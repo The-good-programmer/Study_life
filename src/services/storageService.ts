@@ -148,4 +148,58 @@ export class StorageService {
       return [];
     }
   }
+
+  /**
+   * Exports all student data (stats, cards with FSRS stability, and session histories) to JSON
+   */
+  public static exportAllDataAsJSON(): string {
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      stats: this.getStats(),
+      cards: this.getAllCards(),
+      sessions: this.getSessions(),
+    };
+    return JSON.stringify(data, null, 2);
+  }
+
+  /**
+   * Restores student data from JSON backup
+   */
+  public static importDataFromJSON(jsonString: string): { success: boolean; message: string } {
+    try {
+      const data = JSON.parse(jsonString);
+      if (!data.cards && !data.stats && !data.sessions) {
+        return { success: false, message: 'Invalid backup format.' };
+      }
+      if (data.stats) this.saveStats(data.stats);
+      if (data.cards && Array.isArray(data.cards)) this.saveCards(data.cards);
+      if (data.sessions && Array.isArray(data.sessions)) {
+        localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(data.sessions));
+      }
+      return { 
+        success: true, 
+        message: `Successfully restored ${data.cards?.length || 0} flashcards and ${data.sessions?.length || 0} sessions!` 
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Corrupted file';
+      return { success: false, message: `Import error: ${msg}` };
+    }
+  }
+
+  /**
+   * Exports flashcards to Anki-compatible Tab-Separated Values (TSV)
+   */
+  public static exportCardsToAnkiCSV(): string {
+    const cards = this.getAllCards();
+    const rows = cards.map(c => {
+      const front = (c.question || '').replace(/\t/g, ' ').replace(/\n/g, '<br>');
+      const back = `${(c.answer || '')}${c.explanation ? '<br><small>' + c.explanation + '</small>' : ''}`
+        .replace(/\t/g, ' ')
+        .replace(/\n/g, '<br>');
+      const tags = 'Studify::FSRS';
+      return `${front}\t${back}\t${tags}`;
+    });
+    return `#separator:tab\n#html:true\n#tags column:3\n${rows.join('\n')}`;
+  }
 }

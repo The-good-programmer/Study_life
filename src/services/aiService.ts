@@ -87,6 +87,50 @@ Evaluate the student's submission. Return ONLY valid JSON with this exact schema
   }
 
   /**
+   * Socratic interactive coach follow-up after Feynman evaluation
+   */
+  public static async askSocraticFollowUp(
+    concept: ConceptCheckpoint,
+    userExplanation: string,
+    studentQuestion: string
+  ): Promise<string> {
+    const ai = this.getClient();
+    const cleanQ = studentQuestion.trim();
+    if (!cleanQ) return 'Please ask a specific clarifying question regarding this concept.';
+
+    if (ai) {
+      try {
+        const prompt = `
+You are a warm, concise Socratic science tutor helping a student deeply understand "${concept.title}".
+Context / Mental Model: "${concept.mentalModel}"
+Core Takeaways: ${JSON.stringify(concept.coreTakeaways)}
+Student's initial explanation: "${userExplanation}"
+Student's question: "${cleanQ}"
+
+Answer the student in 2 to 3 concise, illuminating sentences. Use an intuitive analogy where helpful. Directly illuminate the underlying mechanism.
+`;
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+        });
+
+        if (response.text?.trim()) {
+          return response.text.trim();
+        }
+      } catch (err) {
+        console.warn('Gemini follow-up failed, using heuristic guidance:', err);
+      }
+    }
+
+    // Heuristic response
+    const matchedTerm = concept.keyTerms.find(k => cleanQ.toLowerCase().includes(k.term.toLowerCase()));
+    if (matchedTerm) {
+      return `Regarding ${matchedTerm.term}: recall that ${matchedTerm.definition}. In the context of ${concept.title}, it functions as the central link connecting the input mechanism to the final outcome.`;
+    }
+    return `In ${concept.title}, the key to your question lies in "${concept.coreTakeaways[0] || concept.mentalModel}". When you trace how the components interact step-by-step, you see why this mechanism is required.`;
+  }
+
+  /**
    * Generates a full science-backed Study Session with decomposed concept checkpoints
    */
   public static async generateStudySession(

@@ -1,8 +1,3 @@
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
-
 export interface ExtractedPDF {
   text: string;
   numPages: number;
@@ -12,13 +7,19 @@ export interface ExtractedPDF {
 
 export class PDFService {
   /**
-   * Extracts clean, structured text from an uploaded PDF file
+   * Lazily loads PDF.js and extracts clean, structured text from an uploaded PDF file
    */
   public static async extractTextFromPDF(
     file: File,
     onProgress?: (progressPercent: number, page: number, totalPages: number) => void
   ): Promise<ExtractedPDF> {
     try {
+      // Dynamically import pdfjs-dist on demand to keep initial app bundle ultra-lightweight
+      const pdfjsLib = await import('pdfjs-dist');
+      
+      // Configure PDF.js worker
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+
       const arrayBuffer = await file.arrayBuffer();
       const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;
