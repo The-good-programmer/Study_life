@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, HelpCircle, Zap, Coffee, X, Clock, ChevronRight } from 'lucide-react';
+import { Sparkles, HelpCircle, Zap, Coffee, X, Clock, ChevronRight, Maximize2, Minimize2, EyeOff } from 'lucide-react';
 import type { StudyPhase, StudySession } from '../../types';
 import { PrimingPhase } from './PrimingPhase';
 import { FeynmanPhase } from './FeynmanPhase';
@@ -14,9 +14,14 @@ interface StudyPilotProps {
   onOpenDashboard: () => void;
 }
 
+type AmbientTheme = 'obsidian' | 'library' | 'indigo-flow';
+
 export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, onOpenDashboard }) => {
   const [session, setSession] = useState<StudySession>(initialSession);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement);
+  const [distractionAlert, setDistractionAlert] = useState<string | null>(null);
+  const [theme, setTheme] = useState<AmbientTheme>('obsidian');
 
   // Live session timer
   useEffect(() => {
@@ -32,6 +37,35 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
 
     return () => clearInterval(interval);
   }, [session.currentPhase]);
+
+  // Anti-distraction visibility tracker
+  useEffect(() => {
+    let leaveTimestamp: number | null = null;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        leaveTimestamp = Date.now();
+      } else if (document.visibilityState === 'visible' && leaveTimestamp) {
+        const secondsAway = Math.round((Date.now() - leaveTimestamp) / 1000);
+        if (secondsAway >= 5) {
+          setDistractionAlert(`Focus Guard: You switched away for ${secondsAway}s. Re-aligning working memory into the zone.`);
+          setTimeout(() => setDistractionAlert(null), 6000);
+        }
+        leaveTimestamp = null;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  };
 
   const currentConcept = session.concepts[session.currentConceptIndex] || session.concepts[0];
 
@@ -70,11 +104,17 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
     { id: 'rest', label: '4. Rest', icon: Coffee },
   ];
 
+  const themeClasses: Record<AmbientTheme, string> = {
+    'obsidian': 'bg-[#0a0b10] text-slate-100',
+    'library': 'bg-[#120f0d] text-amber-50',
+    'indigo-flow': 'bg-[#0d0f1d] text-indigo-50',
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+    <div className={`min-h-screen flex flex-col transition-colors duration-500 ${themeClasses[theme]}`}>
       
       {/* Top Cockpit Header */}
-      <div className="w-full border-b border-slate-800 bg-slate-900/60 backdrop-blur-md px-4 py-3 sticky top-0 z-30">
+      <div className="w-full border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md px-4 py-3 sticky top-0 z-30">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
           
           {/* Concept Progress Info */}
@@ -96,7 +136,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
                   {session.title}
                 </span>
               </div>
-              <h2 className="text-sm sm:text-base font-bold text-white truncate max-w-[280px] sm:max-w-md">
+              <h2 className="text-sm sm:text-base font-bold text-white truncate max-w-[240px] sm:max-w-md">
                 {currentConcept.title}
               </h2>
             </div>
@@ -131,14 +171,55 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
             })}
           </div>
 
-          {/* Live Session Clock */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 font-mono text-xs">
-            <Clock className="w-3.5 h-3.5 text-indigo-400" />
-            <span>{timeFormatted}</span>
+          {/* Focus Controls */}
+          <div className="flex items-center gap-2">
+            
+            {/* Theme Switcher */}
+            <div className="hidden sm:flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-lg">
+              <button
+                onClick={() => setTheme('obsidian')}
+                className={`w-4 h-4 rounded-full bg-slate-900 border ${theme === 'obsidian' ? 'border-indigo-400 ring-1 ring-indigo-400' : 'border-slate-700'}`}
+                title="Obsidian Dark Theme"
+              />
+              <button
+                onClick={() => setTheme('library')}
+                className={`w-4 h-4 rounded-full bg-amber-950 border ${theme === 'library' ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-700'}`}
+                title="Warm Library Theme"
+              />
+              <button
+                onClick={() => setTheme('indigo-flow')}
+                className={`w-4 h-4 rounded-full bg-indigo-950 border ${theme === 'indigo-flow' ? 'border-indigo-400 ring-1 ring-indigo-400' : 'border-slate-700'}`}
+                title="Indigo Flow Theme"
+              />
+            </div>
+
+            {/* Fullscreen Focus Toggle */}
+            <button
+              onClick={toggleFullscreen}
+              className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen Focus'}
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+
+            {/* Live Session Clock */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 font-mono text-xs">
+              <Clock className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{timeFormatted}</span>
+            </div>
+
           </div>
 
         </div>
       </div>
+
+      {/* Anti-distraction Banner */}
+      {distractionAlert && (
+        <div className="w-full bg-amber-500/20 border-b border-amber-500/30 px-4 py-2 text-center text-xs text-amber-200 animate-fadeIn flex items-center justify-center gap-2">
+          <EyeOff className="w-4 h-4 text-amber-400" />
+          <span>{distractionAlert}</span>
+        </div>
+      )}
 
       {/* Main Study Arena */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 flex flex-col justify-center">

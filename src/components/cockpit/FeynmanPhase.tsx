@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { HelpCircle, Send, CheckCircle, AlertTriangle, ArrowRight, Eye, RefreshCw, Award } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { HelpCircle, Send, CheckCircle, AlertTriangle, ArrowRight, Eye, RefreshCw, Award, Mic, MicOff } from 'lucide-react';
 import type { ConceptCheckpoint, FeynmanEvaluation } from '../../types';
 import { AIService } from '../../services/aiService';
 import { soundEngine } from '../../services/soundEngine';
@@ -9,17 +9,95 @@ interface FeynmanPhaseProps {
   onComplete: () => void;
 }
 
+// Window speech recognition typings
+interface IWindow extends Window {
+  SpeechRecognition?: any;
+  webkitSpeechRecognition?: any;
+}
+
 export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete }) => {
   const [explanation, setExplanation] = useState('');
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluation, setEvaluation] = useState<FeynmanEvaluation | null>(null);
   const [showSample, setShowSample] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    const win = window as unknown as IWindow;
+    const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+      setSpeechSupported(true);
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event: any) => {
+          let fullTranscript = '';
+          for (let i = 0; i < event.results.length; i++) {
+            fullTranscript += event.results[i][0].transcript + ' ';
+          }
+          if (fullTranscript.trim()) {
+            setExplanation(fullTranscript.trim());
+          }
+        };
+
+        recognition.onerror = (event: any) => {
+          console.warn('Speech recognition error:', event.error);
+          setIsListening(false);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recognition;
+      } catch (e) {
+        console.warn('Failed to initialize speech recognition:', e);
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, []);
+
+  const toggleVoiceDictation = () => {
+    if (!recognitionRef.current) return;
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (err) {
+        console.error('Error starting speech recognition:', err);
+      }
+    }
+  };
 
   const wordCount = explanation.trim() ? explanation.trim().split(/\s+/).length : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (wordCount < 5) return;
+
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
 
     setIsEvaluating(true);
     try {
@@ -62,7 +140,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete 
           {concept.feynmanPrompt}
         </h3>
         <p className="mt-2 text-xs text-slate-400">
-          Rule: Do not look at notes. Write as if you are teaching someone who knows nothing about this subject.
+          Rule: Do not look at notes. Explain as if teaching a beginner. You can type or <strong>speak aloud via microphone</strong>.
         </p>
       </div>
 
@@ -74,9 +152,22 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete 
               rows={7}
               value={explanation}
               onChange={(e) => setExplanation(e.target.value)}
-              placeholder="Start explaining the concept step-by-step in your own words..."
-              className="w-full p-4 rounded-xl bg-slate-900 border border-slate-700 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 text-slate-100 text-sm leading-relaxed placeholder:text-slate-500 outline-none resize-none transition-all"
+              placeholder="Start explaining the concept step-by-step in your own words, or tap the microphone to speak aloud..."
+              className={`w-full p-4 rounded-xl bg-slate-900 border text-slate-100 text-sm leading-relaxed placeholder:text-slate-500 outline-none resize-none transition-all ${
+                isListening
+                  ? 'border-rose-500 ring-2 ring-rose-500/30 shadow-lg shadow-rose-500/10'
+                  : 'border-slate-700 focus:border-purple-500 focus:ring-1 focus:ring-purple-500'
+              }`}
             />
+
+            {/* Live voice indicator */}
+            {isListening && (
+              <div className="absolute top-3 right-3 flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-medium animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                <span>Listening aloud...</span>
+              </div>
+            )}
+
             <div className="absolute bottom-3 right-3 flex items-center gap-3 text-xs text-slate-400 bg-slate-900/80 px-2.5 py-1 rounded-md backdrop-blur-sm border border-slate-800">
               <span>{wordCount} words</span>
               {wordCount < 15 && <span className="text-amber-400 text-[11px]">Aim for 20+ words</span>}
@@ -84,13 +175,41 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete 
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => setExplanation(concept.sampleMasteryExplanation)}
-              className="text-xs text-slate-400 hover:text-purple-300 underline underline-offset-4 transition-colors"
-            >
-              [Demo] Paste Example Response
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Voice Dictation Button */}
+              {speechSupported && (
+                <button
+                  type="button"
+                  onClick={toggleVoiceDictation}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all ${
+                    isListening
+                      ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-500 shadow-lg shadow-rose-600/30 animate-pulse'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                  }`}
+                  title={isListening ? 'Stop voice recording' : 'Dictate your explanation aloud'}
+                >
+                  {isListening ? (
+                    <>
+                      <MicOff className="w-4 h-4 text-white" />
+                      <span>Stop Listening</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-4 h-4 text-rose-400" />
+                      <span>Speak Explanation Aloud</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setExplanation(concept.sampleMasteryExplanation)}
+                className="text-xs text-slate-400 hover:text-purple-300 underline underline-offset-4 transition-colors"
+              >
+                [Demo] Fill Sample
+              </button>
+            </div>
 
             <button
               type="submit"
