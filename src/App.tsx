@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { StudySession, UserStats } from './types';
 import { StorageService } from './services/storageService';
 import { Navbar } from './components/layout/Navbar';
@@ -13,11 +13,6 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [stats, setStats] = useState<UserStats>(StorageService.getStats());
 
-  useEffect(() => {
-    // Refresh stats when sessions finish or view changes
-    setStats(StorageService.getStats());
-  }, [activeSession, view]);
-
   const handleStartSession = (session: StudySession) => {
     setActiveSession(session);
   };
@@ -31,6 +26,11 @@ export function App() {
     setStats(StorageService.getStats());
   };
 
+  const handleNavigate = (targetView: 'home' | 'dashboard') => {
+    setView(targetView);
+    setStats(StorageService.getStats());
+  };
+
   // If in an active study session, display the distraction-free Study Pilot Cockpit
   if (activeSession) {
     return (
@@ -39,7 +39,7 @@ export function App() {
         onExit={handleExitSession}
         onOpenDashboard={() => {
           setActiveSession(null);
-          setView('dashboard');
+          handleNavigate('dashboard');
         }}
       />
     );
@@ -51,8 +51,8 @@ export function App() {
       <Navbar
         stats={stats}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenDashboard={() => setView('dashboard')}
-        onLogoClick={() => setView('home')}
+        onOpenDashboard={() => handleNavigate('dashboard')}
+        onLogoClick={() => handleNavigate('home')}
       />
 
       {/* Main Content Area */}

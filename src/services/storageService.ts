@@ -8,23 +8,53 @@ const STORAGE_KEYS = {
   SOUND_PREF: 'studify_sound_pref',
 };
 
+const LEVEL_TITLES = [
+  'Synapse Builder',
+  'Deep Worker',
+  'Active Retrievist',
+  'Feynman Practitioner',
+  'Cortical Architect',
+  'Cognitive Alchemist',
+  'Hippocampal Maestro',
+  'Memory Champion',
+  'Neuroplastic Prodigy',
+  'Cognitive Sovereign'
+];
+
 export class StorageService {
+  private static calculateLevel(xp: number): { level: number; title: string } {
+    // 150 XP per level
+    const level = Math.max(1, Math.floor(xp / 150) + 1);
+    const titleIndex = Math.min(LEVEL_TITLES.length - 1, level - 1);
+    return { level, title: LEVEL_TITLES[titleIndex] };
+  }
+
   public static getStats(): UserStats {
     const raw = localStorage.getItem(STORAGE_KEYS.STATS);
+    const today = new Date().toISOString().split('T')[0];
+
+    const defaultStats: UserStats = {
+      totalStudyMinutes: 0,
+      sessionsCompleted: 0,
+      conceptsMastered: 0,
+      currentStreak: 1,
+      lastActiveDate: today,
+      cardsDueCount: 0,
+      xp: 0,
+      level: 1,
+      levelTitle: 'Synapse Builder',
+      dailyGoalMinutes: 25,
+      todayMinutes: 0,
+    };
+
     if (!raw) {
-      return {
-        totalStudyMinutes: 0,
-        sessionsCompleted: 0,
-        conceptsMastered: 0,
-        currentStreak: 1,
-        lastActiveDate: new Date().toISOString().split('T')[0],
-        cardsDueCount: 0,
-      };
+      return defaultStats;
     }
+
     try {
-      const stats = JSON.parse(raw);
-      // Update streak check
-      const today = new Date().toISOString().split('T')[0];
+      const stats: UserStats = { ...defaultStats, ...JSON.parse(raw) };
+      
+      // Update streak and reset today's minutes if day changed
       if (stats.lastActiveDate !== today) {
         const last = new Date(stats.lastActiveDate);
         const curr = new Date(today);
@@ -35,19 +65,17 @@ export class StorageService {
           stats.currentStreak = 1;
         }
         stats.lastActiveDate = today;
+        stats.todayMinutes = 0; // Reset daily minutes for new day
         this.saveStats(stats);
       }
+
+      const { level, title } = this.calculateLevel(stats.xp || 0);
+      stats.level = level;
+      stats.levelTitle = title;
       stats.cardsDueCount = this.getDueCards().length;
       return stats;
     } catch {
-      return {
-        totalStudyMinutes: 0,
-        sessionsCompleted: 0,
-        conceptsMastered: 0,
-        currentStreak: 1,
-        lastActiveDate: new Date().toISOString().split('T')[0],
-        cardsDueCount: 0,
-      };
+      return defaultStats;
     }
   }
 
@@ -55,9 +83,34 @@ export class StorageService {
     localStorage.setItem(STORAGE_KEYS.STATS, JSON.stringify(stats));
   }
 
+  public static addXP(amount: number): { newXP: number; newLevel: number; leveledUp: boolean } {
+    const stats = this.getStats();
+    const oldLevel = stats.level;
+    stats.xp = (stats.xp || 0) + Math.max(0, Math.round(amount));
+
+    const { level, title } = this.calculateLevel(stats.xp);
+    stats.level = level;
+    stats.levelTitle = title;
+
+    this.saveStats(stats);
+    return {
+      newXP: stats.xp,
+      newLevel: level,
+      leveledUp: level > oldLevel,
+    };
+  }
+
   public static recordStudyMinutes(minutes: number) {
     const stats = this.getStats();
-    stats.totalStudyMinutes += Math.max(1, Math.round(minutes));
+    const added = Math.max(1, Math.round(minutes));
+    stats.totalStudyMinutes += added;
+    stats.todayMinutes = (stats.todayMinutes || 0) + added;
+    this.saveStats(stats);
+  }
+
+  public static setDailyGoal(minutes: number) {
+    const stats = this.getStats();
+    stats.dailyGoalMinutes = Math.max(5, Math.min(240, minutes));
     this.saveStats(stats);
   }
 
@@ -136,7 +189,12 @@ export class StorageService {
     } else {
       sessions.unshift(session);
     }
-    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions.slice(0, 30)));
+    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions.slice(0, 50)));
+  }
+
+  public static deleteSession(id: string) {
+    const sessions = this.getSessions().filter(s => s.id !== id);
+    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions));
   }
 
   public static getSessions(): StudySession[] {
@@ -150,11 +208,11 @@ export class StorageService {
   }
 
   /**
-   * Exports all student data (stats, cards with FSRS stability, and session histories) to JSON
+   * Exports all student data to JSON
    */
   public static exportAllDataAsJSON(): string {
     const data = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       stats: this.getStats(),
       cards: this.getAllCards(),

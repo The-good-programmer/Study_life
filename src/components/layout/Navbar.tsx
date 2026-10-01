@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Brain, Flame, Clock, Layers, Volume2, VolumeX, Settings, Sparkles } from 'lucide-react';
+import { Brain, Flame, Layers, Volume2, VolumeX, Settings, Sparkles, Zap, CheckCircle2 } from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
 import type { SoundType } from '../../services/soundEngine';
 import type { UserStats } from '../../types';
@@ -27,6 +27,21 @@ export const Navbar: React.FC<NavbarProps> = ({ stats, onOpenSettings, onOpenDas
     soundEngine.setVolume(val);
   };
 
+  // Daily goal calculation
+  const dailyGoal = stats.dailyGoalMinutes || 25;
+  const todayMinutes = stats.todayMinutes || 0;
+  const goalPercent = Math.min(100, Math.round((todayMinutes / dailyGoal) * 100));
+  const goalCompleted = goalPercent >= 100;
+
+  // SVG Circle math: radius = 10, circumference = 2 * PI * 10 = 62.83
+  const circleRadius = 10;
+  const circumference = 2 * Math.PI * circleRadius;
+  const strokeOffset = circumference - (goalPercent / 100) * circumference;
+
+  // XP progress to next level (150 XP per level)
+  const currentLevelXP = (stats.xp || 0) % 150;
+  const xpPercent = Math.round((currentLevelXP / 150) * 100);
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -51,24 +66,79 @@ export const Navbar: React.FC<NavbarProps> = ({ stats, onOpenSettings, onOpenDas
         </div>
 
         {/* Live Metrics & Quick Controls */}
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3">
           
+          {/* Level & XP Badge */}
+          <div 
+            title={`Level ${stats.level}: ${stats.levelTitle} (${currentLevelXP}/150 XP)`}
+            className="hidden sm:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-medium cursor-help"
+          >
+            <div className="w-5 h-5 rounded-md bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 font-bold text-[11px]">
+              <Zap className="w-3 h-3 text-purple-400 fill-purple-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-white text-[11px]">Lvl {stats.level}</span>
+                <span className="text-[10px] text-purple-300">{stats.levelTitle}</span>
+              </div>
+              <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                <div 
+                  className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-300"
+                  style={{ width: `${xpPercent}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Daily Goal Radial Ring */}
+          <div 
+            title={`Daily Target: ${todayMinutes}m of ${dailyGoal}m completed (${goalPercent}%)`}
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-medium cursor-help"
+          >
+            <div className="relative w-6 h-6 flex items-center justify-center">
+              <svg className="w-6 h-6 transform -rotate-90">
+                <circle
+                  cx="12"
+                  cy="12"
+                  r={circleRadius}
+                  stroke="#1e293b"
+                  strokeWidth="2.5"
+                  fill="transparent"
+                />
+                <circle
+                  cx="12"
+                  cy="12"
+                  r={circleRadius}
+                  stroke={goalCompleted ? '#10b981' : '#6366f1'}
+                  strokeWidth="2.5"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeOffset}
+                  strokeLinecap="round"
+                  fill="transparent"
+                  className="transition-all duration-500"
+                />
+              </svg>
+              {goalCompleted ? (
+                <CheckCircle2 className="w-3 h-3 text-emerald-400 absolute" />
+              ) : (
+                <span className="text-[9px] font-bold text-slate-300 absolute">
+                  {goalPercent}%
+                </span>
+              )}
+            </div>
+            <div className="hidden md:block text-[11px]">
+              <span className="text-slate-200 font-semibold">{todayMinutes}m</span>
+              <span className="text-slate-500">/{dailyGoal}m</span>
+            </div>
+          </div>
+
           {/* Streak */}
           <div 
             title="Current Daily Study Streak"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-amber-400 text-xs font-medium"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-amber-400 text-xs font-medium"
           >
             <Flame className="w-4 h-4 fill-amber-400 text-amber-500 animate-pulse" />
-            <span>{stats.currentStreak}d Streak</span>
-          </div>
-
-          {/* Total Minutes */}
-          <div 
-            title="Total Study Minutes"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 text-xs font-medium"
-          >
-            <Clock className="w-4 h-4 text-indigo-400" />
-            <span>{stats.totalStudyMinutes}m</span>
+            <span>{stats.currentStreak}d</span>
           </div>
 
           {/* Cards Due / Dashboard Button */}
@@ -76,10 +146,10 @@ export const Navbar: React.FC<NavbarProps> = ({ stats, onOpenSettings, onOpenDas
             <button
               onClick={onOpenDashboard}
               title="Spaced Repetition Queue"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-emerald-400 text-xs font-medium transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-emerald-400 text-xs font-medium transition-colors"
             >
               <Layers className="w-4 h-4" />
-              <span>{stats.cardsDueCount} Due</span>
+              <span className="hidden sm:inline">{stats.cardsDueCount} Due</span>
             </button>
           )}
 

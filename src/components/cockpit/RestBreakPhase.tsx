@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Coffee, ArrowRight, Eye, Droplets, Activity, Play, Pause } from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
+import { StorageService } from '../../services/storageService';
 
 interface RestBreakPhaseProps {
   onComplete: () => void;
@@ -13,6 +14,11 @@ export const RestBreakPhase: React.FC<RestBreakPhaseProps> = ({ onComplete, onSk
   const [breathPhase, setBreathPhase] = useState<'Inhale' | 'Hold (Full)' | 'Exhale' | 'Hold (Empty)'>('Inhale');
   const [breathCount, setBreathCount] = useState(4);
 
+  const handleFinish = useCallback(() => {
+    StorageService.addXP(30); // +30 XP for neuroscience rest break
+    onComplete();
+  }, [onComplete]);
+
   // 180s countdown timer
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -22,12 +28,12 @@ export const RestBreakPhase: React.FC<RestBreakPhaseProps> = ({ onComplete, onSk
       }, 1000);
     } else if (secondsRemaining === 0) {
       soundEngine.playCompletionChime();
-      onComplete();
+      handleFinish();
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isActive, secondsRemaining, onComplete]);
+  }, [isActive, secondsRemaining, handleFinish]);
 
   // Box breathing 16s cycle (4-4-4-4)
   useEffect(() => {
@@ -141,7 +147,7 @@ export const RestBreakPhase: React.FC<RestBreakPhaseProps> = ({ onComplete, onSk
         </button>
 
         <button
-          onClick={onComplete}
+          onClick={handleFinish}
           className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 group transition-all"
         >
           <span>I am Refreshed — Continue Study</span>

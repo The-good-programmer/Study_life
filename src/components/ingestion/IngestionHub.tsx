@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { Sparkles, FileText, Compass, ArrowRight, Play, RefreshCw, Layers, UploadCloud, CheckCircle2, AlertCircle, FileUp } from 'lucide-react';
+import { Sparkles, FileText, Compass, ArrowRight, Play, RefreshCw, Layers, UploadCloud, CheckCircle2, AlertCircle, FileUp, BookMarked, Search, Trash2, Download } from 'lucide-react';
 import type { StudySession } from '../../types';
 import { DEMO_STUDY_SESSIONS } from '../../data/demoDecks';
 import { AIService } from '../../services/aiService';
 import { PDFService } from '../../services/pdfService';
 import type { ExtractedPDF } from '../../services/pdfService';
+import { StorageService } from '../../services/storageService';
 
 interface IngestionHubProps {
   onStartSession: (session: StudySession) => void;
@@ -12,7 +13,7 @@ interface IngestionHubProps {
 }
 
 export const IngestionHub: React.FC<IngestionHubProps> = ({ onStartSession, onOpenDashboard }) => {
-  const [activeTab, setActiveTab] = useState<'pdf' | 'topic' | 'notes' | 'curated'>('pdf');
+  const [activeTab, setActiveTab] = useState<'pdf' | 'topic' | 'notes' | 'my-decks' | 'curated'>('pdf');
   const [topicInput, setTopicInput] = useState('');
   const [notesInput, setNotesInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -21,6 +22,8 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({ onStartSession, onOp
   const [extractedPdf, setExtractedPdf] = useState<ExtractedPDF | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [savedSessions, setSavedSessions] = useState<StudySession[]>(() => StorageService.getSessions());
+  const [deckSearch, setDeckSearch] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,6 +85,8 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({ onStartSession, onOp
     try {
       const session = await AIService.generateStudySession(extractedPdf.text, true);
       session.title = extractedPdf.fileName;
+      StorageService.saveSession(session);
+      setSavedSessions(StorageService.getSessions());
       onStartSession(session);
     } catch (err) {
       console.error(err);
@@ -97,6 +102,8 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({ onStartSession, onOp
     setIsLoading(true);
     try {
       const session = await AIService.generateStudySession(text, false);
+      StorageService.saveSession(session);
+      setSavedSessions(StorageService.getSessions());
       onStartSession(session);
     } catch (err) {
       console.error(err);
@@ -111,6 +118,8 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({ onStartSession, onOp
     setIsLoading(true);
     try {
       const session = await AIService.generateStudySession(notesInput, true);
+      StorageService.saveSession(session);
+      setSavedSessions(StorageService.getSessions());
       onStartSession(session);
     } catch (err) {
       console.error(err);
@@ -118,6 +127,31 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({ onStartSession, onOp
       setIsLoading(false);
     }
   };
+
+  const handleDeleteDeck = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm('Delete this study deck from your local library?')) {
+      StorageService.deleteSession(id);
+      setSavedSessions(StorageService.getSessions());
+    }
+  };
+
+  const handleExportSingleDeck = (session: StudySession, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const json = JSON.stringify(session, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `studify-deck-${session.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const filteredDecks = savedSessions.filter(s => 
+    s.title.toLowerCase().includes(deckSearch.toLowerCase()) || 
+    s.category.toLowerCase().includes(deckSearch.toLowerCase())
+  );
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 py-6 sm:py-10 animate-fadeIn px-4">
@@ -145,7 +179,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({ onStartSession, onOp
         <div className="inline-flex p-1 rounded-xl bg-slate-900 border border-slate-800 text-xs font-medium max-w-full overflow-x-auto">
           <button
             onClick={() => setActiveTab('pdf')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all shrink-0 ${
               activeTab === 'pdf'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'text-slate-400 hover:text-white'
@@ -157,7 +191,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({ onStartSession, onOp
 
           <button
             onClick={() => setActiveTab('topic')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all shrink-0 ${
               activeTab === 'topic'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'text-slate-400 hover:text-white'
@@ -169,7 +203,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({ onStartSession, onOp
 
           <button
             onClick={() => setActiveTab('notes')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all shrink-0 ${
               activeTab === 'notes'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'text-slate-400 hover:text-white'
@@ -180,14 +214,29 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({ onStartSession, onOp
           </button>
 
           <button
+            onClick={() => {
+              setSavedSessions(StorageService.getSessions());
+              setActiveTab('my-decks');
+            }}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all shrink-0 ${
+              activeTab === 'my-decks'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <BookMarked className="w-4 h-4 text-purple-400" />
+            <span>My Decks ({savedSessions.length})</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('curated')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all shrink-0 ${
               activeTab === 'curated'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            <Layers className="w-4 h-4" />
+            <Layers className="w-4 h-4 text-emerald-400" />
             <span>Curated Decks</span>
           </button>
         </div>
@@ -433,7 +482,102 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({ onStartSession, onOp
         </div>
       )}
 
-      {/* Tab 3: Curated Science Decks */}
+      {/* Tab 3: My Decks & Library */}
+      {activeTab === 'my-decks' && (
+        <div className="p-6 sm:p-8 rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <BookMarked className="w-5 h-5 text-purple-400" />
+                <span>My Saved Decks & Library</span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                All study decks generated from your custom notes, topics, and PDFs.
+              </p>
+            </div>
+
+            {/* Search filter */}
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={deckSearch}
+                onChange={(e) => setDeckSearch(e.target.value)}
+                placeholder="Search my decks..."
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          {filteredDecks.length === 0 ? (
+            <div className="p-12 text-center rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
+              <BookMarked className="w-10 h-10 text-slate-600 mx-auto" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-300">
+                  {deckSearch ? 'No decks match your search query.' : 'No custom decks saved yet.'}
+                </p>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Drop a lecture PDF or enter a topic in the tabs above to automatically generate your first saved deck!
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {filteredDecks.map((deck) => {
+                const totalCards = deck.concepts.reduce((acc, c) => acc + c.retrievalCards.length, 0);
+                return (
+                  <div
+                    key={deck.id}
+                    onClick={() => onStartSession(deck)}
+                    className="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-all flex flex-col justify-between group"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                          {deck.category}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => handleExportSingleDeck(deck, e)}
+                            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-indigo-300 transition-colors"
+                            title="Export this deck to JSON"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteDeck(deck.id, e)}
+                            className="p-1.5 rounded-lg hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 transition-colors"
+                            title="Delete deck from library"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
+                        {deck.title}
+                      </h4>
+                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                        {deck.description}
+                      </p>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-900 mt-3 flex items-center justify-between text-[11px] text-slate-500">
+                      <span>{deck.concepts.length} Concepts • {totalCards} Cards</span>
+                      <span className="text-indigo-400 font-semibold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                        <span>Study</span>
+                        <Play className="w-3 h-3 fill-indigo-400" />
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 4: Curated Science Decks */}
       {activeTab === 'curated' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {DEMO_STUDY_SESSIONS.map((demo) => (

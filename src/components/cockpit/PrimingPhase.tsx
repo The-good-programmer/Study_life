@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Lightbulb, CheckCircle2, BookOpen, ArrowRight, Eye, Sparkles } from 'lucide-react';
 import type { ConceptCheckpoint } from '../../types';
+import { MathRenderer } from '../common/MathRenderer';
+import { StorageService } from '../../services/storageService';
 
 interface PrimingPhaseProps {
   concept: ConceptCheckpoint;
@@ -9,6 +11,11 @@ interface PrimingPhaseProps {
 
 export const PrimingPhase: React.FC<PrimingPhaseProps> = ({ concept, onComplete }) => {
   const [selectedTerm, setSelectedTerm] = useState<string | null>(null);
+
+  const handleFinishPriming = () => {
+    StorageService.addXP(20); // +20 XP for priming mental models
+    onComplete();
+  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fadeIn">
@@ -22,7 +29,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({ concept, onComplete 
           </span>
         </div>
         <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-900/60 text-indigo-200 border border-indigo-700/50">
-          ~{Math.round(concept.estimatedMinutes * 0.25)} min
+          +20 XP
         </span>
       </div>
 
@@ -35,9 +42,9 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({ concept, onComplete 
           Intuitive Mental Model
         </div>
         
-        <p className="text-base sm:text-lg text-slate-100 font-medium leading-relaxed">
-          "{concept.mentalModel}"
-        </p>
+        <div className="text-base sm:text-lg text-slate-100 font-medium leading-relaxed">
+          "<MathRenderer text={concept.mentalModel} />"
+        </div>
       </div>
 
       {/* Core Takeaways */}
@@ -53,7 +60,9 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({ concept, onComplete 
               <span className="w-5 h-5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[11px] font-bold text-indigo-400 shrink-0 mt-0.5">
                 {idx + 1}
               </span>
-              <span className="leading-snug">{takeaway}</span>
+              <span className="leading-snug">
+                <MathRenderer text={takeaway} />
+              </span>
             </li>
           ))}
         </ul>
@@ -85,7 +94,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({ concept, onComplete 
                       : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60'
                   }`}
                 >
-                  {termObj.term}
+                  <MathRenderer text={termObj.term} />
                 </button>
               );
             })}
@@ -94,9 +103,11 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({ concept, onComplete 
           {/* Expanded definition card */}
           {selectedTerm && (
             <div className="p-3.5 rounded-xl bg-slate-950 border border-indigo-900/60 text-xs animate-fadeIn">
-              <span className="font-semibold text-indigo-300">{selectedTerm}: </span>
-              <span className="text-slate-300">
-                {concept.keyTerms.find(t => t.term === selectedTerm)?.definition}
+              <span className="font-semibold text-indigo-300">
+                <MathRenderer text={selectedTerm} />: 
+              </span>
+              <span className="text-slate-300 ml-1">
+                <MathRenderer text={concept.keyTerms.find(t => t.term === selectedTerm)?.definition || ''} />
               </span>
             </div>
           )}
@@ -106,7 +117,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({ concept, onComplete 
       {/* Action / Next Button */}
       <div className="pt-4 flex justify-end">
         <button
-          onClick={onComplete}
+          onClick={handleFinishPriming}
           className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-semibold text-sm shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 group transition-all"
         >
           <span>Mental Model Primed — Start Feynman Challenge</span>

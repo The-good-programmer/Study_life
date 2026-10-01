@@ -60,4 +60,10 @@ export interface UserStats {
   currentStreak: number;
   lastActiveDate: string; // YYYY-MM-DD
   cardsDueCount: number;
+  // Habit & XP metrics
+  xp: number;
+  level: number;
+  levelTitle: string;
+  dailyGoalMinutes: number;
+  todayMinutes: number;
 }

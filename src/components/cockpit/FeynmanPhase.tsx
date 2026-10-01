@@ -3,6 +3,8 @@ import { HelpCircle, Send, CheckCircle, AlertTriangle, ArrowRight, Eye, RefreshC
 import type { ConceptCheckpoint, FeynmanEvaluation } from '../../types';
 import { AIService } from '../../services/aiService';
 import { soundEngine } from '../../services/soundEngine';
+import { StorageService } from '../../services/storageService';
+import { MathRenderer } from '../common/MathRenderer';
 
 interface FeynmanPhaseProps {
   concept: ConceptCheckpoint;
@@ -21,7 +23,11 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete 
   const [evaluation, setEvaluation] = useState<FeynmanEvaluation | null>(null);
   const [showSample, setShowSample] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [speechSupported, setSpeechSupported] = useState(false);
+  const [speechSupported] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const win = window as unknown as IWindow;
+    return !!(win.SpeechRecognition || win.webkitSpeechRecognition);
+  });
 
   // Socratic Follow-up Coach State
   const [socraticQuestion, setSocraticQuestion] = useState('');
@@ -35,7 +41,6 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete 
     const SpeechRecognition = win.SpeechRecognition || win.webkitSpeechRecognition;
 
     if (SpeechRecognition) {
-      setSpeechSupported(true);
       try {
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
@@ -109,6 +114,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete 
       const result = await AIService.evaluateFeynmanExplanation(concept, explanation);
       setEvaluation(result);
       soundEngine.playCompletionChime();
+      StorageService.addXP(50); // +50 XP for completing Feynman explanation
     } catch (err) {
       console.error(err);
     } finally {
@@ -132,7 +138,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete 
           </span>
         </div>
         <span className="text-[11px] px-2 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-700/50">
-          Active Encoding
+          +50 XP
         </span>
       </div>
 
@@ -142,7 +148,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete 
           Your Feynman Challenge
         </div>
         <h3 className="text-base sm:text-lg font-semibold text-white leading-snug">
-          {concept.feynmanPrompt}
+          <MathRenderer text={concept.feynmanPrompt} />
         </h3>
         <p className="mt-2 text-xs text-slate-400">
           Rule: Do not look at notes. Explain as if teaching a beginner. You can type or <strong>speak aloud via microphone</strong>.
@@ -338,6 +344,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete 
                   try {
                     const ans = await AIService.askSocraticFollowUp(concept, explanation, socraticQuestion);
                     setSocraticAnswer(ans);
+                    StorageService.addXP(15); // +15 XP for Socratic inquiry
                   } catch (err) {
                     console.error(err);
                   } finally {
