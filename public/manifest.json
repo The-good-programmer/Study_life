@@ -1,0 +1,16 @@
+{
+  "name": "Studify — Science-Backed Study Pilot",
+  "short_name": "Studify",
+  "description": "Zero-friction study platform with automated cognitive learning loops.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0d14",
+  "theme_color": "#0b0d14",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
