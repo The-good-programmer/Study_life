@@ -8,6 +8,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    port: 5173,
+    host: true,
+  },
   resolve: {
     dedupe: ['react', 'react-dom', 'three'],
   },
@@ -15,6 +19,9 @@ export default defineConfig({
     include: [
       'react',
       'react-dom',
+      'react-dom/client',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime',
       'three',
       'three/examples/jsm/loaders/GLTFLoader.js',
     ],
