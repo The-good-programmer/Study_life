@@ -60,7 +60,10 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
       return false;
     }
   });
-  const weeklyStats = useMemo(() => StorageService.getWeeklyXP(), [stats.xp]);
+  const weeklyStats = useMemo(() => {
+    if (stats.xp < 0) return { current: 0, best: 0 };
+    return StorageService.getWeeklyXP();
+  }, [stats.xp]);
   const savedSessions = useMemo(() => StorageService.getSessions(), []);
   const dueCards = useMemo(() => StorageService.getDueCards(), []);
 

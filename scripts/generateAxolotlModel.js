@@ -344,7 +344,7 @@ limbConfigs.forEach((cfg) => {
   pawMesh.position.set(0, -0.27, 0.05);
   limbGroup.add(pawMesh);
 
-  [-0.07, -0.024, 0.024, 0.07].forEach((dx, d) => {
+  [-0.07, -0.024, 0.024, 0.07].forEach((dx) => {
     const toeGeom = new THREE.SphereGeometry(0.028, 8, 8);
     const toeMesh = new THREE.Mesh(toeGeom, gillStemMat);
     toeMesh.position.set(dx, -0.28, 0.16);

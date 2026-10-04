@@ -65,19 +65,17 @@ export class StorageService {
       console.warn(`[StorageService] localStorage.setItem failed for key "${key}":`, e);
       if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)) {
         try {
-          // Prune heavy diagram caches to restore quota
+          // Prune ephemeral diagram caches from localStorage (these are backed up in IndexedDB)
           localStorage.removeItem(this.getKey(STORAGE_KEYS.DIAGRAMS));
-          const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.SESSIONS));
-          if (raw) {
-            const sessions: StudySession[] = JSON.parse(raw);
-            if (sessions.length > 8) {
-              localStorage.setItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions.slice(0, 8)));
-            }
-          }
+          
+          // Retry write without destroying any user decks
           localStorage.setItem(key, value);
           return true;
         } catch {
-          // Ignore secondary failure
+          // If still constrained, store payload durably in IndexedDB to prevent data loss
+          IndexedDbService.setItem(key, value).catch(idbErr => {
+            console.error('[StorageService] IndexedDB quota fallback failed:', idbErr);
+          });
         }
       }
       return false;
@@ -364,7 +362,26 @@ export class StorageService {
       cards[idx].isStarred = !cards[idx].isStarred;
       newStatus = !!cards[idx].isStarred;
       this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(cards));
+    } else {
+      const sessions = this.getSessions();
+      let currentSessionStar = false;
+      let foundInSession = false;
+      for (const s of sessions) {
+        for (const c of s.concepts) {
+          const card = c.retrievalCards.find(rc => rc.id === cardId);
+          if (card) {
+            currentSessionStar = !!card.isStarred;
+            foundInSession = true;
+            break;
+          }
+        }
+        if (foundInSession) break;
+      }
+      newStatus = foundInSession ? !currentSessionStar : true;
+      cards.push({ id: cardId, isStarred: newStatus } as RetrievalCard);
+      this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(cards));
     }
+
     const sessions = this.getSessions();
     let sessionUpdated = false;
     sessions.forEach(s => {
@@ -380,6 +397,28 @@ export class StorageService {
       this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions));
     }
     return newStatus;
+  }
+
+  public static isCardStarred(cardId: string): boolean {
+    const cards = this.getAllCards();
+    const card = cards.find(c => c.id === cardId);
+    if (card && card.isStarred !== undefined) return !!card.isStarred;
+    const sessions = this.getSessions();
+    for (const s of sessions) {
+      for (const c of s.concepts) {
+        const rc = c.retrievalCards.find(rcard => rcard.id === cardId);
+        if (rc && rc.isStarred !== undefined) return !!rc.isStarred;
+      }
+    }
+    return false;
+  }
+
+  public static getSoundPreference(): string {
+    return localStorage.getItem(this.getKey(STORAGE_KEYS.SOUND_PREF)) || 'binaural-40hz';
+  }
+
+  public static setSoundPreference(pref: string): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.SOUND_PREF), pref);
   }
 
   public static getAllCards(): RetrievalCard[] {

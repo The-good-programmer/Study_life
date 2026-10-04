@@ -35,7 +35,23 @@ const LazyLoadingFallback = () => (
 );
 
 export function App() {
-  const [activeSession, setActiveSession] = useState<StudySession | null>(null);
+  const [activeSession, setActiveSession] = useState<StudySession | null>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('launch') === 'quick_sprint') {
+        const saved = StorageService.getSessions();
+        const primary = saved[0] || CURATED_STARTER_DECKS[0]?.session;
+        if (primary) {
+          return {
+            ...primary,
+            currentPhase: 'retrieval',
+            casualFlashcardMode: true,
+          };
+        }
+      }
+    }
+    return null;
+  });
   const [matchSession, setMatchSession] = useState<StudySession | null>(null);
   const [audioSession, setAudioSession] = useState<StudySession | null>(null);
   const [stationSession, setStationSession] = useState<StudySession | null>(null);
@@ -105,25 +121,11 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Initialize Web Push Streak Protection & URL launcher
+  // Initialize Web Push Streak Protection & daily notification checks
   useEffect(() => {
     NotificationService.scheduleStreakCheck();
     const statsData = StorageService.getStats();
     NotificationService.checkDailyReminder(statsData.todayMinutes, statsData.currentStreak);
-
-    // Deep link: auto-launch quick sprint from notification
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('launch') === 'quick_sprint') {
-      const saved = StorageService.getSessions();
-      const primary = saved[0] || CURATED_STARTER_DECKS[0]?.session;
-      if (primary) {
-        setActiveSession({
-          ...primary,
-          currentPhase: 'retrieval',
-          casualFlashcardMode: true,
-        });
-      }
-    }
   }, []);
 
   const handleStartSession = (session: StudySession) => {

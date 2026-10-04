@@ -39,6 +39,256 @@ interface StoredMaterials {
   rimLight: THREE.DirectionalLight;
 }
 
+// Helper: Build Accessory Geometry
+function buildAccessory(group: THREE.Group, acc: AxolotlAccessoryId) {
+  while (group.children.length > 0) {
+    group.remove(group.children[0]);
+  }
+
+  if (acc === 'none') return;
+
+  if (acc === 'glasses') {
+    const glassesGroup = new THREE.Group();
+    glassesGroup.position.set(0, 0.15, 0.64);
+
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: '#f59e0b',
+      metalness: 0.8,
+      roughness: 0.2,
+    });
+
+    [-0.43, 0.43].forEach((x) => {
+      const rimGeom = new THREE.TorusGeometry(0.18, 0.022, 12, 24);
+      const rimMesh = new THREE.Mesh(rimGeom, frameMat);
+      rimMesh.position.set(x, 0, 0);
+      glassesGroup.add(rimMesh);
+    });
+
+    const bridgeGeom = new THREE.CylinderGeometry(0.016, 0.016, 0.42, 8);
+    bridgeGeom.rotateZ(Math.PI / 2);
+    const bridgeMesh = new THREE.Mesh(bridgeGeom, frameMat);
+    bridgeMesh.position.set(0, 0, 0);
+    glassesGroup.add(bridgeMesh);
+
+    group.add(glassesGroup);
+  } else if (acc === 'cap') {
+    const capGroup = new THREE.Group();
+    capGroup.position.set(0, 0.72, 0.05);
+
+    const capMat = new THREE.MeshStandardMaterial({ color: '#1e1b4b', roughness: 0.5 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: '#fbbf24', metalness: 0.8, roughness: 0.2 });
+
+    const boardGeom = new THREE.BoxGeometry(0.95, 0.045, 0.95);
+    boardGeom.rotateY(Math.PI / 4);
+    const boardMesh = new THREE.Mesh(boardGeom, capMat);
+    capGroup.add(boardMesh);
+
+    const baseGeom = new THREE.CylinderGeometry(0.38, 0.45, 0.2, 16);
+    baseGeom.translate(0, -0.1, 0);
+    const baseMesh = new THREE.Mesh(baseGeom, capMat);
+    capGroup.add(baseMesh);
+
+    const tasselGeom = new THREE.CylinderGeometry(0.02, 0.04, 0.45, 8);
+    tasselGeom.translate(0.35, -0.22, 0.2);
+    const tasselMesh = new THREE.Mesh(tasselGeom, goldMat);
+    capGroup.add(tasselMesh);
+
+    group.add(capGroup);
+  } else if (acc === 'headphones') {
+    const hpGroup = new THREE.Group();
+    hpGroup.position.set(0, 0.38, 0);
+
+    const hpMat = new THREE.MeshStandardMaterial({ color: '#090a10', roughness: 0.3 });
+    const neonMat = new THREE.MeshStandardMaterial({
+      color: '#00f0ff',
+      emissive: '#00f0ff',
+      emissiveIntensity: 0.8,
+    });
+
+    const bandGeom = new THREE.TorusGeometry(0.74, 0.05, 8, 24, Math.PI);
+    const bandMesh = new THREE.Mesh(bandGeom, hpMat);
+    bandMesh.rotation.z = -Math.PI;
+    bandMesh.position.y = 0.12;
+    hpGroup.add(bandMesh);
+
+    [-0.74, 0.74].forEach((x) => {
+      const cupGeom = new THREE.CylinderGeometry(0.2, 0.2, 0.12, 16);
+      cupGeom.rotateZ(Math.PI / 2);
+      const cupMesh = new THREE.Mesh(cupGeom, hpMat);
+      cupMesh.position.set(x, 0.1, 0);
+      hpGroup.add(cupMesh);
+
+      const ringGeom = new THREE.RingGeometry(0.08, 0.15, 16);
+      ringGeom.rotateY(Math.PI / 2);
+      const ringMesh = new THREE.Mesh(ringGeom, neonMat);
+      ringMesh.position.set(x > 0 ? x + 0.07 : x - 0.07, 0.1, 0);
+      hpGroup.add(ringMesh);
+    });
+
+    group.add(hpGroup);
+  } else if (acc === 'halo') {
+    const haloGroup = new THREE.Group();
+    haloGroup.position.set(0, 0.95, 0);
+
+    const haloMat = new THREE.MeshStandardMaterial({
+      color: '#fef08a',
+      emissive: '#eab308',
+      emissiveIntensity: 1.2,
+      roughness: 0.1,
+    });
+
+    const haloGeom = new THREE.TorusGeometry(0.55, 0.045, 12, 32);
+    haloGeom.rotateX(Math.PI / 2.3);
+    const haloMesh = new THREE.Mesh(haloGeom, haloMat);
+    haloGroup.add(haloMesh);
+
+    group.add(haloGroup);
+  } else if (acc === 'crown') {
+    const crownGroup = new THREE.Group();
+    crownGroup.position.set(0, 0.68, 0.08);
+
+    const crownMat = new THREE.MeshStandardMaterial({
+      color: '#facc15',
+      metalness: 0.9,
+      roughness: 0.15,
+    });
+    const gemMat = new THREE.MeshStandardMaterial({
+      color: '#ef4444',
+      emissive: '#ef4444',
+      emissiveIntensity: 0.5,
+    });
+
+    const ringGeom = new THREE.CylinderGeometry(0.38, 0.42, 0.18, 16);
+    const ringMesh = new THREE.Mesh(ringGeom, crownMat);
+    crownGroup.add(ringMesh);
+
+    for (let s = 0; s < 5; s++) {
+      const ang = (s / 5) * Math.PI * 2;
+      const spikeGeom = new THREE.ConeGeometry(0.08, 0.25, 8);
+      const spikeMesh = new THREE.Mesh(spikeGeom, crownMat);
+      spikeMesh.position.set(Math.cos(ang) * 0.38, 0.2, Math.sin(ang) * 0.38);
+      crownGroup.add(spikeMesh);
+
+      if (s === 0) {
+        const gemGeom = new THREE.SphereGeometry(0.05, 8, 8);
+        const gemMesh = new THREE.Mesh(gemGeom, gemMat);
+        gemMesh.position.set(Math.cos(ang) * 0.42, 0.12, Math.sin(ang) * 0.42);
+        crownGroup.add(gemMesh);
+      }
+    }
+
+    group.add(crownGroup);
+  } else if (acc === 'bowtie') {
+    const bowGroup = new THREE.Group();
+    bowGroup.position.set(0, -0.32, 0.58);
+
+    const bowMat = new THREE.MeshStandardMaterial({ color: '#ec4899', roughness: 0.4 });
+    const knotGeom = new THREE.SphereGeometry(0.08, 10, 10);
+    bowGroup.add(new THREE.Mesh(knotGeom, bowMat));
+
+    [-0.18, 0.18].forEach((x) => {
+      const wingGeom = new THREE.ConeGeometry(0.16, 0.28, 8);
+      wingGeom.rotateZ(x > 0 ? -Math.PI / 2 : Math.PI / 2);
+      const wingMesh = new THREE.Mesh(wingGeom, bowMat);
+      wingMesh.position.set(x, 0, 0);
+      bowGroup.add(wingMesh);
+    });
+
+    group.add(bowGroup);
+  } else if (acc === 'snorkel') {
+    const goggleGroup = new THREE.Group();
+    goggleGroup.position.set(0, 0.15, 0.6);
+
+    const goggleMat = new THREE.MeshStandardMaterial({ color: '#06b6d4', roughness: 0.2 });
+    const lensMat = new THREE.MeshStandardMaterial({
+      color: '#e0f2fe',
+      transparent: true,
+      opacity: 0.6,
+      roughness: 0.1,
+    });
+
+    const frameGeom = new THREE.BoxGeometry(1.05, 0.38, 0.12);
+    const frameMesh = new THREE.Mesh(frameGeom, goggleMat);
+    goggleGroup.add(frameMesh);
+
+    const lensGeom = new THREE.BoxGeometry(0.95, 0.3, 0.02);
+    lensGeom.translate(0, 0, 0.06);
+    const lensMesh = new THREE.Mesh(lensGeom, lensMat);
+    goggleGroup.add(lensMesh);
+
+    const pipeGeom = new THREE.CylinderGeometry(0.04, 0.04, 0.9, 8);
+    pipeGeom.translate(0.62, 0.35, -0.1);
+    const pipeMesh = new THREE.Mesh(pipeGeom, new THREE.MeshStandardMaterial({ color: '#f59e0b' }));
+    goggleGroup.add(pipeMesh);
+
+    group.add(goggleGroup);
+  }
+}
+
+// Helper: Build Environment Floor & Props
+function buildEnvironmentProps(group: THREE.Group, envId: AxolotlEnvironmentId) {
+  while (group.children.length > 0) {
+    group.remove(group.children[0]);
+  }
+
+  if (envId === 'sanctuary-reef') {
+    const pebbleMat = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.8 });
+    for (let p = 0; p < 35; p++) {
+      const rad = 0.15 + Math.random() * 0.25;
+      const pGeom = new THREE.DodecahedronGeometry(rad, 1);
+      pGeom.scale(1.2, 0.5, 1);
+      const pMesh = new THREE.Mesh(pGeom, pebbleMat);
+      pMesh.position.set(
+        (Math.random() - 0.5) * 5,
+        -2.3 + Math.random() * 0.2,
+        (Math.random() - 0.5) * 4
+      );
+      group.add(pMesh);
+    }
+
+    const plantMat = new THREE.MeshStandardMaterial({ color: '#10b981', roughness: 0.5 });
+    [-1.8, 1.8].forEach((x) => {
+      const plantGeom = new THREE.CylinderGeometry(0.04, 0.12, 2.2, 8);
+      plantGeom.translate(x, -1.2, -1.2);
+      const plantMesh = new THREE.Mesh(plantGeom, plantMat);
+      group.add(plantMesh);
+    });
+  } else if (envId === 'deep-biolum') {
+    const crystalMat = new THREE.MeshStandardMaterial({
+      color: '#38bdf8',
+      emissive: '#0284c7',
+      emissiveIntensity: 0.8,
+      roughness: 0.1,
+    });
+
+    [-2, -1.2, 1.4, 2.2].forEach((x) => {
+      const cGeom = new THREE.ConeGeometry(0.25, 1.6, 6);
+      cGeom.translate(x, -1.5, -1.5);
+      const cMesh = new THREE.Mesh(cGeom, crystalMat);
+      group.add(cMesh);
+    });
+  } else if (envId === 'zen-pond') {
+    const lotusGroup = new THREE.Group();
+    lotusGroup.position.set(1.5, -1.6, -1);
+
+    const petalMat = new THREE.MeshStandardMaterial({ color: '#f472b6', roughness: 0.3 });
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2;
+      const petalGeom = new THREE.SphereGeometry(0.2, 8, 8);
+      petalGeom.scale(0.5, 0.2, 1.2);
+      const petalMesh = new THREE.Mesh(petalGeom, petalMat);
+      petalMesh.position.set(Math.cos(ang) * 0.3, 0, Math.sin(ang) * 0.3);
+      petalMesh.rotation.y = -ang;
+      lotusGroup.add(petalMesh);
+    }
+    group.add(lotusGroup);
+  } else if (envId === 'cyber-matrix') {
+    const grid = new THREE.GridHelper(8, 16, '#00f0ff', '#1e293b');
+    grid.position.y = -2.2;
+    group.add(grid);
+  }
+}
+
 export const Axolotl3DCanvas: React.FC<Axolotl3DCanvasProps> = ({
   skin: propSkin,
   accessory: propAccessory,
@@ -64,13 +314,10 @@ export const Axolotl3DCanvas: React.FC<Axolotl3DCanvasProps> = ({
   const [isPetting, setIsPetting] = useState(false);
   const [webglError, setWebglError] = useState(false);
 
-  // Sync with service if props are not explicitly overriding
-  useEffect(() => {
-    if (propSkin) setActiveSkin(propSkin);
-    if (propAccessory) setActiveAccessory(propAccessory);
-    if (propEnvironment) setActiveEnvironment(propEnvironment);
-    if (propMood) setActiveMood(propMood);
-  }, [propSkin, propAccessory, propEnvironment, propMood]);
+  const effectiveSkin = propSkin || activeSkin;
+  const effectiveAccessory = propAccessory || activeAccessory;
+  const effectiveEnvironment = propEnvironment || activeEnvironment;
+  const effectiveMood = propMood || activeMood;
 
   useEffect(() => {
     const unsub = axolotlService.subscribe((state) => {
@@ -83,23 +330,21 @@ export const Axolotl3DCanvas: React.FC<Axolotl3DCanvasProps> = ({
   }, [propSkin, propAccessory, propEnvironment, propMood]);
 
   // Live refs for animation loop & stable scene initialization
-  const activeMoodRef = useRef(activeMood);
-  activeMoodRef.current = activeMood;
-
-  const activeSkinRef = useRef(activeSkin);
-  activeSkinRef.current = activeSkin;
-
-  const activeAccessoryRef = useRef(activeAccessory);
-  activeAccessoryRef.current = activeAccessory;
-
-  const activeEnvironmentRef = useRef(activeEnvironment);
-  activeEnvironmentRef.current = activeEnvironment;
-
+  const activeMoodRef = useRef(effectiveMood);
+  const activeSkinRef = useRef(effectiveSkin);
+  const activeAccessoryRef = useRef(effectiveAccessory);
+  const activeEnvironmentRef = useRef(effectiveEnvironment);
   const breathingGuideRef = useRef(breathingGuide);
-  breathingGuideRef.current = breathingGuide;
-
   const autoRotateRef = useRef(autoRotate);
-  autoRotateRef.current = autoRotate;
+
+  useEffect(() => {
+    activeMoodRef.current = effectiveMood;
+    activeSkinRef.current = effectiveSkin;
+    activeAccessoryRef.current = effectiveAccessory;
+    activeEnvironmentRef.current = effectiveEnvironment;
+    breathingGuideRef.current = breathingGuide;
+    autoRotateRef.current = autoRotate;
+  });
 
   // Three.js References
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -418,7 +663,7 @@ export const Axolotl3DCanvas: React.FC<Axolotl3DCanvasProps> = ({
           };
 
           // Apply current active skin
-          const p = SKIN_PALETTES[activeSkin] || SKIN_PALETTES.leucistic;
+          const p = SKIN_PALETTES[activeSkinRef.current] || SKIN_PALETTES.leucistic;
           bodyMat.color.set(p.bodyColor);
           bodyMat.roughness = p.roughness;
           bodyMat.metalness = p.metalness;
@@ -427,7 +672,7 @@ export const Axolotl3DCanvas: React.FC<Axolotl3DCanvasProps> = ({
           stemMat.color.set(p.gillStemColor);
           frillMat.color.set(p.gillFrillColor);
           frillMat.emissive.set(p.gillFrillColor);
-          frillMat.emissiveIntensity = activeSkin === 'cyber' || activeSkin === 'midnight' ? 0.45 : 0.15;
+          frillMat.emissiveIntensity = activeSkinRef.current === 'cyber' || activeSkinRef.current === 'midnight' ? 0.45 : 0.15;
           eyeMat.color.set(p.eyeColor);
           finMat.color.set(p.gillStemColor);
         }
@@ -442,7 +687,7 @@ export const Axolotl3DCanvas: React.FC<Axolotl3DCanvasProps> = ({
     const envPropsGroup = new THREE.Group();
     environmentPropsGroupRef.current = envPropsGroup;
     scene.add(envPropsGroup);
-    buildEnvironmentProps(envPropsGroup, activeEnvironment);
+    buildEnvironmentProps(envPropsGroup, activeEnvironmentRef.current);
 
     // 9. Floating Translucent Bubbles
     const bubblesGroup = new THREE.Group();
@@ -726,258 +971,7 @@ export const Axolotl3DCanvas: React.FC<Axolotl3DCanvasProps> = ({
     if (!environmentPropsGroupRef.current || !sceneRef.current) return;
     const e = ENVIRONMENTS_META[activeEnvironment] || ENVIRONMENTS_META['sanctuary-reef'];
     sceneRef.current.fog = new THREE.FogExp2(e.fogColor, 0.045);
-    buildEnvironmentProps(environmentPropsGroupRef.current, activeEnvironment);
   }, [activeEnvironment]);
-
-  // Helper: Build Accessory Geometry
-  function buildAccessory(group: THREE.Group, acc: AxolotlAccessoryId) {
-    while (group.children.length > 0) {
-      group.remove(group.children[0]);
-    }
-
-    if (acc === 'none') return;
-
-    if (acc === 'glasses') {
-      const glassesGroup = new THREE.Group();
-      glassesGroup.position.set(0, 0.15, 0.64);
-
-      const frameMat = new THREE.MeshStandardMaterial({
-        color: '#f59e0b',
-        metalness: 0.8,
-        roughness: 0.2,
-      });
-
-      [-0.43, 0.43].forEach((x) => {
-        const rimGeom = new THREE.TorusGeometry(0.18, 0.022, 12, 24);
-        const rimMesh = new THREE.Mesh(rimGeom, frameMat);
-        rimMesh.position.set(x, 0, 0);
-        glassesGroup.add(rimMesh);
-      });
-
-      const bridgeGeom = new THREE.CylinderGeometry(0.016, 0.016, 0.42, 8);
-      bridgeGeom.rotateZ(Math.PI / 2);
-      const bridgeMesh = new THREE.Mesh(bridgeGeom, frameMat);
-      bridgeMesh.position.set(0, 0, 0);
-      glassesGroup.add(bridgeMesh);
-
-      group.add(glassesGroup);
-    } else if (acc === 'cap') {
-      const capGroup = new THREE.Group();
-      capGroup.position.set(0, 0.72, 0.05);
-
-      const capMat = new THREE.MeshStandardMaterial({ color: '#1e1b4b', roughness: 0.5 });
-      const goldMat = new THREE.MeshStandardMaterial({ color: '#fbbf24', metalness: 0.8, roughness: 0.2 });
-
-      const boardGeom = new THREE.BoxGeometry(0.95, 0.045, 0.95);
-      boardGeom.rotateY(Math.PI / 4);
-      const boardMesh = new THREE.Mesh(boardGeom, capMat);
-      capGroup.add(boardMesh);
-
-      const baseGeom = new THREE.CylinderGeometry(0.38, 0.45, 0.2, 16);
-      baseGeom.translate(0, -0.1, 0);
-      const baseMesh = new THREE.Mesh(baseGeom, capMat);
-      capGroup.add(baseMesh);
-
-      const tasselGeom = new THREE.CylinderGeometry(0.02, 0.04, 0.45, 8);
-      tasselGeom.translate(0.35, -0.22, 0.2);
-      const tasselMesh = new THREE.Mesh(tasselGeom, goldMat);
-      capGroup.add(tasselMesh);
-
-      group.add(capGroup);
-    } else if (acc === 'headphones') {
-      const hpGroup = new THREE.Group();
-      hpGroup.position.set(0, 0.38, 0);
-
-      const hpMat = new THREE.MeshStandardMaterial({ color: '#090a10', roughness: 0.3 });
-      const neonMat = new THREE.MeshStandardMaterial({
-        color: '#00f0ff',
-        emissive: '#00f0ff',
-        emissiveIntensity: 0.8,
-      });
-
-      const bandGeom = new THREE.TorusGeometry(0.74, 0.05, 8, 24, Math.PI);
-      const bandMesh = new THREE.Mesh(bandGeom, hpMat);
-      bandMesh.rotation.z = -Math.PI;
-      bandMesh.position.y = 0.12;
-      hpGroup.add(bandMesh);
-
-      [-0.74, 0.74].forEach((x) => {
-        const cupGeom = new THREE.CylinderGeometry(0.2, 0.2, 0.12, 16);
-        cupGeom.rotateZ(Math.PI / 2);
-        const cupMesh = new THREE.Mesh(cupGeom, hpMat);
-        cupMesh.position.set(x, 0.1, 0);
-        hpGroup.add(cupMesh);
-
-        const ringGeom = new THREE.RingGeometry(0.08, 0.15, 16);
-        ringGeom.rotateY(Math.PI / 2);
-        const ringMesh = new THREE.Mesh(ringGeom, neonMat);
-        ringMesh.position.set(x > 0 ? x + 0.07 : x - 0.07, 0.1, 0);
-        hpGroup.add(ringMesh);
-      });
-
-      group.add(hpGroup);
-    } else if (acc === 'halo') {
-      const haloGroup = new THREE.Group();
-      haloGroup.position.set(0, 0.95, 0);
-
-      const haloMat = new THREE.MeshStandardMaterial({
-        color: '#fef08a',
-        emissive: '#eab308',
-        emissiveIntensity: 1.2,
-        roughness: 0.1,
-      });
-
-      const haloGeom = new THREE.TorusGeometry(0.55, 0.045, 12, 32);
-      haloGeom.rotateX(Math.PI / 2.3);
-      const haloMesh = new THREE.Mesh(haloGeom, haloMat);
-      haloGroup.add(haloMesh);
-
-      group.add(haloGroup);
-    } else if (acc === 'crown') {
-      const crownGroup = new THREE.Group();
-      crownGroup.position.set(0, 0.68, 0.08);
-
-      const crownMat = new THREE.MeshStandardMaterial({
-        color: '#facc15',
-        metalness: 0.9,
-        roughness: 0.15,
-      });
-      const gemMat = new THREE.MeshStandardMaterial({
-        color: '#ef4444',
-        emissive: '#ef4444',
-        emissiveIntensity: 0.5,
-      });
-
-      const ringGeom = new THREE.CylinderGeometry(0.38, 0.42, 0.18, 16);
-      const ringMesh = new THREE.Mesh(ringGeom, crownMat);
-      crownGroup.add(ringMesh);
-
-      for (let s = 0; s < 5; s++) {
-        const ang = (s / 5) * Math.PI * 2;
-        const spikeGeom = new THREE.ConeGeometry(0.08, 0.25, 8);
-        const spikeMesh = new THREE.Mesh(spikeGeom, crownMat);
-        spikeMesh.position.set(Math.cos(ang) * 0.38, 0.2, Math.sin(ang) * 0.38);
-        crownGroup.add(spikeMesh);
-
-        if (s === 0) {
-          const gemGeom = new THREE.SphereGeometry(0.05, 8, 8);
-          const gemMesh = new THREE.Mesh(gemGeom, gemMat);
-          gemMesh.position.set(Math.cos(ang) * 0.42, 0.12, Math.sin(ang) * 0.42);
-          crownGroup.add(gemMesh);
-        }
-      }
-
-      group.add(crownGroup);
-    } else if (acc === 'bowtie') {
-      const bowGroup = new THREE.Group();
-      bowGroup.position.set(0, -0.32, 0.58);
-
-      const bowMat = new THREE.MeshStandardMaterial({ color: '#ec4899', roughness: 0.4 });
-      const knotGeom = new THREE.SphereGeometry(0.08, 10, 10);
-      bowGroup.add(new THREE.Mesh(knotGeom, bowMat));
-
-      [-0.18, 0.18].forEach((x) => {
-        const wingGeom = new THREE.ConeGeometry(0.16, 0.28, 8);
-        wingGeom.rotateZ(x > 0 ? -Math.PI / 2 : Math.PI / 2);
-        const wingMesh = new THREE.Mesh(wingGeom, bowMat);
-        wingMesh.position.set(x, 0, 0);
-        bowGroup.add(wingMesh);
-      });
-
-      group.add(bowGroup);
-    } else if (acc === 'snorkel') {
-      const goggleGroup = new THREE.Group();
-      goggleGroup.position.set(0, 0.15, 0.6);
-
-      const goggleMat = new THREE.MeshStandardMaterial({ color: '#06b6d4', roughness: 0.2 });
-      const lensMat = new THREE.MeshStandardMaterial({
-        color: '#e0f2fe',
-        transparent: true,
-        opacity: 0.6,
-        roughness: 0.1,
-      });
-
-      const frameGeom = new THREE.BoxGeometry(1.05, 0.38, 0.12);
-      const frameMesh = new THREE.Mesh(frameGeom, goggleMat);
-      goggleGroup.add(frameMesh);
-
-      const lensGeom = new THREE.BoxGeometry(0.95, 0.3, 0.02);
-      lensGeom.translate(0, 0, 0.06);
-      const lensMesh = new THREE.Mesh(lensGeom, lensMat);
-      goggleGroup.add(lensMesh);
-
-      const pipeGeom = new THREE.CylinderGeometry(0.04, 0.04, 0.9, 8);
-      pipeGeom.translate(0.62, 0.35, -0.1);
-      const pipeMesh = new THREE.Mesh(pipeGeom, new THREE.MeshStandardMaterial({ color: '#f59e0b' }));
-      goggleGroup.add(pipeMesh);
-
-      group.add(goggleGroup);
-    }
-  }
-
-  // Helper: Build Environment Floor & Props
-  function buildEnvironmentProps(group: THREE.Group, envId: AxolotlEnvironmentId) {
-    while (group.children.length > 0) {
-      group.remove(group.children[0]);
-    }
-
-    if (envId === 'sanctuary-reef') {
-      const pebbleMat = new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.8 });
-      for (let p = 0; p < 35; p++) {
-        const rad = 0.15 + Math.random() * 0.25;
-        const pGeom = new THREE.DodecahedronGeometry(rad, 1);
-        pGeom.scale(1.2, 0.5, 1);
-        const pMesh = new THREE.Mesh(pGeom, pebbleMat);
-        pMesh.position.set(
-          (Math.random() - 0.5) * 5,
-          -2.3 + Math.random() * 0.2,
-          (Math.random() - 0.5) * 4
-        );
-        group.add(pMesh);
-      }
-
-      const plantMat = new THREE.MeshStandardMaterial({ color: '#10b981', roughness: 0.5 });
-      [-1.8, 1.8].forEach((x) => {
-        const plantGeom = new THREE.CylinderGeometry(0.04, 0.12, 2.2, 8);
-        plantGeom.translate(x, -1.2, -1.2);
-        const plantMesh = new THREE.Mesh(plantGeom, plantMat);
-        group.add(plantMesh);
-      });
-    } else if (envId === 'deep-biolum') {
-      const crystalMat = new THREE.MeshStandardMaterial({
-        color: '#38bdf8',
-        emissive: '#0284c7',
-        emissiveIntensity: 0.8,
-        roughness: 0.1,
-      });
-
-      [-2, -1.2, 1.4, 2.2].forEach((x) => {
-        const cGeom = new THREE.ConeGeometry(0.25, 1.6, 6);
-        cGeom.translate(x, -1.5, -1.5);
-        const cMesh = new THREE.Mesh(cGeom, crystalMat);
-        group.add(cMesh);
-      });
-    } else if (envId === 'zen-pond') {
-      const lotusGroup = new THREE.Group();
-      lotusGroup.position.set(1.5, -1.6, -1);
-
-      const petalMat = new THREE.MeshStandardMaterial({ color: '#f472b6', roughness: 0.3 });
-      for (let i = 0; i < 8; i++) {
-        const ang = (i / 8) * Math.PI * 2;
-        const petalGeom = new THREE.SphereGeometry(0.2, 8, 8);
-        petalGeom.scale(0.5, 0.2, 1.2);
-        const petalMesh = new THREE.Mesh(petalGeom, petalMat);
-        petalMesh.position.set(Math.cos(ang) * 0.3, 0, Math.sin(ang) * 0.3);
-        petalMesh.rotation.y = -ang;
-        lotusGroup.add(petalMesh);
-      }
-      group.add(lotusGroup);
-    } else if (envId === 'cyber-matrix') {
-      const grid = new THREE.GridHelper(8, 16, '#00f0ff', '#1e293b');
-      grid.position.y = -2.2;
-      group.add(grid);
-    }
-  }
 
   // Pointer Movement (Interactive Tracking & Orbiting)
   const handlePointerMove = (e: React.PointerEvent) => {

@@ -176,8 +176,28 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
       return [];
     }
 
-    const shuffledDistractors = [...pool].sort(() => Math.random() - 0.5).slice(0, 3);
-    const allOpts = [currentCard.answer, ...shuffledDistractors].sort(() => Math.random() - 0.5);
+    // Deterministic seeded Fisher-Yates shuffle based on card ID to ensure stable options across renders
+    let seed = 0;
+    for (let i = 0; i < currentCard.id.length; i++) {
+      seed = (seed * 31 + currentCard.id.charCodeAt(i)) >>> 0;
+    }
+    const pseudoRandom = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+
+    const shuffledPool = [...pool];
+    for (let i = shuffledPool.length - 1; i > 0; i--) {
+      const j = Math.floor(pseudoRandom() * (i + 1));
+      [shuffledPool[i], shuffledPool[j]] = [shuffledPool[j], shuffledPool[i]];
+    }
+    const selectedDistractors = shuffledPool.slice(0, 3);
+
+    const allOpts = [currentCard.answer, ...selectedDistractors];
+    for (let i = allOpts.length - 1; i > 0; i--) {
+      const j = Math.floor(pseudoRandom() * (i + 1));
+      [allOpts[i], allOpts[j]] = [allOpts[j], allOpts[i]];
+    }
     return allOpts;
   }, [currentCard, cards, concept.keyTerms]);
 
@@ -350,7 +370,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, isAnswerRevealed, handleRate, effectiveType, currentCard, handleSelectOption, handleToggleReveal]);
+  }, [activeTab, isAnswerRevealed, handleRate, effectiveType, currentCard, handleSelectOption, handleToggleReveal, hasInteractiveOptions, isCorrect, selectedOption, activeOptions]);
 
   // Web Gamepad Controller Integration (8BitDo, Joy-Cons, Xbox, PlayStation)
   useEffect(() => {

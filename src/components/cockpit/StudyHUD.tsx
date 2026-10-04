@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Flame, 
   Gamepad2, 
@@ -30,26 +30,25 @@ export const StudyHUD: React.FC<StudyHUDProps> = ({
   onOpenShortcuts,
 }) => {
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  const [pedagogicalStatus, setPedagogicalStatus] = useState<string>("Retrieve from memory before revealing the answer.");
 
-  // Dynamic status updates based on retrieval progress
-  useEffect(() => {
+  // Dynamic status derived based on retrieval progress
+  const pedagogicalStatus = useMemo(() => {
     if (combo >= 4) {
-      setPedagogicalStatus(`⚡ ${combo}x streak — synaptic recall in high-speed flow state!`);
+      return `⚡ ${combo}x streak — synaptic recall in high-speed flow state!`;
     } else if (combo === 3) {
-      setPedagogicalStatus("🔥 3 consecutive successful retrievals — strong memory traces forming.");
+      return "🔥 3 consecutive successful retrievals — strong memory traces forming.";
     } else if (lastRating === 'again') {
-      setPedagogicalStatus("Effortful error recovery triggers deeper memory consolidation.");
+      return "Effortful error recovery triggers deeper memory consolidation.";
     } else if (lastRating === 'hard') {
-      setPedagogicalStatus("Desirable difficulty engaged — neural pathways reinforced.");
+      return "Desirable difficulty engaged — neural pathways reinforced.";
     } else if (lastRating === 'easy') {
-      setPedagogicalStatus("Rapid retrieval — FSRS interval will expand substantially.");
+      return "Rapid retrieval — FSRS interval will expand substantially.";
     } else if (isAnswerRevealed) {
-      setPedagogicalStatus("Rate your retrieval effort honestly to calibrate FSRS spacing.");
+      return "Rate your retrieval effort honestly to calibrate FSRS spacing.";
     } else {
-      setPedagogicalStatus("Retrieve from memory before revealing the answer.");
+      return "Retrieve from memory before revealing the answer.";
     }
-  }, [combo, lastRating, isAnswerRevealed, currentIndex]);
+  }, [combo, lastRating, isAnswerRevealed]);
 
   return (
     <>

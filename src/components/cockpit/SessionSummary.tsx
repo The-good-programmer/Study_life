@@ -137,7 +137,9 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
     StorageService.recordStudyMinutes(minutes);
 
     const r = axolotlService.awardStudySessionRewards(totalCards, minutes, 0.9);
-    setRewards(r);
+    queueMicrotask(() => {
+      setRewards(r);
+    });
 
     try {
       confetti({

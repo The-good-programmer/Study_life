@@ -110,8 +110,6 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
 
     let secondsLeft = 4;
     let currentStep: 'Inhale' | 'Hold' | 'Exhale' = 'Inhale';
-    setBreathPhase('Inhale');
-    setBreathSeconds(4);
 
     const timer = setInterval(() => {
       secondsLeft -= 1;
@@ -480,7 +478,16 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => setBreathingActive(prev => !prev)}
+                  onClick={() => {
+                    setBreathingActive(prev => {
+                      const next = !prev;
+                      if (next) {
+                        setBreathPhase('Inhale');
+                        setBreathSeconds(4);
+                      }
+                      return next;
+                    });
+                  }}
                   className={`py-1.5 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
                     breathingActive
                       ? 'bg-cyan-500/25 border-cyan-400/50 text-cyan-200 animate-pulse'
