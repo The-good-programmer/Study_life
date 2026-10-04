@@ -4,7 +4,6 @@ import {
   Gamepad2, 
   Keyboard, 
   X,
-  Sparkles,
   Zap
 } from 'lucide-react';
 import type { FSRSRating } from '../../types';

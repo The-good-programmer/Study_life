@@ -235,13 +235,7 @@ export class StorageService {
   }
 
   public static getApiKey(): string {
-    const stored = localStorage.getItem(STORAGE_KEYS.API_KEY);
-    if (stored) return stored;
-    try {
-      return (import.meta as unknown as { env: { VITE_GEMINI_API_KEY?: string } }).env?.VITE_GEMINI_API_KEY || '';
-    } catch {
-      return '';
-    }
+    return localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
   }
 
   public static setApiKey(key: string) {

@@ -24,8 +24,16 @@ export interface VivaVoceTurnResponse {
 }
 
 export class AIService {
+  /**
+   * Checks whether a user-configured Gemini API key is present
+   */
+  public static isAvailable(): boolean {
+    return Boolean(StorageService.getApiKey());
+  }
+
   private static getClient(customKey?: string): GoogleGenAI | null {
-    const key = customKey || StorageService.getApiKey() || (import.meta as unknown as { env: { VITE_GEMINI_API_KEY?: string } }).env?.VITE_GEMINI_API_KEY;
+    // Strictly rely on user-configured key in browser storage, never bake keys into client bundle
+    const key = customKey || StorageService.getApiKey();
     if (!key) return null;
     try {
       return new GoogleGenAI({ apiKey: key });
@@ -36,11 +44,12 @@ export class AIService {
   }
 
   private static readonly MODEL_CANDIDATES = [
-    'gemini-2.5-flash',
-    'gemini-3.5-flash',
-    'gemini-2.5-pro',
     'gemini-3.5-flash-lite',
+    'gemini-2.5-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-2.5-flash',
     'gemini-3.8-flash',
+    'gemini-2.5-pro',
   ];
 
   private static async generateContentWithFallback(
@@ -56,10 +65,12 @@ export class AIService {
         if (responseMimeType) {
           config.responseMimeType = responseMimeType;
         }
-        if (enableThinking && (model.includes('2.5') || model.includes('3.'))) {
-          config.thinkingConfig = {
-            thinkingBudget: 1024,
-          };
+        if (enableThinking) {
+          if (model.includes('3.')) {
+            config.thinkingConfig = { thinkingLevel: 'LOW' };
+          } else if (model.includes('2.5')) {
+            config.thinkingConfig = { thinkingBudget: 1024 };
+          }
         }
         const response = await ai.models.generateContent({
           model,

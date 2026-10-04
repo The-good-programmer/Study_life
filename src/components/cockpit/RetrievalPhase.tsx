@@ -1112,7 +1112,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                         type="button"
                         onClick={() => {
                           haptics.light();
-                          soundEngine.playPop();
+                          soundEngine.playTapPop();
                           setHintLevel(prev => (prev >= 3 ? 0 : prev + 1));
                         }}
                         className={`text-xs px-3 py-1.5 rounded-xl border flex items-center gap-1.5 transition-all font-semibold cursor-pointer ${
