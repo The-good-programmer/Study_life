@@ -1,20 +1,127 @@
-import React, { useState } from 'react';
-import { Brain, Flame, Layers, Volume2, VolumeX, Settings, Sparkles, Zap, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  Flame, 
+  Layers, 
+  Volume2, 
+  VolumeX, 
+  Settings, 
+  Sparkles, 
+  Zap, 
+  CheckCircle2, 
+  Search, 
+  Award, 
+  Shuffle, 
+  WifiOff, 
+  Download,
+  Compass,
+  Menu,
+  User,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Sun,
+  Moon
+} from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
 import type { SoundType } from '../../services/soundEngine';
-import type { UserStats } from '../../types';
+import type { UserStats, UserAccount } from '../../types';
+import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
+import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
 
 interface NavbarProps {
   stats: UserStats;
+  currentUser?: UserAccount | null;
+  onOpenAuth?: (tab?: 'login' | 'register' | 'profile') => void;
+  activeView?: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio';
+  onNavigate?: (view: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio') => void;
   onOpenSettings: () => void;
   onOpenDashboard?: () => void;
+  onOpenCommandPalette?: () => void;
+  onOpenExam?: () => void;
+  onOpenInterleaving?: () => void;
+  onOpenStarterCatalog?: () => void;
+  onOpenSanctuary?: () => void;
   onLogoClick?: () => void;
+  onToggleMobileSidebar?: () => void;
+  isOnline?: boolean;
+  isInstallable?: boolean;
+  onPromptInstall?: () => void;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebarCollapse?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ stats, onOpenSettings, onOpenDashboard, onLogoClick }) => {
+export const Navbar: React.FC<NavbarProps> = ({ 
+  stats, 
+  currentUser,
+  onOpenAuth,
+  activeView = 'home',
+  onNavigate,
+  onOpenSettings, 
+  onOpenDashboard, 
+  onOpenCommandPalette, 
+  onOpenExam,
+  onOpenInterleaving,
+  onOpenStarterCatalog,
+  onOpenSanctuary,
+  onLogoClick,
+  onToggleMobileSidebar,
+  isOnline = true,
+  isInstallable = false,
+  onPromptInstall,
+  isSidebarCollapsed = false,
+  onToggleSidebarCollapse,
+}) => {
   const [currentSound, setCurrentSound] = useState<SoundType>(soundEngine.getCurrentSound());
   const [soundMenuOpen, setSoundMenuOpen] = useState(false);
   const [volume, setVolume] = useState(soundEngine.getVolume());
+  const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
+  const [isTourModalOpen, setIsTourModalOpen] = useState(() => {
+    try {
+      return localStorage.getItem('axon_tour_seen') !== 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isPaperTheme, setIsPaperTheme] = useState(() => {
+    try {
+      return localStorage.getItem('axon_theme') === 'paper';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (isPaperTheme) {
+        document.documentElement.setAttribute('data-theme', 'paper');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+    } catch {}
+  }, [isPaperTheme]);
+
+  const handleToggleTheme = () => {
+    setIsPaperTheme(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('axon_theme', next ? 'paper' : 'dark');
+        if (next) {
+          document.documentElement.setAttribute('data-theme', 'paper');
+        } else {
+          document.documentElement.removeAttribute('data-theme');
+        }
+      } catch {}
+      return next;
+    });
+  };
+
+  // Listen to sound engine state changes
+  useEffect(() => {
+    const unsubscribe = soundEngine.subscribe((sound, vol) => {
+      setCurrentSound(sound);
+      setVolume(vol);
+    });
+    return unsubscribe;
+  }, []);
 
   const handleSoundChange = (type: SoundType) => {
     soundEngine.play(type);
@@ -33,45 +140,127 @@ export const Navbar: React.FC<NavbarProps> = ({ stats, onOpenSettings, onOpenDas
   const goalPercent = Math.min(100, Math.round((todayMinutes / dailyGoal) * 100));
   const goalCompleted = goalPercent >= 100;
 
-  // SVG Circle math: radius = 10, circumference = 2 * PI * 10 = 62.83
-  const circleRadius = 10;
-  const circumference = 2 * Math.PI * circleRadius;
-  const strokeOffset = circumference - (goalPercent / 100) * circumference;
-
   // XP progress to next level (150 XP per level)
   const currentLevelXP = (stats.xp || 0) % 150;
   const xpPercent = Math.round((currentLevelXP / 150) * 100);
 
+  const soundPresets: { id: SoundType; label: string; desc: string; icon: string }[] = [
+    { id: 'off', label: 'Mute Audio', desc: 'Silence focus synthesizers', icon: '🔇' },
+    { id: 'binaural-40hz', label: '40Hz Gamma Waves', desc: 'Cortical entrainment & working memory', icon: '🧠' },
+    { id: 'binaural-alpha-10hz', label: '10Hz Alpha Waves', desc: 'Relaxed focus & anxiety reduction', icon: '🧘' },
+    { id: 'brown-noise', label: 'Brownian Deep Noise', desc: 'Acoustic masking of speech & background', icon: '🌊' },
+    { id: 'pink-noise', label: 'Spectral Pink Noise', desc: 'Balanced frequencies for memory stabilization', icon: '🌸' },
+    { id: 'rain', label: 'Gentle Steady Rain', desc: 'Calming natural broadband soundscape', icon: '🌧️' },
+    { id: 'ambient-drone', label: 'Solfeggio Meditative Drone', desc: 'Warm chord pad for deep immersion', icon: '🎵' },
+  ];
+
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+    <>
+      <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#090a10]/85 backdrop-blur-xl transition-all">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-3">
         
-        {/* Brand */}
-        <div 
-          onClick={onLogoClick}
-          className="flex items-center gap-3 cursor-pointer group select-none"
-        >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-            <Brain className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-lg text-white tracking-tight">Studify</span>
-              <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                Pilot
-              </span>
+        {/* Left: Mobile Drawer Trigger + Brand Identity */}
+        <div className="flex items-center gap-3 shrink-0">
+          {onToggleMobileSidebar && (
+            <button
+              onClick={onToggleMobileSidebar}
+              className="md:hidden p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-slate-300 hover:text-white transition-all cursor-pointer"
+              title="Open Navigation"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+          )}
+
+          <div 
+            onClick={onLogoClick}
+            className="flex items-center gap-2.5 cursor-pointer group select-none md:hidden"
+          >
+            <div className="relative w-8 h-8 rounded-xl overflow-hidden p-0.5 bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 shadow-md shadow-pink-500/20 group-hover:scale-105 transition-all">
+              <img src="/lottie.png" alt="Lotti" className="w-full h-full object-cover rounded-[10px]" />
             </div>
-            <p className="text-xs text-slate-400">Zero-Friction Science Study</p>
+            <span className="font-extrabold text-base text-white tracking-tight font-display">Lotti</span>
+          </div>
+
+          {/* Mobile 3D Axolotl Quick Access */}
+          <button
+            onClick={() => onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.()}
+            className="md:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 border border-pink-500/40 text-pink-200 text-xs font-bold shadow-sm"
+            title="Visit 3D Axolotl Sanctuary"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-pink-400 animate-pulse" />
+            <span>3D Axolotl</span>
+          </button>
+
+          {/* Desktop Sidebar Shrink / Expand Toggle */}
+          {onToggleSidebarCollapse && (
+            <button
+              onClick={onToggleSidebarCollapse}
+              className="hidden md:flex p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-white transition-all cursor-pointer mr-1"
+              title={isSidebarCollapsed ? "Expand Sidebar [Ctrl+[]" : "Shrink Sidebar (only icons) [Ctrl+[]"}
+            >
+              {isSidebarCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4 text-cyan-400" />
+              ) : (
+                <PanelLeftClose className="w-4 h-4 text-slate-400" />
+              )}
+            </button>
+          )}
+
+          <div className="hidden md:flex items-center gap-2.5 text-xs font-semibold text-slate-400">
+            <span className="text-indigo-400">⚡</span>
+            <span className="text-slate-300 capitalize">
+              {activeView === 'home' ? '3D Habitat Hub' : activeView === 'dashboard' ? 'FSRS Retention' : activeView === 'exam' ? 'Mock Exam' : activeView === 'sanctuary' ? '3D Axolotl Sanctuary' : activeView === 'studio' ? 'Document Studio' : 'Interleaving'}
+            </span>
+            
+            <button
+              onClick={() => onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.()}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-sm group ${
+                activeView === 'sanctuary'
+                  ? 'bg-pink-500/25 border-pink-500/50 text-pink-100 shadow-pink-500/10'
+                  : 'bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-cyan-500/15 hover:from-pink-500/30 hover:to-cyan-500/30 border-pink-500/40 text-pink-200 hover:text-white'
+              }`}
+              title="Visit the 3D Axolotl Sanctuary"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-pink-400 group-hover:rotate-12 transition-transform" />
+              <span className="text-[12px] font-bold">3D Axolotl</span>
+              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-pink-500/30 text-pink-300 font-mono">
+                3D LIVE
+              </span>
+            </button>
+
+            <button
+              onClick={() => setIsTourModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-white transition-all cursor-pointer shadow-sm group"
+              title="Interactive tour: How AXON's 4-Phase Cognitive Architecture Works"
+            >
+              <span className="text-[11px] font-semibold">How it Works</span>
+            </button>
           </div>
         </div>
 
-        {/* Live Metrics & Quick Controls */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Center: Quizlet-style Wide Search Bar */}
+        {onOpenCommandPalette && (
+          <button
+            onClick={onOpenCommandPalette}
+            className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-slate-900/90 hover:bg-slate-850 border border-white/[0.1] hover:border-indigo-500/50 text-slate-400 hover:text-slate-200 text-xs transition-all shadow-sm flex-1 max-w-xs sm:max-w-md lg:max-w-lg mx-2 justify-between group cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 truncate">
+              <Search className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400 transition-colors shrink-0" />
+              <span className="text-slate-400 group-hover:text-slate-200 truncate">Search flashcards, topics, decks...</span>
+            </div>
+            <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-white/[0.08] border border-white/[0.1] rounded text-slate-400 shrink-0">
+              ⌘K
+            </kbd>
+          </button>
+        )}
+
+        {/* Right: Live Metrics & Controls */}
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           
-          {/* Level & XP Badge */}
+          {/* Level & XP Progression */}
           <div 
-            title={`Level ${stats.level}: ${stats.levelTitle} (${currentLevelXP}/150 XP)`}
-            className="hidden sm:flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-medium cursor-help"
+            title={`Level ${stats.level}: ${stats.levelTitle} (${currentLevelXP}/150 XP to next level)`}
+            className="hidden xl:flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900/80 border border-white/[0.08] text-xs font-medium cursor-help hover:border-purple-500/40 transition-colors"
           >
             <div className="w-5 h-5 rounded-md bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 font-bold text-[11px]">
               <Zap className="w-3 h-3 text-purple-400 fill-purple-400" />
@@ -79,9 +268,9 @@ export const Navbar: React.FC<NavbarProps> = ({ stats, onOpenSettings, onOpenDas
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-white text-[11px]">Lvl {stats.level}</span>
-                <span className="text-[10px] text-purple-300">{stats.levelTitle}</span>
+                <span className="text-[10px] text-purple-300 truncate max-w-[70px]">{stats.levelTitle}</span>
               </div>
-              <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+              <div className="w-14 h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
                 <div 
                   className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-300"
                   style={{ width: `${xpPercent}%` }}
@@ -93,151 +282,294 @@ export const Navbar: React.FC<NavbarProps> = ({ stats, onOpenSettings, onOpenDas
           {/* Daily Goal Radial Ring */}
           <div 
             title={`Daily Target: ${todayMinutes}m of ${dailyGoal}m completed (${goalPercent}%)`}
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-medium cursor-help"
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900/80 border border-white/[0.08] text-xs font-medium cursor-help hover:border-indigo-500/40 transition-colors"
           >
-            <div className="relative w-6 h-6 flex items-center justify-center">
-              <svg className="w-6 h-6 transform -rotate-90">
+            <div className="relative w-5 h-5 flex items-center justify-center">
+              <svg className="w-5 h-5 transform -rotate-90">
                 <circle
-                  cx="12"
-                  cy="12"
-                  r={circleRadius}
+                  cx="10"
+                  cy="10"
+                  r={8}
                   stroke="#1e293b"
-                  strokeWidth="2.5"
+                  strokeWidth="2.2"
                   fill="transparent"
                 />
                 <circle
-                  cx="12"
-                  cy="12"
-                  r={circleRadius}
+                  cx="10"
+                  cy="10"
+                  r={8}
                   stroke={goalCompleted ? '#10b981' : '#6366f1'}
-                  strokeWidth="2.5"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={strokeOffset}
+                  strokeWidth="2.2"
+                  strokeDasharray={2 * Math.PI * 8}
+                  strokeDashoffset={2 * Math.PI * 8 - (goalPercent / 100) * (2 * Math.PI * 8)}
                   strokeLinecap="round"
                   fill="transparent"
                   className="transition-all duration-500"
                 />
               </svg>
               {goalCompleted ? (
-                <CheckCircle2 className="w-3 h-3 text-emerald-400 absolute" />
+                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400 absolute" />
               ) : (
-                <span className="text-[9px] font-bold text-slate-300 absolute">
+                <span className="text-[8px] font-bold text-slate-300 absolute">
                   {goalPercent}%
                 </span>
               )}
             </div>
-            <div className="hidden md:block text-[11px]">
+            <div className="hidden sm:block text-[11px]">
               <span className="text-slate-200 font-semibold">{todayMinutes}m</span>
               <span className="text-slate-500">/{dailyGoal}m</span>
             </div>
           </div>
 
-          {/* Streak */}
-          <div 
-            title="Current Daily Study Streak"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-amber-400 text-xs font-medium"
+          {/* Daily Streak */}
+          <button 
+            type="button"
+            onClick={() => setIsStreakModalOpen(true)}
+            title="Lottie's Streak Guardian — Click to check streak status & freeze"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-850 border border-white/[0.08] hover:border-amber-500/50 text-amber-400 text-xs font-semibold shadow-sm transition-all cursor-pointer group hover:scale-105"
           >
-            <Flame className="w-4 h-4 fill-amber-400 text-amber-500 animate-pulse" />
+            <Flame className="w-4 h-4 fill-amber-400 text-amber-500 animate-pulse group-hover:scale-110 transition-transform" />
             <span>{stats.currentStreak}d</span>
-          </div>
+          </button>
 
-          {/* Cards Due / Dashboard Button */}
-          {onOpenDashboard && (
-            <button
-              onClick={onOpenDashboard}
-              title="Spaced Repetition Queue"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-emerald-400 text-xs font-medium transition-colors"
-            >
-              <Layers className="w-4 h-4" />
-              <span className="hidden sm:inline">{stats.cardsDueCount} Due</span>
-            </button>
-          )}
-
-          {/* Audio Engine Dropdown */}
+          {/* Audio Engine with Real-Time Equalizer Bar Indicator */}
           <div className="relative">
             <button
               onClick={() => setSoundMenuOpen(!soundMenuOpen)}
-              className={`p-2 rounded-lg border transition-all ${
+              className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-2 transition-all cursor-pointer ${
                 currentSound !== 'off'
-                  ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300 shadow-md shadow-indigo-500/10'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                  ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300 shadow-md shadow-indigo-500/15'
+                  : 'bg-slate-900/80 border-white/[0.08] text-slate-400 hover:text-white'
               }`}
-              title="Focus Soundscapes (40Hz Gamma, Brown Noise, Rain)"
+              title="Focus Soundscapes (40Hz Gamma, Alpha Waves, Noise, Rain)"
             >
-              {currentSound !== 'off' ? <Volume2 className="w-4 h-4 text-indigo-400" /> : <VolumeX className="w-4 h-4" />}
+              {currentSound !== 'off' ? (
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-end gap-0.5 h-3.5 w-3.5">
+                    <span className="w-0.5 bg-indigo-400 rounded-full animate-eq-1" />
+                    <span className="w-0.5 bg-indigo-300 rounded-full animate-eq-2" />
+                    <span className="w-0.5 bg-indigo-400 rounded-full animate-eq-3" />
+                  </div>
+                  <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+                </div>
+              ) : (
+                <VolumeX className="w-4 h-4" />
+              )}
             </button>
 
+            {/* Audio Dropdown Popover */}
             {soundMenuOpen && (
-              <div className="absolute right-0 mt-2 w-64 p-3 rounded-xl bg-slate-900 border border-slate-800 shadow-2xl z-50 text-xs text-slate-200">
-                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
-                  <span className="font-semibold text-white flex items-center gap-1.5">
+              <div className="absolute right-0 mt-2 w-72 p-3.5 rounded-2xl bg-[#0e111d] border border-white/[0.12] shadow-2xl z-50 text-xs text-slate-200 animate-fadeIn">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/[0.08]">
+                  <span className="font-bold text-white flex items-center gap-1.5 font-display">
                     <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                    Neuro-Focus Audio
+                    Neuro-Focus Soundscapes
                   </span>
-                  <span className="text-[10px] text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded">
-                    Web Audio
+                  <span className="text-[10px] text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 font-mono">
+                    Zero Latency
                   </span>
                 </div>
 
-                <div className="space-y-1.5 mb-3">
-                  {[
-                    { id: 'off', label: 'Mute / Silent' },
-                    { id: 'binaural-40hz', label: '🧠 40Hz Gamma Binaural', desc: 'Working memory & focus' },
-                    { id: 'brown-noise', label: '🌊 Brown Noise', desc: 'Masks external voices' },
-                    { id: 'rain', label: '🌧️ Gentle Rain', desc: 'Calming alpha state' },
-                    { id: 'ambient-drone', label: '🎵 Deep Drone Pad', desc: 'Deep meditative flow' },
-                  ].map(sound => (
+                <div className="space-y-1 mb-3 max-h-56 overflow-y-auto pr-1">
+                  {soundPresets.map(sound => (
                     <button
                       key={sound.id}
-                      onClick={() => handleSoundChange(sound.id as SoundType)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg flex flex-col transition-all ${
+                      onClick={() => handleSoundChange(sound.id)}
+                      className={`w-full text-left px-2.5 py-2 rounded-xl flex items-start gap-2.5 transition-all cursor-pointer ${
                         currentSound === sound.id
-                          ? 'bg-indigo-600 text-white font-medium'
-                          : 'hover:bg-slate-800 text-slate-300'
+                          ? 'bg-indigo-600 text-white font-medium shadow-md shadow-indigo-600/20'
+                          : 'hover:bg-white/[0.05] text-slate-300'
                       }`}
                     >
-                      <span>{sound.label}</span>
-                      {sound.desc && (
-                        <span className={`text-[10px] ${currentSound === sound.id ? 'text-indigo-100' : 'text-slate-400'}`}>
+                      <span className="text-sm mt-0.5">{sound.icon}</span>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-xs leading-tight">{sound.label}</div>
+                        <div className={`text-[10px] leading-tight mt-0.5 ${currentSound === sound.id ? 'text-indigo-100' : 'text-slate-400'}`}>
                           {sound.desc}
-                        </span>
-                      )}
+                        </div>
+                      </div>
                     </button>
                   ))}
                 </div>
 
-                {currentSound !== 'off' && (
-                  <div className="pt-2 border-t border-slate-800">
-                    <div className="flex items-center justify-between mb-1 text-[11px] text-slate-400">
-                      <span>Volume</span>
-                      <span>{Math.round(volume * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={volume}
-                      onChange={handleVolumeChange}
-                      className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
-                    />
-                  </div>
-                )}
+                {/* Volume Slider */}
+                <div className="pt-2 border-t border-white/[0.08] flex items-center gap-2 text-slate-400">
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                  />
+                  <span className="font-mono text-[10px] w-7 text-right">{Math.round(volume * 100)}%</span>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Settings */}
+          {/* Offline Mode Indicator */}
+          {!isOnline && (
+            <div 
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold shadow-sm"
+              title="Lotti is operating offline. All local decks and FSRS reviews work without internet."
+            >
+              <WifiOff className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Offline</span>
+            </div>
+          )}
+
+          {/* PWA Install Button */}
+          {isInstallable && onPromptInstall && (
+            <button
+              onClick={onPromptInstall}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-semibold text-xs shadow-md shadow-indigo-600/30 transition-all cursor-pointer hover:scale-[1.02]"
+              title="Install Lotti Native App"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Install</span>
+            </button>
+          )}
+
+          {/* User Account / Profile Pill */}
+          <button
+            onClick={() => onOpenAuth ? onOpenAuth(currentUser ? 'profile' : 'login') : undefined}
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-850 border border-white/[0.08] hover:border-indigo-500/50 text-slate-300 hover:text-white transition-all shadow-sm cursor-pointer group"
+            title={currentUser ? `Logged in as ${currentUser.name} (${currentUser.email})` : 'Log In or Create Account'}
+          >
+            {currentUser ? (
+              <>
+                <span className="text-sm select-none">{currentUser.avatar}</span>
+                <span className="text-xs font-bold text-white max-w-[85px] sm:max-w-[120px] truncate hidden sm:inline">
+                  {currentUser.name}
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hidden lg:inline truncate max-w-[120px]">
+                  {currentUser.grade || 'Student'}
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="w-5 h-5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                  <User className="w-3 h-3" />
+                </div>
+                <span className="text-xs font-semibold text-slate-300 group-hover:text-white">
+                  Log In
+                </span>
+              </>
+            )}
+          </button>
+
+          {/* Daylight Paper Study Theme Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleTheme}
+            className="p-2 rounded-xl bg-slate-900/80 border border-white/[0.08] hover:border-amber-400/40 text-slate-400 hover:text-amber-300 transition-all shadow-sm cursor-pointer"
+            title={isPaperTheme ? "Switch to Dark Obsidian Theme" : "Switch to Daylight / Paper Study Theme"}
+          >
+            {isPaperTheme ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-400" />}
+          </button>
+
+          {/* Settings Modal Button */}
           <button
             onClick={onOpenSettings}
-            className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
-            title="Settings & API Key"
+            className="p-2 rounded-xl bg-slate-900/80 border border-white/[0.08] hover:border-white/[0.2] text-slate-400 hover:text-white transition-all shadow-sm cursor-pointer"
+            title="Settings & Data Export"
           >
             <Settings className="w-4 h-4" />
           </button>
+
         </div>
 
       </div>
+
+      {/* Mobile Sub-Navigation Pill Bar */}
+      <div className="lg:hidden border-t border-white/[0.06] bg-slate-950/80 px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs">
+        <button
+          onClick={() => onNavigate ? onNavigate('home') : (onLogoClick && onLogoClick())}
+          className={`px-3 py-1 rounded-xl font-semibold whitespace-nowrap flex items-center gap-1.5 ${
+            activeView === 'home'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Compass className="w-3 h-3" />
+          <span>Workspace</span>
+        </button>
+
+        <button
+          onClick={() => onNavigate ? onNavigate('dashboard') : (onOpenDashboard && onOpenDashboard())}
+          className={`px-3 py-1 rounded-xl font-semibold whitespace-nowrap flex items-center gap-1.5 ${
+            activeView === 'dashboard'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Layers className="w-3 h-3" />
+          <span>Retention</span>
+          {stats.cardsDueCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-500/20 text-emerald-300">
+              {stats.cardsDueCount}
+            </span>
+          )}
+        </button>
+
+        {onOpenStarterCatalog && (
+          <button
+            onClick={onOpenStarterCatalog}
+            className="px-3 py-1 rounded-xl font-semibold whitespace-nowrap text-slate-400 hover:text-white flex items-center gap-1.5"
+          >
+            <Sparkles className="w-3 h-3 text-amber-400" />
+            <span>Catalog</span>
+          </button>
+        )}
+
+        <button
+          onClick={() => onNavigate ? onNavigate('exam') : (onOpenExam && onOpenExam())}
+          className={`px-3 py-1 rounded-xl font-semibold whitespace-nowrap flex items-center gap-1.5 ${
+            activeView === 'exam'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Award className="w-3 h-3 text-amber-400" />
+          <span>Exam</span>
+        </button>
+
+        <button
+          onClick={() => onNavigate ? onNavigate('interleave') : (onOpenInterleaving && onOpenInterleaving())}
+          className={`px-3 py-1 rounded-xl font-semibold whitespace-nowrap flex items-center gap-1.5 ${
+            activeView === 'interleave'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Shuffle className="w-3 h-3 text-purple-400" />
+          <span>Interleave</span>
+        </button>
+      </div>
     </header>
+
+    {/* Lottie's Streak Guardian Modal */}
+    <StreakGuardianModal
+      isOpen={isStreakModalOpen}
+      onClose={() => setIsStreakModalOpen(false)}
+      stats={stats}
+      onLaunchStreakSaver={onOpenDashboard}
+    />
+
+    {/* How AXON Works 4-Phase Cognitive Architecture Tour */}
+    <CognitiveTourModal
+      isOpen={isTourModalOpen}
+      onClose={() => {
+        setIsTourModalOpen(false);
+        try {
+          localStorage.setItem('axon_tour_seen', 'true');
+        } catch {}
+      }}
+      onStartQuickSession={onOpenStarterCatalog}
+    />
+  </>
   );
 };

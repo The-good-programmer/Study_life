@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Coffee, ArrowRight, Eye, Droplets, Activity, Play, Pause } from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
 import { StorageService } from '../../services/storageService';
+import { LottieMascot } from '../mascot/LottieMascot';
 
 interface RestBreakPhaseProps {
   onComplete: () => void;
@@ -15,7 +16,7 @@ export const RestBreakPhase: React.FC<RestBreakPhaseProps> = ({ onComplete, onSk
   const [breathCount, setBreathCount] = useState(4);
 
   const handleFinish = useCallback(() => {
-    StorageService.addXP(30); // +30 XP for neuroscience rest break
+    StorageService.addXP(30); // +30 XP for micro-rest consolidation
     onComplete();
   }, [onComplete]);
 
@@ -60,97 +61,122 @@ export const RestBreakPhase: React.FC<RestBreakPhaseProps> = ({ onComplete, onSk
   const timeFormatted = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 text-center animate-fadeIn">
+    <div className="max-w-2xl mx-auto space-y-6 text-center animate-fadeIn py-2">
       
-      {/* Header */}
-      <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-900/50">
-        <div className="flex items-center gap-2.5 text-xs sm:text-sm text-emerald-300">
-          <Coffee className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>
-            <strong>Phase 4: Neuroscience Micro-Rest</strong> — The hippocampus consolidates during offline rest.
-          </span>
+      {/* Header Banner */}
+      <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/25 backdrop-blur-md">
+        <div className="flex items-center gap-3 text-xs sm:text-sm text-emerald-300">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+            <Coffee className="w-4 h-4" />
+          </div>
+          <div className="text-left">
+            <div className="font-bold text-white font-display">Phase 4: Neuroscience Micro-Rest</div>
+            <div className="text-[11px] text-emerald-300/80">
+              Hippocampal sharp-wave ripples replay and consolidate memory during offline micro-rest.
+            </div>
+          </div>
         </div>
-        <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-emerald-900/60 text-emerald-200 border border-emerald-700/50">
-          Consolidation Phase
+        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0 font-mono">
+          +30 XP
         </span>
       </div>
 
-      {/* Main Visualizer Card */}
-      <div className="p-8 sm:p-12 rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-emerald-950/20 border border-emerald-500/20 shadow-2xl flex flex-col items-center justify-center space-y-6">
+      {/* Main Visualizer Stage */}
+      <div className="p-8 sm:p-12 rounded-3xl glass-panel relative overflow-hidden flex flex-col items-center justify-center space-y-6">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
         
         {/* Timer Display */}
         <div className="flex items-center gap-3">
-          <div className="text-4xl sm:text-5xl font-mono font-bold text-white tracking-wider">
+          <div className="text-4xl sm:text-6xl font-mono font-black text-white tracking-wider">
             {timeFormatted}
           </div>
           <button
             onClick={() => setIsActive(!isActive)}
-            className="p-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+            className="p-3 rounded-2xl bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-white/[0.1] hover:border-emerald-400/50 transition-colors shadow-lg"
             title={isActive ? 'Pause' : 'Resume'}
           >
             {isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
           </button>
         </div>
 
-        {/* Box Breathing Visualizer */}
-        <div className="relative w-48 h-48 flex items-center justify-center my-4">
-          {/* Outer glowing pulsing circle */}
+        {/* Multi-Ring Fluid Box Breathing Visualizer */}
+        <div className="relative w-52 h-52 flex items-center justify-center my-4">
+          {/* Outermost ambient aura ring */}
           <div
-            className={`absolute inset-0 rounded-full border-2 border-emerald-500/40 transition-transform duration-1000 ease-in-out ${
+            className={`absolute inset-0 rounded-full border border-emerald-500/30 transition-transform duration-1000 ease-in-out ${
               breathPhase === 'Inhale'
-                ? 'scale-110 bg-emerald-500/10'
+                ? 'scale-125 bg-emerald-500/15'
                 : breathPhase === 'Hold (Full)'
-                ? 'scale-110 bg-emerald-500/20'
+                ? 'scale-125 bg-emerald-500/20 ring-4 ring-emerald-500/20'
                 : breathPhase === 'Exhale'
-                ? 'scale-85 bg-emerald-500/5'
-                : 'scale-85 bg-transparent'
+                ? 'scale-90 bg-emerald-500/5'
+                : 'scale-90 bg-transparent'
+            }`}
+          />
+
+          {/* Secondary inner ring */}
+          <div
+            className={`absolute inset-4 rounded-full border-2 border-emerald-400/50 transition-transform duration-1000 ease-in-out ${
+              breathPhase === 'Inhale' || breathPhase === 'Hold (Full)'
+                ? 'scale-110 bg-emerald-500/10'
+                : 'scale-95 bg-transparent'
             }`}
           />
           
-          {/* Inner focus sphere */}
-          <div className="z-10 flex flex-col items-center">
-            <Activity className="w-6 h-6 text-emerald-400 mb-1 animate-pulse" />
-            <span className="text-base font-bold text-white tracking-wide">
+          {/* Inner core status orb */}
+          <div className="z-10 flex flex-col items-center select-none">
+            <Activity className="w-7 h-7 text-emerald-400 mb-1 animate-pulse" />
+            <span className="text-lg font-bold text-white tracking-wide font-display">
               {breathPhase}
             </span>
-            <span className="text-xs font-mono text-emerald-300 mt-0.5">
+            <span className="text-sm font-mono text-emerald-300 font-bold mt-1">
               {breathCount}s
             </span>
           </div>
         </div>
 
-        <p className="text-xs text-slate-400 max-w-sm">
-          Follow the 4-4-4-4 Box Breathing pattern to trigger the parasympathetic nervous system and reset working memory.
+        <p className="text-xs text-slate-400 max-w-md leading-relaxed font-sans">
+          Follow the 4-4-4-4 Box Breathing cycle to trigger parasympathetic vagal stimulation and clear adenosine saturation in your prefrontal cortex.
         </p>
 
-        {/* 20-20-20 & Health Checklist */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left pt-4 border-t border-slate-800 text-xs text-slate-300">
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-            <Eye className="w-4 h-4 text-emerald-400 shrink-0" />
+        {/* 20-20-20 & Ergonomic Health Checklist */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left pt-5 border-t border-white/[0.08] text-xs text-slate-300">
+          <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-950/60 border border-white/[0.06]">
+            <Eye className="w-5 h-5 text-emerald-400 shrink-0" />
             <span>Look at an object 20 feet away to relax ciliary eye muscles.</span>
           </div>
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-            <Droplets className="w-4 h-4 text-blue-400 shrink-0" />
-            <span>Drink a sip of water to maintain neural conduction.</span>
+          <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-slate-950/60 border border-white/[0.06]">
+            <Droplets className="w-5 h-5 text-cyan-400 shrink-0" />
+            <span>Take a sip of water to optimize neurotransmitter electrolyte conduction.</span>
           </div>
         </div>
 
       </div>
 
-      {/* Buttons */}
+      {/* Lottie Rest Companion */}
+      <div className="flex items-center justify-center">
+        <LottieMascot 
+          variant="card" 
+          size="sm" 
+          speech="Micro-rest is where your brain replays today's study memories at 10x speed. Relax your gaze and breathe." 
+          className="max-w-md w-full !bg-emerald-950/20 !border-emerald-500/25"
+        />
+      </div>
+
+      {/* Control Buttons */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
         <button
           onClick={onSkip}
-          className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+          className="text-xs text-slate-400 hover:text-slate-200 transition-colors font-medium"
         >
           Skip Rest Break
         </button>
 
         <button
           onClick={handleFinish}
-          className="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 group transition-all"
+          className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm shadow-xl shadow-emerald-600/25 flex items-center justify-center gap-2 group transition-all hover:scale-[1.02]"
         >
-          <span>I am Refreshed — Continue Study</span>
+          <span>I am Refreshed — Continue Study Pilot</span>
           <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
         </button>
       </div>

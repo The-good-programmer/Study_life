@@ -12,10 +12,23 @@ interface MathRendererProps {
 export const MathRenderer: React.FC<MathRendererProps> = ({ text, className = '' }) => {
   if (!text) return null;
 
+  // Escape HTML characters to prevent XSS while allowing safe formula markup
+  const escapeHtml = (str: string): string => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
   // Split by inline math ($...$) or block math ($$...$$)
   const renderFormattedText = (raw: string) => {
-    // Replace standard math symbols and Greek letters
-    const formatted = raw
+    // 1. First escape raw HTML to prevent XSS injection
+    const escaped = escapeHtml(raw);
+
+    // 2. Replace standard math symbols, Greek letters, and arrows (supporting escaped arrows)
+    const formatted = escaped
       .replace(/\\alpha/g, 'α')
       .replace(/\\beta/g, 'β')
       .replace(/\\gamma/g, 'γ')
@@ -35,8 +48,8 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ text, className = ''
       .replace(/\\approx/g, '≈')
       .replace(/\\neq/g, '≠')
       .replace(/\\rightarrow/g, '→')
-      .replace(/->/g, '→')
-      .replace(/<=>/g, '⇌')
+      .replace(/-&gt;/g, '→')
+      .replace(/&lt;=&gt;/g, '⇌')
       .replace(/\\infty/g, '∞');
 
     // Parse superscripts like x^2 or x^{10}

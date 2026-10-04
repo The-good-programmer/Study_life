@@ -2,49 +2,382 @@
 
 @layer base {
   :root {
-    --bg-main: #0a0b10;
-    --card-bg: #12141e;
-    --card-border: #1e2235;
+    --bg-main: #090a10;
+    --card-bg: #0f121e;
+    --card-border: rgba(255, 255, 255, 0.08);
     --accent: #6366f1;
-    --accent-glow: rgba(99, 102, 241, 0.15);
+    --accent-glow: rgba(99, 102, 241, 0.2);
   }
 
   body {
-    background-color: #0b0d14;
+    background-color: #090a10;
     color: #e2e8f0;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     min-height: 100vh;
     margin: 0;
     padding: 0;
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
   }
 }
 
-/* Custom animations for study flow */
-@keyframes pulse-slow {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.8;
+/* Ambient glow & grid textures */
+.bg-ambient-mesh {
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 60%),
+    radial-gradient(circle at 85% 15%, rgba(168, 85, 247, 0.09) 0%, transparent 45%),
+    radial-gradient(circle at 15% 25%, rgba(16, 185, 129, 0.07) 0%, transparent 45%);
+}
+
+.bg-grid-pattern {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Glassmorphism panels */
+.glass-panel {
+  background: rgba(13, 16, 27, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-elevated {
+  background: rgba(15, 19, 32, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+}
+
+.glass-panel-interactive {
+  background: rgba(13, 16, 27, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel-interactive:hover {
+  background: rgba(19, 24, 40, 0.85);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 20px 45px -12px rgba(99, 102, 241, 0.18), inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+/* Hide scrollbar for clean horizontal tabs */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 3D Flip Card utilities */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* Equalizer animations for Audio Engine */
+@keyframes eq-jump-1 {
+  0%, 100% { height: 3px; }
+  50% { height: 14px; }
+}
+
+@keyframes eq-jump-2 {
+  0%, 100% { height: 14px; }
+  50% { height: 4px; }
+}
+
+@keyframes eq-jump-3 {
+  0%, 100% { height: 6px; }
+  50% { height: 16px; }
+}
+
+@keyframes eq-jump-4 {
+  0%, 100% { height: 12px; }
+  50% { height: 3px; }
+}
+
+.animate-eq-1 { animation: eq-jump-1 0.75s ease-in-out infinite; }
+.animate-eq-2 { animation: eq-jump-2 0.55s ease-in-out 0.15s infinite; }
+.animate-eq-3 { animation: eq-jump-3 0.85s ease-in-out 0.3s infinite; }
+.animate-eq-4 { animation: eq-jump-4 0.65s ease-in-out 0.05s infinite; }
+
+/* Custom gentle pulse */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.03); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s ease-in-out infinite;
+}
+
+/* Smooth sleek scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(9, 10, 16, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.4);
+}
+
+/* --- Duolingo-Grade Tactile 3D Buttons ("Feather" Press Mechanics) --- */
+.btn-tactile {
+  position: relative;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, border-bottom-width 0.08s ease;
+  user-select: none;
+  cursor: pointer;
+}
+
+.btn-tactile:active:not(:disabled) {
+  transform: translateY(3px);
+  border-bottom-width: 1px !important;
+}
+
+.btn-tactile-primary {
+  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+  border-bottom: 4px solid #3730a3;
+  color: #ffffff;
+  box-shadow: 0 4px 14px -2px rgba(79, 70, 229, 0.4);
+}
+.btn-tactile-primary:active:not(:disabled) {
+  border-bottom-color: #3730a3;
+  box-shadow: 0 1px 4px -1px rgba(79, 70, 229, 0.3);
+}
+
+.btn-tactile-emerald {
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  border-bottom: 4px solid #047857;
+  color: #ffffff;
+  box-shadow: 0 4px 14px -2px rgba(16, 185, 129, 0.4);
+}
+.btn-tactile-emerald:active:not(:disabled) {
+  border-bottom-color: #047857;
+  box-shadow: 0 1px 4px -1px rgba(16, 185, 129, 0.3);
+}
+
+.btn-tactile-amber {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  border-bottom: 4px solid #b45309;
+  color: #ffffff;
+  box-shadow: 0 4px 14px -2px rgba(245, 158, 11, 0.4);
+}
+.btn-tactile-amber:active:not(:disabled) {
+  border-bottom-color: #b45309;
+  box-shadow: 0 1px 4px -1px rgba(245, 158, 11, 0.3);
+}
+
+.btn-tactile-rose {
+  background: linear-gradient(180deg, #f43f5e 0%, #e11d48 100%);
+  border-bottom: 4px solid #be123c;
+  color: #ffffff;
+  box-shadow: 0 4px 14px -2px rgba(244, 63, 94, 0.4);
+}
+.btn-tactile-rose:active:not(:disabled) {
+  border-bottom-color: #be123c;
+  box-shadow: 0 1px 4px -1px rgba(244, 63, 94, 0.3);
+}
+
+.btn-tactile-slate {
+  background: linear-gradient(180deg, #1e2438 0%, #151928 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 4px solid #0a0d17;
+  color: #e2e8f0;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+}
+.btn-tactile-slate:hover:not(:disabled) {
+  background: linear-gradient(180deg, #252d47 0%, #1a2034 100%);
+  color: #ffffff;
+}
+.btn-tactile-slate:active:not(:disabled) {
+  border-bottom-width: 1px !important;
+  box-shadow: 0 1px 4px -1px rgba(0, 0, 0, 0.4);
+}
+
+/* Shimmer animation for Duolingo-style progress bars */
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes slideUp {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
   }
-  50% {
-    transform: scale(1.05);
+  100% {
+    transform: translateY(0);
     opacity: 1;
   }
 }
 
-.animate-pulse-slow {
-  animation: pulse-slow 4s ease-in-out infinite;
+.animate-slideUp {
+  animation: slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Box breathing circle animation */
-@keyframes box-breathe {
-  0% { transform: scale(0.85); }
-  25% { transform: scale(1.2); }
-  50% { transform: scale(1.2); }
-  75% { transform: scale(0.85); }
-  100% { transform: scale(0.85); }
+.animate-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.animate-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+  animation: shimmer-sweep 2.2s infinite;
 }
 
-.animate-box-breathe {
-  animation: box-breathe 16s ease-in-out infinite;
+/* Daylight / Warm Paper study theme support */
+[data-theme="paper"] {
+  --bg-main: #fbfbf9;
+  --card-bg: #ffffff;
+  --card-border: rgba(0, 0, 0, 0.09);
+  --accent: #4f46e5;
+  --accent-glow: rgba(79, 70, 229, 0.12);
 }
+
+[data-theme="paper"] body {
+  background-color: #fbfbf9 !important;
+  color: #1e293b !important;
+}
+
+[data-theme="paper"] .bg-ambient-mesh {
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 60%),
+    radial-gradient(circle at 85% 15%, rgba(245, 158, 11, 0.06) 0%, transparent 45%),
+    radial-gradient(circle at 15% 25%, rgba(16, 185, 129, 0.05) 0%, transparent 45%) !important;
+}
+
+[data-theme="paper"] .glass-panel,
+[data-theme="paper"] .glass-panel-elevated {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+  color: #1e293b !important;
+}
+
+/* High contrast typography in Daylight Paper mode */
+[data-theme="paper"] .text-white,
+[data-theme="paper"] .text-slate-100 {
+  color: #0f172a !important;
+}
+
+[data-theme="paper"] .text-slate-200 {
+  color: #1e293b !important;
+}
+
+[data-theme="paper"] .text-slate-300 {
+  color: #334155 !important;
+}
+
+[data-theme="paper"] .text-slate-400 {
+  color: #475569 !important;
+}
+
+[data-theme="paper"] .bg-slate-900,
+[data-theme="paper"] .bg-slate-950,
+[data-theme="paper"] .bg-\[\#090a10\],
+[data-theme="paper"] .bg-\[\#0b0f19\],
+[data-theme="paper"] .bg-\[\#0d101e\],
+[data-theme="paper"] .bg-\[\#0d1020\],
+[data-theme="paper"] .bg-\[\#12162d\] {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+}
+
+[data-theme="paper"] .bg-gradient-to-br.from-\[\#12162d\] {
+  background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 50%, #ffffff 100%) !important;
+  border-color: #c7d2fe !important;
+}
+
+[data-theme="paper"] .bg-white\/\[0\.02\],
+[data-theme="paper"] .bg-white\/\[0\.03\],
+[data-theme="paper"] .bg-white\/\[0\.04\],
+[data-theme="paper"] .bg-white\/\[0\.05\],
+[data-theme="paper"] .bg-white\/\[0\.06\],
+[data-theme="paper"] .bg-white\/\[0\.07\],
+[data-theme="paper"] .bg-white\/\[0\.08\] {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme="paper"] .border-white\/\[0\.06\],
+[data-theme="paper"] .border-white\/\[0\.08\],
+[data-theme="paper"] .border-white\/\[0\.1\],
+[data-theme="paper"] .border-white\/\[0\.12\],
+[data-theme="paper"] .border-white\/\[0\.15\],
+[data-theme="paper"] .border-white\/\[0\.2\] {
+  border-color: #e2e8f0 !important;
+}
+
+[data-theme="paper"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="paper"] textarea,
+[data-theme="paper"] select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="paper"] input::placeholder,
+[data-theme="paper"] textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Preserve bright white text inside colorful tactile action buttons */
+[data-theme="paper"] .btn-tactile-primary,
+[data-theme="paper"] .btn-tactile-emerald,
+[data-theme="paper"] .btn-tactile-amber,
+[data-theme="paper"] .btn-tactile-rose {
+  color: #ffffff !important;
+}
+
+[data-theme="paper"] .btn-tactile-slate {
+  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%) !important;
+  border: 1px solid #cbd5e1 !important;
+  border-bottom: 4px solid #94a3b8 !important;
+  color: #1e293b !important;
+}
+
+
+

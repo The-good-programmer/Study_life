@@ -8,6 +8,17 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  resolve: {
+    dedupe: ['react', 'react-dom', 'three'],
+  },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'three',
+      'three/examples/jsm/loaders/GLTFLoader.js',
+    ],
+  },
   build: {
     rollupOptions: {
       output: {
@@ -15,6 +26,9 @@ export default defineConfig({
           if (id.includes('node_modules')) {
             if (id.includes('react') || id.includes('react-dom')) {
               return 'vendor-react';
+            }
+            if (id.includes('three')) {
+              return 'vendor-three';
             }
             if (id.includes('@google/genai')) {
               return 'vendor-genai';
