@@ -9,6 +9,7 @@ import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { CURATED_STARTER_DECKS } from './data/curatedStarterCatalog';
 import { NotificationService } from './services/notificationService';
+import { WagePayoutBanner } from './components/lifesim/WagePayoutBanner';
 
 // Lazy-loaded heavy modules and modals for optimal initial bundle performance
 const IngestionHub = lazy(() => import('./components/ingestion/IngestionHub').then(m => ({ default: m.IngestionHub })));
@@ -541,6 +542,9 @@ export function App() {
           />
         </Suspense>
       )}
+
+      {/* Global Study Wage Deposited Banner */}
+      <WagePayoutBanner />
     </div>
   );
 }

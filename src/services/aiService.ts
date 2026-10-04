@@ -44,11 +44,20 @@ export class AIService {
   }
 
   private static readonly MODEL_CANDIDATES = [
-    'gemini-2.5-flash-lite',
     'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
     'gemini-2.0-flash',
     'gemini-2.5-pro',
   ];
+
+  /**
+   * Checks if a given model code supports reasoning/thinking configurations.
+   * Gemini 2.5 and Gemini 3 models support thinkingConfig; earlier models
+   * like Gemini 2.0 or Gemini 1.5 reject requests with thinkingConfig.
+   */
+  public static supportsThinking(model: string): boolean {
+    return model.includes('2.5') || model.includes('3.');
+  }
 
   private static async generateContentWithFallback(
     ai: GoogleGenAI,
@@ -58,26 +67,50 @@ export class AIService {
   ) {
     let lastError: unknown = null;
     for (const model of this.MODEL_CANDIDATES) {
-      try {
+      const buildConfig = (includeThinking: boolean) => {
         const config: Record<string, unknown> = {};
         if (responseMimeType) {
           config.responseMimeType = responseMimeType;
         }
-        if (enableThinking) {
+        if (includeThinking && this.supportsThinking(model)) {
           if (model.includes('3.')) {
             config.thinkingConfig = { thinkingLevel: 'LOW' };
           } else if (model.includes('2.5')) {
             config.thinkingConfig = { thinkingBudget: 1024 };
           }
         }
+        return config;
+      };
+
+      try {
+        const config = buildConfig(enableThinking);
         const response = await ai.models.generateContent({
           model,
           contents,
           config: Object.keys(config).length > 0 ? (config as any) : undefined,
         });
         return response;
-      } catch (err) {
+      } catch (err: unknown) {
         lastError = err;
+        const errMsg = err instanceof Error ? err.message : String(err);
+
+        // If failure was caused by thinkingConfig rejection on this model,
+        // retry the same model immediately without thinkingConfig
+        if (enableThinking && (errMsg.includes('thinking') || errMsg.includes('INVALID_ARGUMENT'))) {
+          try {
+            console.warn(`[Lotti AI] Model ${model} failed with thinkingConfig, retrying without thinking...`, err);
+            const fallbackConfig = buildConfig(false);
+            const response = await ai.models.generateContent({
+              model,
+              contents,
+              config: Object.keys(fallbackConfig).length > 0 ? (fallbackConfig as any) : undefined,
+            });
+            return response;
+          } catch (retryErr) {
+            lastError = retryErr;
+          }
+        }
+
         console.warn(`[Lotti AI] Model ${model} failed, trying next candidate...`, err);
       }
     }

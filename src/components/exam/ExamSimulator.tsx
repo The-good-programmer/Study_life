@@ -30,9 +30,12 @@ import type {
 } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
+import { lifeSimService } from '../../services/lifeSimService';
 import { DEMO_STUDY_SESSIONS } from '../../data/demoDecks';
 import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
 import { MathRenderer } from '../common/MathRenderer';
+
+import { evaluateTextAnswer } from './examEvaluator';
 
 interface ExamSimulatorProps {
   onBack: () => void;
@@ -151,6 +154,8 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
       ))
     : 'standard';
 
+  const hasOptions = !!(currentItem?.card?.options && currentItem.card.options.length > 0);
+
   // Evaluate single question
   const evaluateAnswer = useCallback((userAns: string, conf: ConfidenceLevel): ExamQuestionResult => {
     if (!currentItem) {
@@ -162,14 +167,12 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
     // Check correctness
     let isCorrect = false;
-    if (effectiveCardType === 'multiple-choice') {
+    if (hasOptions) {
       const strippedUser = cleanUserAns.replace(/^[a-d1-4][).\s-]+\s*/i, '').trim();
       const strippedTarget = targetAnswer.replace(/^[a-d1-4][).\s-]+\s*/i, '').trim();
       isCorrect = cleanUserAns === targetAnswer || strippedUser === strippedTarget || strippedUser === targetAnswer || cleanUserAns === strippedTarget;
     } else {
-      isCorrect = cleanUserAns === targetAnswer || 
-        (cleanUserAns.length > 3 && targetAnswer.includes(cleanUserAns)) ||
-        (cleanUserAns.length > 3 && cleanUserAns.includes(targetAnswer));
+      isCorrect = evaluateTextAnswer(userAns, currentItem.card.answer);
     }
 
     // Determine Quadrant & Points
@@ -211,7 +214,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
       quadrant,
       explanation: currentItem.card.explanation,
     };
-  }, [currentItem, effectiveCardType]);
+  }, [currentItem, hasOptions]);
 
   // Advance or Complete Exam
   const advanceQuestion = useCallback((newResults: ExamQuestionResult[]) => {
@@ -267,6 +270,10 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
       StorageService.saveExamReport(report);
       StorageService.addXP(Math.max(10, Math.round(totalPoints / 2)));
+      lifeSimService.awardStudyWage(
+        `Mock Exam: ${report.deckTitle.slice(0, 20)} (${report.rawAccuracyPercent}%)`,
+        Math.max(30, Math.round(totalPoints))
+      );
       soundEngine.playCompletionChime();
 
       try {
@@ -357,7 +364,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
       }
 
       // MCQ Choice Keys: A, B, C, D or 1, 2, 3, 4 (only before submit)
-      if (!isAnswerSubmitted && effectiveCardType === 'multiple-choice' && currentItem.card.options) {
+      if (!isAnswerSubmitted && hasOptions && currentItem.card.options) {
         let pickIdx = -1;
         if (key === 'A' || key === '1') pickIdx = 0;
         else if (key === 'B' || key === '2') pickIdx = 1;
@@ -383,7 +390,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [stage, currentItem, isAnswerSubmitted, effectiveCardType, selectedConfidence, handleSubmitCurrentAnswer, advanceQuestion, results]);
+  }, [stage, currentItem, isAnswerSubmitted, effectiveCardType, hasOptions, selectedConfidence, handleSubmitCurrentAnswer, advanceQuestion, results]);
 
   // Launch Remediation Session
   const handleLaunchRemediation = () => {
@@ -676,7 +683,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           <div className="flex items-center justify-between text-xs text-slate-400 uppercase tracking-wider font-bold">
             <span className="text-indigo-400">{currentItem.conceptTitle}</span>
             <span className="font-mono text-[11px] text-slate-500">
-              {effectiveCardType === 'multiple-choice' ? 'Multiple Choice' : effectiveCardType === 'cloze' ? 'Cloze Deletion' : 'Concept Recall'}
+              {effectiveCardType === 'image-occlusion' ? 'Image Occlusion' : hasOptions ? 'Multiple Choice' : effectiveCardType === 'cloze' ? 'Cloze Deletion' : 'Concept Recall'}
             </span>
           </div>
 
@@ -684,8 +691,69 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             <MathRenderer text={currentItem.card.question} />
           </h3>
 
+          {/* Image Occlusion Card View */}
+          {effectiveCardType === 'image-occlusion' && currentItem.card.imageUrl && (
+            <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950/80 border border-white/[0.08] flex items-center justify-center p-2 shadow-inner select-none my-3">
+              <img
+                src={currentItem.card.imageUrl}
+                alt="Technical or Anatomical Diagram"
+                className="w-full h-auto object-contain max-h-[360px] pointer-events-none rounded-xl"
+              />
+
+              {/* Overlaid Occlusion Masks */}
+              {(currentItem.card.masks || []).map((mask, idx) => {
+                const isTarget = mask.id === currentItem.card.activeMaskId;
+                const isRevealed = isTarget && isAnswerSubmitted;
+
+                if (currentItem.card.occlusionMode === 'hide-one-reveal-one' && !isTarget) {
+                  return null;
+                }
+
+                if (isTarget) {
+                  return (
+                    <div
+                      key={mask.id}
+                      className={`absolute rounded-lg flex items-center justify-center p-1 transition-all shadow-xl ${
+                        isRevealed
+                          ? 'bg-emerald-950/95 border-2 border-emerald-400 text-emerald-200 ring-2 ring-emerald-500/40'
+                          : 'bg-amber-950/95 border-2 border-amber-400 text-amber-200 animate-pulse ring-2 ring-amber-500/40'
+                      }`}
+                      style={{
+                        left: `${mask.x}%`,
+                        top: `${mask.y}%`,
+                        width: `${mask.width}%`,
+                        height: `${mask.height}%`,
+                      }}
+                    >
+                      <span className="text-[11px] font-bold font-mono truncate px-1">
+                        {isRevealed ? (mask.label || currentItem.card.answer) : `? [Mask #${idx + 1}]`}
+                      </span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={mask.id}
+                    className="absolute rounded-lg bg-slate-900/95 border border-slate-700/80 flex items-center justify-center p-1 shadow-md select-none pointer-events-none"
+                    style={{
+                      left: `${mask.x}%`,
+                      top: `${mask.y}%`,
+                      width: `${mask.width}%`,
+                      height: `${mask.height}%`,
+                    }}
+                  >
+                    <span className="text-[10px] font-mono text-slate-500 font-bold">
+                      [Mask #{idx + 1}]
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* Multiple Choice Options */}
-          {effectiveCardType === 'multiple-choice' && (
+          {hasOptions && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
               {(currentItem.card.options && currentItem.card.options.length > 0
                 ? currentItem.card.options
@@ -730,8 +798,8 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             </div>
           )}
 
-          {/* Cloze / Standard Input */}
-          {effectiveCardType !== 'multiple-choice' && !isAnswerSubmitted && (
+          {/* Cloze / Standard Free-Text Input */}
+          {!hasOptions && !isAnswerSubmitted && (
             <div className="space-y-2 pt-2">
               <label className="text-[11px] font-semibold text-slate-400">
                 Type your answer or target keyphrase:

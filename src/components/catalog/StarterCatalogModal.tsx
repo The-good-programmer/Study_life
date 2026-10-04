@@ -51,8 +51,14 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('All');
   const [previewDeck, setPreviewDeck] = useState<StarterDeckMetadata | null>(null);
   const [importedDeckIds, setImportedDeckIds] = useState<Set<string>>(() => {
-    const existing = StorageService.getSessions().map(s => s.id);
-    return new Set(existing);
+    const sessions = StorageService.getSessions();
+    const importedIds = new Set<string>();
+    CURATED_STARTER_DECKS.forEach(deck => {
+      if (sessions.some(s => s.id === deck.id || s.id.startsWith(`${deck.id}-`) || s.title === deck.session.title)) {
+        importedIds.add(deck.id);
+      }
+    });
+    return importedIds;
   });
   const [justImportedId, setJustImportedId] = useState<string | null>(null);
 
@@ -80,7 +86,7 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
     return matchesSearch && matchesCategory && matchesDifficulty;
   });
 
-  const handleImportDeck = (deck: StarterDeckMetadata) => {
+  const handleImportDeck = (deck: StarterDeckMetadata): StudySession => {
     const clonedSession = createClonedSession(deck);
     StorageService.saveSession(clonedSession);
 
@@ -96,19 +102,23 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
     if (onDeckImported) {
       onDeckImported();
     }
+
+    return clonedSession;
   };
 
   const handleLaunchDirectly = (deck: StarterDeckMetadata) => {
     // If not already imported, auto-import to ensure progress is tracked
-    if (!importedDeckIds.has(deck.id)) {
-      handleImportDeck(deck);
-    }
+    const existing = StorageService.getSessions().find(s => 
+      s.id === deck.id || s.id.startsWith(`${deck.id}-`) || s.title === deck.session.title
+    );
+    const sessionToLaunch = existing || handleImportDeck(deck);
+
     soundEngine.playStart();
     onClose();
     if (onOpenDeckStation) {
-      onOpenDeckStation(deck.session);
+      onOpenDeckStation(sessionToLaunch);
     } else {
-      onStartSession(deck.session);
+      onStartSession(sessionToLaunch);
     }
   };
 

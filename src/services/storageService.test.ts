@@ -62,4 +62,295 @@ describe('StorageService', () => {
     StorageService.setSoundPreference('off');
     expect(StorageService.getSoundPreference()).toBe('off');
   });
+
+  it('automatically syncs cards from saved sessions into global cards queue', () => {
+    expect(StorageService.getAllCards().length).toBe(0);
+
+    const mockSession = {
+      id: 'session-test-sync-1',
+      title: 'Neurobiology of Memory',
+      category: 'Neuroscience',
+      description: 'Test session',
+      currentConceptIndex: 0,
+      currentPhase: 'priming' as const,
+      elapsedSeconds: 0,
+      createdAt: new Date().toISOString(),
+      concepts: [
+        {
+          id: 'c-1',
+          order: 1,
+          title: 'Synaptic Plasticity',
+          estimatedMinutes: 10,
+          mentalModel: 'Synapses strengthen with use.',
+          coreTakeaways: ['LTP strengthens synapses', 'LTD weakens them'],
+          keyTerms: [{ term: 'LTP', definition: 'Long-term potentiation' }],
+          feynmanPrompt: 'Explain LTP.',
+          sampleMasteryExplanation: 'LTP explanation.',
+          retrievalCards: [
+            {
+              id: 'rc-sync-1',
+              conceptId: 'c-1',
+              cardType: 'standard' as const,
+              question: 'What is LTP?',
+              answer: 'Long-term potentiation',
+              stability: 1,
+              difficulty: 5,
+              reps: 0,
+              lapses: 0,
+            },
+            {
+              id: 'rc-sync-2',
+              conceptId: 'c-1',
+              cardType: 'cloze' as const,
+              question: 'The process of {{LTP}} strengthens synapses.',
+              answer: 'LTP',
+              stability: 1,
+              difficulty: 5,
+              reps: 0,
+              lapses: 0,
+            }
+          ]
+        }
+      ]
+    };
+
+    StorageService.saveSession(mockSession);
+
+    // Cards should now be automatically discoverable in getAllCards()
+    const allCards = StorageService.getAllCards();
+    expect(allCards.length).toBe(2);
+    expect(allCards.map(c => c.id)).toContain('rc-sync-1');
+    expect(allCards.map(c => c.id)).toContain('rc-sync-2');
+
+    // Deleting the session should clean up its cards
+    StorageService.deleteSession('session-test-sync-1');
+    expect(StorageService.getAllCards().length).toBe(0);
+  });
+
+  it('does not increment streak on day change without active study (no free lunch)', () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const initialStats = {
+      totalStudyMinutes: 20,
+      sessionsCompleted: 1,
+      conceptsMastered: 1,
+      currentStreak: 3,
+      lastActiveDate: yesterday,
+      cardsDueCount: 0,
+      xp: 100,
+      level: 1,
+      levelTitle: 'Synapse Builder',
+      dailyGoalMinutes: 25,
+      todayMinutes: 20,
+    };
+    localStorage.setItem('studify_stats_v1', JSON.stringify(initialStats));
+
+    // Calling getStats on the new day should reset todayMinutes, but NOT increment currentStreak
+    const stats = StorageService.getStats();
+    expect(stats.currentStreak).toBe(3);
+    expect(stats.todayMinutes).toBe(0);
+
+    // Active study today should advance the streak
+    StorageService.recordStudyMinutes(10);
+    const updatedStats = StorageService.getStats();
+    expect(updatedStats.currentStreak).toBe(4);
+    expect(updatedStats.todayMinutes).toBe(10);
+  });
+
+  it('resets streak to 0 when a day is missed without synaptic freeze', () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const initialStats = {
+      totalStudyMinutes: 50,
+      sessionsCompleted: 2,
+      conceptsMastered: 2,
+      currentStreak: 5,
+      lastActiveDate: twoDaysAgo,
+      cardsDueCount: 0,
+      xp: 200,
+      level: 2,
+      levelTitle: 'Deep Worker',
+      dailyGoalMinutes: 25,
+      todayMinutes: 25,
+    };
+    localStorage.setItem('studify_stats_v1', JSON.stringify(initialStats));
+
+    // User missed yesterday and has no freeze -> streak resets to 0
+    const stats = StorageService.getStats();
+    expect(stats.currentStreak).toBe(0);
+    expect(stats.todayMinutes).toBe(0);
+  });
+
+  it('shields streak for 1 missed day and consumes synaptic freeze', () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const initialStats = {
+      totalStudyMinutes: 50,
+      sessionsCompleted: 2,
+      conceptsMastered: 2,
+      currentStreak: 5,
+      lastActiveDate: twoDaysAgo,
+      cardsDueCount: 0,
+      xp: 200,
+      level: 2,
+      levelTitle: 'Deep Worker',
+      dailyGoalMinutes: 25,
+      todayMinutes: 25,
+    };
+    localStorage.setItem('studify_stats_v1', JSON.stringify(initialStats));
+    StorageService.setSynapticFreeze(true);
+    expect(StorageService.hasSynapticFreeze()).toBe(true);
+
+    // Missed 1 day with freeze equipped: streak preserved, freeze consumed
+    const stats = StorageService.getStats();
+    expect(stats.currentStreak).toBe(5);
+    expect(StorageService.hasSynapticFreeze()).toBe(false);
+
+    // Studying today should extend the streak from 5 to 6
+    StorageService.recordCompletedSession();
+    expect(StorageService.getStats().currentStreak).toBe(6);
+  });
+
+  it('returns exact count of cards reviewed today with getReviewedTodayCount', () => {
+    expect(StorageService.getReviewedTodayCount()).toBe(0);
+
+    const today = new Date().toISOString();
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const card1 = {
+      id: 'c-rev-1',
+      conceptId: 'c-1',
+      cardType: 'standard' as const,
+      question: 'Q1',
+      answer: 'A1',
+      stability: 1,
+      difficulty: 5,
+      reps: 1,
+      lapses: 0,
+      lastReviewDate: today,
+    };
+
+    const card2 = {
+      id: 'c-rev-2',
+      conceptId: 'c-1',
+      cardType: 'standard' as const,
+      question: 'Q2',
+      answer: 'A2',
+      stability: 1,
+      difficulty: 5,
+      reps: 1,
+      lapses: 0,
+      lastReviewDate: yesterday,
+    };
+
+    StorageService.saveCard(card1);
+    StorageService.saveCard(card2);
+
+    expect(StorageService.getReviewedTodayCount()).toBe(1);
+  });
+
+  it('non-destructively merges guest sessions, cards, and stats to existing user account', () => {
+    const userId = 'usr_target_123';
+
+    // 1. Setup existing user account data
+    const existingUserSessions = [
+      {
+        id: 'user-deck-1',
+        title: 'User Existing Chemistry',
+        subject: 'Science',
+        concepts: [],
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    localStorage.setItem(`studify_sessions_v1_${userId}`, JSON.stringify(existingUserSessions));
+
+    const existingUserStats = {
+      xp: 500,
+      level: 4,
+      levelTitle: 'Active Retrievist',
+      currentStreak: 4,
+      sessionsCompleted: 3,
+      conceptsMastered: 6,
+      totalStudyMinutes: 45,
+      todayMinutes: 10,
+      lastActiveDate: '2026-10-03',
+      cardsDueCount: 0,
+      dailyGoalMinutes: 20,
+    };
+    localStorage.setItem(`studify_stats_v1_${userId}`, JSON.stringify(existingUserStats));
+
+    // 2. Setup guest data
+    const guestSessions = [
+      {
+        id: 'guest-deck-1',
+        title: 'Guest Biology Deck',
+        subject: 'Biology',
+        concepts: [
+          {
+            id: 'con-1',
+            title: 'Cell Division',
+            explanation: 'Mitosis vs Meiosis',
+            retrievalCards: [
+              {
+                id: 'card-g-1',
+                conceptId: 'con-1',
+                cardType: 'standard' as const,
+                question: 'What is Mitosis?',
+                answer: 'Nuclear division',
+                stability: 2,
+                difficulty: 5,
+                reps: 2,
+                lapses: 0,
+              },
+            ],
+          },
+        ],
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    localStorage.setItem('studify_sessions_v1', JSON.stringify(guestSessions));
+
+    const guestStats = {
+      xp: 250,
+      level: 2,
+      levelTitle: 'Deep Worker',
+      currentStreak: 2,
+      sessionsCompleted: 1,
+      conceptsMastered: 2,
+      totalStudyMinutes: 20,
+      todayMinutes: 15,
+      lastActiveDate: '2026-10-04',
+      cardsDueCount: 0,
+      dailyGoalMinutes: 20,
+    };
+    localStorage.setItem('studify_stats_v1', JSON.stringify(guestStats));
+
+    // 3. Execute migration
+    const result = StorageService.migrateGuestDataToUser(userId);
+    expect(result.migratedDecks).toBe(1);
+    expect(result.migratedXP).toBe(250);
+
+    // 4. Verify existing user sessions were NOT erased, but merged
+    const mergedUserSessionsRaw = localStorage.getItem(`studify_sessions_v1_${userId}`);
+    const mergedUserSessions = JSON.parse(mergedUserSessionsRaw || '[]');
+    expect(mergedUserSessions.length).toBe(2);
+    expect(mergedUserSessions.some((s: any) => s.id === 'user-deck-1')).toBe(true);
+    expect(mergedUserSessions.some((s: any) => s.id === 'guest-deck-1')).toBe(true);
+
+    // 5. Verify stats were merged non-destructively (cumulative XP = 500 + 250 = 750)
+    const mergedUserStatsRaw = localStorage.getItem(`studify_stats_v1_${userId}`);
+    const mergedUserStats = JSON.parse(mergedUserStatsRaw || '{}');
+    expect(mergedUserStats.xp).toBe(750);
+    expect(mergedUserStats.totalStudyMinutes).toBe(65); // 45 + 20
+    expect(mergedUserStats.sessionsCompleted).toBe(4);   // 3 + 1
+    expect(mergedUserStats.currentStreak).toBe(4);       // max(4, 2)
+    expect(mergedUserStats.lastActiveDate).toBe('2026-10-04');
+
+    // 6. Verify cards were migrated to user's cards queue
+    const mergedCardsRaw = localStorage.getItem(`studify_cards_v1_${userId}`);
+    const mergedCards = JSON.parse(mergedCardsRaw || '[]');
+    expect(mergedCards.some((c: any) => c.id === 'card-g-1')).toBe(true);
+
+    // 7. Verify guest storage was cleared to prevent duplicate ghost data
+    expect(localStorage.getItem('studify_sessions_v1')).toBeNull();
+    expect(localStorage.getItem('studify_stats_v1')).toBeNull();
+  });
 });
+

@@ -487,14 +487,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </button>
 
-          {/* 3D Axolotl Sanctuary */}
+          {/* Student Sanctuary & Life Sim */}
           <button
             onClick={() => {
               onNavigate('sanctuary');
               if (onCloseMobile) onCloseMobile();
             }}
-            title="3D Axolotl Sanctuary & Habitat"
-            aria-label="3D Axolotl Sanctuary"
+            title="Student Sanctuary & Life Sim Habitat"
+            aria-label="Student Sanctuary"
             className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
               isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
             } ${
@@ -510,18 +510,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Sparkles className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
                 activeView === 'sanctuary' ? 'text-pink-400' : 'text-pink-400/80 group-hover:text-pink-300'
               }`} />
-              {isExpanded && <span className="truncate">3D Sanctuary</span>}
+              {isExpanded && <span className="truncate">Sanctuary</span>}
             </div>
 
             {isExpanded && (
               <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 border border-pink-500/30 shrink-0 font-mono">
-                3D
+                SIM
               </span>
             )}
 
             {!isExpanded && (
               <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                3D Sanctuary
+                Student Sanctuary
               </div>
             )}
           </button>

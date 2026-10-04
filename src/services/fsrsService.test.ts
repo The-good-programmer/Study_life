@@ -71,4 +71,19 @@ describe('FSRSService', () => {
     expect(FSRSService.formatInterval(7)).toBe('7d');
     expect(FSRSService.formatInterval(65)).toBe('2mo');
   });
+
+  it('calculates optimal intervals scaling with stability and target retention', () => {
+    // At default 0.90 retention, interval should equal stability
+    expect(FSRSService.calculateInterval(10, 0.90)).toBe(10);
+    expect(FSRSService.calculateInterval(30, 0.90)).toBe(30);
+
+    // Higher retention target (0.95) requires shorter review intervals
+    const strictInterval = FSRSService.calculateInterval(30, 0.95);
+    expect(strictInterval).toBeLessThan(30);
+    expect(strictInterval).toBeGreaterThan(5);
+
+    // Lower retention target (0.80) allows longer review intervals
+    const relaxedInterval = FSRSService.calculateInterval(30, 0.80);
+    expect(relaxedInterval).toBeGreaterThan(30);
+  });
 });

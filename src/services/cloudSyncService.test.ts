@@ -41,4 +41,49 @@ describe('CloudSyncService', () => {
     expect(retrieved.cloudToken).toBe('LOTTI-SYNC-AAA-BBB');
     expect(retrieved.endpointUrl).toBe('https://example.com/sync');
   });
+
+  it('includes axolotl sanctuary state in createSyncPayload', () => {
+    const mockAxolotl = {
+      level: 5,
+      xp: 320,
+      decorations: ['crystal_rock', 'seaweed'],
+    };
+    localStorage.setItem('studify_axolotl_sanctuary_v1', JSON.stringify(mockAxolotl));
+
+    const payload = CloudSyncService.createSyncPayload();
+    expect(payload.axolotlState).toEqual(mockAxolotl);
+    expect(payload.version).toBe(2);
+    expect(payload.checksum).toBeDefined();
+  });
+
+  it('restores axolotl sanctuary state and merges stats properly in mergeRemoteData', () => {
+    const remotePayload = {
+      version: 2,
+      syncedAt: Date.now(),
+      userId: 'test_user',
+      checksum: 'abc123',
+      sessions: [],
+      stats: {
+        totalStudyMinutes: 120,
+        currentStreak: 7,
+        longestStreak: 10,
+        conceptsMastered: 15,
+        sessionsCompleted: 12,
+        xp: 950,
+        todayMinutes: 20,
+        lastStudyDate: new Date().toISOString(),
+      },
+      axolotlState: {
+        level: 8,
+        xp: 750,
+        decorations: ['golden_coral'],
+      },
+    };
+
+    CloudSyncService.mergeRemoteData(remotePayload as any);
+
+    const axolotlStored = JSON.parse(localStorage.getItem('studify_axolotl_sanctuary_v1') || '{}');
+    expect(axolotlStored.level).toBe(8);
+    expect(axolotlStored.decorations).toEqual(['golden_coral']);
+  });
 });

@@ -2,26 +2,27 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Sparkles, 
   Heart, 
-  RotateCw, 
-  Camera, 
   Wind, 
   BookOpen, 
-  Download, 
   Edit3, 
   Smile, 
-  Play,
-  Layers,
-  Zap,
-  Plus,
-  Search,
-  Maximize2,
-  Minimize2,
-  X,
-  Check,
-  TrendingUp,
-  Headphones,
-  Shuffle,
-  Award
+  Play, 
+  Layers, 
+  Zap, 
+  Plus, 
+  Search, 
+  Maximize2, 
+  Minimize2, 
+  X, 
+  Check, 
+  TrendingUp, 
+  Headphones, 
+  Shuffle, 
+  Award, 
+  Utensils, 
+  Sun, 
+  CloudSun, 
+  Moon 
 } from 'lucide-react';
 import { 
   axolotlService, 
@@ -36,7 +37,11 @@ import {
   type AxolotlState 
 } from '../../services/axolotlService';
 import { StorageService } from '../../services/storageService';
-import { Axolotl3DCanvas } from './Axolotl3DCanvas';
+import { ExpressiveAxolotl } from './ExpressiveAxolotl';
+import { CampusCafeteriaModal } from '../lifesim/CampusCafeteriaModal';
+import { DailyLedgerWidget } from '../lifesim/DailyLedgerWidget';
+import { lifeSimService, CAFETERIA_MENU, LIFESTYLE_TIERS } from '../../services/lifeSimService';
+import { type DailyLedger, type LifestyleTier } from '../../types/lifeSim';
 import type { StudySession } from '../../types';
 import confetti from 'canvas-confetti';
 
@@ -65,7 +70,6 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
 }) => {
   const [state, setState] = useState<AxolotlState>(axolotlService.getState());
   const [isZenMode, setIsZenMode] = useState(false);
-  const [autoRotate, setAutoRotate] = useState(false);
   const [breathingActive, setBreathingActive] = useState(false);
   const [breathPhase, setBreathPhase] = useState<'Inhale' | 'Hold' | 'Exhale'>('Inhale');
   const [breathSeconds, setBreathSeconds] = useState(4);
@@ -76,7 +80,9 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(state.name);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null);
+  const [isCafeteriaOpen, setIsCafeteriaOpen] = useState(false);
+  const [dailyLedger, setDailyLedger] = useState<DailyLedger>(lifeSimService.getDailyLedger());
+  const [lifestyleTier, setLifestyleTier] = useState<LifestyleTier>(lifeSimService.getLifestyleTier());
 
   // Subscribe to live state updates
   useEffect(() => {
@@ -84,7 +90,14 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
       setState(newState);
       setNameInput(newState.name);
     });
-    return unsub;
+    const unsubLife = lifeSimService.subscribe(() => {
+      setDailyLedger(lifeSimService.getDailyLedger());
+      setLifestyleTier(lifeSimService.getLifestyleTier());
+    });
+    return () => {
+      unsub();
+      unsubLife();
+    };
   }, []);
 
   const showToast = (msg: string) => {
@@ -177,20 +190,6 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
     showToast(`🎪 ${state.name} performed a ${res.trickName}!`);
   };
 
-  // Handle Snapshot
-  const handleTakeSnapshot = () => {
-    window.dispatchEvent(
-      new CustomEvent('axolotl-snapshot', {
-        detail: {
-          callback: (url: string) => {
-            setSnapshotUrl(url);
-            showToast('📸 3D Portrait Captured! Ready to download.');
-          },
-        },
-      })
-    );
-  };
-
   // Launch Quick Study for due cards or default deck
   const handleLaunchQuickStudy = () => {
     if (savedSessions.length === 0) {
@@ -221,56 +220,26 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
         </div>
       )}
 
-      {/* Snapshot Download Modal */}
-      {snapshotUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="relative max-w-md w-full bg-slate-900 border border-pink-500/30 rounded-3xl p-5 shadow-2xl space-y-4 text-center">
-            <h3 className="text-base font-bold text-white font-display">📸 3D Portrait of {state.name}</h3>
-            <div className="relative w-full h-64 rounded-2xl overflow-hidden bg-slate-950 border border-white/[0.08] p-2 flex items-center justify-center">
-              <img src={snapshotUrl} alt="Axolotl Portrait" className="w-full h-full object-contain" />
-            </div>
-            <div className="flex items-center gap-3">
-              <a
-                href={snapshotUrl}
-                download={`${state.name}-3d-sanctuary.png`}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-pink-600/30 transition-all cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>Save High-Res PNG</span>
-              </a>
-              <button
-                type="button"
-                onClick={() => setSnapshotUrl(null)}
-                className="py-2.5 px-4 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-slate-300 hover:text-white text-xs font-semibold cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Living 3D Habitat Stage */}
+      {/* Main Living 2D Student Sanctuary & Habitat Stage */}
       <div className={`relative w-full rounded-3xl overflow-hidden border border-white/[0.1] shadow-2xl transition-all duration-700 ${
-        isZenMode ? 'h-[85vh] sm:h-[90vh]' : 'h-[520px] sm:h-[600px] lg:h-[680px]'
-      } bg-gradient-to-b from-slate-900/90 via-slate-950 to-slate-950`}>
+        isZenMode ? 'h-[85vh] sm:h-[90vh]' : 'h-[540px] sm:h-[620px] lg:h-[680px]'
+      } ${
+        new Date().getHours() >= 6 && new Date().getHours() < 12
+          ? 'bg-gradient-to-b from-amber-950/40 via-slate-900 to-slate-950'
+          : new Date().getHours() >= 12 && new Date().getHours() < 18
+            ? 'bg-gradient-to-b from-sky-950/40 via-slate-900 to-slate-950'
+            : 'bg-gradient-to-b from-indigo-950/50 via-slate-950 to-slate-950'
+      }`}>
         
-        {/* Real-Time Three.js Living Axolotl Canvas */}
-        <Axolotl3DCanvas
-          skin={state.skin}
-          accessory={state.accessory}
-          environment={state.environment}
-          mood={state.mood}
-          interactive={true}
-          enableOrbit={true}
-          autoRotate={autoRotate}
-          breathingGuide={breathingActive}
-          className="w-full h-full"
-          onPet={handlePet}
-        />
+        {/* Ambient Glows & Atmosphere Grid */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-0 right-1/4 w-96 h-96 rounded-full bg-gradient-to-br from-pink-500/10 via-purple-500/10 to-cyan-500/10 blur-3xl animate-pulse" />
+          <div className="absolute bottom-0 left-1/4 w-96 h-96 rounded-full bg-indigo-500/10 blur-3xl" />
+          <div className="absolute inset-0 bg-[radial-gradient(#ffffff08_1px,transparent_1px)] [background-size:24px_24px]" />
+        </div>
 
         {/* --- TOP HUD BAR --- */}
-        <div className={`absolute top-3 sm:top-4 inset-x-3 sm:inset-x-5 flex items-center justify-between pointer-events-none transition-opacity duration-300 ${
+        <div className={`absolute top-3 sm:top-4 inset-x-3 sm:inset-x-5 flex items-center justify-between pointer-events-none transition-opacity duration-300 z-20 ${
           isZenMode ? 'opacity-0 hover:opacity-100 pointer-events-auto' : 'opacity-100'
         }`}>
           {/* Pet Status & Progression Card */}
@@ -336,11 +305,23 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
             </div>
           </div>
 
-          {/* Right Top Controls: Currency, Zen Mode, Wardrobe */}
+          {/* Right Top Controls: Cafeteria, Currency, Zen Mode, Wardrobe */}
           <div className="pointer-events-auto flex items-center gap-2">
+            {/* Campus Cafeteria Button */}
+            <button
+              type="button"
+              onClick={() => setIsCafeteriaOpen(true)}
+              className="px-2.5 sm:px-3 py-1.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-pink-500/20 to-purple-500/20 hover:from-amber-500/30 hover:to-pink-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold backdrop-blur-xl shadow-lg transition-all cursor-pointer flex items-center gap-1.5 hover:scale-105"
+              title="Open Campus Cafeteria — Buy Meals with Study Wages"
+            >
+              <Utensils className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Cafeteria</span>
+              <span className="text-xs">🍳</span>
+            </button>
+
             {/* Coins Badge */}
             <div 
-              title="Axon Study Coins — Earned by reviewing cards & mastering topics"
+              title="Axon Study Coins — Earned by reviewing cards & studying"
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl bg-slate-950/85 border border-white/[0.1] text-amber-300 text-xs font-bold backdrop-blur-xl shadow-lg"
             >
               <span className="text-amber-400">🪙</span>
@@ -364,7 +345,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
               title="Customize Skins, Outfits & Biomes"
             >
               <Sparkles className="w-3.5 h-3.5 text-pink-400" />
-              <span className="hidden sm:inline">Style & Biomes</span>
+              <span className="hidden sm:inline">Style</span>
             </button>
 
             {/* 1-Click Zen Mode Toggle */}
@@ -384,31 +365,117 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
           </div>
         </div>
 
-        {/* --- CENTER FLOATING CONTROLS (Auto-rotate & Snapshot) --- */}
-        <div className={`absolute top-18 right-3 sm:right-5 flex flex-col gap-2 pointer-events-auto transition-opacity duration-300 ${
-          isZenMode ? 'opacity-0 hover:opacity-100' : 'opacity-100'
-        }`}>
-          <button
-            type="button"
-            onClick={() => setAutoRotate(prev => !prev)}
-            className={`p-2.5 rounded-2xl border text-xs font-semibold backdrop-blur-xl transition-all cursor-pointer shadow-lg ${
-              autoRotate 
-                ? 'bg-pink-500/25 border-pink-500/40 text-pink-200' 
-                : 'bg-slate-950/80 hover:bg-slate-900/90 border-white/[0.1] text-slate-300'
-            }`}
-            title="Toggle 360° Continuous Orbit Rotation"
-          >
-            <RotateCw className={`w-4 h-4 ${autoRotate ? 'animate-spin' : ''}`} />
-          </button>
+        {/* --- 2D LIVING SANCTUARY & STUDY DESK (Center Stage) --- */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none px-4 pt-10 pb-28">
+          
+          {/* Time of Day & Lifestyle Atmosphere Badge */}
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950/75 border border-white/[0.08] backdrop-blur-md text-[11px] font-semibold text-slate-300 mb-3 shadow-lg">
+            {new Date().getHours() >= 6 && new Date().getHours() < 12 ? (
+              <span className="flex items-center gap-1 text-amber-300"><Sun className="w-3.5 h-3.5" /> Morning Shift</span>
+            ) : new Date().getHours() >= 12 && new Date().getHours() < 18 ? (
+              <span className="flex items-center gap-1 text-sky-300"><CloudSun className="w-3.5 h-3.5" /> Campus Afternoon</span>
+            ) : (
+              <span className="flex items-center gap-1 text-purple-300"><Moon className="w-3.5 h-3.5" /> Night Focus</span>
+            )}
+            <span className="text-slate-600">•</span>
+            <span className="text-indigo-300 font-bold">{LIFESTYLE_TIERS[lifestyleTier].title}</span>
+            <span className="text-slate-600">•</span>
+            <span className={`font-mono font-bold ${dailyLedger.netBalance >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              Net: {dailyLedger.netBalance >= 0 ? `+${dailyLedger.netBalance}` : dailyLedger.netBalance} 🪙
+            </span>
+          </div>
 
-          <button
-            type="button"
-            onClick={handleTakeSnapshot}
-            className="p-2.5 rounded-2xl bg-slate-950/80 hover:bg-slate-900/90 border border-white/[0.1] text-slate-300 hover:text-white text-xs font-semibold backdrop-blur-xl transition-all cursor-pointer shadow-lg"
-            title="Capture 3D Portrait Snapshot"
+          {/* The Living Companion Stage */}
+          <div 
+            className="relative pointer-events-auto cursor-pointer group flex flex-col items-center" 
+            onClick={handlePet}
+            title={`Pet ${state.name}!`}
           >
-            <Camera className="w-4 h-4 text-cyan-400" />
-          </button>
+            {/* Breathing Guide Focus Halo */}
+            {breathingActive && (
+              <div className={`absolute -inset-10 rounded-full border-2 border-cyan-400/60 transition-all duration-1000 ${
+                breathPhase === 'Inhale' 
+                  ? 'scale-125 bg-cyan-500/10' 
+                  : breathPhase === 'Hold' 
+                    ? 'scale-110 bg-cyan-500/20' 
+                    : 'scale-90 bg-transparent'
+              }`} />
+            )}
+
+            {/* Ambient Companion Aura */}
+            <div className="absolute -inset-4 rounded-full bg-gradient-to-tr from-pink-500/20 via-purple-500/20 to-cyan-400/20 blur-xl group-hover:blur-2xl transition-all" />
+
+            {/* 2D Expressive Mascot */}
+            <div className="relative z-10 transform group-hover:scale-105 transition-transform duration-300">
+              <ExpressiveAxolotl
+                size="xl"
+                mood={state.mood as any}
+                accessory={state.accessory === 'none' ? 'none' : (state.accessory as any)}
+                animated={true}
+              />
+            </div>
+
+            {/* Interactive Speech & Pet Tag */}
+            <div className="mt-2 px-3 py-1 rounded-full bg-slate-950/85 border border-pink-500/30 text-[11px] font-bold text-pink-200 flex items-center gap-1.5 shadow-lg group-hover:border-pink-500/60 transition-all">
+              <Heart className="w-3 h-3 text-pink-400 fill-pink-400 animate-pulse" />
+              <span>Pet {state.name} (+5 XP)</span>
+            </div>
+          </div>
+
+          {/* The Cozy Student Desk / Biome Surface */}
+          <div className="w-full max-w-lg mt-3 p-3 rounded-2xl bg-slate-950/80 border border-white/[0.1] backdrop-blur-xl shadow-xl flex items-center justify-between gap-3 pointer-events-auto">
+            
+            {/* Left: Meal / Fuel Tray */}
+            {(() => {
+              const todayMeal = CAFETERIA_MENU.find(m => m.id === (dailyLedger.breakfastId || dailyLedger.lunchId)) || dailyLedger.expenses[0];
+              return (
+                <div 
+                  onClick={() => setIsCafeteriaOpen(true)}
+                  className="flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] transition-all cursor-pointer flex-1 min-w-0"
+                  title="Click to visit Cafeteria & order meals"
+                >
+                  <span className="text-2xl p-1 rounded-lg bg-white/[0.05] shrink-0">
+                    {todayMeal ? todayMeal.emoji : '🥪'}
+                  </span>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[11px] font-bold text-slate-400 leading-tight">Daily Sustenance</span>
+                    <span className="text-xs font-extrabold text-white truncate">
+                      {todayMeal ? todayMeal.name : 'Choose Today’s Fuel'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Right: Lifestyle Decor & Perks */}
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 shrink-0">
+              {lifestyleTier === 'scholar' ? (
+                <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-200" title="Dean's List Penthouse: +10% Study Wage">
+                  <span className="animate-spin">📻</span>
+                  <span className="hidden sm:inline">Vinyl Station</span>
+                </span>
+              ) : lifestyleTier === 'cozy' ? (
+                <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200" title="Cozy Scholar: Warm lighting & plants">
+                  <span>🪴</span>
+                  <span className="hidden sm:inline">Succulent & Mug</span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800/60 border border-white/[0.06] text-slate-400" title="Frugal Student: Humble beginnings">
+                  <span>📚</span>
+                  <span className="hidden sm:inline">Study Desk</span>
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setIsCafeteriaOpen(true)}
+                className="p-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs cursor-pointer transition-colors"
+                title="Open Cafeteria"
+              >
+                🍳
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* --- BOTTOM CARE & STUDY DOCKS (Collapsible via Zen Mode) --- */}
@@ -615,6 +682,13 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
 
           </div>
         )}
+      </div>
+
+      {/* Daily Student Ledger & Budget Tracker */}
+      <div className="w-full">
+        <DailyLedgerWidget 
+          onOpenCafeteria={() => setIsCafeteriaOpen(true)}
+        />
       </div>
 
       {/* --- SLIDE-OVER WARDROBE & BIOMES MODAL --- */}
@@ -921,6 +995,15 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
           </div>
         </div>
       )}
+
+      {/* Campus Cafeteria & Bodega Modal */}
+      <CampusCafeteriaModal
+        isOpen={isCafeteriaOpen}
+        onClose={() => setIsCafeteriaOpen(false)}
+        onMealPurchased={(meal) => {
+          showToast(`🍽️ Enjoy your ${meal.name}! ${meal.buffDescription}`);
+        }}
+      />
     </div>
   );
 };

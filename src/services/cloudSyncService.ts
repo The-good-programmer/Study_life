@@ -99,7 +99,7 @@ export class CloudSyncService {
 
     let axolotlState: Record<string, unknown> | undefined;
     try {
-      const axRaw = localStorage.getItem('axon_axolotl_state');
+      const axRaw = localStorage.getItem('studify_axolotl_sanctuary_v1') || localStorage.getItem('axon_axolotl_state');
       if (axRaw) axolotlState = JSON.parse(axRaw);
     } catch {}
 
@@ -249,12 +249,19 @@ export class CloudSyncService {
       const mergedStats: UserStats = {
         ...localStats,
         xp: Math.max(localStats.xp || 0, remote.stats.xp || 0),
-        currentStreak: Math.max(localStats.currentStreak || 1, remote.stats.currentStreak || 1),
+        currentStreak: Math.max(localStats.currentStreak || 0, remote.stats.currentStreak || 0),
         conceptsMastered: Math.max(localStats.conceptsMastered || 0, remote.stats.conceptsMastered || 0),
         sessionsCompleted: Math.max(localStats.sessionsCompleted || 0, remote.stats.sessionsCompleted || 0),
         totalStudyMinutes: Math.max(localStats.totalStudyMinutes || 0, remote.stats.totalStudyMinutes || 0),
       };
       StorageService.saveStats(mergedStats);
+    }
+
+    // Merge axolotl habitat state if present in remote payload
+    if (remote.axolotlState) {
+      try {
+        localStorage.setItem('studify_axolotl_sanctuary_v1', JSON.stringify(remote.axolotlState));
+      } catch {}
     }
   }
 

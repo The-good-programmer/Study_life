@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Flame, 
   Zap, 
@@ -49,17 +49,22 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   onOpenSanctuary,
   onOpenExam,
 }) => {
-  const [stats] = useState<UserStats>(() => StorageService.getStats());
+  const [stats, setStats] = useState<UserStats>(() => StorageService.getStats());
   const [axolotlState] = useState(() => axolotlService.getState());
   const [showScienceModal, setShowScienceModal] = useState(false);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
-  const [hasSynapticFreeze, setHasSynapticFreeze] = useState(() => {
-    try {
-      return localStorage.getItem('axon_synaptic_freeze_active') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [hasSynapticFreeze, setHasSynapticFreeze] = useState(() => StorageService.hasSynapticFreeze());
+  const [reviewedToday, setReviewedToday] = useState(() => StorageService.getReviewedTodayCount());
+
+  useEffect(() => {
+    const unsub = StorageService.addMutationListener(() => {
+      setStats(StorageService.getStats());
+      setReviewedToday(StorageService.getReviewedTodayCount());
+      setHasSynapticFreeze(StorageService.hasSynapticFreeze());
+    });
+    return unsub;
+  }, []);
+
   const weeklyStats = useMemo(() => {
     if (stats.xp < 0) return { current: 0, best: 0 };
     return StorageService.getWeeklyXP();
@@ -82,8 +87,6 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
 
   // Daily target goal calculation (e.g. 15 cards/day)
   const dailyGoal = 15;
-  const estimatedToday = Math.min(dailyGoal, Math.max(0, stats.todayMinutes * 2 || (stats.sessionsCompleted > 0 ? 8 : 0)));
-  const reviewedToday = estimatedToday;
   const progressPercent = Math.min(100, Math.round((reviewedToday / dailyGoal) * 100));
 
   // Quick launch for Quick Sprint (Flashcard drill directly)
@@ -146,7 +149,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
           </div>
           <div>
             <div className="text-base sm:text-lg font-black text-white font-display leading-tight flex items-center gap-1.5">
-              <span>{stats.currentStreak || 1}</span>
+              <span>{stats.currentStreak}</span>
               <span className="text-xs text-amber-300 font-bold uppercase tracking-wider">Days</span>
               {hasSynapticFreeze && (
                 <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 text-[11px] font-mono border border-cyan-500/30" title="Protected by Synaptic Freeze">
@@ -618,9 +621,8 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
         isOpen={isStreakModalOpen}
         onClose={() => {
           setIsStreakModalOpen(false);
-          try {
-            setHasSynapticFreeze(localStorage.getItem('axon_synaptic_freeze_active') === 'true');
-          } catch {}
+          setHasSynapticFreeze(StorageService.hasSynapticFreeze());
+          setStats(StorageService.getStats());
         }}
         stats={stats}
         onLaunchStreakSaver={handleLaunchQuickSprint}

@@ -25,6 +25,7 @@ import { ExportService } from '../../services/exportService';
 import { LottieMascot } from '../mascot/LottieMascot';
 import { SynapticFlexModal } from '../mascot/SynapticFlexModal';
 import { axolotlService } from '../../services/axolotlService';
+import { lifeSimService } from '../../services/lifeSimService';
 import { haptics } from '../../services/hapticsService';
 
 interface SessionSummaryProps {
@@ -136,7 +137,13 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
     StorageService.recordCompletedSession();
     StorageService.recordStudyMinutes(minutes);
 
-    const r = axolotlService.awardStudySessionRewards(totalCards, minutes, 0.9);
+    const rawCoins = Math.max(15, Math.round(totalCards * 5 + minutes * 3));
+    const wage = lifeSimService.awardStudyWage(
+      `Sprint: ${session.title ? session.title.slice(0, 24) : 'Active Recall'}`,
+      rawCoins
+    );
+    const r = axolotlService.awardStudySessionRewards(totalCards, minutes, 0.9, true);
+    r.coinsEarned = wage.totalAmount;
     queueMicrotask(() => {
       setRewards(r);
     });

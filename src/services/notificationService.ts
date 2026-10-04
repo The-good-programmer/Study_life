@@ -3,6 +3,8 @@
  * Duolingo-grade habit loop reminders to protect student streaks.
  */
 
+import { StorageService } from './storageService';
+
 export interface NotificationSettings {
   enabled: boolean;
   reminderHour: number; // 0 - 23, e.g. 19 for 7 PM
@@ -41,7 +43,7 @@ export class NotificationService {
    */
   public static getSettings(): NotificationSettings {
     try {
-      const raw = localStorage.getItem(SETTINGS_KEY);
+      const raw = localStorage.getItem(StorageService.getKey(SETTINGS_KEY));
       if (raw) return { ...this.defaultSettings, ...JSON.parse(raw) };
     } catch {}
     return { ...this.defaultSettings };
@@ -53,7 +55,7 @@ export class NotificationService {
   public static saveSettings(settings: Partial<NotificationSettings>): NotificationSettings {
     const updated = { ...this.getSettings(), ...settings };
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
+      localStorage.setItem(StorageService.getKey(SETTINGS_KEY), JSON.stringify(updated));
     } catch {}
     return updated;
   }
@@ -139,7 +141,7 @@ export class NotificationService {
     if (todayMinutes > 0) return;
 
     const todayDateStr = new Date().toISOString().split('T')[0];
-    const lastNotified = localStorage.getItem(LAST_NOTIF_KEY);
+    const lastNotified = localStorage.getItem(StorageService.getKey(LAST_NOTIF_KEY));
     if (lastNotified === todayDateStr) {
       // Already sent reminder today
       return;
@@ -162,7 +164,7 @@ export class NotificationService {
 
       if (success) {
         try {
-          localStorage.setItem(LAST_NOTIF_KEY, todayDateStr);
+          localStorage.setItem(StorageService.getKey(LAST_NOTIF_KEY), todayDateStr);
         } catch {}
       }
     }
@@ -178,9 +180,8 @@ export class NotificationService {
     const INTERVAL_MS = 15 * 60 * 1000;
     setInterval(() => {
       try {
-        const statsRaw = localStorage.getItem('studify_stats_v1');
-        const stats = statsRaw ? JSON.parse(statsRaw) : { todayMinutes: 0, currentStreak: 1 };
-        this.checkDailyReminder(stats.todayMinutes || 0, stats.currentStreak || 1);
+        const stats = StorageService.getStats();
+        this.checkDailyReminder(stats.todayMinutes || 0, stats.currentStreak || 0);
       } catch {}
     }, INTERVAL_MS);
   }

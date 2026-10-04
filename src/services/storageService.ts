@@ -89,6 +89,25 @@ export class StorageService {
     return { level, title: LEVEL_TITLES[titleIndex] };
   }
 
+  public static hasSynapticFreeze(): boolean {
+    try {
+      return localStorage.getItem('axon_synaptic_freeze_active') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  public static setSynapticFreeze(active: boolean): void {
+    try {
+      if (active) {
+        localStorage.setItem('axon_synaptic_freeze_active', 'true');
+      } else {
+        localStorage.removeItem('axon_synaptic_freeze_active');
+      }
+    } catch {}
+    this.notifyMutation();
+  }
+
   public static getStats(): UserStats {
     const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.STATS));
     const today = new Date().toISOString().split('T')[0];
@@ -97,8 +116,8 @@ export class StorageService {
       totalStudyMinutes: 0,
       sessionsCompleted: 0,
       conceptsMastered: 0,
-      currentStreak: 1,
-      lastActiveDate: today,
+      currentStreak: 0,
+      lastActiveDate: '',
       cardsDueCount: 0,
       xp: 0,
       level: 1,
@@ -109,25 +128,55 @@ export class StorageService {
     };
 
     if (!raw) {
+      defaultStats.cardsDueCount = this.getDueCards().length;
       return defaultStats;
     }
 
     try {
       const stats: UserStats = { ...defaultStats, ...JSON.parse(raw) };
       
-      // Update streak and reset today's minutes if day changed
-      if (stats.lastActiveDate !== today) {
+      // Handle day rollover and streak protection
+      if (stats.lastActiveDate && stats.lastActiveDate !== today) {
         const last = new Date(stats.lastActiveDate);
         const curr = new Date(today);
         const diffDays = Math.round((curr.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
+        
         if (diffDays === 1) {
-          stats.currentStreak += 1;
-        } else if (diffDays > 1) {
-          stats.currentStreak = 1;
+          // Exactly 1 day since last study. Streak is intact and alive,
+          // but NOT incremented yet (user must complete active study today).
+          // Reset daily study minutes for the new day.
+          if (stats.todayMinutes !== 0) {
+            stats.todayMinutes = 0;
+            this.safeSetItem(this.getKey(STORAGE_KEYS.STATS), JSON.stringify(stats));
+          }
+        } else if (diffDays === 2) {
+          // Missed 1 day! Check if Synaptic Freeze is active
+          const hasFreeze = this.hasSynapticFreeze();
+          if (hasFreeze && stats.currentStreak > 0) {
+            // Shield the streak! Consume freeze item
+            try {
+              localStorage.removeItem('axon_synaptic_freeze_active');
+            } catch {}
+            // Treat the missed day as protected by backdating lastActiveDate to yesterday
+            const yesterday = new Date(curr.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            stats.lastActiveDate = yesterday;
+            stats.todayMinutes = 0;
+            this.safeSetItem(this.getKey(STORAGE_KEYS.STATS), JSON.stringify(stats));
+          } else {
+            // Unshielded missed day: streak resets
+            stats.currentStreak = 0;
+            stats.todayMinutes = 0;
+            this.safeSetItem(this.getKey(STORAGE_KEYS.STATS), JSON.stringify(stats));
+          }
+        } else if (diffDays > 2) {
+          // Missed multiple days: streak resets (freeze only covers 1 missed day)
+          try {
+            localStorage.removeItem('axon_synaptic_freeze_active');
+          } catch {}
+          stats.currentStreak = 0;
+          stats.todayMinutes = 0;
+          this.safeSetItem(this.getKey(STORAGE_KEYS.STATS), JSON.stringify(stats));
         }
-        stats.lastActiveDate = today;
-        stats.todayMinutes = 0; // Reset daily minutes for new day
-        this.saveStats(stats);
       }
 
       const { level, title } = this.calculateLevel(stats.xp || 0);
@@ -216,8 +265,36 @@ export class StorageService {
     this.safeSetItem(this.getKey(STORAGE_KEYS.ACTIVITY), JSON.stringify(history));
   }
 
-  public static recordStudyMinutes(minutes: number) {
+  /**
+   * Records active study for today, advancing streak if consecutive day
+   */
+  public static recordActiveStudyDay(): UserStats {
+    const today = new Date().toISOString().split('T')[0];
     const stats = this.getStats();
+
+    if (stats.lastActiveDate !== today) {
+      if (stats.lastActiveDate) {
+        const last = new Date(stats.lastActiveDate);
+        const curr = new Date(today);
+        const diffDays = Math.round((curr.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays === 1) {
+          stats.currentStreak = (stats.currentStreak || 0) + 1;
+        } else {
+          stats.currentStreak = 1;
+        }
+      } else {
+        // First active day ever
+        stats.currentStreak = 1;
+      }
+      stats.lastActiveDate = today;
+      this.saveStats(stats);
+    }
+
+    return stats;
+  }
+
+  public static recordStudyMinutes(minutes: number) {
+    const stats = this.recordActiveStudyDay();
     const added = Math.max(1, Math.round(minutes));
     stats.totalStudyMinutes += added;
     stats.todayMinutes = (stats.todayMinutes || 0) + added;
@@ -246,13 +323,13 @@ export class StorageService {
   }
 
   public static recordCompletedSession() {
-    const stats = this.getStats();
+    const stats = this.recordActiveStudyDay();
     stats.sessionsCompleted += 1;
     this.saveStats(stats);
   }
 
   public static recordMasteredConcept() {
-    const stats = this.getStats();
+    const stats = this.recordActiveStudyDay();
     stats.conceptsMastered += 1;
     this.saveStats(stats);
   }
@@ -292,6 +369,10 @@ export class StorageService {
   }
 
   public static saveCard(card: RetrievalCard) {
+    const today = new Date().toISOString().split('T')[0];
+    if (card.lastReviewDate && card.lastReviewDate.startsWith(today)) {
+      this.recordActiveStudyDay();
+    }
     const cards = this.getAllCards();
     const index = cards.findIndex(c => c.id === card.id);
     if (index >= 0) {
@@ -423,12 +504,38 @@ export class StorageService {
 
   public static getAllCards(): RetrievalCard[] {
     const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.CARDS));
-    if (!raw) return [];
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return [];
+    let cards: RetrievalCard[] = [];
+    if (raw) {
+      try {
+        cards = JSON.parse(raw);
+      } catch {
+        cards = [];
+      }
     }
+
+    // Auto-backfill: Check if any sessions contain cards not yet indexed in CARDS
+    const sessions = this.getSessions();
+    const cardMap = new Map<string, RetrievalCard>(cards.map(c => [c.id, c]));
+    let backfilled = false;
+
+    sessions.forEach(s => {
+      s.concepts?.forEach(c => {
+        c.retrievalCards?.forEach(rc => {
+          if (!cardMap.has(rc.id)) {
+            cardMap.set(rc.id, rc);
+            backfilled = true;
+          }
+        });
+      });
+    });
+
+    if (backfilled) {
+      const merged = Array.from(cardMap.values());
+      this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(merged));
+      return merged;
+    }
+
+    return cards;
   }
 
   public static getDueCards(): RetrievalCard[] {
@@ -438,6 +545,62 @@ export class StorageService {
       if (!c.nextReviewDate) return true;
       return new Date(c.nextReviewDate) <= now;
     });
+  }
+
+  /**
+   * Returns the count of distinct cards reviewed today
+   */
+  public static getReviewedTodayCount(): number {
+    const today = new Date().toISOString().split('T')[0];
+    const all = this.getAllCards();
+    return all.filter(c => c.lastReviewDate && c.lastReviewDate.startsWith(today)).length;
+  }
+
+  /**
+   * Syncs cards from a study session into the global CARDS queue while preserving existing FSRS review progress.
+   */
+  private static syncSessionCardsToGlobalQueue(sessionCards: RetrievalCard[]): void {
+    const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.CARDS));
+    let existingCards: RetrievalCard[] = [];
+    if (raw) {
+      try { existingCards = JSON.parse(raw); } catch { existingCards = []; }
+    }
+    const cardMap = new Map<string, RetrievalCard>(existingCards.map(c => [c.id, c]));
+
+    sessionCards.forEach(sc => {
+      const existing = cardMap.get(sc.id);
+      if (existing) {
+        // Preserve higher review progress (e.g. if already scheduled)
+        const reps = Math.max(existing.reps || 0, sc.reps || 0);
+        const stability = (existing.reps || 0) >= (sc.reps || 0) ? (existing.stability || sc.stability) : sc.stability;
+        const difficulty = (existing.reps || 0) >= (sc.reps || 0) ? (existing.difficulty || sc.difficulty) : sc.difficulty;
+        const lastReviewDate = existing.lastReviewDate || sc.lastReviewDate;
+        const nextReviewDate = existing.nextReviewDate || sc.nextReviewDate;
+        const isStarred = existing.isStarred !== undefined ? existing.isStarred : sc.isStarred;
+
+        cardMap.set(sc.id, {
+          ...sc,
+          ...existing,
+          question: sc.question,
+          answer: sc.answer,
+          hint: sc.hint || existing.hint,
+          explanation: sc.explanation || existing.explanation,
+          options: sc.options || existing.options,
+          masks: sc.masks || existing.masks,
+          imageUrl: sc.imageUrl || existing.imageUrl,
+          reps,
+          stability,
+          difficulty,
+          lastReviewDate,
+          nextReviewDate,
+          isStarred,
+        });
+      } else {
+        cardMap.set(sc.id, sc);
+      }
+    });
+
+    this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(Array.from(cardMap.values())));
   }
 
   public static saveSession(session: StudySession) {
@@ -465,11 +628,22 @@ export class StorageService {
       sessions.unshift(lightweightSession);
     }
     this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions.slice(0, 30)));
+
+    // Automatically sync cards into the global FSRS cards queue
+    const sessionCards = session.concepts?.flatMap(c => c.retrievalCards || []) || [];
+    if (sessionCards.length > 0) {
+      this.syncSessionCardsToGlobalQueue(sessionCards);
+    }
+
     this.notifyMutation();
   }
 
   public static saveSessions(sessions: StudySession[]): void {
     this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions.slice(0, 50)));
+    const allCards = sessions.flatMap(s => s.concepts?.flatMap(c => c.retrievalCards || []) || []);
+    if (allCards.length > 0) {
+      this.syncSessionCardsToGlobalQueue(allCards);
+    }
     this.notifyMutation();
   }
 
@@ -484,9 +658,27 @@ export class StorageService {
   }
 
   public static deleteSession(id: string) {
-    const sessions = this.getSessions().filter(s => s.id !== id);
-    this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions));
+    const sessions = this.getSessions();
+    const sessionToDelete = sessions.find(s => s.id === id);
+    const updatedSessions = sessions.filter(s => s.id !== id);
+    this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(updatedSessions));
     IndexedDbService.removeItem(`pdf_${id}`).catch(() => {});
+
+    // Remove cards belonging exclusively to this deleted session from CARDS
+    if (sessionToDelete) {
+      const cardIdsToDelete = new Set(sessionToDelete.concepts?.flatMap(c => c.retrievalCards?.map(rc => rc.id) || []) || []);
+      if (cardIdsToDelete.size > 0) {
+        const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.CARDS));
+        if (raw) {
+          try {
+            const cards: RetrievalCard[] = JSON.parse(raw);
+            const filteredCards = cards.filter(c => !cardIdsToDelete.has(c.id));
+            this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(filteredCards));
+          } catch {}
+        }
+      }
+    }
+    this.notifyMutation();
   }
 
   public static getSessions(): StudySession[] {
@@ -658,54 +850,285 @@ export class StorageService {
   }
 
   /**
-   * Migrates guest data to a target user's isolated storage namespace
+   * Clears guest study data from localStorage while preserving global app preferences
    */
-  public static migrateGuestDataToUser(userId: string): { migratedDecks: number; migratedCards: number; migratedXP: number } {
+  public static clearGuestData(): void {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.SESSIONS);
+      localStorage.removeItem(STORAGE_KEYS.CARDS);
+      localStorage.removeItem(STORAGE_KEYS.STATS);
+      localStorage.removeItem(STORAGE_KEYS.ACTIVITY);
+      localStorage.removeItem(STORAGE_KEYS.EXAM_REPORTS);
+      localStorage.removeItem(STORAGE_KEYS.INTERLEAVING_REPORTS);
+      localStorage.removeItem(STORAGE_KEYS.DIAGRAMS);
+      localStorage.removeItem(STORAGE_KEYS.GUEST_PROFILE);
+    } catch (e) {
+      console.warn('[StorageService] Error clearing guest data:', e);
+    }
+  }
+
+  /**
+   * Migrates guest data to a target user's isolated storage namespace
+   * Non-destructive: merges guest sessions, cards, stats, and reports into existing user data.
+   */
+  public static migrateGuestDataToUser(
+    userId: string,
+    clearGuest: boolean = true
+  ): { migratedDecks: number; migratedCards: number; migratedXP: number } {
     const guestSessionsRaw = localStorage.getItem(STORAGE_KEYS.SESSIONS);
     const guestCardsRaw = localStorage.getItem(STORAGE_KEYS.CARDS);
     const guestStatsRaw = localStorage.getItem(STORAGE_KEYS.STATS);
     const guestActivityRaw = localStorage.getItem(STORAGE_KEYS.ACTIVITY);
     const guestExamRaw = localStorage.getItem(STORAGE_KEYS.EXAM_REPORTS);
     const guestInterleaveRaw = localStorage.getItem(STORAGE_KEYS.INTERLEAVING_REPORTS);
+    const guestDiagramsRaw = localStorage.getItem(STORAGE_KEYS.DIAGRAMS);
 
     let migratedDecks = 0;
     let migratedCards = 0;
     let migratedXP = 0;
 
+    let guestSessions: StudySession[] = [];
     if (guestSessionsRaw) {
       try {
-        const guestSessions = JSON.parse(guestSessionsRaw);
-        migratedDecks = guestSessions.length;
-        localStorage.setItem(`${STORAGE_KEYS.SESSIONS}_${userId}`, guestSessionsRaw);
+        const parsed = JSON.parse(guestSessionsRaw);
+        if (Array.isArray(parsed)) {
+          guestSessions = parsed;
+          migratedDecks = guestSessions.length;
+        }
       } catch {}
     }
 
+    // 1. Merge Sessions
+    if (guestSessions.length > 0) {
+      const userSessionsKey = `${STORAGE_KEYS.SESSIONS}_${userId}`;
+      const userSessionsRaw = localStorage.getItem(userSessionsKey);
+      let userSessions: StudySession[] = [];
+      if (userSessionsRaw) {
+        try {
+          const parsed = JSON.parse(userSessionsRaw);
+          if (Array.isArray(parsed)) userSessions = parsed;
+        } catch {}
+      }
+
+      const sessionMap = new Map<string, StudySession>();
+      userSessions.forEach(s => sessionMap.set(s.id, s));
+
+      guestSessions.forEach((guestS) => {
+        const existing = sessionMap.get(guestS.id);
+        if (!existing) {
+          sessionMap.set(guestS.id, guestS);
+        } else {
+          const existingTime = Math.max(
+            existing.completedAt ? new Date(existing.completedAt).getTime() : 0,
+            existing.createdAt ? new Date(existing.createdAt).getTime() : 0
+          );
+          const guestTime = Math.max(
+            guestS.completedAt ? new Date(guestS.completedAt).getTime() : 0,
+            guestS.createdAt ? new Date(guestS.createdAt).getTime() : 0
+          );
+          if (guestTime >= existingTime) {
+            sessionMap.set(guestS.id, guestS);
+          }
+        }
+      });
+
+      this.safeSetItem(userSessionsKey, JSON.stringify(Array.from(sessionMap.values())));
+    }
+
+    // 2. Merge Cards
+    let guestCards: RetrievalCard[] = [];
     if (guestCardsRaw) {
       try {
-        const guestCards = JSON.parse(guestCardsRaw);
-        migratedCards = guestCards.length;
-        localStorage.setItem(`${STORAGE_KEYS.CARDS}_${userId}`, guestCardsRaw);
+        const parsed = JSON.parse(guestCardsRaw);
+        if (Array.isArray(parsed)) {
+          guestCards = parsed;
+          migratedCards = guestCards.length;
+        }
       } catch {}
     }
 
+    if (guestCards.length > 0 || guestSessions.length > 0) {
+      const userCardsKey = `${STORAGE_KEYS.CARDS}_${userId}`;
+      const userCardsRaw = localStorage.getItem(userCardsKey);
+      let userCards: RetrievalCard[] = [];
+      if (userCardsRaw) {
+        try {
+          const parsed = JSON.parse(userCardsRaw);
+          if (Array.isArray(parsed)) userCards = parsed;
+        } catch {}
+      }
+
+      const cardMap = new Map<string, RetrievalCard>();
+      userCards.forEach(c => cardMap.set(c.id, c));
+
+      guestCards.forEach((guestC) => {
+        const existing = cardMap.get(guestC.id);
+        if (!existing) {
+          cardMap.set(guestC.id, guestC);
+        } else {
+          if ((guestC.reps || 0) >= (existing.reps || 0)) {
+            cardMap.set(guestC.id, guestC);
+          }
+        }
+      });
+
+      // Ensure any cards inside guest sessions are also present in card map
+      guestSessions.forEach(s => {
+        (s.concepts || []).forEach(cp => {
+          (cp.retrievalCards || []).forEach(rc => {
+            if (!cardMap.has(rc.id)) {
+              cardMap.set(rc.id, rc);
+            }
+          });
+        });
+      });
+
+      this.safeSetItem(userCardsKey, JSON.stringify(Array.from(cardMap.values())));
+    }
+
+    // 3. Merge Stats
     if (guestStatsRaw) {
       try {
-        const guestStats = JSON.parse(guestStatsRaw);
+        const guestStats: UserStats = JSON.parse(guestStatsRaw);
         migratedXP = guestStats.xp || 0;
-        localStorage.setItem(`${STORAGE_KEYS.STATS}_${userId}`, guestStatsRaw);
+
+        const userStatsKey = `${STORAGE_KEYS.STATS}_${userId}`;
+        const userStatsRaw = localStorage.getItem(userStatsKey);
+        let userStats: UserStats | null = null;
+        if (userStatsRaw) {
+          try {
+            userStats = JSON.parse(userStatsRaw);
+          } catch {}
+        }
+
+        if (userStats) {
+          const mergedXP = (userStats.xp || 0) + (guestStats.xp || 0);
+          const { level, title } = this.calculateLevel(mergedXP);
+          const currentStreak = Math.max(userStats.currentStreak || 0, guestStats.currentStreak || 0);
+
+          let lastActiveDate = userStats.lastActiveDate || guestStats.lastActiveDate || new Date().toISOString().split('T')[0];
+          if (userStats.lastActiveDate && guestStats.lastActiveDate) {
+            lastActiveDate = guestStats.lastActiveDate >= userStats.lastActiveDate ? guestStats.lastActiveDate : userStats.lastActiveDate;
+          }
+
+          const mergedStats: UserStats = {
+            ...userStats,
+            xp: mergedXP,
+            level,
+            levelTitle: title,
+            totalStudyMinutes: (userStats.totalStudyMinutes || 0) + (guestStats.totalStudyMinutes || 0),
+            sessionsCompleted: (userStats.sessionsCompleted || 0) + (guestStats.sessionsCompleted || 0),
+            conceptsMastered: (userStats.conceptsMastered || 0) + (guestStats.conceptsMastered || 0),
+            todayMinutes: (userStats.todayMinutes || 0) + (guestStats.todayMinutes || 0),
+            currentStreak,
+            lastActiveDate,
+          };
+          this.safeSetItem(userStatsKey, JSON.stringify(mergedStats));
+        } else {
+          const { level, title } = this.calculateLevel(guestStats.xp || 0);
+          guestStats.level = level;
+          guestStats.levelTitle = title;
+          this.safeSetItem(userStatsKey, JSON.stringify(guestStats));
+        }
       } catch {}
     }
 
+    // 4. Merge Activity History
     if (guestActivityRaw) {
-      localStorage.setItem(`${STORAGE_KEYS.ACTIVITY}_${userId}`, guestActivityRaw);
-    }
-    if (guestExamRaw) {
-      localStorage.setItem(`${STORAGE_KEYS.EXAM_REPORTS}_${userId}`, guestExamRaw);
-    }
-    if (guestInterleaveRaw) {
-      localStorage.setItem(`${STORAGE_KEYS.INTERLEAVING_REPORTS}_${userId}`, guestInterleaveRaw);
+      try {
+        const guestActivity = JSON.parse(guestActivityRaw);
+        if (Array.isArray(guestActivity) && guestActivity.length > 0) {
+          const userActivityKey = `${STORAGE_KEYS.ACTIVITY}_${userId}`;
+          const userActivityRaw = localStorage.getItem(userActivityKey);
+          let userActivity: any[] = [];
+          if (userActivityRaw) {
+            try {
+              const parsed = JSON.parse(userActivityRaw);
+              if (Array.isArray(parsed)) userActivity = parsed;
+            } catch {}
+          }
+          const actMap = new Map<string, any>();
+          userActivity.forEach((a, i) => actMap.set(a.id || a.date || `u_${i}`, a));
+          guestActivity.forEach((a, i) => {
+            const key = a.id || a.date || `g_${i}`;
+            if (!actMap.has(key)) actMap.set(key, a);
+          });
+          this.safeSetItem(userActivityKey, JSON.stringify(Array.from(actMap.values())));
+        }
+      } catch {}
     }
 
+    // 5. Merge Exam Reports
+    if (guestExamRaw) {
+      try {
+        const guestExams = JSON.parse(guestExamRaw);
+        if (Array.isArray(guestExams) && guestExams.length > 0) {
+          const userExamKey = `${STORAGE_KEYS.EXAM_REPORTS}_${userId}`;
+          const userExamRaw = localStorage.getItem(userExamKey);
+          let userExams: ExamReport[] = [];
+          if (userExamRaw) {
+            try {
+              const parsed = JSON.parse(userExamRaw);
+              if (Array.isArray(parsed)) userExams = parsed;
+            } catch {}
+          }
+          const examMap = new Map<string, ExamReport>();
+          userExams.forEach(e => examMap.set(e.id, e));
+          guestExams.forEach((e: ExamReport) => {
+            if (!examMap.has(e.id)) examMap.set(e.id, e);
+          });
+          this.safeSetItem(userExamKey, JSON.stringify(Array.from(examMap.values())));
+        }
+      } catch {}
+    }
+
+    // 6. Merge Interleaving Reports
+    if (guestInterleaveRaw) {
+      try {
+        const guestInter = JSON.parse(guestInterleaveRaw);
+        if (Array.isArray(guestInter) && guestInter.length > 0) {
+          const userInterKey = `${STORAGE_KEYS.INTERLEAVING_REPORTS}_${userId}`;
+          const userInterRaw = localStorage.getItem(userInterKey);
+          let userInter: InterleavingSessionReport[] = [];
+          if (userInterRaw) {
+            try {
+              const parsed = JSON.parse(userInterRaw);
+              if (Array.isArray(parsed)) userInter = parsed;
+            } catch {}
+          }
+          const interMap = new Map<string, InterleavingSessionReport>();
+          userInter.forEach(r => interMap.set(r.id, r));
+          guestInter.forEach((r: InterleavingSessionReport) => {
+            if (!interMap.has(r.id)) interMap.set(r.id, r);
+          });
+          this.safeSetItem(userInterKey, JSON.stringify(Array.from(interMap.values())));
+        }
+      } catch {}
+    }
+
+    // 7. Merge Concept Diagrams
+    if (guestDiagramsRaw) {
+      try {
+        const guestDiagrams = JSON.parse(guestDiagramsRaw);
+        const userDiagramsKey = `${STORAGE_KEYS.DIAGRAMS}_${userId}`;
+        const userDiagramsRaw = localStorage.getItem(userDiagramsKey);
+        let userDiagrams = {};
+        if (userDiagramsRaw) {
+          try {
+            userDiagrams = JSON.parse(userDiagramsRaw);
+          } catch {}
+        }
+        const mergedDiagrams = { ...guestDiagrams, ...userDiagrams };
+        this.safeSetItem(userDiagramsKey, JSON.stringify(mergedDiagrams));
+      } catch {}
+    }
+
+    // 8. Clear Guest Data to prevent ghost state or duplicate migrations
+    if (clearGuest) {
+      this.clearGuestData();
+    }
+
+    this.notifyMutation();
     return { migratedDecks, migratedCards, migratedXP };
   }
 

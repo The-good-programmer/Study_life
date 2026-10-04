@@ -53,10 +53,10 @@ export class FSRSService {
     return {
       ...base,
       due,
-      stability,
-      difficulty,
+      stability: reps > 0 ? stability : 0,
+      difficulty: reps > 0 ? difficulty : 0,
       elapsed_days: elapsedDays,
-      scheduled_days: Math.max(1, Math.round(stability)),
+      scheduled_days: reps > 0 ? Math.max(1, Math.round(stability)) : 0,
       reps,
       lapses,
       state: reps > 0 ? State.Review : State.New,
@@ -103,7 +103,7 @@ export class FSRSService {
   public static calculateInterval(stability: number, targetRetention: number = 0.90): number {
     const s = Math.max(0.5, stability);
     const r = Math.max(0.70, Math.min(0.97, targetRetention));
-    const factor = Math.exp((1 / this.DECAY) * Math.log(0.9)) - 1;
+    const factor = Math.exp((-1 / this.DECAY) * Math.log(0.9)) - 1;
     const interval = (s / factor) * (Math.pow(r, -1 / this.DECAY) - 1);
     return Math.max(1, Math.round(interval));
   }
@@ -119,14 +119,14 @@ export class FSRSService {
 
     const getDays = (item: RecordLogItem): number => {
       const ms = item.card.due.getTime() - now.getTime();
-      return Math.max(0, ms / (1000 * 60 * 60 * 24));
+      return Math.max(0.01, ms / (1000 * 60 * 60 * 24));
     };
 
     return {
-      again: '<15m',
-      hard: this.formatInterval(Math.max(0.04, getDays(results[Rating.Hard]))),
-      good: this.formatInterval(Math.max(1, getDays(results[Rating.Good]))),
-      easy: this.formatInterval(Math.max(2, getDays(results[Rating.Easy]))),
+      again: this.formatInterval(getDays(results[Rating.Again])),
+      hard: this.formatInterval(getDays(results[Rating.Hard])),
+      good: this.formatInterval(getDays(results[Rating.Good])),
+      easy: this.formatInterval(getDays(results[Rating.Easy])),
     };
   }
 

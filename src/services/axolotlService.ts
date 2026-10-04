@@ -598,7 +598,7 @@ class AxolotlService {
     };
   }
 
-  public awardStudySessionRewards(cardsReviewed: number, durationMinutes: number = 5, accuracy: number = 0.85): {
+  public awardStudySessionRewards(cardsReviewed: number, durationMinutes: number = 5, accuracy: number = 0.85, skipCoins: boolean = false): {
     treatsEarned: Record<AxolotlTreatType, number>;
     coinsEarned: number;
     friendshipXPEarned: number;
@@ -628,7 +628,9 @@ class AxolotlService {
     this.state.treatInventory.bean += beanCount;
     this.state.treatInventory.pearl += pearlCount;
 
-    this.state.axonCoins = (this.state.axonCoins || 0) + coinsEarned;
+    if (!skipCoins) {
+      this.state.axonCoins = (this.state.axonCoins || 0) + coinsEarned;
+    }
     this.state.energy = Math.min(100, (this.state.energy || 50) + 30);
     this.state.happiness = Math.min(100, this.state.happiness + 15);
     this.state.mood = 'happy';
@@ -679,6 +681,13 @@ class AxolotlService {
   public addCoins(amount: number) {
     this.state.axonCoins = Math.max(0, (this.state.axonCoins || 0) + amount);
     this.notify();
+  }
+
+  public spendCoins(amount: number): boolean {
+    if ((this.state.axonCoins || 0) < amount) return false;
+    this.state.axonCoins -= amount;
+    this.notify();
+    return true;
   }
 
   public doTrick(): { trickName: string } {

@@ -31,13 +31,7 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
   stats,
   onLaunchStreakSaver
 }) => {
-  const [hasFreeze, setHasFreeze] = useState(() => {
-    try {
-      return localStorage.getItem('axon_synaptic_freeze_active') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [hasFreeze, setHasFreeze] = useState(() => StorageService.hasSynapticFreeze());
   const [notice, setNotice] = useState<string | null>(null);
   const [notifEnabled, setNotifEnabled] = useState(() => {
     return NotificationService.getSettings().enabled && NotificationService.getPermission() === 'granted';
@@ -91,7 +85,7 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
 
     try {
       StorageService.addXP(-100);
-      localStorage.setItem('axon_synaptic_freeze_active', 'true');
+      StorageService.setSynapticFreeze(true);
       setHasFreeze(true);
       soundEngine.playSuccess();
       confetti({

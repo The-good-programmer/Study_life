@@ -1,10 +1,8 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
-import { Sparkles, Zap, Brain, MessageSquare, Box } from 'lucide-react';
+import { Sparkles, Zap, Brain, MessageSquare } from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
 import { ExpressiveAxolotl } from './ExpressiveAxolotl';
-
-const Axolotl3DCanvas = lazy(() => import('./Axolotl3DCanvas').then(m => ({ default: m.Axolotl3DCanvas })));
 
 export interface LottieMascotProps {
   variant?: 'avatar' | 'badge' | 'compact' | 'hero' | 'card' | 'breathing';
@@ -15,7 +13,6 @@ export interface LottieMascotProps {
   onMascotClick?: () => void;
   onExploreTour?: () => void;
   onOpenSanctuary?: () => void;
-  show3DToggle?: boolean;
 }
 
 const LOTTIE_TIPS = [
@@ -37,11 +34,9 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
   onMascotClick,
   onExploreTour,
   onOpenSanctuary,
-  show3DToggle = true,
 }) => {
   const [tipIndex, setTipIndex] = useState(0);
   const [isWobbling, setIsWobbling] = useState(false);
-  const [isLive3D, setIsLive3D] = useState(false);
 
   const currentSpeech = speech || LOTTIE_TIPS[tipIndex];
 
@@ -96,7 +91,7 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
           }
         }}
         className={`relative group cursor-pointer inline-flex items-center justify-center shrink-0 ${className}`}
-        title="Lottie — Click to visit 3D Sanctuary!"
+        title="Lottie — Click to visit Student Sanctuary & Life Sim!"
       >
         <div className={`relative ${sizeMap[size]} rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 shadow-md shadow-pink-500/20 group-hover:scale-105 transition-all duration-300 flex items-center justify-center`}>
           <ExpressiveAxolotl 
@@ -118,7 +113,7 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
         <div className="absolute -top-6 -left-6 w-32 h-32 rounded-full bg-pink-500/10 blur-2xl pointer-events-none" />
         <div className="absolute -bottom-6 -right-6 w-32 h-32 rounded-full bg-cyan-500/10 blur-2xl pointer-events-none" />
 
-        {/* Mascot Avatar with Interactive Pulsing Rings (Supports Live 3D or 2D) */}
+        {/* Mascot Avatar with Interactive Pulsing Rings (Pure 2D) */}
         <div className="relative group shrink-0 select-none flex flex-col items-center gap-2">
           <div 
             onClick={() => {
@@ -129,37 +124,22 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
               }
             }}
             className="relative cursor-pointer"
-            title="Click Lottie to open 3D Axolotl Sanctuary!"
+            title="Click Lottie to open Student Sanctuary!"
           >
             <div className="absolute -inset-1.5 rounded-3xl bg-gradient-to-tr from-pink-500/40 via-purple-500/30 to-cyan-400/40 blur-sm group-hover:blur-md transition-all animate-pulse" />
             <div className={`relative ${sizeMap[size]} rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-950 p-1 border border-pink-500/30 shadow-xl group-hover:scale-105 transition-all duration-300 flex items-center justify-center`}>
-              {isLive3D ? (
-                <Suspense fallback={
-                  <div className="w-full h-full flex items-center justify-center bg-slate-950">
-                    <div className="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
-                  </div>
-                }>
-                  <Axolotl3DCanvas 
-                    interactive={true} 
-                    enableOrbit={false} 
-                    autoRotate={true}
-                    className="w-full h-full rounded-xl sm:rounded-2xl" 
-                  />
-                </Suspense>
-              ) : (
-                <ExpressiveAxolotl 
-                  size={size === 'xl' ? 'xl' : size === 'lg' ? 'lg' : 'md'} 
-                  mood={isWobbling ? 'celebrating' : 'cheering'} 
-                />
-              )}
+              <ExpressiveAxolotl 
+                size={size === 'xl' ? 'xl' : size === 'lg' ? 'lg' : 'md'} 
+                mood={isWobbling ? 'celebrating' : 'cheering'} 
+              />
             </div>
             <div className="absolute -bottom-2 -right-1 px-2 py-0.5 rounded-full bg-slate-950/90 border border-pink-500/40 text-[11px] font-bold text-pink-300 flex items-center gap-1 shadow-lg">
               <Sparkles className="w-2.5 h-2.5 text-pink-400" />
-              <span>{isLive3D ? '3D' : 'Lottie'}</span>
+              <span>Lottie</span>
             </div>
           </div>
 
-          {/* Quick Action Button directly under avatar: Open 3D Sanctuary */}
+          {/* Quick Action Button directly under avatar: Open Sanctuary */}
           {onOpenSanctuary && (
             <button
               type="button"
@@ -168,31 +148,10 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
                 onOpenSanctuary();
               }}
               className="px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 hover:from-pink-400 hover:to-cyan-400 text-white flex items-center gap-1.5 shadow-md shadow-pink-500/30 hover:scale-105 transition-all cursor-pointer animate-pulse"
-              title="Open full 3D Axolotl Sanctuary page"
+              title="Open Student Sanctuary & Life Sim"
             >
               <Sparkles className="w-3 h-3 text-white" />
-              <span>3D Sanctuary 🐾</span>
-            </button>
-          )}
-
-          {/* Quick 2D / 3D Mode Switcher on hero card */}
-          {show3DToggle && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsLive3D(prev => !prev);
-                try {
-                  soundEngine.playAxolotlBubble();
-                } catch {
-                  // catch
-                }
-              }}
-              className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-slate-300 hover:text-white flex items-center gap-1 transition-all cursor-pointer shadow-sm"
-              title="Toggle preview between 2D illustration and 3D living Axolotl"
-            >
-              <Box className="w-2.5 h-2.5 text-pink-400" />
-              <span>{isLive3D ? '2D View' : 'Live 3D'}</span>
+              <span>Sanctuary 🐾</span>
             </button>
           )}
         </div>
@@ -215,10 +174,10 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onOpenSanctuary(); }}
                   className="px-3 py-1 rounded-full text-[11px] font-bold bg-gradient-to-r from-pink-500/30 via-purple-500/30 to-cyan-500/30 hover:from-pink-500/50 hover:to-cyan-500/50 text-pink-100 border border-pink-400/50 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm group hover:scale-105"
-                  title="Open dedicated full-page 3D Axolotl Sanctuary with feeding, care & customization"
+                  title="Open dedicated full-page Student Sanctuary with cafeteria, feeding, care & customization"
                 >
                   <Sparkles className="w-3 h-3 text-cyan-300 group-hover:rotate-12 transition-transform" />
-                  <span>3D Sanctuary 🐾</span>
+                  <span>Sanctuary 🐾</span>
                 </button>
               )}
 

@@ -25,6 +25,7 @@ import type { SoundType } from '../../services/soundEngine';
 import type { UserStats, UserAccount } from '../../types';
 import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
 import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
+import { DailyLedgerWidget } from '../lifesim/DailyLedgerWidget';
 
 interface NavbarProps {
   stats: UserStats;
@@ -206,7 +207,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="hidden md:flex items-center gap-2.5 text-xs font-semibold text-slate-400">
             <span className="text-indigo-400">⚡</span>
             <span className="text-slate-300 capitalize">
-              {activeView === 'home' ? '3D Habitat Hub' : activeView === 'dashboard' ? 'FSRS Retention' : activeView === 'exam' ? 'Mock Exam' : activeView === 'sanctuary' ? '3D Axolotl Sanctuary' : activeView === 'studio' ? 'Document Studio' : 'Interleaving'}
+              {activeView === 'home' ? 'Sanctuary & Decks' : activeView === 'dashboard' ? 'FSRS Retention' : activeView === 'exam' ? 'Mock Exam' : activeView === 'sanctuary' ? 'Student Sanctuary' : activeView === 'studio' ? 'Document Studio' : 'Interleaving'}
             </span>
             
             <button
@@ -216,12 +217,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? 'bg-pink-500/25 border-pink-500/50 text-pink-100 shadow-pink-500/10'
                   : 'bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-cyan-500/15 hover:from-pink-500/30 hover:to-cyan-500/30 border-pink-500/40 text-pink-200 hover:text-white'
               }`}
-              title="Visit the 3D Axolotl Sanctuary"
+              title="Visit the Student Sanctuary & Life Sim"
             >
               <Sparkles className="w-3.5 h-3.5 text-pink-400 group-hover:rotate-12 transition-transform" />
-              <span className="text-[12px] font-bold">3D Axolotl</span>
+              <span className="text-[12px] font-bold">Sanctuary</span>
               <span className="text-[11px] font-black uppercase px-1.5 py-0.5 rounded bg-pink-500/30 text-pink-300 font-mono">
-                3D LIVE
+                LIFE SIM
               </span>
             </button>
 
@@ -328,6 +329,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Flame className="w-4 h-4 fill-amber-400 text-amber-500 animate-pulse group-hover:scale-110 transition-transform" />
             <span>{stats.currentStreak}d</span>
           </button>
+
+          {/* Compact Daily Student Ledger Widget */}
+          <DailyLedgerWidget 
+            compact={true} 
+            onOpenCafeteria={() => onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.()} 
+          />
 
           {/* Audio Engine with Real-Time Equalizer Bar Indicator */}
           <div className="relative">

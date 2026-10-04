@@ -180,7 +180,8 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
       {session.currentPhase === 'priming' && (
         <PrimingPhase
           concept={currentConcept}
-          onComplete={() => setPhase('retrieval')}
+          isCasualMode={session.casualFlashcardMode}
+          onComplete={() => setPhase(session.casualFlashcardMode ? 'retrieval' : 'feynman')}
           onInspectSource={handleInspectSource}
           diagnosticMissed={
             session.diagnosticReport?.probes.find(p => p.conceptId === currentConcept.id)?.isCorrect === false
@@ -299,18 +300,21 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
 
                 return (
                   <div key={p.id} className="flex items-center">
-                    <div
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                    <button
+                      type="button"
+                      onClick={() => setPhase(p.id as StudyPhase)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                         isActive
                           ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-600/30'
                           : isPassed
-                          ? 'text-indigo-300 font-semibold'
-                          : 'text-slate-500'
+                          ? 'text-indigo-300 hover:text-white hover:bg-white/[0.06] font-semibold'
+                          : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]'
                       }`}
+                      title={`Jump to Phase: ${p.label}`}
                     >
                       <Icon className="w-3.5 h-3.5" />
                       <span>{p.label}</span>
-                    </div>
+                    </button>
                     {idx < phases.length - 1 && (
                       <ChevronRight className="w-3 h-3 text-slate-700 mx-0.5" />
                     )}

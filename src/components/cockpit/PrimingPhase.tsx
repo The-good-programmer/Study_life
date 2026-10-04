@@ -14,6 +14,7 @@ interface PrimingPhaseProps {
   onComplete: () => void;
   onInspectSource?: (pageNumber?: number) => void;
   diagnosticMissed?: boolean;
+  isCasualMode?: boolean;
 }
 
 export const PrimingPhase: React.FC<PrimingPhaseProps> = ({ 
@@ -21,6 +22,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
   onComplete, 
   onInspectSource,
   diagnosticMissed,
+  isCasualMode = false,
 }) => {
   const [selectedTerm, setSelectedTerm] = useState<string | null>(null);
   const [visualMode, setVisualMode] = useState<'graph' | 'whiteboard'>('graph');
@@ -255,7 +257,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
           onClick={handleFinishPriming}
           className="w-full sm:w-auto px-7 py-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-indigo-600 to-indigo-500 hover:from-emerald-500 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 group transition-all hover:scale-[1.02] cursor-pointer"
         >
-          <span>Ready! Start Practice Questions</span>
+          <span>{isCasualMode ? 'Ready! Start Practice Questions' : 'Ready! Explain Concept (Feynman Technique)'}</span>
           <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
         </button>
       </div>

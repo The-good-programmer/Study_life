@@ -26,6 +26,7 @@ import { DEMO_STUDY_SESSIONS } from '../../data/demoDecks';
 import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
 import { FSRSService } from '../../services/fsrsService';
 import { soundEngine } from '../../services/soundEngine';
+import { lifeSimService } from '../../services/lifeSimService';
 import { MathRenderer } from '../common/MathRenderer';
 
 interface InterleavingArenaProps {
@@ -331,6 +332,10 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
 
     const totalXP = 60 + (correctCount * 10) + (shiftTrials.length * 5);
     StorageService.addXP(totalXP);
+    lifeSimService.awardStudyWage(
+      `Interleaving Shift (${shiftTrials.length} context shifts)`,
+      Math.max(25, Math.round(totalXP / 2))
+    );
 
     const report: InterleavingSessionReport = {
       id: `interleave-rpt-${Math.random().toString(36).slice(2, 9)}`,
