@@ -41,4 +41,8 @@ export default defineConfig({
       },
     },
   },
+  // @ts-expect-error vitest config
+  test: {
+    setupFiles: ['./src/test-setup.ts'],
+  },
 })

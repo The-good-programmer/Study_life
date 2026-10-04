@@ -8,10 +8,10 @@ import { usePwaInstall } from './hooks/usePwaInstall';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { CURATED_STARTER_DECKS } from './data/curatedStarterCatalog';
-import { IngestionHub } from './components/ingestion/IngestionHub';
 import { NotificationService } from './services/notificationService';
 
 // Lazy-loaded heavy modules and modals for optimal initial bundle performance
+const IngestionHub = lazy(() => import('./components/ingestion/IngestionHub').then(m => ({ default: m.IngestionHub })));
 const StudyPilot = lazy(() => import('./components/cockpit/StudyPilot').then(m => ({ default: m.StudyPilot })));
 const RetentionDashboard = lazy(() => import('./components/dashboard/RetentionDashboard').then(m => ({ default: m.RetentionDashboard })));
 const SettingsModal = lazy(() => import('./components/settings/SettingsModal').then(m => ({ default: m.SettingsModal })));
