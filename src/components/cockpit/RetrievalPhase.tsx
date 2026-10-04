@@ -19,7 +19,6 @@ import type { CardType, ConceptCheckpoint, FSRSRating, RetrievalCard, Diagnostic
 import { FSRSService } from '../../services/fsrsService';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
-import { leagueService } from '../../services/leagueService';
 import { AIService } from '../../services/aiService';
 import { MathRenderer } from '../common/MathRenderer';
 import { gamepadService, type GamepadAction } from '../../services/gamepadService';
@@ -203,8 +202,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 
     // Reward XP
     const xpGained = rating === 'easy' ? 15 : 10;
-    StorageService.addXP(xpGained);
-    leagueService.addWeeklyXP(xpGained);
+    StorageService.addWeeklyXP(xpGained);
 
     setLastRating(rating);
 
@@ -557,8 +555,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     });
 
     soundEngine.playCompletionChime();
-    StorageService.addXP(40);
-    leagueService.addWeeklyXP(40);
+    StorageService.addWeeklyXP(40);
   }, [blurtingText, blurtingTargets]);
 
   const evaluateRef = useRef(handleEvaluateBlurting);

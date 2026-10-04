@@ -230,7 +230,7 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
                   title="Interactive 4-Phase Cognitive Architecture Tour"
                 >
                   <Sparkles className="w-2.5 h-2.5 text-pink-400" />
-                  <span>How AXON Works (Tour)</span>
+                  <span>How Lotti Works (Tour)</span>
                 </button>
               )}
             </div>

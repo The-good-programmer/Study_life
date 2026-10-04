@@ -33,12 +33,11 @@ export const SynapticFlexModal: React.FC<SynapticFlexModalProps> = ({
 
   if (!isOpen) return null;
 
-  const flexText = `🧠 Just conquered a ${minutes}m neuro-cognitive session on AXON!
+  const flexText = `🧠 Just conquered a ${minutes}m study session on Lotti!
 📚 Topic: "${session.title}"
 ⚡ Cleared: ${session.concepts.length} Concept Nodes • ${totalCards} FSRS Active Recall Reps
 🔥 Streak: ${stats.currentStreak} Days
-🦎 Lottie: "Synapses wire when they fire."
-Try the cognitive autopilot: https://axonstudy.app`;
+🦎 Lottie: "Synapses wire when they fire."`;
 
   const handleCopyText = async () => {
     try {
@@ -85,9 +84,9 @@ Try the cognitive autopilot: https://axonstudy.app`;
           {/* Card Top Brand */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <span className="font-black text-sm text-white tracking-tight font-display">AXON</span>
+              <span className="font-black text-sm text-white tracking-tight font-display">Lotti</span>
               <span className="text-[8px] font-mono uppercase px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                Cognitive Autopilot
+                Spaced Recall
               </span>
             </div>
             <div className="flex items-center gap-1 text-[11px] font-mono text-amber-400 font-bold">

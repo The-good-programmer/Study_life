@@ -106,10 +106,10 @@ class SoundEngine {
 
     switch (type) {
       case 'binaural-40hz':
-        this.playBinauralBeats(200, 40); // 200Hz base + 40Hz gamma entrainment
+        this.playBinauralBeats(200, 40); // 200Hz base + 40Hz gamma focus soundscape
         break;
       case 'binaural-alpha-10hz':
-        this.playBinauralBeats(180, 10); // 180Hz base + 10Hz alpha entrainment
+        this.playBinauralBeats(180, 10); // 180Hz base + 10Hz alpha focus soundscape
         break;
       case 'brown-noise':
         this.playBrownNoise();

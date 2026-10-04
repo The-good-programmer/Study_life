@@ -143,11 +143,12 @@ export interface StudySession {
 
 export interface FeynmanEvaluation {
   score: number; // 0 - 100
-  grade: 'Novice' | 'Developing' | 'Solid Understanding' | 'Complete Mastery';
+  grade: 'Novice' | 'Developing' | 'Solid Understanding' | 'Complete Mastery' | 'Self-Review';
   masteredPoints: string[];
   missingNuances: string[];
   jargonDetected: string[];
   actionableFeedback: string;
+  isOfflineSelfCheck?: boolean;
 }
 
 export type FSRSRating = 'again' | 'hard' | 'good' | 'easy';

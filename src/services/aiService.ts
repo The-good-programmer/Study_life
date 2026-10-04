@@ -867,12 +867,12 @@ Return ONLY a valid JSON object with this exact structure:
       }
     }
 
-    // Naive Intuition or Partial Truth
+    // Default mechanism review
     return {
       optionText: selectedOption,
       trapType: 'naive-intuition',
-      trapTitle: 'Common Intuition Fallacy',
-      trapExplanation: `This choice is a common intuitive assumption. In ${concept?.title || 'this system'}, the underlying causal law differs from surface appearance: the required answer is "${card.answer}".`
+      trapTitle: 'Concept Review',
+      trapExplanation: `In ${concept?.title || 'this topic'}, the required answer is "${card.answer}". Review this distinction before proceeding.`
     };
   }
 
@@ -916,47 +916,32 @@ Return ONLY a valid JSON object with this exact structure:
 
   private static heuristicFeynmanEvaluation(concept: ConceptCheckpoint, text: string): FeynmanEvaluation {
     const lower = text.toLowerCase();
-    const wordCount = text.trim().split(/\s+/).length;
     
     // Check coverage of key terms
     const matchedTerms = concept.keyTerms.filter(k => lower.includes(k.term.toLowerCase()));
     const missingTerms = concept.keyTerms.filter(k => !lower.includes(k.term.toLowerCase()));
 
-    let score = 50;
-    if (wordCount >= 30) score += 15;
-    if (wordCount >= 60) score += 15;
-    if (matchedTerms.length > 0) score += Math.min(20, matchedTerms.length * 10);
-
     const masteredPoints: string[] = [];
-    if (wordCount > 35) {
-      masteredPoints.push('Good explanation length and thought development.');
-    }
     if (matchedTerms.length > 0) {
-      masteredPoints.push(`Naturally integrated concepts: ${matchedTerms.map(t => t.term).join(', ')}.`);
+      masteredPoints.push(`Key terms mentioned: ${matchedTerms.map(t => t.term).join(', ')}.`);
     } else {
-      masteredPoints.push('Communicated the core premise without getting trapped in jargon.');
+      masteredPoints.push('Expressed explanation in your own words.');
     }
 
     const missingNuances: string[] = [];
     if (missingTerms.length > 0) {
-      missingNuances.push(`Try to connect your explanation to: ${missingTerms.map(t => t.term).join(', ')}.`);
+      missingNuances.push(`Terms you might incorporate: ${missingTerms.map(t => t.term).join(', ')}.`);
     }
     missingNuances.push(...concept.coreTakeaways.slice(0, 2));
 
-    let grade: FeynmanEvaluation['grade'] = 'Developing';
-    if (score >= 85) grade = 'Complete Mastery';
-    else if (score >= 70) grade = 'Solid Understanding';
-
     return {
-      score: Math.min(95, score),
-      grade,
+      score: 0,
+      grade: 'Self-Review',
       masteredPoints,
       missingNuances: missingNuances.slice(0, 3),
-      jargonDetected: matchedTerms.filter(t => {
-        const termRegex = new RegExp(`\\b${t.term}\\b.{0,30}\\b(is|means|because|causes|transforms|by|via)\\b`, 'i');
-        return !termRegex.test(lower);
-      }).map(t => t.term),
-      actionableFeedback: 'You have articulated the main idea well! Re-reading the nuances will cement this concept into your neocortex.'
+      jargonDetected: [],
+      isOfflineSelfCheck: true,
+      actionableFeedback: 'Offline Self-Check: Automated scoring is unavailable without an active Gemini API key. Compare your explanation against the core takeaways above, then self-evaluate your confidence to proceed.'
     };
   }
 

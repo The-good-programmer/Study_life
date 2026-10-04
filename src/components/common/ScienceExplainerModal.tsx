@@ -42,7 +42,7 @@ const TOPICS: ScienceTopic[] = [
   {
     id: 'retrieval',
     title: 'Active Retrieval Practice',
-    badge: '300% Higher Retention',
+    badge: 'Evidence-Based Recall',
     icon: Zap,
     color: 'from-amber-500 to-orange-500',
     lead: 'Pulling an answer out of your memory directly strengthens synaptic pathways. Re-reading creates an illusion of competence.',
@@ -53,7 +53,7 @@ const TOPICS: ScienceTopic[] = [
         description: 'Brain recognizes familiar shapes on the page, tricking you into feeling prepared while neurons remain passive.'
       },
       science: {
-        label: 'Active Cold Recall (Studify)',
+        label: 'Active Cold Recall (Lotti)',
         description: 'Reconstructing the memory from scratch without looking triggers long-term potentiation and structural dendrite growth.'
       }
     },
@@ -121,15 +121,15 @@ const TOPICS: ScienceTopic[] = [
     icon: GitFork,
     color: 'from-emerald-500 to-teal-500',
     lead: 'Mixing different topics together feels harder and messier in the moment, but dramatically accelerates pattern recognition and transfer to real exams.',
-    paperCitation: 'Bjork & Bjork (1994), "A New Theory of Disuse and Desirable Difficulties"; Rohrer & Taylor (2007)',
+    paperCitation: 'Bjork & Bjork (1994), "A New Theory of Desirable Difficulties"; Rohrer & Taylor (2007)',
     comparison: {
       flawed: {
         label: 'Blocked Practice (AAAA, BBBB)',
         description: 'Doing 20 cards of the same topic creates a rhythmic autopilot where you never learn when to apply which formula.'
       },
       science: {
-        label: 'Interleaved Practice (ABACBC)',
-        description: 'Studify injects cards from earlier concepts, forcing your brain to first diagnose *which* tool is needed before solving.'
+        label: 'Interleaved Practice (Lotti)',
+        description: 'Lotti injects cards from earlier concepts, forcing your brain to first diagnose *which* tool is needed before solving.'
       }
     },
     keyTakeaways: [
@@ -167,10 +167,10 @@ const TOPICS: ScienceTopic[] = [
   {
     id: 'audio',
     title: '40Hz Gamma & Focus Soundscapes',
-    badge: 'Auditory Neuro-Entrainment',
+    badge: 'Acoustic Focus Masking',
     icon: Volume2,
     color: 'from-cyan-500 to-blue-500',
-    lead: 'Auditory beat frequencies and stochastic acoustic noise stabilize neural oscillations, reducing mind-wandering and distractibility.',
+    lead: 'Steady acoustic textures and auditory beat frequencies provide consistent acoustic masking, minimizing auditory distractibility.',
     paperCitation: 'Herrmann (2001), "Human EEG Responses to 1-100 Hz Flutter Stimuli"; Sörqvist et al. (2012)',
     comparison: {
       flawed: {
@@ -178,14 +178,14 @@ const TOPICS: ScienceTopic[] = [
         description: 'Silence leaves room for task-unrelated thoughts; lyrics hijack the phonological loop needed for reading.'
       },
       science: {
-        label: '40Hz Gamma Binaural Beats + Brown Noise',
-        description: 'Binaural beats synchronize hemispheric gamma oscillations associated with high-level cognitive binding; brown noise blankets sudden ambient acoustic spikes.'
+        label: '40Hz Gamma Beat + Brown Noise',
+        description: 'Auditory beat frequencies provide steady acoustic texture; brown noise blankets sudden ambient acoustic spikes.'
       }
     },
     keyTakeaways: [
       'Use headphones for true binaural stereo channel separation (Left: 200Hz, Right: 240Hz = 40Hz beat).',
-      'Gamma frequencies (40Hz) correlate with peak concentration, working memory buffer maintenance, and synaptic plasticity.',
-      'Brown and pink noise utilize stochastic resonance to smooth over distracting environmental sounds.'
+      'Auditory beat soundscapes provide predictable acoustic rhythms without linguistic distraction.',
+      'Brown and pink noise utilize stochastic acoustic smoothing to blanket distracting environmental sounds.'
     ],
     protocolTip: 'Turn on 40Hz Gamma Binaural Beats in the top audio bar whenever you enter a high-stakes focus session.'
   }
@@ -226,7 +226,7 @@ export const ScienceExplainerModal: React.FC<ScienceExplainerModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-white font-display">The Cognitive Science of Studify</h2>
+                <h2 className="text-lg font-bold text-white font-display">The Cognitive Science of Lotti</h2>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   Empirical Foundations
                 </span>
@@ -315,7 +315,7 @@ export const ScienceExplainerModal: React.FC<ScienceExplainerModalProps> = ({
             <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-2">
               <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span>The Studify Method ({currentTopic.comparison.science.label})</span>
+                <span>The Lotti Method ({currentTopic.comparison.science.label})</span>
               </div>
               <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
                 {currentTopic.comparison.science.description}

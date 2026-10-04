@@ -146,7 +146,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const soundPresets: { id: SoundType; label: string; desc: string; icon: string }[] = [
     { id: 'off', label: 'Mute Audio', desc: 'Silence focus synthesizers', icon: '🔇' },
-    { id: 'binaural-40hz', label: '40Hz Gamma Waves', desc: 'Cortical entrainment & working memory', icon: '🧠' },
+    { id: 'binaural-40hz', label: '40Hz Gamma Waves', desc: 'Focus soundscape & acoustic masking', icon: '🧠' },
     { id: 'binaural-alpha-10hz', label: '10Hz Alpha Waves', desc: 'Relaxed focus & anxiety reduction', icon: '🧘' },
     { id: 'brown-noise', label: 'Brownian Deep Noise', desc: 'Acoustic masking of speech & background', icon: '🌊' },
     { id: 'pink-noise', label: 'Spectral Pink Noise', desc: 'Balanced frequencies for memory stabilization', icon: '🌸' },
@@ -231,7 +231,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={() => setIsTourModalOpen(true)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-white transition-all cursor-pointer shadow-sm group"
-              title="Interactive tour: How AXON's 4-Phase Cognitive Architecture Works"
+              title="Interactive tour: How Lotti's 4-Phase Cognitive Architecture Works"
             >
               <span className="text-[11px] font-semibold">How it Works</span>
             </button>

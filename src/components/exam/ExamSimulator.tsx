@@ -451,7 +451,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             <div className="text-left">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-semibold">
                 <Award className="w-3 h-3 text-amber-400" />
-                <span>AXON High-Stakes Simulator</span>
+                <span>Lotti High-Stakes Simulator</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight font-display">
                 Mock Exam Simulator
@@ -969,7 +969,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             <button
               type="button"
               onClick={() => {
-                const shareText = `🎓 AXON Mock Exam Scorecard\nDeck: ${finalReport.deckTitle}\nWeighted Score: ${finalReport.confidenceWeightedScore}/${finalReport.maxPossibleScore} (${finalReport.rawAccuracyPercent}% Raw Accuracy)\nMetacognitive Calibration: ${finalReport.calibrationPercent}%\nMastery Grade: ${grade}\n🎯 Calibrated Mastery: ${finalReport.masteryCount} | ⚠️ Blindspots: ${finalReport.blindspotCount}\n\nPowered by AXON Cognitive Autopilot: https://axonstudy.ai 🦎🧠`;
+                const shareText = `🎓 Lotti Mock Exam Scorecard\nDeck: ${finalReport.deckTitle}\nWeighted Score: ${finalReport.confidenceWeightedScore}/${finalReport.maxPossibleScore} (${finalReport.rawAccuracyPercent}% Raw Accuracy)\nMetacognitive Calibration: ${finalReport.calibrationPercent}%\nMastery Grade: ${grade}\n🎯 Calibrated Mastery: ${finalReport.masteryCount} | ⚠️ Blindspots: ${finalReport.blindspotCount}\n\nPowered by Lotti Spaced Recall 🦎🧠`;
                 navigator.clipboard.writeText(shareText);
                 setCopiedShare(true);
                 soundEngine.playSuccess();

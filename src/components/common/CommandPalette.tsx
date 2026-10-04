@@ -52,7 +52,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   ];
 
   const soundOptions: { id: SoundType; label: string; desc: string }[] = [
-    { id: 'binaural-40hz', label: 'Play 40Hz Gamma Focus Audio', desc: 'Cognitive entrainment for high working-memory tasks' },
+    { id: 'binaural-40hz', label: 'Play 40Hz Gamma Focus Audio', desc: 'Focus soundscape for intense study sessions' },
     { id: 'binaural-alpha-10hz', label: 'Play 10Hz Alpha Flow Wave', desc: 'Calm, relaxed concentration' },
     { id: 'brown-noise', label: 'Play Brownian Noise', desc: 'Masks distracting conversations' },
     { id: 'pink-noise', label: 'Play Pink Noise', desc: 'Clinically proven memory stabilization' },
@@ -251,7 +251,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     },
     {
       id: 'nav-settings',
-      title: 'Open AXON Settings & Preferences',
+      title: 'Open Lotti Settings & Preferences',
       subtitle: 'Gemini API key, Anki exports, data backup',
       icon: Settings,
       category: 'Navigation' as const,
@@ -395,7 +395,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           </div>
           <div className="flex items-center gap-1.5 text-indigo-400">
             <Brain className="w-3.5 h-3.5" />
-            <span>AXON Omnibar</span>
+            <span>Lotti Omnibar</span>
           </div>
         </div>
 

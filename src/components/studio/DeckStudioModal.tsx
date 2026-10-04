@@ -342,7 +342,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
       id: sessionId,
       title: title.trim(),
       category: category.trim() || 'General Studies',
-      description: description.trim() || `Custom study deck created in Studify Deck Studio.`,
+      description: description.trim() || `Custom study deck created in Lotti Deck Studio.`,
       currentConceptIndex: 0,
       currentPhase: 'priming',
       elapsedSeconds: initialSession?.elapsedSeconds || 0,

@@ -179,6 +179,31 @@ export class StorageService {
     };
   }
 
+  public static getWeeklyXP(): { current: number; best: number } {
+    try {
+      const rawCurrent = localStorage.getItem('lotti_weekly_xp') || localStorage.getItem('axon_weekly_xp') || '0';
+      const rawBest = localStorage.getItem('lotti_weekly_xp_best') || '0';
+      const current = parseInt(rawCurrent, 10) || 0;
+      const best = Math.max(parseInt(rawBest, 10) || 0, current);
+      return { current, best };
+    } catch {
+      return { current: 0, best: 0 };
+    }
+  }
+
+  public static addWeeklyXP(amount: number): number {
+    const safeAmount = Math.max(0, Math.round(amount));
+    const { current, best } = this.getWeeklyXP();
+    const next = current + safeAmount;
+    const nextBest = Math.max(best, next);
+    try {
+      localStorage.setItem('lotti_weekly_xp', next.toString());
+      localStorage.setItem('lotti_weekly_xp_best', nextBest.toString());
+    } catch {}
+    this.addXP(safeAmount);
+    return next;
+  }
+
   public static getActivityHistory(): Record<string, number> {
     const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.ACTIVITY));
     if (!raw) return {};

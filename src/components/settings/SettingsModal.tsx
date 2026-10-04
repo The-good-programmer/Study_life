@@ -37,6 +37,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
 
   // Cloud Sync state
   const [syncConfig, setSyncConfig] = useState<CloudSyncConfig>(() => CloudSyncService.getConfig());
+  const [syncEndpoint, setSyncEndpoint] = useState(() => CloudSyncService.getConfig().endpointUrl || '');
+  const [syncToken, setSyncToken] = useState(() => CloudSyncService.getConfig().cloudToken || '');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copiedToken, setCopiedToken] = useState(false);
@@ -56,6 +58,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
   useEffect(() => {
     return CloudSyncService.subscribe(config => {
       setSyncConfig(config);
+      setSyncEndpoint(config.endpointUrl || '');
+      setSyncToken(config.cloudToken || '');
     });
   }, []);
 
@@ -136,24 +140,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
     const token = CloudSyncService.generateSyncToken();
     const updated = CloudSyncService.saveConfig({ cloudToken: token, enabled: true });
     setSyncConfig(updated);
+    setSyncToken(token);
     soundEngine.playSuccess();
   };
 
   const handleCopyToken = () => {
-    if (syncConfig.cloudToken) {
-      navigator.clipboard.writeText(syncConfig.cloudToken);
+    if (syncToken) {
+      navigator.clipboard.writeText(syncToken);
       setCopiedToken(true);
       setTimeout(() => setCopiedToken(false), 2000);
     }
   };
 
+  const handleEndpointChange = (val: string) => {
+    setSyncEndpoint(val);
+    const updated = CloudSyncService.saveConfig({ endpointUrl: val.trim() });
+    setSyncConfig(updated);
+  };
+
+  const handleTokenChange = (val: string) => {
+    setSyncToken(val);
+    const updated = CloudSyncService.saveConfig({ cloudToken: val.trim() });
+    setSyncConfig(updated);
+  };
+
   const handleToggleCloudSync = () => {
     const next = !syncConfig.enabled;
-    let token = syncConfig.cloudToken;
+    let token = syncToken;
     if (next && !token) {
       token = CloudSyncService.generateSyncToken();
+      setSyncToken(token);
     }
-    const updated = CloudSyncService.saveConfig({ enabled: next, cloudToken: token });
+    const updated = CloudSyncService.saveConfig({ enabled: next, cloudToken: token, endpointUrl: syncEndpoint });
     setSyncConfig(updated);
   };
 
@@ -370,21 +388,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
           </div>
 
           <p className="text-xs text-slate-400 leading-relaxed font-sans">
-            Keep your decks, FSRS review intervals, and streak progress seamlessly synchronized between your mobile phone, laptop, and tablet.
+            Synchronize your decks, FSRS review intervals, and streak progress across devices using your own remote endpoint or worker.
           </p>
+
+          {/* Local-First Architecture Notice */}
+          <div className="p-3 rounded-xl bg-cyan-950/20 border border-cyan-800/30 text-[11px] text-cyan-200/90 leading-relaxed font-sans">
+            🔒 <strong className="text-cyan-100">Private by default:</strong> Your study progress is saved locally in this browser. To sync across your devices, specify a remote sync server endpoint URL below. If left blank, sync is disabled and you can use <em>Export Local Data</em> for instant offline backups.
+          </div>
+
+          {/* Sync Endpoint URL */}
+          <div className="space-y-1.5 pt-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] uppercase font-mono font-bold text-slate-400">Remote Sync Endpoint URL</label>
+              <span className="text-[10px] text-slate-500 font-sans">Cloudflare Worker / Custom API</span>
+            </div>
+            <input 
+              type="url"
+              value={syncEndpoint}
+              onChange={e => handleEndpointChange(e.target.value)}
+              placeholder="https://sync.example.com/api/lotti"
+              className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-white/[0.1] text-cyan-300 font-mono text-xs outline-none focus:border-cyan-500/50 transition-colors"
+            />
+          </div>
 
           {/* Sync Token Input & Generator */}
           <div className="space-y-1.5 pt-1">
-            <label className="text-[10px] uppercase font-mono font-bold text-slate-400">Your Device Pairing Token</label>
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] uppercase font-mono font-bold text-slate-400">Device Pairing Token</label>
+              <span className="text-[10px] text-slate-500 font-sans">Shared secret between devices</span>
+            </div>
             <div className="flex gap-2">
               <input 
                 type="text"
-                readOnly
-                value={syncConfig.cloudToken || 'Click "Generate Token" to pair devices'}
-                placeholder="LOTTI-SYNC-..."
-                className="flex-1 px-3.5 py-2 rounded-xl bg-slate-900 border border-white/[0.1] text-cyan-300 font-mono text-xs select-all outline-none"
+                value={syncToken}
+                onChange={e => handleTokenChange(e.target.value)}
+                placeholder="Enter or generate pairing token"
+                className="flex-1 px-3.5 py-2 rounded-xl bg-slate-900 border border-white/[0.1] text-cyan-300 font-mono text-xs outline-none focus:border-cyan-500/50 transition-colors"
               />
-              {syncConfig.cloudToken ? (
+              {syncToken ? (
                 <button
                   type="button"
                   onClick={handleCopyToken}
@@ -394,15 +435,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                   {copiedToken ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
                   <span>{copiedToken ? 'Copied' : 'Copy'}</span>
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleGenerateToken}
-                  className="px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-colors cursor-pointer shadow-md shadow-cyan-600/20"
-                >
-                  Generate Token
-                </button>
-              )}
+              ) : null}
+              <button
+                type="button"
+                onClick={handleGenerateToken}
+                className="px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-colors cursor-pointer shadow-md shadow-cyan-600/20"
+              >
+                Generate
+              </button>
             </div>
           </div>
 
@@ -420,10 +460,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
 
             <button
               type="button"
-              disabled={isSyncing || !syncConfig.enabled}
+              disabled={isSyncing || !syncConfig.enabled || !syncConfig.endpointUrl || !syncConfig.cloudToken}
               onClick={handleSyncNow}
+              title={!syncConfig.endpointUrl ? 'Endpoint URL required to sync' : undefined}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                isSyncing || !syncConfig.enabled
+                isSyncing || !syncConfig.enabled || !syncConfig.endpointUrl || !syncConfig.cloudToken
                   ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                   : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-md shadow-cyan-600/25'
               }`}

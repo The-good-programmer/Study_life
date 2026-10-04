@@ -23,8 +23,6 @@ import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
 import confetti from 'canvas-confetti';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
 import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
-import { WeeklyStudyLeagueModal } from '../game/WeeklyStudyLeagueModal';
-import { leagueService } from '../../services/leagueService';
 import { haptics } from '../../services/hapticsService';
 import { ExpressiveAxolotl } from '../mascot/ExpressiveAxolotl';
 
@@ -55,8 +53,6 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   const [axolotlState] = useState(() => axolotlService.getState());
   const [showScienceModal, setShowScienceModal] = useState(false);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
-  const [isLeagueModalOpen, setIsLeagueModalOpen] = useState(false);
-  const [leagueInitialTab, setLeagueInitialTab] = useState<'league' | 'friends'>('league');
   const [hasSynapticFreeze, setHasSynapticFreeze] = useState(() => {
     try {
       return localStorage.getItem('axon_synaptic_freeze_active') === 'true';
@@ -64,13 +60,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
       return false;
     }
   });
-  const leagueStatus = useMemo(() => {
-    // Re-evaluate league ranking whenever user XP updates
-    return leagueService.getLeagueStatus();
-  }, [stats.xp]);
-  const friendQuest = useMemo(() => {
-    return leagueService.getFriendQuest();
-  }, [stats.xp]);
+  const weeklyStats = useMemo(() => StorageService.getWeeklyXP(), [stats.xp]);
   const savedSessions = useMemo(() => StorageService.getSessions(), []);
   const dueCards = useMemo(() => StorageService.getDueCards(), []);
 
@@ -243,7 +233,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                   setShowScienceModal(true);
                 }}
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.12] text-indigo-200 hover:text-white text-xs font-semibold transition-all cursor-pointer shadow-sm hover:scale-105"
-                title="Discover the empirical cognitive neuroscience behind Studify"
+                title="Discover the empirical cognitive neuroscience behind Lotti"
               >
                 <Brain className="w-3.5 h-3.5 text-indigo-400" />
                 <span>Why this works (The Science)</span>
@@ -566,100 +556,46 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
             </div>
           </div>
 
-          {/* Duolingo Diamond League Status Widget */}
+          {/* Personal Weekly Study Record Widget */}
           <div 
             onClick={() => {
               soundEngine.playAxolotlBubble();
               haptics.light();
-              setLeagueInitialTab('league');
-              setIsLeagueModalOpen(true);
+              onOpenDashboard();
             }}
             className="p-5 rounded-3xl bg-gradient-to-br from-indigo-950/40 via-purple-950/20 to-slate-900 border border-indigo-500/30 space-y-3 cursor-pointer hover:border-indigo-500/60 transition-all group shadow-sm"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <span className="text-2xl">{leagueStatus.tierIcon}</span>
+                <span className="text-2xl">📈</span>
                 <div>
                   <h3 className="text-sm font-bold text-white font-display flex items-center gap-1.5">
-                    <span>{leagueStatus.tierName}</span>
-                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300">
-                      Rank #{leagueStatus.userRank}
+                    <span>Weekly Study Output</span>
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
+                      Personal Progress
                     </span>
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    {leagueStatus.isPromotionZone ? '🔥 Promotion Zone!' : `${leagueStatus.daysLeft}d left in weekly cycle`}
+                    {weeklyStats.current >= 300 ? '🔥 Great momentum this week!' : 'Build consistency with daily sprints'}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-1 text-xs font-bold text-indigo-300 group-hover:text-white transition-colors">
-                <span>Leaderboard</span>
+                <span>Analytics</span>
                 <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
               </div>
             </div>
 
-            <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/[0.06] flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-400">Your Weekly Output:</span>
-              <span className="text-indigo-300 font-bold">{leagueStatus.userWeeklyXP} XP</span>
-            </div>
-          </div>
-
-          {/* Weekly Friend Quest Co-op Widget */}
-          <div 
-            onClick={() => {
-              soundEngine.playAxolotlBubble();
-              haptics.light();
-              setLeagueInitialTab('friends');
-              setIsLeagueModalOpen(true);
-            }}
-            className="p-5 rounded-3xl bg-gradient-to-br from-pink-950/30 via-purple-950/20 to-slate-900 border border-pink-500/30 space-y-3 cursor-pointer hover:border-pink-500/60 transition-all group shadow-sm"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="relative text-2xl">
-                  <span>{friendQuest.partnerAvatar}</span>
-                  <span className="absolute -bottom-1 -right-1 text-xs">🤝</span>
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white font-display flex items-center gap-1.5">
-                    <span>Friend Quest</span>
-                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-pink-500/20 text-pink-300">
-                      with {friendQuest.partnerName.split(' ')[0]}
-                    </span>
-                  </h3>
-                  <p className="text-[11px] text-slate-400">
-                    {friendQuest.completed ? '🎉 Quest Complete! Tap to claim' : `${friendQuest.targetCount - (friendQuest.userProgress + friendQuest.partnerProgress)} cards left`}
-                  </p>
-                </div>
+            <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/[0.06] flex flex-col">
+                <span className="text-slate-400 text-[10px]">This Week</span>
+                <span className="text-indigo-300 font-bold text-sm">{weeklyStats.current} XP</span>
               </div>
-
-              <div className="flex items-center gap-1 text-xs font-bold text-pink-300 group-hover:text-white transition-colors">
-                <span>Co-op</span>
-                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/[0.06] flex flex-col">
+                <span className="text-slate-400 text-[10px]">Personal Best</span>
+                <span className="text-purple-300 font-bold text-sm">{weeklyStats.best} XP</span>
               </div>
-            </div>
-
-            {/* Dual Co-op Progress Bar */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] font-mono">
-                <span className="text-indigo-300">You ({friendQuest.userProgress})</span>
-                <span className="text-pink-300">{friendQuest.partnerName.split(' ')[0]} ({friendQuest.partnerProgress})</span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-slate-900/80 border border-white/[0.08] overflow-hidden flex">
-                <div 
-                  className="h-full bg-gradient-to-r from-indigo-500 to-indigo-400 transition-all duration-300"
-                  style={{ width: `${Math.min(100, (friendQuest.userProgress / friendQuest.targetCount) * 100)}%` }}
-                />
-                <div 
-                  className="h-full bg-gradient-to-r from-pink-500 to-rose-400 transition-all duration-300"
-                  style={{ width: `${Math.min(100 - (friendQuest.userProgress / friendQuest.targetCount) * 100, (friendQuest.partnerProgress / friendQuest.targetCount) * 100)}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="p-2 rounded-xl bg-slate-950/60 border border-white/[0.06] flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-400">Joint Reward:</span>
-              <span className="text-amber-300 font-bold">+60 🪙 • +100 XP</span>
             </div>
           </div>
 
@@ -685,14 +621,6 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
         }}
         stats={stats}
         onLaunchStreakSaver={handleLaunchQuickSprint}
-      />
-
-      {/* Weekly Study League Modal */}
-      <WeeklyStudyLeagueModal
-        isOpen={isLeagueModalOpen}
-        initialTab={leagueInitialTab}
-        onClose={() => setIsLeagueModalOpen(false)}
-        onStartStudy={handleLaunchQuickSprint}
       />
 
     </div>

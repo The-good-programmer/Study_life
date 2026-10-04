@@ -399,9 +399,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleSwitchAccount = (userId: string) => {
-    const success = AuthService.switchAccount(userId);
-    if (success) {
+  const handleSwitchAccount = async (targetAccount: UserAccount) => {
+    if (targetAccount.provider === 'password' && targetAccount.passwordHash) {
+      setLoginEmail(targetAccount.email);
+      setLoginPassword('');
+      setLoginError(`Please enter password for ${targetAccount.name} to switch.`);
+      setTab('login');
+      return;
+    }
+
+    const res = await AuthService.switchAccount(targetAccount.id);
+    if (res.success) {
       const updated = AuthService.getCurrentUser();
       if (onUserChanged) onUserChanged(updated);
       onClose();
@@ -578,6 +586,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
+          {/* Local-First Architecture Notice */}
+          <div className="p-2.5 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-[11px] text-indigo-200/90 flex items-center gap-2">
+            <span className="text-sm">🔒</span>
+            <span>Local profile: accounts and study history are stored privately in this browser.</span>
+          </div>
 
           {/* TAB 1: LOG IN */}
           {tab === 'login' && !currentUser && (
@@ -1765,7 +1778,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <div className="flex items-center gap-2 shrink-0">
                         {!isCurrent && (
                           <button
-                            onClick={() => handleSwitchAccount(acc.id)}
+                            onClick={() => handleSwitchAccount(acc)}
                             className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                           >
                             <span>Switch</span>

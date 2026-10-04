@@ -1,3 +1,14 @@
+import {
+  fsrs,
+  generatorParameters,
+  Rating,
+  State,
+  createEmptyCard,
+  forgetting_curve,
+  type Card as FSRSCard,
+  type Grade,
+  type RecordLogItem,
+} from 'ts-fsrs';
 import type { FSRSRating, RetrievalCard } from '../types';
 
 export interface SchedulingResult {
@@ -13,19 +24,61 @@ export interface DecayPoint {
 }
 
 export class FSRSService {
-  /**
-   * FSRS Power-Law constants:
-   * R(t, S) = (1 + FACTOR * (t / S))^DECAY
-   * Standard parameters: FACTOR = 19/81 (~0.234567), DECAY = -0.5
-   * Notice that when elapsed days t == S:
-   * R(S, S) = (1 + 19/81)^(-0.5) = (100/81)^(-0.5) = 9/10 = 0.90 (90%)
-   * Stability S is rigorously defined as the duration in days for retrievability to reach 90%.
-   */
-  public static readonly FACTOR = 19 / 81;
-  public static readonly DECAY = -0.5;
+  public static readonly DECAY = 0.5;
+
+  private static getScheduler(targetRetention: number = 0.90) {
+    const clampedRetention = Math.max(0.70, Math.min(0.97, targetRetention));
+    return fsrs(
+      generatorParameters({
+        request_retention: clampedRetention,
+        enable_fuzz: false,
+      })
+    );
+  }
+
+  private static toFSRSCard(card: RetrievalCard, now: Date = new Date()): FSRSCard {
+    const base = createEmptyCard(now);
+    const lastReview = card.lastReviewDate ? new Date(card.lastReviewDate) : undefined;
+    const due = card.nextReviewDate ? new Date(card.nextReviewDate) : now;
+    const reps = card.reps || 0;
+    const lapses = card.lapses || 0;
+    const stability = card.stability && card.stability > 0 ? card.stability : 1;
+    const difficulty = card.difficulty && card.difficulty > 0 ? card.difficulty : 5;
+
+    let elapsedDays = 0;
+    if (lastReview) {
+      elapsedDays = Math.max(0, (now.getTime() - lastReview.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    return {
+      ...base,
+      due,
+      stability,
+      difficulty,
+      elapsed_days: elapsedDays,
+      scheduled_days: Math.max(1, Math.round(stability)),
+      reps,
+      lapses,
+      state: reps > 0 ? State.Review : State.New,
+      last_review: lastReview,
+    };
+  }
+
+  private static ratingToFSRS(rating: FSRSRating): Grade {
+    switch (rating) {
+      case 'again':
+        return Rating.Again;
+      case 'hard':
+        return Rating.Hard;
+      case 'good':
+        return Rating.Good;
+      case 'easy':
+        return Rating.Easy;
+    }
+  }
 
   /**
-   * Calculates the exact mathematical retrievability R(t, S) for a card right now.
+   * Calculates the mathematical retrievability R(t, S) using official FSRS power-law formula.
    * Returns percentage: 0 - 100%
    */
   public static calculateRetrievability(card: RetrievalCard, now: Date = new Date()): number {
@@ -36,127 +89,84 @@ export class FSRSService {
     const last = new Date(card.lastReviewDate);
     const elapsedDays = Math.max(0, (now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
 
-    // R = (1 + (FACTOR * t / S))^DECAY
-    const r = Math.pow(1 + (this.FACTOR * elapsedDays) / stability, this.DECAY);
-    return Math.round(Math.max(0, Math.min(1, r)) * 1000) / 10;
+    try {
+      const r = forgetting_curve(this.DECAY, elapsedDays, stability);
+      return Math.round(Math.max(0, Math.min(1, r)) * 1000) / 10;
+    } catch {
+      return 90;
+    }
   }
 
   /**
-   * Computes optimal interval given stability S and target retention rate (default 0.90)
-   * Formula: I = (S / FACTOR) * (R_target^(1 / DECAY) - 1)
+   * Computes optimal interval given stability S and target retention rate
    */
   public static calculateInterval(stability: number, targetRetention: number = 0.90): number {
-    const r = Math.max(0.70, Math.min(0.98, targetRetention));
-    // Since DECAY = -0.5, 1 / DECAY = -2. R^(-2) = (1 / R)^2
-    const exponent = 1 / this.DECAY;
-    const interval = (stability / this.FACTOR) * (Math.pow(r, exponent) - 1);
+    const s = Math.max(0.5, stability);
+    const r = Math.max(0.70, Math.min(0.97, targetRetention));
+    const factor = Math.exp((1 / this.DECAY) * Math.log(0.9)) - 1;
+    const interval = (s / factor) * (Math.pow(r, -1 / this.DECAY) - 1);
     return Math.max(1, Math.round(interval));
   }
 
   /**
-   * Preview the intervals for all 4 ratings for UI buttons based on target retention
+   * Previews intervals for all 4 ratings using ts-fsrs scheduling engine
    */
   public static previewIntervals(card: RetrievalCard, targetRetention: number = 0.90): Record<FSRSRating, string> {
-    const stability = card.stability && card.stability > 0 ? card.stability : 1;
-    const currentR = this.calculateRetrievability(card) / 100;
+    const now = new Date();
+    const scheduler = this.getScheduler(targetRetention);
+    const fsrsCard = this.toFSRSCard(card, now);
+    const results = scheduler.repeat(fsrsCard, now);
 
-    const hardStability = Math.max(1, stability * 1.2);
-    const goodStability = Math.max(
-      2,
-      stability === 1
-        ? 2.5
-        : stability * (1.8 + Math.max(0.2, (11 - (card.difficulty || 5)) * 0.15) * Math.max(0.2, 1 - currentR))
-    );
-    const easyStability = Math.max(goodStability * 1.25, stability * 3.8);
+    const getDays = (item: RecordLogItem): number => {
+      const ms = item.card.due.getTime() - now.getTime();
+      return Math.max(0, ms / (1000 * 60 * 60 * 24));
+    };
 
     return {
-      again: '<15 min',
-      hard: this.formatInterval(this.calculateInterval(hardStability, targetRetention)),
-      good: this.formatInterval(this.calculateInterval(goodStability, targetRetention)),
-      easy: this.formatInterval(this.calculateInterval(easyStability, targetRetention)),
+      again: '<15m',
+      hard: this.formatInterval(Math.max(0.04, getDays(results[Rating.Hard]))),
+      good: this.formatInterval(Math.max(1, getDays(results[Rating.Good]))),
+      easy: this.formatInterval(Math.max(2, getDays(results[Rating.Easy]))),
     };
   }
 
   /**
-   * Schedules next review based on the student's rating and target retention
+   * Schedules next review using ts-fsrs
    */
   public static schedule(card: RetrievalCard, rating: FSRSRating, targetRetention: number = 0.90): SchedulingResult {
-    const currentStability = card.stability && card.stability > 0 ? card.stability : 1;
-    const currentDifficulty = card.difficulty && card.difficulty > 0 ? card.difficulty : 5;
-    let reps = card.reps || 0;
-    let lapses = card.lapses || 0;
-    const currentR = this.calculateRetrievability(card) / 100;
-
-    let newStability = currentStability;
-    let newDifficulty = currentDifficulty;
-    let intervalDays = 1;
-
-    switch (rating) {
-      case 'again':
-        lapses += 1;
-        reps = 0;
-        // Forgetting stability resets
-        newStability = Math.max(
-          0.5,
-          Math.min(
-            currentStability * 0.4,
-            0.7 * Math.pow(currentDifficulty, -0.3) * (Math.pow(currentStability + 1, 0.2) - 1) * Math.exp(0.5 * (1 - currentR))
-          )
-        );
-        newDifficulty = Math.min(10, currentDifficulty + 1.2);
-        intervalDays = 0.01; // ~15 minutes
-        break;
-
-      case 'hard':
-        reps += 1;
-        newStability = Math.max(1, currentStability * 1.2);
-        newDifficulty = Math.min(10, currentDifficulty + 0.5);
-        intervalDays = this.calculateInterval(newStability, targetRetention);
-        break;
-
-      case 'good': {
-        reps += 1;
-        const recallBonus = 1 + Math.max(0.5, (11 - currentDifficulty) * 0.15) * Math.max(0.2, 1 - currentR);
-        newStability = Math.max(2, currentStability === 1 ? 2.5 : currentStability * (1.8 + recallBonus));
-        newDifficulty = Math.max(1, currentDifficulty - 0.2);
-        intervalDays = this.calculateInterval(newStability, targetRetention);
-        break;
-      }
-
-      case 'easy':
-        reps += 1;
-        newStability = Math.max(4, currentStability === 1 ? 4.0 : currentStability * 3.8 * 1.25);
-        newDifficulty = Math.max(1, currentDifficulty - 0.8);
-        intervalDays = this.calculateInterval(newStability, targetRetention);
-        break;
-    }
-
     const now = new Date();
-    const nextDate = new Date(now.getTime() + intervalDays * 24 * 60 * 60 * 1000);
+    const scheduler = this.getScheduler(targetRetention);
+    const fsrsCard = this.toFSRSCard(card, now);
+    const fsrsRating = this.ratingToFSRS(rating);
+    const results = scheduler.repeat(fsrsCard, now);
+    const scheduled = results[fsrsRating];
+
+    const nextDue = scheduled.card.due;
+    const intervalDays = Math.max(0.01, (nextDue.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
     const updatedCard: RetrievalCard = {
       ...card,
-      stability: Math.round(newStability * 10) / 10,
-      difficulty: Math.round(newDifficulty * 10) / 10,
-      reps,
-      lapses,
+      stability: Math.round(scheduled.card.stability * 10) / 10,
+      difficulty: Math.round(scheduled.card.difficulty * 10) / 10,
+      reps: scheduled.card.reps,
+      lapses: scheduled.card.lapses,
       lastReviewDate: now.toISOString(),
-      nextReviewDate: nextDate.toISOString(),
+      nextReviewDate: nextDue.toISOString(),
       retrievability: 100,
     };
 
     return {
       updatedCard,
-      nextIntervalDays: intervalDays,
+      nextIntervalDays: Math.round(intervalDays * 100) / 100,
       intervalLabel: this.formatInterval(intervalDays),
       retrievability: 100,
     };
   }
 
   public static formatInterval(days: number): string {
-    if (days < 0.1) return '15m';
-    if (days < 1) return `${Math.round(days * 24)}h`;
-    if (days === 1) return '1d';
+    if (days < 0.05) return '15m';
+    if (days < 1) return `${Math.max(1, Math.round(days * 24))}h`;
+    if (days < 1.5) return '1d';
     if (days < 30) return `${Math.round(days)}d`;
     return `${Math.round(days / 30)}mo`;
   }
@@ -170,11 +180,15 @@ export class FSRSService {
     const step = Math.max(1, Math.round(totalDays / 20));
 
     for (let day = 0; day <= totalDays; day += step) {
-      const r = Math.pow(1 + (this.FACTOR * day) / s, this.DECAY);
-      points.push({
-        day,
-        retrievability: Math.round(Math.max(0, Math.min(1, r)) * 100),
-      });
+      try {
+        const r = forgetting_curve(this.DECAY, day, s);
+        points.push({
+          day,
+          retrievability: Math.round(Math.max(0, Math.min(1, r)) * 100),
+        });
+      } catch {
+        points.push({ day, retrievability: 90 });
+      }
     }
     return points;
   }
@@ -187,7 +201,7 @@ export class FSRSService {
   }
 
   /**
-   * Filters and sorts leeches from highest synaptic instability to lowest
+   * Filters and sorts leeches from highest lapse rate to lowest
    */
   public static findLeeches(cards: RetrievalCard[]): RetrievalCard[] {
     return cards
@@ -196,16 +210,18 @@ export class FSRSService {
   }
 
   /**
-   * Cures a leech by applying mnemonic rewiring and resetting stability
+   * Helps a student rewire a leech by attaching a mnemonic hint and scheduling an immediate review
    */
   public static rewireCard(card: RetrievalCard, mnemonicHint: string): RetrievalCard {
+    const now = new Date();
     return {
       ...card,
       hint: mnemonicHint,
-      lapses: Math.max(0, card.lapses - 2),
-      difficulty: Math.max(3, card.difficulty - 2.5),
-      stability: Math.max(2.5, card.stability * 1.8),
-      retrievability: 95,
+      lapses: Math.max(0, card.lapses - 1),
+      difficulty: Math.max(3, (card.difficulty || 5) - 1.0),
+      stability: Math.max(1.0, card.stability || 1.0),
+      nextReviewDate: now.toISOString(),
+      retrievability: 100,
     };
   }
 }

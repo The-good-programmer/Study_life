@@ -111,7 +111,7 @@ export class ExportService {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${session.title} — AXON High-Yield Study Sheet</title>
+  <title>${session.title} — Lotti High-Yield Study Sheet</title>
   <style>
     @page {
       margin: 18mm 16mm;
@@ -381,7 +381,7 @@ export class ExportService {
 
   <header class="sheet-header">
     <div>
-      <div class="brand-tag">AXON Cognitive Architecture — High-Yield Review Sheet</div>
+      <div class="brand-tag">Lotti Cognitive Architecture — High-Yield Review Sheet</div>
       <h1 class="doc-title">${esc(session.title)}</h1>
     </div>
     <div class="meta-details">
@@ -411,7 +411,7 @@ export class ExportService {
   </main>
 
   <footer class="sheet-footer">
-    <div>AXON — The Zero-Friction Cognitive Learning Engine</div>
+    <div>Lotti — The Habit-Forming Spaced Recall Platform</div>
     <div>Spaced Schedule: 1d ➔ 3d ➔ 7d ➔ 21d ➔ Permanent Neocortical Transfer</div>
   </footer>
 </body>

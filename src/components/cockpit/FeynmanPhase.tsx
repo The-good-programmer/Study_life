@@ -518,8 +518,8 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                           {isExaminer ? (
                             <span className="text-pink-300 flex items-center gap-1.5">
                               <span>Lottie</span>
-                              <span className="text-[10px] font-mono text-cyan-400 font-normal px-1.5 py-0.2 rounded-full bg-cyan-500/10 border border-cyan-500/20">
-                                Socratic Examiner
+                              <span className="text-[10px] font-mono text-cyan-400 font-normal px-1.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
+                                {AIService.isAvailable() ? 'AI Socratic Examiner' : 'Offline Guided Review'}
                               </span>
                             </span>
                           ) : (
@@ -977,15 +977,29 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                       <Award className="w-7 h-7" />
                     </div>
                     <div>
-                      <div className="text-xs text-slate-400 uppercase tracking-wider font-bold font-display">
-                        Socratic Comprehension Analysis
-                      </div>
-                      <div className="text-xl font-black text-white flex items-center gap-2 font-display">
-                        <span>{evaluation.grade}</span>
-                        <span className="text-sm font-semibold text-purple-300 font-mono">
-                          ({evaluation.score}% Score)
-                        </span>
-                      </div>
+                      {evaluation.isOfflineSelfCheck ? (
+                        <>
+                          <div className="text-xs text-amber-300 uppercase tracking-wider font-bold font-display flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-400" />
+                            <span>Offline Self-Check (No AI Key)</span>
+                          </div>
+                          <div className="text-xl font-black text-white flex items-center gap-2 font-display">
+                            <span>Concept Checklist</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-xs text-slate-400 uppercase tracking-wider font-bold font-display">
+                            Socratic Comprehension Analysis
+                          </div>
+                          <div className="text-xl font-black text-white flex items-center gap-2 font-display">
+                            <span>{evaluation.grade}</span>
+                            <span className="text-sm font-semibold text-purple-300 font-mono">
+                              ({evaluation.score}% Score)
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -1133,6 +1147,43 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
 
               {/* Adaptive Mastery Gate for Written Rubric */}
               {(() => {
+                if (evaluation.isOfflineSelfCheck) {
+                  return (
+                    <div className="p-5 sm:p-6 rounded-3xl bg-purple-950/30 border border-purple-500/30 space-y-4 animate-fadeIn">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-purple-300 font-bold font-display text-sm">
+                          <CheckCircle className="w-4 h-4 text-purple-400" />
+                          <span>Self-Assessment Checklist Complete</span>
+                        </div>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-200 border border-purple-500/30">
+                          Offline Mode
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        Compare your written thoughts with the reference model and key takeaways above. When you feel ready, proceed to active recall practice.
+                      </p>
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-white/[0.06]">
+                        <button
+                          type="button"
+                          onClick={() => setEvaluation(null)}
+                          className="text-xs text-purple-300 hover:text-white flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Revise Explanation</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={onComplete}
+                          className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <span>I Understand This Concept — Proceed to Recall</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
                 const isWrittenQualified = evaluation.score >= 70 || isWrittenGateCleared;
 
                 if (!isWrittenQualified) {

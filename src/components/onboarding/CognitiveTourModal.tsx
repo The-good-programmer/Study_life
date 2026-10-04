@@ -39,7 +39,7 @@ const TOUR_STEPS: TourStep[] = [
     badge: "Active Priming",
     badgeColor: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30",
     lottieQuote: "Never read cold text! We prime your working memory with concept graphs and core anchors first so new facts click into place effortlessly.",
-    description: "Before diving into complex paragraphs, AXON synthesizes an intuitive mental graph, 3 high-yield takeaways, and interactive terminology chips to drastically reduce cognitive load.",
+    description: "Before diving into complex paragraphs, Lotti synthesizes an intuitive mental graph, 3 high-yield takeaways, and interactive terminology chips to drastically reduce cognitive load.",
     highlights: [
       "Visual concept relationship graph",
       "Key terminology chips with instant definitions",
@@ -65,13 +65,13 @@ const TOUR_STEPS: TourStep[] = [
   {
     phase: "Phase 3",
     scienceTitle: "Active Retrieval & FSRS Spaced Schedule",
-    citations: "Roediger & Karpicke (Testing Effect) • SuperMemo FSRS",
+    citations: "Roediger & Karpicke (Testing Effect) • ts-fsrs Algorithm",
     badge: "Memory Stabilization",
     badgeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
     lottieQuote: "Re-reading notes gives a counterfeit feeling of knowing. Real learning is the struggle to pull memories out of the void. And yes, you can do it with a Nintendo Switch Joy-Con!",
     description: "Interactive flashcards force active memory retrieval. Four-tier effort ratings feed directly into the modern Free Spaced Repetition Scheduler (FSRS) algorithm to defy the Ebbinghaus forgetting curve.",
     highlights: [
-      "FSRS spaced repetition with leech auto-detection",
+      "Official ts-fsrs spaced repetition with leech auto-detection",
       "Bluetooth Gamepad support (8BitDo, Joy-Cons, Xbox)",
       "Image Occlusion Studio for anatomical/technical diagrams"
     ],
@@ -80,15 +80,15 @@ const TOUR_STEPS: TourStep[] = [
   {
     phase: "Phase 4",
     scienceTitle: "Neuroscience Micro-Rest & Ultradian Reset",
-    citations: "Kleitman (Ultradian Rhythms) • Huberman / Stanford Neuroscience",
+    citations: "Kleitman (Ultradian Rhythms) • Stanford Neuroscience",
     badge: "Memory Consolidation",
     badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
     lottieQuote: "Your brain doesn't store memories while you're grinding—it locks them in during offline rest! 3 minutes of box breathing triggers 10x hippocampal replay.",
-    description: "Long-term potentiation requires neural recovery. AXON orchestrates a guided 3-minute rest with an animated 4-4-4-4 Box Breathing visualizer, 20-20-20 eye strain relaxation, and 40Hz soundscape resets.",
+    description: "Long-term potentiation requires neural recovery. Lotti orchestrates a guided 3-minute rest with an animated 4-4-4-4 Box Breathing visualizer, 20-20-20 eye strain relaxation, and 40Hz soundscape resets.",
     highlights: [
       "Dynamic 4-4-4-4 Box Breathing visualizer",
       "Hippocampal memory consolidation protocol",
-      "Synthesized 40Hz Gamma wave cortical entrainment"
+      "Synthesized 40Hz acoustic focus soundscape"
     ],
     icon: Coffee
   }
@@ -147,7 +147,7 @@ export const CognitiveTourModal: React.FC<CognitiveTourModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-extrabold text-white font-display">AXON Architecture</span>
+                <span className="text-sm font-extrabold text-white font-display">Lotti Architecture</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">
                   Step {currentStep + 1} of 4
                 </span>
@@ -252,7 +252,7 @@ export const CognitiveTourModal: React.FC<CognitiveTourModalProps> = ({
               onClick={handleNext}
               className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 hover:from-pink-400 hover:to-cyan-400 text-white font-bold text-xs shadow-lg shadow-pink-500/25 flex items-center gap-2 transition-all hover:scale-105 cursor-pointer"
             >
-              <span>{isLast ? "Launch AXON Session" : "Next Phase"}</span>
+              <span>{isLast ? "Launch Study Session" : "Next Phase"}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

@@ -39,8 +39,11 @@ export class CloudSyncService {
    */
   public static generateSyncToken(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const randPart = (len: number) => 
-      Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    const randPart = (len: number) => {
+      const bytes = new Uint8Array(len);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, b => chars[b % chars.length]).join('');
+    };
     return `LOTTI-SYNC-${randPart(4)}-${randPart(4)}`;
   }
 
@@ -132,40 +135,35 @@ export class CloudSyncService {
       return { success: false, message: 'No cloud token configured. Please generate or paste a token.' };
     }
 
+    if (!config.endpointUrl || !config.endpointUrl.startsWith('http')) {
+      this.saveConfig({ status: 'idle', errorMessage: 'Remote endpoint URL required' });
+      return {
+        success: false,
+        message: 'Cloud sync requires a remote server URL (e.g. self-hosted REST or Cloudflare Worker). Configure your endpoint in Settings, or use Library Export to backup your decks offline.'
+      };
+    }
+
     this.saveConfig({ status: 'syncing', errorMessage: undefined });
 
     try {
       const payload = this.createSyncPayload();
 
-      // If a custom cloud backend endpoint is configured:
-      if (config.endpointUrl && config.endpointUrl.startsWith('http')) {
-        const response = await fetch(config.endpointUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.cloudToken}`,
-          },
-          body: JSON.stringify(payload),
-        });
+      const response = await fetch(config.endpointUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.cloudToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
-        if (!response.ok) {
-          throw new Error(`Sync server responded with ${response.status}: ${response.statusText}`);
-        }
+      if (!response.ok) {
+        throw new Error(`Sync server responded with ${response.status}: ${response.statusText}`);
+      }
 
-        const remoteData = await response.json();
-        if (remoteData && remoteData.sessions) {
-          this.mergeRemoteData(remoteData);
-        }
-      } else {
-        // Local-first persistent device snapshot mode
-        // Stores synced state in IndexedDB and backup namespace
-        try {
-          const snapshotKey = `studify_cloud_snapshot_${config.cloudToken}`;
-          localStorage.setItem(snapshotKey, JSON.stringify(payload));
-        } catch {}
-
-        // Small simulated latency for natural UI feedback
-        await new Promise(r => setTimeout(r, 600));
+      const remoteData = await response.json();
+      if (remoteData && remoteData.sessions) {
+        this.mergeRemoteData(remoteData);
       }
 
       // Clear pending queue
@@ -180,7 +178,7 @@ export class CloudSyncService {
         errorMessage: undefined,
       });
 
-      return { success: true, message: `Successfully synced ${payload.sessions.length} decks to cloud!` };
+      return { success: true, message: `Successfully synchronized ${payload.sessions.length} decks with remote server!` };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Network sync failed';
       this.saveConfig({
@@ -196,7 +194,7 @@ export class CloudSyncService {
   }
 
   /**
-   * Merge remote cloud data into local storage using Last-Write-Wins (LWW)
+   * Merge remote cloud data into local storage using timestamp-based Last-Write-Wins (LWW)
    */
   public static mergeRemoteData(remote: CloudSyncPayload): void {
     if (!remote || !Array.isArray(remote.sessions)) return;
@@ -207,14 +205,38 @@ export class CloudSyncService {
     // Index local sessions
     localSessions.forEach(s => sessionMap.set(s.id, s));
 
-    // Merge or insert remote sessions
+    const getLatestTimestamp = (s: StudySession): number => {
+      let latest = 0;
+      if (s.createdAt) {
+        const t = new Date(s.createdAt).getTime();
+        if (!isNaN(t)) latest = Math.max(latest, t);
+      }
+      if (s.completedAt) {
+        const ct = new Date(s.completedAt).getTime();
+        if (!isNaN(ct)) latest = Math.max(latest, ct);
+      }
+      (s.concepts || []).forEach(cp => {
+        (cp.retrievalCards || []).forEach(card => {
+          if (card.lastReviewDate) {
+            const rt = new Date(card.lastReviewDate).getTime();
+            if (!isNaN(rt)) latest = Math.max(latest, rt);
+          }
+        });
+      });
+      return latest;
+    };
+
+    // Merge or insert remote sessions with genuine timestamp comparison
     remote.sessions.forEach(remoteS => {
       const localS = sessionMap.get(remoteS.id);
       if (!localS) {
         sessionMap.set(remoteS.id, remoteS);
       } else {
-        // If remote has newer card updates or more concepts, take remote
-        sessionMap.set(remoteS.id, remoteS);
+        const localTime = getLatestTimestamp(localS);
+        const remoteTime = getLatestTimestamp(remoteS);
+        if (remoteTime >= localTime) {
+          sessionMap.set(remoteS.id, remoteS);
+        }
       }
     });
 

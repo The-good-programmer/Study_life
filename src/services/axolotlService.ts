@@ -375,7 +375,7 @@ export const NEURO_AXOLOTL_LORE = [
   {
     title: "Cortical 40Hz Gamma Rhythms",
     text: "40Hz neural oscillations bind disparate sensory and memory modules across the cortex during intense focus.",
-    studyTieIn: "Our built-in 40Hz binaural beats gently entrain this frequency, minimizing distractibility and fatigue."
+    studyTieIn: "Our built-in 40Hz audio provides steady acoustic masking to minimize distractibility and fatigue."
   },
   {
     title: "Memory Consolidation in Sleep & Rest",

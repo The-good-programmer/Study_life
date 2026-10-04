@@ -17,14 +17,64 @@ export class AuthService {
   }
 
   /**
-   * Hashes a password string concatenated with a salt using Web Crypto SHA-256
+   * Hashes a password string using Web Crypto PBKDF2 (SHA-256, 100,000 iterations)
    */
   public static async hashPassword(password: string, salt: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const saltBytes = encoder.encode(salt);
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(password),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits']
+    );
+    const derivedBits = await crypto.subtle.deriveBits(
+      {
+        name: 'PBKDF2',
+        salt: saltBytes,
+        iterations: 100000,
+        hash: 'SHA-256',
+      },
+      keyMaterial,
+      256
+    );
+    const hashArray = Array.from(new Uint8Array(derivedBits));
+    return 'pbkdf2$' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
+   * Legacy simple SHA-256 hashing for backward compatibility migration
+   */
+  public static async hashPasswordLegacy(password: string, salt: string): Promise<string> {
     const encoder = new TextEncoder();
     const data = encoder.encode(salt + password);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
+   * Verifies password against stored hash, supporting both PBKDF2 and legacy SHA-256.
+   * Returns { valid: boolean, needsRehash: boolean }
+   */
+  public static async verifyPassword(password: string, user: UserAccount): Promise<{ valid: boolean; needsRehash: boolean }> {
+    if (!user.passwordHash || !user.passwordSalt) {
+      return { valid: false, needsRehash: false };
+    }
+
+    if (user.passwordHash.startsWith('pbkdf2$')) {
+      const computed = await this.hashPassword(password, user.passwordSalt);
+      return { valid: computed === user.passwordHash, needsRehash: false };
+    }
+
+    // Legacy SHA-256 hash check
+    const legacyComputed = await this.hashPasswordLegacy(password, user.passwordSalt);
+    if (legacyComputed === user.passwordHash) {
+      return { valid: true, needsRehash: true };
+    }
+
+    return { valid: false, needsRehash: false };
   }
 
   /**
@@ -239,9 +289,14 @@ export class AuthService {
       };
     }
 
-    const computedHash = await this.hashPassword(password, user.passwordSalt);
-    if (computedHash !== user.passwordHash) {
+    const { valid, needsRehash } = await this.verifyPassword(password, user);
+    if (!valid) {
       return { success: false, error: 'Incorrect password. Please verify and try again.' };
+    }
+
+    // Transparently upgrade legacy SHA-256 hash to PBKDF2
+    if (needsRehash && user.passwordSalt) {
+      user.passwordHash = await this.hashPassword(password, user.passwordSalt);
     }
 
     // Update lastLoginAt
@@ -261,12 +316,29 @@ export class AuthService {
   }
 
   /**
-   * Quick-switch to another registered account on this browser
+   * Quick-switch to another registered account on this browser.
+   * If the target account is password-protected, a valid password is required.
    */
-  public static switchAccount(userId: string): boolean {
+  public static async switchAccount(
+    userId: string,
+    password?: string
+  ): Promise<{ success: boolean; requiresPassword?: boolean; error?: string }> {
     const accounts = this.getAllAccounts();
     const target = accounts.find(a => a.id === userId);
-    if (!target) return false;
+    if (!target) return { success: false, error: 'Target account not found.' };
+
+    if (target.provider === 'password' && target.passwordHash) {
+      if (!password) {
+        return { success: false, requiresPassword: true, error: 'Password required to switch to this account.' };
+      }
+      const { valid, needsRehash } = await this.verifyPassword(password, target);
+      if (!valid) {
+        return { success: false, requiresPassword: true, error: 'Incorrect password.' };
+      }
+      if (needsRehash && target.passwordSalt) {
+        target.passwordHash = await this.hashPassword(password, target.passwordSalt);
+      }
+    }
 
     target.lastLoginAt = new Date().toISOString();
     this.saveAccounts(accounts);
@@ -275,7 +347,7 @@ export class AuthService {
     StorageService.setActiveUserId(target.id);
 
     this.notifySubscribers(target);
-    return true;
+    return { success: true };
   }
 
   /**
