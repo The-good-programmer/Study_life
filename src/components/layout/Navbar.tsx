@@ -165,6 +165,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onToggleMobileSidebar}
               className="md:hidden p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-slate-300 hover:text-white transition-all cursor-pointer"
+              aria-label="Open Navigation"
               title="Open Navigation"
             >
               <Menu className="w-4 h-4" />
@@ -196,6 +197,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onToggleSidebarCollapse}
               className="hidden md:flex p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-white transition-all cursor-pointer mr-1"
+              aria-label={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
               title={isSidebarCollapsed ? "Expand Sidebar [Ctrl+[]" : "Shrink Sidebar (only icons) [Ctrl+[]"}
             >
               {isSidebarCollapsed ? (
@@ -223,7 +225,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Sparkles className="w-3.5 h-3.5 text-pink-400 group-hover:rotate-12 transition-transform" />
               <span className="text-[12px] font-bold">3D Axolotl</span>
-              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-pink-500/30 text-pink-300 font-mono">
+              <span className="text-[11px] font-black uppercase px-1.5 py-0.5 rounded bg-pink-500/30 text-pink-300 font-mono">
                 3D LIVE
               </span>
             </button>
@@ -248,7 +250,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Search className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400 transition-colors shrink-0" />
               <span className="text-slate-400 group-hover:text-slate-200 truncate">Search flashcards, topics, decks...</span>
             </div>
-            <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-white/[0.08] border border-white/[0.1] rounded text-slate-400 shrink-0">
+            <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[11px] font-mono bg-white/[0.08] border border-white/[0.1] rounded text-slate-400 shrink-0">
               ⌘K
             </kbd>
           </button>
@@ -268,7 +270,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-white text-[11px]">Lvl {stats.level}</span>
-                <span className="text-[10px] text-purple-300 truncate max-w-[70px]">{stats.levelTitle}</span>
+                <span className="text-[11px] text-purple-300 truncate max-w-[70px]">{stats.levelTitle}</span>
               </div>
               <div className="w-14 h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
                 <div 
@@ -365,7 +367,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
                     Neuro-Focus Soundscapes
                   </span>
-                  <span className="text-[10px] text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 font-mono">
+                  <span className="text-[11px] text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 font-mono">
                     Zero Latency
                   </span>
                 </div>
@@ -384,7 +386,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <span className="text-sm mt-0.5">{sound.icon}</span>
                       <div className="min-w-0">
                         <div className="font-semibold text-xs leading-tight">{sound.label}</div>
-                        <div className={`text-[10px] leading-tight mt-0.5 ${currentSound === sound.id ? 'text-indigo-100' : 'text-slate-400'}`}>
+                        <div className={`text-[11px] leading-tight mt-0.5 ${currentSound === sound.id ? 'text-indigo-100' : 'text-slate-400'}`}>
                           {sound.desc}
                         </div>
                       </div>
@@ -404,7 +406,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     onChange={handleVolumeChange}
                     className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                   />
-                  <span className="font-mono text-[10px] w-7 text-right">{Math.round(volume * 100)}%</span>
+                  <span className="font-mono text-[11px] w-7 text-right">{Math.round(volume * 100)}%</span>
                 </div>
               </div>
             )}
@@ -445,7 +447,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="text-xs font-bold text-white max-w-[85px] sm:max-w-[120px] truncate hidden sm:inline">
                   {currentUser.name}
                 </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hidden lg:inline truncate max-w-[120px]">
+                <span className="text-[11px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hidden lg:inline truncate max-w-[120px]">
                   {currentUser.grade || 'Student'}
                 </span>
               </>
@@ -466,6 +468,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="button"
             onClick={handleToggleTheme}
             className="p-2 rounded-xl bg-slate-900/80 border border-white/[0.08] hover:border-amber-400/40 text-slate-400 hover:text-amber-300 transition-all shadow-sm cursor-pointer"
+            aria-label={isPaperTheme ? "Switch to Dark Theme" : "Switch to Daylight Theme"}
             title={isPaperTheme ? "Switch to Dark Obsidian Theme" : "Switch to Daylight / Paper Study Theme"}
           >
             {isPaperTheme ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-400" />}
@@ -475,6 +478,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             onClick={onOpenSettings}
             className="p-2 rounded-xl bg-slate-900/80 border border-white/[0.08] hover:border-white/[0.2] text-slate-400 hover:text-white transition-all shadow-sm cursor-pointer"
+            aria-label="Settings and Data Export"
             title="Settings & Data Export"
           >
             <Settings className="w-4 h-4" />
@@ -509,7 +513,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Layers className="w-3 h-3" />
           <span>Retention</span>
           {stats.cardsDueCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-500/20 text-emerald-300">
+            <span className="px-1.5 py-0.2 rounded-full text-[11px] bg-emerald-500/20 text-emerald-300">
               {stats.cardsDueCount}
             </span>
           )}

@@ -449,7 +449,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-slate-950 animate-ping" />
             </div>
             <div className="text-left">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-semibold">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-semibold">
                 <Award className="w-3 h-3 text-amber-400" />
                 <span>Lotti High-Stakes Simulator</span>
               </div>
@@ -642,7 +642,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
               <div className="text-xs font-bold text-white font-display">
                 Question {currentIndex + 1} of {examQuestions.length}
               </div>
-              <div className="text-[10px] text-slate-400 truncate max-w-[200px]">
+              <div className="text-[11px] text-slate-400 truncate max-w-[200px]">
                 {currentItem.deckTitle}
               </div>
             </div>
@@ -760,7 +760,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                       <AlertTriangle className="w-4 h-4" /> Misconception Detected
                     </span>
                   )}
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/[0.06] text-slate-300">
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-mono bg-white/[0.06] text-slate-300">
                     Quadrant: {results[results.length - 1].quadrant}
                   </span>
                 </div>
@@ -792,7 +792,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                   <span>Rate Your Subjective Confidence:</span>
                   <HelpCircle className="w-3.5 h-3.5 text-slate-500" />
                 </span>
-                <span className="text-[10px] font-mono text-slate-500">Press Z, X, or C</span>
+                <span className="text-[11px] font-mono text-slate-500">Press Z, X, or C</span>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
@@ -809,9 +809,9 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                 >
                   <div className="flex items-center justify-between text-xs font-bold mb-1">
                     <span>Low (Guess)</span>
-                    <kbd className="px-1.5 py-0.5 text-[9px] bg-slate-900 rounded border border-white/[0.1] font-mono">Z</kbd>
+                    <kbd className="px-1.5 py-0.5 text-[11px] bg-slate-900 rounded border border-white/[0.1] font-mono">Z</kbd>
                   </div>
-                  <div className="text-[10px] text-slate-400 leading-tight">+5 if right • 0 if wrong</div>
+                  <div className="text-[11px] text-slate-400 leading-tight">+5 if right • 0 if wrong</div>
                 </button>
 
                 {/* Medium Confidence */}
@@ -826,9 +826,9 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                 >
                   <div className="flex items-center justify-between text-xs font-bold mb-1 text-amber-300">
                     <span>Medium</span>
-                    <kbd className="px-1.5 py-0.5 text-[9px] bg-amber-950 rounded border border-amber-700 font-mono text-amber-300">X</kbd>
+                    <kbd className="px-1.5 py-0.5 text-[11px] bg-amber-950 rounded border border-amber-700 font-mono text-amber-300">X</kbd>
                   </div>
-                  <div className="text-[10px] text-amber-400/80 leading-tight">+14 if right • -5 if wrong</div>
+                  <div className="text-[11px] text-amber-400/80 leading-tight">+14 if right • -5 if wrong</div>
                 </button>
 
                 {/* High Confidence */}
@@ -843,9 +843,9 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                 >
                   <div className="flex items-center justify-between text-xs font-bold mb-1 text-indigo-300">
                     <span>High (Certain)</span>
-                    <kbd className="px-1.5 py-0.5 text-[9px] bg-indigo-950 rounded border border-indigo-700 font-mono text-indigo-300">C</kbd>
+                    <kbd className="px-1.5 py-0.5 text-[11px] bg-indigo-950 rounded border border-indigo-700 font-mono text-indigo-300">C</kbd>
                   </div>
-                  <div className="text-[10px] text-indigo-300/80 leading-tight">+20 if right • -15 if wrong!</div>
+                  <div className="text-[11px] text-indigo-300/80 leading-tight">+20 if right • -15 if wrong!</div>
                 </button>
 
               </div>
@@ -952,7 +952,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-pink-300 font-display">Lottie's Metacognitive Assessment</span>
-                <span className={`px-2 py-0.2 rounded-full text-[9px] font-mono font-bold ${
+                <span className={`px-2 py-0.2 rounded-full text-[11px] font-mono font-bold ${
                   finalReport.calibrationPercent >= 80 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                 }`}>
                   {finalReport.calibrationPercent >= 80 ? 'Calibrated Mind' : 'Calibration Work Needed'}
@@ -1109,7 +1109,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                       </span>
                       <div>
                         <div className="font-bold text-white line-clamp-1">{result.card.question}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">
+                        <div className="text-[11px] text-slate-400 font-mono">
                           Confidence: <span className="uppercase text-slate-300 font-bold">{result.confidence}</span> • {result.quadrant}
                         </div>
                       </div>

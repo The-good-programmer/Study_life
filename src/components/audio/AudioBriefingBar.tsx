@@ -134,7 +134,7 @@ export const AudioBriefingBar: React.FC<AudioBriefingBarProps> = ({
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider font-mono">
+              <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider font-mono">
                 Audio Overview • {conceptIndex + 1}/{concepts.length}
               </span>
               {isPlaying && (

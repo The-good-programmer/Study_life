@@ -132,17 +132,17 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
                   {session.category || 'General Curriculum'}
                 </span>
                 {session.sourceDocument && (
-                  <span className="text-[10px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                  <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">
                     <FileText className="w-3 h-3 text-sky-400" />
                     <span>PDF Grounded</span>
                   </span>
                 )}
                 {starredCount > 0 && (
-                  <span className="text-[10px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
                     <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                     <span>{starredCount} Starred</span>
                   </span>
@@ -282,7 +282,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                   <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 group-hover:scale-105 transition-transform">
                     <Play className="w-5 h-5 fill-white ml-0.5" />
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase">
                     Recommended
                   </span>
                 </div>
@@ -312,7 +312,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-amber-600/30 group-hover:scale-105 transition-transform">
                     <Zap className="w-5 h-5 fill-white" />
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">
                     Gamified Speed
                   </span>
                 </div>
@@ -342,7 +342,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                   <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-600/30 group-hover:scale-105 transition-transform">
                     <Layers className="w-5 h-5" />
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 uppercase">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 uppercase">
                     Anki Style
                   </span>
                 </div>
@@ -372,7 +372,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                   <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center shadow-lg shadow-sky-600/30 group-hover:scale-105 transition-transform">
                     <Headphones className="w-5 h-5" />
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 uppercase">
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 uppercase">
                     NotebookLM Style
                   </span>
                 </div>
@@ -501,14 +501,14 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono text-slate-500">
+                          <span className="text-[11px] font-mono text-slate-500">
                             #{idx + 1}
                           </span>
-                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-white/[0.06] text-slate-300">
+                          <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded bg-white/[0.06] text-slate-300">
                             {card.cardType || 'standard'}
                           </span>
                           {card.cardType === 'image-occlusion' && (
-                            <span className="text-[10px] font-bold flex items-center gap-1 text-amber-400">
+                            <span className="text-[11px] font-bold flex items-center gap-1 text-amber-400">
                               <Eye className="w-3 h-3" />
                               <span>{card.masks?.length} Masks</span>
                             </span>
@@ -539,7 +539,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                       {isExpanded && (
                         <div className="pt-2 border-t border-white/[0.06] space-y-2 text-xs animate-fadeIn">
                           <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-emerald-200">
-                            <span className="text-[10px] uppercase font-bold text-emerald-400 block mb-0.5">Answer</span>
+                            <span className="text-[11px] uppercase font-bold text-emerald-400 block mb-0.5">Answer</span>
                             {card.answer}
                           </div>
 
@@ -549,7 +549,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pt-1">
+                          <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pt-1">
                             <span>Stability: {card.stability.toFixed(1)}d</span>
                             <span>Difficulty: {card.difficulty.toFixed(1)}/10</span>
                             <span>Reps: {card.reps} ({card.lapses} lapses)</span>

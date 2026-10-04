@@ -585,11 +585,11 @@ export const DualCodingWhiteboard: React.FC<DualCodingWhiteboardProps> = ({
               <span className="font-bold text-xs sm:text-sm text-white font-display">
                 Feynman Dual-Coding Canvas
               </span>
-              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold">
+              <span className="text-[11px] font-mono uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold">
                 Paivio Theory
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 hidden sm:block">
+            <p className="text-[11px] text-slate-400 hidden sm:block">
               Pair spatial schemas with verbal memory for up to 200% deeper consolidation.
             </p>
           </div>
@@ -826,7 +826,7 @@ export const DualCodingWhiteboard: React.FC<DualCodingWhiteboardProps> = ({
       </div>
 
       {/* Footer Info Ribbon */}
-      <div className="px-4 py-2 border-t border-white/[0.06] bg-slate-950/80 text-[10px] text-slate-500 font-mono flex items-center justify-between">
+      <div className="px-4 py-2 border-t border-white/[0.06] bg-slate-950/80 text-[11px] text-slate-500 font-mono flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span>Active: {activeTool.toUpperCase()}</span>
           <span>•</span>

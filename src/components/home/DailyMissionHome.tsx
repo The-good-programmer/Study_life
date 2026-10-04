@@ -146,7 +146,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
               <span>{stats.currentStreak || 1}</span>
               <span className="text-xs text-amber-300 font-bold uppercase tracking-wider">Days</span>
               {hasSynapticFreeze && (
-                <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-mono border border-cyan-500/30" title="Protected by Synaptic Freeze">
+                <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 text-[11px] font-mono border border-cyan-500/30" title="Protected by Synaptic Freeze">
                   ❄️
                 </span>
               )}
@@ -203,7 +203,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
           <div className="min-w-0">
             <div className="text-xs font-black text-pink-200 font-display truncate flex items-center gap-1">
               <span>{axolotlState.name}</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-pink-500/30 text-pink-300 uppercase font-mono">
+              <span className="text-[11px] px-1.5 py-0.2 rounded-full bg-pink-500/30 text-pink-300 uppercase font-mono">
                 Lvl {axolotlState.friendshipLevel}
               </span>
             </div>
@@ -469,7 +469,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
               <div className="space-y-1.5 flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-extrabold text-pink-300 font-display">Lottie says:</span>
-                  <span className="text-[10px] text-cyan-300 font-mono">Streak Companion ⚡</span>
+                  <span className="text-[11px] text-cyan-300 font-mono">Streak Companion ⚡</span>
                 </div>
                 <p className="text-xs text-slate-200 leading-relaxed font-medium">
                   "Hey friend! Ready for a quick 3-minute win? Let's knock out your {dueCards.length > 0 ? `${dueCards.length} review cards` : 'practice goal'} and keep that streak blazing!"
@@ -571,7 +571,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                 <div>
                   <h3 className="text-sm font-bold text-white font-display flex items-center gap-1.5">
                     <span>Weekly Study Output</span>
-                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
+                    <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
                       Personal Progress
                     </span>
                   </h3>
@@ -589,11 +589,11 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
 
             <div className="grid grid-cols-2 gap-2 text-xs font-mono">
               <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/[0.06] flex flex-col">
-                <span className="text-slate-400 text-[10px]">This Week</span>
+                <span className="text-slate-400 text-[11px]">This Week</span>
                 <span className="text-indigo-300 font-bold text-sm">{weeklyStats.current} XP</span>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/[0.06] flex flex-col">
-                <span className="text-slate-400 text-[10px]">Personal Best</span>
+                <span className="text-slate-400 text-[11px]">Personal Best</span>
                 <span className="text-purple-300 font-bold text-sm">{weeklyStats.best} XP</span>
               </div>
             </div>

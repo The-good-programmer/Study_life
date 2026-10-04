@@ -315,10 +315,10 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                     <Edit3 className="w-2.5 h-2.5 text-slate-400" />
                   </span>
                 )}
-                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                <span className="px-1.5 py-0.2 rounded-full text-[11px] font-black uppercase tracking-wider bg-pink-500/20 text-pink-300 border border-pink-500/30">
                   Lvl {state.friendshipLevel}
                 </span>
-                <span className="hidden sm:inline-block px-1.5 py-0.2 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 font-mono">
+                <span className="hidden sm:inline-block px-1.5 py-0.2 rounded-full text-[11px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 font-mono">
                   {state.evolutionStage}
                 </span>
               </div>
@@ -331,7 +331,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                     style={{ width: `${xpPercent}%` }}
                   />
                 </div>
-                <span className="text-[9px] font-mono text-slate-400">
+                <span className="text-[11px] font-mono text-slate-400">
                   {state.friendshipXP}/{requiredXP}
                 </span>
               </div>
@@ -424,7 +424,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                   <Smile className="w-3.5 h-3.5 text-pink-400" />
                   <span>Feed & Care</span>
                 </span>
-                <span className="text-[10px] text-cyan-300/80">Energy: {state.energy || 85}%</span>
+                <span className="text-[11px] text-cyan-300/80">Energy: {state.energy || 85}%</span>
               </div>
 
               {/* Treat Dispenser */}
@@ -447,8 +447,8 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                       <span className="text-xl sm:text-2xl group-hover:scale-125 transition-transform">
                         {meta.emoji}
                       </span>
-                      <span className="text-[10px] font-bold text-white mt-1">{meta.name}</span>
-                      <span className={`text-[9px] font-mono font-bold px-1.5 rounded-full mt-0.5 ${
+                      <span className="text-[11px] font-bold text-white mt-1">{meta.name}</span>
+                      <span className={`text-[11px] font-mono font-bold px-1.5 rounded-full mt-0.5 ${
                         count > 0 ? 'bg-pink-500/20 text-pink-300' : 'bg-slate-800 text-slate-500'
                       }`}>
                         x{count}
@@ -501,7 +501,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                   <BookOpen className="w-4 h-4 text-indigo-400" />
                   <span>Study Cockpit</span>
                 </span>
-                <span className="text-[10px] font-mono text-slate-400">
+                <span className="text-[11px] font-mono text-slate-400">
                   {stats.conceptsMastered || 0} Concepts Cleared
                 </span>
               </div>
@@ -518,7 +518,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                     {dueCards.length > 0 ? `Review ${dueCards.length} Due Cards` : 'Start Focus Session'}
                   </span>
                 </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/20 text-white font-mono">
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-white/20 text-white font-mono">
                   {dueCards.length > 0 ? 'FSRS DUE' : 'STUDY'}
                 </span>
               </button>
@@ -528,7 +528,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsLibraryOpen(true)}
-                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[11px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
                   title="Browse Saved Decks"
                 >
                   <Layers className="w-3.5 h-3.5 text-indigo-400" />
@@ -538,7 +538,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                 <button
                   type="button"
                   onClick={onOpenDeckStudio}
-                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[11px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
                   title="Create New Deck or Import PDF"
                 >
                   <Plus className="w-3.5 h-3.5 text-pink-400" />
@@ -551,7 +551,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                     if (savedSessions.length > 0) onStartMatch(savedSessions[0]);
                     else onOpenStarterCatalog();
                   }}
-                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[11px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
                   title="Speed Match 60s Game"
                 >
                   <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -561,7 +561,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                 <button
                   type="button"
                   onClick={onOpenDashboard}
-                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[10px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
+                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[11px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
                   title="View FSRS Memory Analytics"
                 >
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
@@ -575,7 +575,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                   <button
                     type="button"
                     onClick={() => onStartAudioBriefing(savedSessions[0])}
-                    className="flex-1 py-1 px-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-[10px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                    className="flex-1 py-1 px-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
                   >
                     <Headphones className="w-3 h-3" />
                     <span>Audio Brief</span>
@@ -586,7 +586,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                   <button
                     type="button"
                     onClick={onOpenInterleaving}
-                    className="flex-1 py-1 px-2 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-[10px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                    className="flex-1 py-1 px-2 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
                   >
                     <Shuffle className="w-3 h-3" />
                     <span>Mix Decks</span>
@@ -597,7 +597,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                   <button
                     type="button"
                     onClick={onOpenExam}
-                    className="flex-1 py-1 px-2 rounded-lg bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 text-[10px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                    className="flex-1 py-1 px-2 rounded-lg bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
                   >
                     <Award className="w-3 h-3" />
                     <span>Mock Exam</span>
@@ -693,11 +693,11 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                               <span>{pal.name}</span>
                               {isSelected && <Check className="w-3.5 h-3.5 text-pink-400" />}
                             </div>
-                            <p className="text-[10px] text-slate-400 line-clamp-1">{pal.subtitle}</p>
+                            <p className="text-[11px] text-slate-400 line-clamp-1">{pal.subtitle}</p>
                           </div>
                         </div>
                         {!isUnlocked && (
-                          <span className="text-[9px] font-bold text-amber-300 uppercase px-2 py-0.5 rounded bg-amber-500/20">
+                          <span className="text-[11px] font-bold text-amber-300 uppercase px-2 py-0.5 rounded bg-amber-500/20">
                             Locked
                           </span>
                         )}
@@ -735,11 +735,11 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                               <span>{acc.name}</span>
                               {isSelected && <Check className="w-3.5 h-3.5 text-pink-400" />}
                             </div>
-                            <p className="text-[10px] text-slate-400">{acc.description}</p>
+                            <p className="text-[11px] text-slate-400">{acc.description}</p>
                           </div>
                         </div>
                         {!isUnlocked && (
-                          <span className="text-[9px] font-bold text-amber-300 uppercase px-2 py-0.5 rounded bg-amber-500/20">
+                          <span className="text-[11px] font-bold text-amber-300 uppercase px-2 py-0.5 rounded bg-amber-500/20">
                             Lvl {acc.requiredLevel}
                           </span>
                         )}
@@ -773,7 +773,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                               <span>{env.name}</span>
                               {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400" />}
                             </div>
-                            <p className="text-[10px] text-slate-400">{env.subtitle}</p>
+                            <p className="text-[11px] text-slate-400">{env.subtitle}</p>
                           </div>
                         </div>
                       </div>
@@ -845,12 +845,12 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <h4 className="text-xs font-bold text-white line-clamp-1">{deck.title}</h4>
-                          <span className="text-[10px] text-slate-400 font-mono">
+                          <span className="text-[11px] text-slate-400 font-mono">
                             {totalDeckCards} cards • {deck.category || 'Active Recall'}
                           </span>
                         </div>
                         {deckDueCount > 0 && (
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30">
                             {deckDueCount} due
                           </span>
                         )}

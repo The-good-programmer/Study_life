@@ -415,7 +415,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                   <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight font-display">
                     Cross-Deck Interleaving Arena
                   </h2>
-                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono uppercase font-bold">
+                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-mono uppercase font-bold">
                     Kornell &amp; Bjork (2008)
                   </span>
                 </div>
@@ -475,10 +475,10 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className={`text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded-full ${style.text} bg-white/[0.05]`}>
+                        <span className={`text-[11px] font-mono uppercase font-bold px-2 py-0.5 rounded-full ${style.text} bg-white/[0.05]`}>
                           {deck.category || 'General'}
                         </span>
-                        <div className={`w-4 h-4 rounded-full flex items-center justify-center border text-[10px] ${
+                        <div className={`w-4 h-4 rounded-full flex items-center justify-center border text-[11px] ${
                           isSelected ? 'bg-indigo-600 border-indigo-400 text-white' : 'border-white/20'
                         }`}>
                           {isSelected && '✓'}
@@ -659,7 +659,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                   {previousCard.domain} &rarr; <strong className="text-white">{currentCard.domain}</strong>
                 </span>
               </div>
-              <span className="text-[10px] font-mono uppercase bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded border border-amber-400/30 font-bold hidden sm:inline">
+              <span className="text-[11px] font-mono uppercase bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded border border-amber-400/30 font-bold hidden sm:inline">
                 +10 XP Resilience Bonus
               </span>
             </div>
@@ -686,7 +686,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
             
             {/* Question Text */}
             <div className="space-y-3">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-slate-400 font-bold">
+              <span className="text-[11px] font-mono uppercase tracking-widest text-slate-400 font-bold">
                 Retrieval Prompt
               </span>
               <div className="text-lg sm:text-xl font-bold text-white leading-relaxed font-sans">
@@ -717,7 +717,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
             {isRevealed ? (
               <div className="space-y-5 pt-6 border-t border-white/[0.08] animate-fadeIn">
                 <div className="space-y-2">
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 font-bold">
+                  <span className="text-[11px] font-mono uppercase tracking-widest text-emerald-400 font-bold">
                     Target Answer
                   </span>
                   <div className="text-base sm:text-lg font-semibold text-slate-100 leading-relaxed font-sans">
@@ -745,7 +745,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                         <span>Again</span>
                         <RotateCw className="w-3 h-3 text-rose-400" />
                       </div>
-                      <div className="text-[10px] text-rose-400/80 font-mono mt-0.5">Key &lsquo;1&rsquo; • Lapsed</div>
+                      <div className="text-[11px] text-rose-400/80 font-mono mt-0.5">Key &lsquo;1&rsquo; • Lapsed</div>
                     </button>
 
                     <button
@@ -753,7 +753,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                       className="p-3.5 rounded-2xl bg-amber-950/50 hover:bg-amber-950/70 border border-amber-500/40 text-amber-300 text-xs font-bold hover:scale-[1.02] transition-all text-left"
                     >
                       <div>Hard</div>
-                      <div className="text-[10px] text-amber-400/80 font-mono mt-0.5">Key &lsquo;2&rsquo; • High Friction</div>
+                      <div className="text-[11px] text-amber-400/80 font-mono mt-0.5">Key &lsquo;2&rsquo; • High Friction</div>
                     </button>
 
                     <button
@@ -761,7 +761,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                       className="p-3.5 rounded-2xl bg-blue-950/50 hover:bg-blue-950/70 border border-blue-500/40 text-blue-300 text-xs font-bold hover:scale-[1.02] transition-all text-left"
                     >
                       <div>Good</div>
-                      <div className="text-[10px] text-blue-400/80 font-mono mt-0.5">Key &lsquo;3&rsquo; • Accurate</div>
+                      <div className="text-[11px] text-blue-400/80 font-mono mt-0.5">Key &lsquo;3&rsquo; • Accurate</div>
                     </button>
 
                     <button
@@ -769,7 +769,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                       className="p-3.5 rounded-2xl bg-emerald-950/50 hover:bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:scale-[1.02] transition-all text-left"
                     >
                       <div>Easy</div>
-                      <div className="text-[10px] text-emerald-400/80 font-mono mt-0.5">Key &lsquo;4&rsquo; • Rapid Recall</div>
+                      <div className="text-[11px] text-emerald-400/80 font-mono mt-0.5">Key &lsquo;4&rsquo; • Rapid Recall</div>
                     </button>
                   </div>
                 </div>
@@ -783,7 +783,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                 >
                   Reveal Solution (Spacebar)
                 </button>
-                <span className="text-[10px] text-slate-500 font-mono">
+                <span className="text-[11px] text-slate-500 font-mono">
                   Discriminate category &rarr; Retrieve mental model
                 </span>
               </div>
@@ -807,7 +807,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                 <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight font-display">
                   Cognitive Discrimination Scorecard
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono uppercase font-bold">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono uppercase font-bold">
                   Interleaving Complete
                 </span>
               </div>
@@ -826,7 +826,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
             
             <div className="p-5 rounded-3xl glass-panel space-y-1">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-bold">
                 Overall Accuracy
               </div>
               <div className="text-3xl font-black text-white font-mono">
@@ -838,7 +838,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
             </div>
 
             <div className="p-5 rounded-3xl glass-panel space-y-1">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-amber-400 font-bold">
                 Context Shifts
               </div>
               <div className="text-3xl font-black text-amber-300 font-mono">
@@ -850,7 +850,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
             </div>
 
             <div className="p-5 rounded-3xl glass-panel space-y-1">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-purple-400 font-bold">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-purple-400 font-bold">
                 Switch Resilience
               </div>
               <div className="text-3xl font-black text-purple-300 font-mono">
@@ -862,7 +862,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
             </div>
 
             <div className="p-5 rounded-3xl glass-panel space-y-1">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-bold">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-bold">
                 Agility Index
               </div>
               <div className="text-3xl font-black text-emerald-300 font-mono">
@@ -910,7 +910,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                       />
                     </div>
 
-                    <div className="text-[10px] text-slate-400 font-mono">
+                    <div className="text-[11px] text-slate-400 font-mono">
                       {item.correct} correct of {item.total} trials
                     </div>
                   </div>

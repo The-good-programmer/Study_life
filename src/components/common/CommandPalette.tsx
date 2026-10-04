@@ -330,7 +330,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               <X className="w-4 h-4" />
             </button>
           )}
-          <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-white/[0.06] border border-white/[0.1] rounded text-slate-400">
+          <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[11px] font-mono bg-white/[0.06] border border-white/[0.1] rounded text-slate-400">
             ESC
           </kbd>
         </div>
@@ -372,7 +372,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded ${
+                    <span className={`text-[11px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded ${
                       isSelected ? 'bg-indigo-700/60 text-indigo-100' : 'bg-white/[0.05] text-slate-500 border border-white/[0.05]'
                     }`}>
                       {item.category}

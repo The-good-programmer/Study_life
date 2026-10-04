@@ -220,14 +220,14 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
             <div className="flex items-center justify-between text-xs text-slate-400 uppercase tracking-wider font-bold font-display">
               <div className="flex items-center gap-2">
                 <span>FSRS Scheduled Recall</span>
-                <span className="text-[10px] text-cyan-300 font-mono bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full">
+                <span className="text-[11px] text-cyan-300 font-mono bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full">
                   R: {cardRetrievability}%
                 </span>
-                <span className="text-[10px] text-indigo-300 font-mono bg-indigo-950/60 border border-indigo-800/60 px-2 py-0.5 rounded-full">
+                <span className="text-[11px] text-indigo-300 font-mono bg-indigo-950/60 border border-indigo-800/60 px-2 py-0.5 rounded-full">
                   S: {card.stability ? `${card.stability.toFixed(1)}d` : '1.0d'}
                 </span>
               </div>
-              <span className="text-[10px] text-indigo-400 font-mono">Target: {Math.round(targetRetention * 100)}%</span>
+              <span className="text-[11px] text-indigo-400 font-mono">Target: {Math.round(targetRetention * 100)}%</span>
             </div>
             <h3 className="text-lg sm:text-xl font-bold text-white leading-relaxed font-display">
               <MathRenderer text={card.question} />
@@ -253,7 +253,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <span>Again</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-rose-900/50 border border-rose-700/50 text-[10px] font-mono">1</kbd>
+                      <kbd className="px-1.5 py-0.5 rounded bg-rose-900/50 border border-rose-700/50 text-[11px] font-mono">1</kbd>
                     </span>
                     <RotateCw className="w-3 h-3 text-rose-400" />
                   </div>
@@ -266,7 +266,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <span>Hard</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-amber-900/50 border border-amber-700/50 text-[10px] font-mono">2</kbd>
+                      <kbd className="px-1.5 py-0.5 rounded bg-amber-900/50 border border-amber-700/50 text-[11px] font-mono">2</kbd>
                     </span>
                   </div>
                   <div className="text-xs text-amber-400 font-mono mt-0.5">{intervals.hard}</div>
@@ -278,7 +278,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <span>Good</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-blue-900/50 border border-blue-700/50 text-[10px] font-mono">3</kbd>
+                      <kbd className="px-1.5 py-0.5 rounded bg-blue-900/50 border border-blue-700/50 text-[11px] font-mono">3</kbd>
                     </span>
                   </div>
                   <div className="text-xs text-blue-400 font-mono mt-0.5">{intervals.good}</div>
@@ -290,7 +290,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <span>Easy</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-emerald-900/50 border border-emerald-700/50 text-[10px] font-mono">4</kbd>
+                      <kbd className="px-1.5 py-0.5 rounded bg-emerald-900/50 border border-emerald-700/50 text-[11px] font-mono">4</kbd>
                     </span>
                   </div>
                   <div className="text-xs text-emerald-400 font-mono mt-0.5">{intervals.easy}</div>
@@ -304,7 +304,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
                 className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/25 transition-all hover:scale-105 flex items-center gap-2"
               >
                 <span>Reveal Target Answer</span>
-                <kbd className="px-2 py-0.5 rounded bg-white/20 text-[10px] font-mono uppercase">Space</kbd>
+                <kbd className="px-2 py-0.5 rounded bg-white/20 text-[11px] font-mono uppercase">Space</kbd>
               </button>
             </div>
           )}
@@ -467,7 +467,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
               <h3 className="text-base font-bold text-white font-display">
                 Mock Exam Arena & Diagnostic Matrix
               </h3>
-              <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono uppercase font-bold">
+              <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-mono uppercase font-bold">
                 Metacognitive
               </span>
             </div>
@@ -505,7 +505,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
             <h3 className="text-base font-bold text-white font-display">
               Macro-Curriculum Knowledge Tree
             </h3>
-            <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono uppercase font-bold">
+            <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-mono uppercase font-bold">
               Knowledge Space Theory
             </span>
           </div>
@@ -542,7 +542,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
             <h3 className="text-base font-bold text-white font-display">
               FSRS Leech Hunter & Mnemonic Rewiring Lab
             </h3>
-            <span className={`px-2 py-0.5 rounded-md border text-[10px] font-mono uppercase font-bold ${
+            <span className={`px-2 py-0.5 rounded-md border text-[11px] font-mono uppercase font-bold ${
               leeches.length > 0 
                 ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' 
                 : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
@@ -588,7 +588,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
               <h3 className="text-base font-bold text-white font-display">
                 Cross-Deck Interleaving Arena
               </h3>
-              <span className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-mono uppercase font-bold">
+              <span className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[11px] font-mono uppercase font-bold">
                 Inductive Transfer
               </span>
             </div>
@@ -642,7 +642,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
                   title={`${d.date}: ${d.hasStudy ? 'Active Study Session' : 'Rest day'}`}
                   className={`h-9 rounded-xl border flex flex-col items-center justify-center cursor-help transition-all ${bgColors[d.intensity]}`}
                 >
-                  <span className="text-[10px] text-slate-300 font-mono">{d.date.split(' ')[1]}</span>
+                  <span className="text-[11px] text-slate-300 font-mono">{d.date.split(' ')[1]}</span>
                 </div>
               );
             })}
@@ -671,7 +671,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
               <h3 className="text-sm font-bold text-white uppercase tracking-wider font-display">
                 FSRS Power-Law Synaptic Forgetting Curve R(t, S)
               </h3>
-              <span className="px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[10px] font-mono font-bold uppercase">
+              <span className="px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[11px] font-mono font-bold uppercase">
                 Mathematical Model
               </span>
             </div>
@@ -708,29 +708,29 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
         {/* Real-Time Synaptic Metric Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-white/[0.06] space-y-0.5 text-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mean Retrievability</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Mean Retrievability</span>
             <div className="text-lg font-black text-cyan-300 font-mono">{meanRetrievability}%</div>
-            <span className="text-[10px] text-slate-500">Across {allCards.length} cards</span>
+            <span className="text-[11px] text-slate-500">Across {allCards.length} cards</span>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-white/[0.06] space-y-0.5 text-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Average Stability</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Average Stability</span>
             <div className="text-lg font-black text-indigo-300 font-mono">{avgStability} Days</div>
-            <span className="text-[10px] text-slate-500">Synaptic half-life (S)</span>
+            <span className="text-[11px] text-slate-500">Synaptic half-life (S)</span>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-white/[0.06] space-y-0.5 text-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target Threshold</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Target Threshold</span>
             <div className="text-lg font-black text-emerald-300 font-mono">{Math.round(targetRetention * 100)}%</div>
-            <span className="text-[10px] text-slate-500">R_target boundary</span>
+            <span className="text-[11px] text-slate-500">R_target boundary</span>
           </div>
 
           <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-white/[0.06] space-y-0.5 text-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Next Spaced Interval</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Next Spaced Interval</span>
             <div className="text-lg font-black text-purple-300 font-mono">
               {FSRSService.calculateInterval(avgStability, targetRetention)} Days
             </div>
-            <span className="text-[10px] text-slate-500">At current target</span>
+            <span className="text-[11px] text-slate-500">At current target</span>
           </div>
         </div>
 
@@ -816,25 +816,25 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
           <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/[0.06] text-center">
             <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider">Learning</span>
             <div className="text-xl font-black text-white font-mono mt-1">{learningCards}</div>
-            <span className="text-[10px] text-slate-500">&lt; 1 day stability</span>
+            <span className="text-[11px] text-slate-500">&lt; 1 day stability</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/[0.06] text-center">
             <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">Young</span>
             <div className="text-xl font-black text-white font-mono mt-1">{youngCards}</div>
-            <span className="text-[10px] text-slate-500">1 - 7 days stability</span>
+            <span className="text-[11px] text-slate-500">1 - 7 days stability</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/[0.06] text-center">
             <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">Mature</span>
             <div className="text-xl font-black text-white font-mono mt-1">{matureCards}</div>
-            <span className="text-[10px] text-slate-500">7 - 30 days stability</span>
+            <span className="text-[11px] text-slate-500">7 - 30 days stability</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/[0.06] text-center">
             <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Mastered</span>
             <div className="text-xl font-black text-white font-mono mt-1">{masteredCards}</div>
-            <span className="text-[10px] text-slate-500">&gt; 30 days stability</span>
+            <span className="text-[11px] text-slate-500">&gt; 30 days stability</span>
           </div>
         </div>
       </div>

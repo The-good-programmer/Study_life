@@ -13,6 +13,7 @@ import {
   Volume2
 } from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
+import { Dialog } from './Dialog';
 
 export type ScienceTopicId = 'retrieval' | 'fsrs' | 'feynman' | 'interleaving' | 'priming' | 'audio';
 
@@ -209,9 +210,14 @@ export const ScienceExplainerModal: React.FC<ScienceExplainerModalProps> = ({
   const currentTopic = TOPICS.find(t => t.id === selectedTopicId) || TOPICS[0];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-fadeIn">
+    <Dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="science-explainer-title"
+      className="max-w-4xl"
+    >
       <div 
-        className="relative w-full max-w-4xl bg-slate-900 border border-indigo-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="relative w-full bg-slate-900 border border-indigo-500/30 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         style={{
           boxShadow: '0 25px 60px -15px rgba(99, 102, 241, 0.25)'
         }}
@@ -226,8 +232,8 @@ export const ScienceExplainerModal: React.FC<ScienceExplainerModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-white font-display">The Cognitive Science of Lotti</h2>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <h2 id="science-explainer-title" className="text-lg font-bold text-white font-display">The Cognitive Science of Lotti</h2>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   Empirical Foundations
                 </span>
               </div>
@@ -241,6 +247,7 @@ export const ScienceExplainerModal: React.FC<ScienceExplainerModalProps> = ({
               onClose();
             }}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer"
+            aria-label="Close science explainer"
             title="Close (Esc)"
           >
             <X className="w-5 h-5" />
@@ -365,6 +372,6 @@ export const ScienceExplainerModal: React.FC<ScienceExplainerModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 };

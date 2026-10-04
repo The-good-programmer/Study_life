@@ -341,7 +341,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
                 <div className="absolute right-0 mt-2 w-64 p-3 rounded-2xl bg-[#0d101e] border border-white/[0.12] shadow-2xl z-50 text-xs text-slate-200 animate-fadeIn">
                   <div className="font-bold text-white mb-2 pb-1.5 border-b border-white/[0.08] font-display flex items-center justify-between">
                     <span>Focus Audio</span>
-                    <span className="text-[10px] text-indigo-300">Active</span>
+                    <span className="text-[11px] text-indigo-300">Active</span>
                   </div>
                   <div className="space-y-1">
                     {[
@@ -413,7 +413,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
               <FileText className="w-3.5 h-3.5 text-indigo-400" />
               <span className="hidden md:inline">Source Reader</span>
               {currentConcept.sourceAnchor && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-mono">
+                <span className="text-[11px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-mono">
                   p.{currentConcept.sourceAnchor.pageNumber}
                 </span>
               )}

@@ -153,7 +153,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight font-display">
                 FSRS Leech Hunter & Mnemonic Rewiring Lab
               </h2>
-              <span className="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-mono uppercase font-bold">
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[11px] font-mono uppercase font-bold">
                 Synaptic Bottlenecks
               </span>
             </div>
@@ -220,7 +220,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
           <div className="lg:col-span-4 space-y-2.5">
             <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider font-display px-1">
               <span>Unstable Flashcards</span>
-              <span className="text-[10px] font-mono text-rose-400 font-bold">{leeches.length} Critical</span>
+              <span className="text-[11px] font-mono text-rose-400 font-bold">{leeches.length} Critical</span>
             </div>
 
             <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
@@ -272,7 +272,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
                 {/* Selected Card Overview */}
                 <div className="space-y-2 pb-5 border-b border-white/[0.08]">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-rose-300 font-bold bg-rose-500/20 px-2.5 py-0.5 rounded-full border border-rose-500/30">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-rose-300 font-bold bg-rose-500/20 px-2.5 py-0.5 rounded-full border border-rose-500/30">
                       Cognitive Autopsy in Progress
                     </span>
                     <span className="text-xs font-mono text-slate-400">
@@ -308,7 +308,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
                           <AlertTriangle className="w-4 h-4 text-amber-400" />
                           <span>Diagnosis: {analysis.diagnosisTitle}</span>
                         </span>
-                        <span className="text-[10px] font-mono text-amber-400 uppercase font-bold">
+                        <span className="text-[11px] font-mono text-amber-400 uppercase font-bold">
                           {analysis.rootCause}
                         </span>
                       </div>
@@ -337,7 +337,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
                               <span className="text-xs font-bold text-white font-display">
                                 {opt.strategyTitle}
                               </span>
-                              <span className="text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                              <span className="text-[11px] font-mono uppercase font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                                 {opt.badge}
                               </span>
                             </div>

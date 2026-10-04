@@ -226,12 +226,12 @@ export const ConceptGraph: React.FC<ConceptGraphProps> = ({ concept }) => {
               {selectedNode.label}
             </span>
             <div className="flex items-center gap-2">
-              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${categoryColors[selectedNode.category].badge}`}>
+              <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${categoryColors[selectedNode.category].badge}`}>
                 {selectedNode.category}
               </span>
               <button
                 onClick={() => setSelectedNode(null)}
-                className="text-[10px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded hover:bg-white/[0.08] transition-colors cursor-pointer"
+                className="text-[11px] text-slate-400 hover:text-white px-1.5 py-0.5 rounded hover:bg-white/[0.08] transition-colors cursor-pointer"
                 title="Close drawer"
               >
                 ✕

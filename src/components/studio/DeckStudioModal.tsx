@@ -372,7 +372,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-white font-display">Deck Studio & Card Architect</h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   FSRS Local-First
                 </span>
               </div>
@@ -513,7 +513,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
                     >
                       <span>{idx + 1}.</span>
                       <span className="truncate max-w-[130px]">{c.title}</span>
-                      <span className="text-[10px] opacity-75 font-mono">({c.retrievalCards.length})</span>
+                      <span className="text-[11px] opacity-75 font-mono">({c.retrievalCards.length})</span>
                     </button>
                   ))}
                 </div>
@@ -635,7 +635,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
 
                           {/* Card Question / Template */}
                           <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-slate-400">
+                            <label className="text-[11px] uppercase font-bold text-slate-400">
                               {card.cardType === 'cloze' 
                                 ? 'Cloze Template (wrap target term in {{double_braces}})' 
                                 : 'Question / Prompt'}
@@ -656,7 +656,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
 
                           {/* Card Answer */}
                           <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-slate-400">
+                            <label className="text-[11px] uppercase font-bold text-slate-400">
                               Target Recall Answer {card.cardType === 'cloze' && '(The word inside {{}})'}
                             </label>
                             <input
@@ -671,7 +671,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
                           {/* Multiple Choice Options */}
                           {card.cardType === 'multiple-choice' && (
                             <div className="space-y-2 pt-1">
-                              <label className="text-[10px] uppercase font-bold text-slate-400">
+                              <label className="text-[11px] uppercase font-bold text-slate-400">
                                 4 Multiple Choice Options (Comma-separated)
                               </label>
                               <input
@@ -690,7 +690,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
                           {/* Hint & Explanation Grid */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                             <div className="space-y-1">
-                              <label className="text-[10px] font-semibold text-slate-400">Optional Hint</label>
+                              <label className="text-[11px] font-semibold text-slate-400">Optional Hint</label>
                               <input
                                 type="text"
                                 value={card.hint || ''}
@@ -700,7 +700,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-semibold text-slate-400">Scientific Detail / Explanation</label>
+                              <label className="text-[11px] font-semibold text-slate-400">Scientific Detail / Explanation</label>
                               <input
                                 type="text"
                                 value={card.explanation || ''}

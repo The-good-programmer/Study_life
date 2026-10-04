@@ -503,15 +503,15 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-pink-500/15 text-pink-300 border border-pink-500/30 flex items-center gap-1.5">
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-pink-500/15 text-pink-300 border border-pink-500/30 flex items-center gap-1.5">
                 <Brain className="w-3 h-3 text-pink-400" />
                 <span>Lotti Study Autopilot</span>
               </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                 <Flame className="w-3 h-3 fill-amber-400 text-amber-400" />
                 <span>{stats.currentStreak} Day Streak</span>
               </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
                 Lvl {stats.level} • {stats.levelTitle}
               </span>
             </div>
@@ -595,7 +595,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                         {effectiveProfile ? effectiveProfile.grade : 'Adaptive Educational Profile'}
                       </span>
                       {effectiveProfile && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                           Age {effectiveProfile.age}
                         </span>
                       )}
@@ -619,7 +619,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                       <Globe className="w-3.5 h-3.5 text-indigo-400" />
                       <span>{effectiveLanguage.flag} {effectiveLanguage.nativeName}</span>
                       {selectedLanguageCode === 'auto' && (
-                        <span className="text-[10px] text-slate-400 font-mono">(Auto)</span>
+                        <span className="text-[11px] text-slate-400 font-mono">(Auto)</span>
                       )}
                       <ChevronDown className="w-3 h-3 text-slate-400" />
                     </button>
@@ -676,7 +676,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                       : depthEstimate.reasoning}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 text-slate-400 font-mono text-[10px]">
+                <div className="flex items-center gap-3 text-slate-400 font-mono text-[11px]">
                   <span>Checkpoints: <strong className="text-white">{depthEstimate.recommendedCheckpoints}</strong></span>
                   <span>Est. Focus: <strong className="text-indigo-300">~{depthEstimate.estimatedMinutes}m</strong></span>
                 </div>
@@ -866,7 +866,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
           {/* Panel 2: AI Topic Ideas */}
           {ingestMode === 'topic' && (
             <div className="space-y-3 pt-3 border-t border-white/[0.06] animate-fadeIn">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 Instant Starters (Click to generate):
               </span>
               <div className="flex flex-wrap gap-2">
@@ -879,7 +879,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                     }}
                     className="px-3 py-1.5 rounded-xl bg-slate-950/80 hover:bg-slate-850 border border-white/[0.08] hover:border-indigo-500/40 text-xs text-slate-300 hover:text-white transition-all flex items-center gap-2 cursor-pointer"
                   >
-                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-white/[0.06] text-indigo-300">
+                    <span className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-white/[0.06] text-indigo-300">
                       {item.domain}
                     </span>
                     <span>{item.topic}</span>
@@ -900,7 +900,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                   placeholder="Paste lecture notes, slide bullet points, textbook paragraphs, or syllabus outline here..."
                   className="w-full p-4 rounded-2xl bg-slate-950/80 border border-white/[0.12] focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-white text-xs sm:text-sm outline-none resize-none placeholder:text-slate-500 transition-all leading-relaxed"
                 />
-                <div className="absolute bottom-3 right-3 text-[10px] font-mono text-slate-500 bg-slate-900/80 px-2 py-0.5 rounded border border-white/[0.08]">
+                <div className="absolute bottom-3 right-3 text-[11px] font-mono text-slate-500 bg-slate-900/80 px-2 py-0.5 rounded border border-white/[0.08]">
                   {notesInput.trim() ? notesInput.trim().split(/\s+/).length : 0} words
                 </div>
               </div>
@@ -954,7 +954,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-2.5 max-w-xl">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                     {defaultQuickSession.category}
                   </span>
                   <span className="text-xs text-slate-500">•</span>
@@ -1028,7 +1028,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-sm">
                   <Zap className="w-5 h-5 fill-amber-400 text-amber-400" />
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
                   60s Match
                 </span>
               </div>
@@ -1056,7 +1056,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-sm">
                   <Layers className="w-5 h-5" />
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   FSRS Queue
                 </span>
               </div>
@@ -1084,7 +1084,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-sm">
                   <Award className="w-5 h-5" />
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   Diagnostic
                 </span>
               </div>
@@ -1112,7 +1112,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-sm">
                   <Shuffle className="w-5 h-5 text-purple-400" />
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
                   Dunlosky
                 </span>
               </div>
@@ -1268,7 +1268,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                     >
                       <div className="space-y-2.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
                             {deck.category}
                           </span>
 
@@ -1333,7 +1333,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                       <div className="pt-3 border-t border-white/[0.06] space-y-3">
                         <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium">
                           <span>{deck.concepts.length} Concepts • {totalCards} Cards</span>
-                          <span className="flex items-center gap-1 text-slate-500 font-mono text-[10px]">
+                          <span className="flex items-center gap-1 text-slate-500 font-mono text-[11px]">
                             <Clock className="w-3 h-3" />
                             <span>~{totalMins}m</span>
                           </span>
@@ -1426,7 +1426,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {starredCards.map((card) => (
                   <div key={card.id} className="p-4 rounded-2xl bg-slate-950/60 border border-white/[0.08] space-y-2">
-                    <div className="flex items-center justify-between text-[10px] text-amber-400 font-semibold uppercase">
+                    <div className="flex items-center justify-between text-[11px] text-amber-400 font-semibold uppercase">
                       <span>★ Bookmarked Item</span>
                       <span className="font-mono text-slate-500">{card.cardType || 'standard'}</span>
                     </div>
@@ -1459,19 +1459,19 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 >
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between gap-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 bg-indigo-500/15 px-2.5 py-0.5 rounded-full border border-indigo-500/30">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300 bg-indigo-500/15 px-2.5 py-0.5 rounded-full border border-indigo-500/30">
                         {deck.category}
                       </span>
 
                       <div className="flex items-center gap-1">
                         {deck.hasImageOcclusion && (
-                          <span className="text-[9px] font-semibold flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30" title="Image Occlusion Ready">
+                          <span className="text-[11px] font-semibold flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30" title="Image Occlusion Ready">
                             <Eye className="w-2.5 h-2.5" />
                             <span>Occlusion</span>
                           </span>
                         )}
                         {deck.hasSourcePdf && (
-                          <span className="text-[9px] font-semibold flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30" title="PDF Grounded">
+                          <span className="text-[11px] font-semibold flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30" title="PDF Grounded">
                             <FileText className="w-2.5 h-2.5" />
                             <span>Source</span>
                           </span>
@@ -1487,7 +1487,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                       {deck.summary}
                     </p>
 
-                    <div className="flex items-center gap-1 text-[10px] text-slate-500 pt-1">
+                    <div className="flex items-center gap-1 text-[11px] text-slate-500 pt-1">
                       <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
                       <span className="truncate">{deck.verifiedBy}</span>
                     </div>

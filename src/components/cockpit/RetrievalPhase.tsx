@@ -703,20 +703,20 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
           <div className="flex items-center justify-between text-xs text-slate-400 font-mono px-1">
             <div className="flex items-center gap-2">
               {interleaveMap.has(currentCard.id) && (
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold flex items-center gap-1.5 shadow-sm">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-mono font-bold flex items-center gap-1.5 shadow-sm">
                   <Brain className="w-3 h-3 text-amber-400" />
                   <span>Delayed Recall • {interleaveMap.get(currentCard.id)}</span>
                 </span>
               )}
               
               {lastGamepadAction && (
-                <span className="px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 border border-indigo-500/40 text-[10px] font-mono animate-bounce">
+                <span className="px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 border border-indigo-500/40 text-[11px] font-mono animate-bounce">
                   Pad: {lastGamepadAction.toUpperCase()}
                 </span>
               )}
 
               {touchFeedback && (
-                <span className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-200 border border-purple-500/40 text-[10px] font-mono animate-fadeIn">
+                <span className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-200 border border-purple-500/40 text-[11px] font-mono animate-fadeIn">
                   {touchFeedback}
                 </span>
               )}
@@ -908,7 +908,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                                     className="inline-flex items-center gap-1 px-3 py-1 mx-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/35 border border-purple-500/50 text-purple-300 font-bold text-sm tracking-wide shadow-md transition-all animate-pulse align-middle"
                                   >
                                     <span>[ ? ]</span>
-                                    <span className="text-[10px] font-normal opacity-80">Reveal</span>
+                                    <span className="text-[11px] font-normal opacity-80">Reveal</span>
                                   </button>
                                 ) : (
                                   <span
@@ -1143,7 +1143,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                       <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-xs text-amber-200 animate-fadeIn space-y-2.5 font-sans">
                         {hintLevel >= 1 && (
                           <div className="flex items-start gap-2">
-                            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[10px] uppercase font-bold shrink-0 mt-0.5">
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[11px] uppercase font-bold shrink-0 mt-0.5">
                               1. Socratic Nudge
                             </span>
                             <span className="text-slate-200 leading-relaxed font-medium">
@@ -1153,7 +1153,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                         )}
                         {hintLevel >= 2 && (
                           <div className="flex items-start gap-2 pt-2 border-t border-amber-500/20">
-                            <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[10px] uppercase font-bold shrink-0 mt-0.5">
+                            <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[11px] uppercase font-bold shrink-0 mt-0.5">
                               2. Analogy Anchor
                             </span>
                             <span className="text-slate-200 leading-relaxed font-medium">
@@ -1163,7 +1163,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                         )}
                         {hintLevel >= 3 && (
                           <div className="flex items-start gap-2 pt-2 border-t border-amber-500/20">
-                            <span className="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 font-mono text-[10px] uppercase font-bold shrink-0 mt-0.5">
+                            <span className="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 font-mono text-[11px] uppercase font-bold shrink-0 mt-0.5">
                               3. Core Deconstruction
                             </span>
                             <span className="text-slate-200 leading-relaxed font-medium">
@@ -1260,7 +1260,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                       <div className="flex items-center justify-between text-xs font-bold text-white mb-1">
                         <div className="flex items-center gap-1.5">
                           <span>Again</span>
-                          <kbd className="px-1.5 py-0.5 text-[10px] bg-black/30 rounded border border-white/20 text-white font-mono">
+                          <kbd className="px-1.5 py-0.5 text-[11px] bg-black/30 rounded border border-white/20 text-white font-mono">
                             1
                           </kbd>
                         </div>
@@ -1277,7 +1277,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                     >
                       <div className="flex items-center justify-between text-xs font-bold text-white mb-1">
                         <span>Hard</span>
-                        <kbd className="px-1.5 py-0.5 text-[10px] bg-black/30 rounded border border-white/20 text-white font-mono">
+                        <kbd className="px-1.5 py-0.5 text-[11px] bg-black/30 rounded border border-white/20 text-white font-mono">
                           2
                         </kbd>
                       </div>
@@ -1292,7 +1292,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                     >
                       <div className="flex items-center justify-between text-xs font-bold text-white mb-1">
                         <span>Good</span>
-                        <kbd className="px-1.5 py-0.5 text-[10px] bg-black/30 rounded border border-white/20 text-white font-mono">
+                        <kbd className="px-1.5 py-0.5 text-[11px] bg-black/30 rounded border border-white/20 text-white font-mono">
                           3
                         </kbd>
                       </div>
@@ -1307,7 +1307,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                     >
                       <div className="flex items-center justify-between text-xs font-bold text-white mb-1">
                         <span>Easy</span>
-                        <kbd className="px-1.5 py-0.5 text-[10px] bg-black/30 rounded border border-white/20 text-white font-mono">
+                        <kbd className="px-1.5 py-0.5 text-[11px] bg-black/30 rounded border border-white/20 text-white font-mono">
                           4
                         </kbd>
                       </div>
@@ -1523,7 +1523,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                 <span className={`w-2 h-2 rounded-full ${gamepadConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
                 <span className="font-semibold">{gamepadConnected ? (gamepadName || 'Connected') : 'No Gamepad Detected'}</span>
               </div>
-              <span className="text-[10px] font-mono text-slate-500">
+              <span className="text-[11px] font-mono text-slate-500">
                 {gamepadConnected ? 'Ready (W3C API)' : 'Plug or pair Bluetooth'}
               </span>
             </div>

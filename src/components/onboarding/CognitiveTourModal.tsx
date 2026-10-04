@@ -148,11 +148,11 @@ export const CognitiveTourModal: React.FC<CognitiveTourModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-extrabold text-white font-display">Lotti Architecture</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">
                   Step {currentStep + 1} of 4
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400">Science-Backed Automated Study Pilot</p>
+              <p className="text-[11px] text-slate-400">Science-Backed Automated Study Pilot</p>
             </div>
           </div>
 
@@ -186,14 +186,14 @@ export const CognitiveTourModal: React.FC<CognitiveTourModalProps> = ({
         <div className="space-y-4 relative z-10">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider border ${step.badgeColor}`}>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold uppercase tracking-wider border ${step.badgeColor}`}>
                 {step.phase}: {step.badge}
               </span>
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight font-display mt-1.5">
                 {step.scienceTitle}
               </h2>
             </div>
-            <span className="text-[10px] font-mono text-slate-400 sm:text-right max-w-xs">
+            <span className="text-[11px] font-mono text-slate-400 sm:text-right max-w-xs">
               {step.citations}
             </span>
           </div>

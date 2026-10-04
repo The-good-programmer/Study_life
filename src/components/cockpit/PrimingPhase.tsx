@@ -70,7 +70,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
                   soundEngine.playAxolotlBubble();
                   setShowScienceModal(true);
                 }}
-                className="px-2 py-0.5 rounded-full bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-300 hover:text-white border border-indigo-500/30 text-[10px] font-mono flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                className="px-2 py-0.5 rounded-full bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-300 hover:text-white border border-indigo-500/30 text-[11px] font-mono flex items-center gap-1 cursor-pointer transition-all shadow-sm"
                 title="Learn why schema priming accelerates learning"
               >
                 <Brain className="w-3 h-3 text-indigo-400" />
@@ -125,7 +125,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
             <Lightbulb className="w-4 h-4" />
             <span>Key Intuition & Analogy</span>
           </div>
-          <span className="text-[10px] text-slate-500 uppercase tracking-widest font-mono">Big Picture</span>
+          <span className="text-[11px] text-slate-500 uppercase tracking-widest font-mono">Big Picture</span>
         </div>
         
         <div className="text-lg sm:text-xl text-slate-100 font-medium leading-relaxed font-sans">
@@ -249,7 +249,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
       {/* Action / Next Button */}
       <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
         <span className="text-xs text-slate-500 hidden sm:inline">
-          Tip: Press <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-300 font-mono text-[10px]">Enter ↵</kbd> to proceed
+          Tip: Press <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-300 font-mono text-[11px]">Enter ↵</kbd> to proceed
         </span>
         <button
           onClick={handleFinishPriming}

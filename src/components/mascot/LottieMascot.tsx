@@ -153,7 +153,7 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
                 />
               )}
             </div>
-            <div className="absolute -bottom-2 -right-1 px-2 py-0.5 rounded-full bg-slate-950/90 border border-pink-500/40 text-[9px] font-bold text-pink-300 flex items-center gap-1 shadow-lg">
+            <div className="absolute -bottom-2 -right-1 px-2 py-0.5 rounded-full bg-slate-950/90 border border-pink-500/40 text-[11px] font-bold text-pink-300 flex items-center gap-1 shadow-lg">
               <Sparkles className="w-2.5 h-2.5 text-pink-400" />
               <span>{isLive3D ? '3D' : 'Lottie'}</span>
             </div>
@@ -188,7 +188,7 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
                   // catch
                 }
               }}
-              className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-slate-300 hover:text-white flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+              className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-slate-300 hover:text-white flex items-center gap-1 transition-all cursor-pointer shadow-sm"
               title="Toggle preview between 2D illustration and 3D living Axolotl"
             >
               <Box className="w-2.5 h-2.5 text-pink-400" />
@@ -201,11 +201,11 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
         {showSpeechBubble && (
           <div className="flex-1 space-y-2 text-center md:text-left">
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-pink-500/15 text-pink-300 border border-pink-500/30 flex items-center gap-1.5">
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-pink-500/15 text-pink-300 border border-pink-500/30 flex items-center gap-1.5">
                 <Brain className="w-3 h-3 text-pink-400" />
                 <span>Neuro Co-Pilot</span>
               </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 flex items-center gap-1">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 flex items-center gap-1">
                 <Zap className="w-2.5 h-2.5 text-cyan-400" />
                 <span>Neurogenesis Active</span>
               </span>
@@ -226,7 +226,7 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onExploreTour(); }}
-                  className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 text-pink-200 border border-pink-500/40 flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+                  className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 text-pink-200 border border-pink-500/40 flex items-center gap-1 transition-all cursor-pointer shadow-sm"
                   title="Interactive 4-Phase Cognitive Architecture Tour"
                 >
                   <Sparkles className="w-2.5 h-2.5 text-pink-400" />
@@ -242,7 +242,7 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
               <p className="text-xs sm:text-sm font-medium text-slate-200 leading-relaxed">
                 "{currentSpeech}"
               </p>
-              <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/[0.06] text-[10px] text-slate-400">
+              <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/[0.06] text-[11px] text-slate-400">
                 <span className="text-slate-400 group-hover:text-pink-300 transition-colors flex items-center gap-1">
                   <MessageSquare className="w-3 h-3" />
                   Click Lottie to cycle science tips
@@ -291,7 +291,7 @@ export const LottieMascot: React.FC<LottieMascotProps> = ({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-bold text-white group-hover:text-pink-300 transition-colors">Lottie</span>
-          <span className="text-[9px] font-mono text-cyan-400 px-1.5 py-0.2 rounded-full bg-cyan-500/10 border border-cyan-500/20">Co-Pilot</span>
+          <span className="text-[11px] font-mono text-cyan-400 px-1.5 py-0.2 rounded-full bg-cyan-500/10 border border-cyan-500/20">Co-Pilot</span>
         </div>
         <p className="text-[11px] text-slate-400 truncate mt-0.5">
           {currentSpeech}

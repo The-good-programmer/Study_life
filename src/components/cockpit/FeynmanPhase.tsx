@@ -330,7 +330,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
           <div>
             <div className="font-bold text-white font-display flex items-center gap-2">
               <span>Phase 2: Socratic Feynman Defense</span>
-              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              <span className="text-[11px] uppercase font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
                 Cognitive Elaboration
               </span>
             </div>
@@ -391,7 +391,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
             <span>Concept Checkpoint:</span>
             <span className="text-white">{concept.title}</span>
           </div>
-          <span className="text-[10px] text-slate-500 uppercase tracking-widest font-mono">
+          <span className="text-[11px] text-slate-500 uppercase tracking-widest font-mono">
             {feynmanMode === 'viva' ? 'Oxford Tutorial Defense' : 'Elaborative Interrogation'}
           </span>
         </div>
@@ -455,7 +455,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                 <span className="text-xs font-bold text-slate-200 font-display">
                   Socratic Board Session
                 </span>
-                <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono font-bold">
+                <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-mono font-bold">
                   {vivaVerdict ? 'Verdict Delivered' : `Round ${vivaRounds} of 3`}
                 </span>
               </div>
@@ -518,7 +518,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                           {isExaminer ? (
                             <span className="text-pink-300 flex items-center gap-1.5">
                               <span>Lottie</span>
-                              <span className="text-[10px] font-mono text-cyan-400 font-normal px-1.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
+                              <span className="text-[11px] font-mono text-cyan-400 font-normal px-1.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
                                 {AIService.isAvailable() ? 'AI Socratic Examiner' : 'Offline Guided Review'}
                               </span>
                             </span>
@@ -534,7 +534,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                           <div className="flex items-center gap-2">
                             {turn.reaction && (
                               <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold border ${
+                                className={`px-2 py-0.5 rounded-full text-[11px] font-mono uppercase font-bold border ${
                                   turn.reaction === 'impressed'
                                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                                     : turn.reaction === 'skeptical'
@@ -578,13 +578,13 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                       {/* Jargon detected warning tag */}
                       {turn.jargonDetected && turn.jargonDetected.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1.5 pt-1.5">
-                          <span className="text-[10px] text-amber-400 font-mono flex items-center gap-1">
+                          <span className="text-[11px] text-amber-400 font-mono flex items-center gap-1">
                             <AlertTriangle className="w-3 h-3" /> Unpacked Jargon:
                           </span>
                           {turn.jargonDetected.map((j, i) => (
                             <span
                               key={i}
-                              className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono"
+                              className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-mono"
                             >
                               {j}
                             </span>
@@ -727,21 +727,21 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                   {/* 3 Metric Scores */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/[0.06] text-center space-y-1">
-                      <span className="text-[10px] text-indigo-300 font-mono uppercase font-bold">Mechanical Depth</span>
+                      <span className="text-[11px] text-indigo-300 font-mono uppercase font-bold">Mechanical Depth</span>
                       <div className="text-2xl font-black text-white font-mono">{vivaVerdict.depthScore}%</div>
-                      <p className="text-[10px] text-slate-400">Causal step-by-step reasoning</p>
+                      <p className="text-[11px] text-slate-400">Causal step-by-step reasoning</p>
                     </div>
 
                     <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/[0.06] text-center space-y-1">
-                      <span className="text-[10px] text-purple-300 font-mono uppercase font-bold">Analogy Integrity</span>
+                      <span className="text-[11px] text-purple-300 font-mono uppercase font-bold">Analogy Integrity</span>
                       <div className="text-2xl font-black text-white font-mono">{vivaVerdict.analogyIntegrity}%</div>
-                      <p className="text-[10px] text-slate-400">Intuitive mental mapping</p>
+                      <p className="text-[11px] text-slate-400">Intuitive mental mapping</p>
                     </div>
 
                     <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/[0.06] text-center space-y-1">
-                      <span className="text-[10px] text-emerald-300 font-mono uppercase font-bold">Jargon-Free Lucidity</span>
+                      <span className="text-[11px] text-emerald-300 font-mono uppercase font-bold">Jargon-Free Lucidity</span>
                       <div className="text-2xl font-black text-white font-mono">{vivaVerdict.jargonFreeScore}%</div>
-                      <p className="text-[10px] text-slate-400">Absence of jargon crutches</p>
+                      <p className="text-[11px] text-slate-400">Absence of jargon crutches</p>
                     </div>
                   </div>
 
@@ -791,7 +791,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                             <AlertTriangle className="w-4 h-4 text-amber-400" />
                             <span>Mastery Gate: Oral Defense Rating Under Threshold ({avgVivaScore}% / 65% required)</span>
                           </div>
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/30">
+                          <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/30">
                             Remediation Active
                           </span>
                         </div>
@@ -1155,7 +1155,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                           <CheckCircle className="w-4 h-4 text-purple-400" />
                           <span>Self-Assessment Checklist Complete</span>
                         </div>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-200 border border-purple-500/30">
+                        <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-200 border border-purple-500/30">
                           Offline Mode
                         </span>
                       </div>
@@ -1194,7 +1194,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                           <AlertTriangle className="w-4 h-4 text-amber-400" />
                           <span>Mastery Gate: Comprehension Threshold Not Met ({evaluation.score}% / 70% required)</span>
                         </div>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/30">
+                        <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/30">
                           Remediation Active
                         </span>
                       </div>

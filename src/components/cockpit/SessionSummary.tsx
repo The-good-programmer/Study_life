@@ -181,7 +181,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
             className="w-full h-full object-cover rounded-2xl"
           />
         </div>
-        <div className="absolute -bottom-2 -right-1 px-2.5 py-0.5 rounded-full bg-slate-950 border border-pink-500/40 text-[10px] font-bold text-pink-300 flex items-center gap-1 shadow-lg">
+        <div className="absolute -bottom-2 -right-1 px-2.5 py-0.5 rounded-full bg-slate-950 border border-pink-500/40 text-[11px] font-bold text-pink-300 flex items-center gap-1 shadow-lg">
           <Sparkles className="w-3 h-3 text-pink-400" />
           <span>Neurogenesis!</span>
         </div>
@@ -244,7 +244,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               <h4 className="text-xs font-bold text-white font-display">Lottie's Care Rewards Earned!</h4>
             </div>
             {rewards.leveledUp && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-500/30 text-pink-300 border border-pink-500/50 animate-bounce">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-pink-500/30 text-pink-300 border border-pink-500/50 animate-bounce">
                 🎉 Friendship Leveled Up!
               </span>
             )}
@@ -254,32 +254,32 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
             <div className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
               <span className="text-lg">🦐</span>
               <div className="text-xs font-bold text-white mt-0.5">+{rewards.treatsEarned.shrimp || 0}</div>
-              <div className="text-[9px] text-slate-400">Shrimp</div>
+              <div className="text-[11px] text-slate-400">Shrimp</div>
             </div>
             <div className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
               <span className="text-lg">🍓</span>
               <div className="text-xs font-bold text-white mt-0.5">+{rewards.treatsEarned.berry || 0}</div>
-              <div className="text-[9px] text-slate-400">Berries</div>
+              <div className="text-[11px] text-slate-400">Berries</div>
             </div>
             <div className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
               <span className="text-lg">🫘</span>
               <div className="text-xs font-bold text-white mt-0.5">+{rewards.treatsEarned.bean || 0}</div>
-              <div className="text-[9px] text-slate-400">Beans</div>
+              <div className="text-[11px] text-slate-400">Beans</div>
             </div>
             <div className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
               <span className="text-lg">✨</span>
               <div className="text-xs font-bold text-white mt-0.5">+{rewards.treatsEarned.pearl || 0}</div>
-              <div className="text-[9px] text-slate-400">Pellets</div>
+              <div className="text-[11px] text-slate-400">Pellets</div>
             </div>
             <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
               <span className="text-lg">🪙</span>
               <div className="text-xs font-bold text-amber-300 mt-0.5">+{rewards.coinsEarned}</div>
-              <div className="text-[9px] text-amber-400/80">Coins</div>
+              <div className="text-[11px] text-amber-400/80">Coins</div>
             </div>
             <div className="p-2 rounded-xl bg-pink-500/10 border border-pink-500/20">
               <span className="text-lg">💖</span>
               <div className="text-xs font-bold text-pink-300 mt-0.5">+{rewards.friendshipXPEarned}</div>
-              <div className="text-[9px] text-pink-400/80">Friendship XP</div>
+              <div className="text-[11px] text-pink-400/80">Friendship XP</div>
             </div>
           </div>
         </div>
@@ -292,7 +292,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
             <TrendingUp className="w-4 h-4 text-indigo-400" />
             <span>FSRS Memory Consolidation Forecast</span>
           </div>
-          <span className="text-[10px] text-slate-400 font-mono">Ebbinghaus Countered</span>
+          <span className="text-[11px] text-slate-400 font-mono">Ebbinghaus Countered</span>
         </div>
 
         {/* Forecast SVG Chart */}
@@ -315,7 +315,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               strokeWidth="2.5"
             />
           </svg>
-          <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-1">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono mt-1">
             <span>Day 0 (Now)</span>
             <span className="text-emerald-400 font-bold">FSRS Retrievability (~92%)</span>
             <span>Day 30</span>
@@ -334,7 +334,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>Curriculum Mastery & Diagnostic Breakdown</span>
           </div>
-          <span className="text-[10px] text-emerald-300 font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40">
+          <span className="text-[11px] text-emerald-300 font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40">
             {session.concepts.length} Checkpoints Cleared
           </span>
         </div>
@@ -346,19 +346,19 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               className="p-3.5 rounded-2xl bg-slate-950/70 border border-white/[0.06] flex items-center justify-between gap-3 text-xs"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="w-5 h-5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 flex items-center justify-center font-mono font-bold text-[10px] shrink-0">
+                <span className="w-5 h-5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 flex items-center justify-center font-mono font-bold text-[11px] shrink-0">
                   {index + 1}
                 </span>
                 <div className="min-w-0">
                   <div className="font-bold text-white truncate font-display">{concept.title}</div>
-                  <div className="text-[10px] text-slate-400 truncate">
+                  <div className="text-[11px] text-slate-400 truncate">
                     {concept.retrievalCards.length} FSRS cards scheduled • Dual-coding mental model validated
                   </div>
                 </div>
               </div>
 
               <div className="shrink-0 flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/30 text-emerald-300 font-mono text-[10px] font-semibold">
+                <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/30 text-emerald-300 font-mono text-[11px] font-semibold">
                   Mastered
                 </span>
               </div>
@@ -377,7 +377,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
             <div>
               <div className="text-xs font-bold text-white font-display flex items-center gap-2">
                 <span>Atomic Memory Rescue Deck</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
                   Targeted Micro-Remediation
                 </span>
               </div>
@@ -387,7 +387,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-amber-300">
+          <div className="flex items-center gap-2 text-[11px] font-mono font-bold text-amber-300">
             {missedProbes.length > 0 && (
               <span className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30">
                 {missedProbes.length} Pre-Test Gaps
@@ -446,7 +446,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
             <Sparkles className="w-4 h-4 text-indigo-400" />
             <span>High-Yield Study Sheet & Deck Export</span>
           </div>
-          <span className="text-[10px] text-indigo-300 font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40">
+          <span className="text-[11px] text-indigo-300 font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40">
             Cornell + Anki Ready
           </span>
         </div>

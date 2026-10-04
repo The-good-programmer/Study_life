@@ -21,6 +21,7 @@ import { CloudSyncService, type CloudSyncConfig } from '../../services/cloudSync
 import { NotificationService, type NotificationSettings } from '../../services/notificationService';
 import { soundEngine } from '../../services/soundEngine';
 import { haptics } from '../../services/hapticsService';
+import { Dialog } from '../common/Dialog';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -231,17 +232,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-      <div className="max-w-lg w-full rounded-3xl bg-[#0d101e] border border-white/[0.12] shadow-2xl p-6 sm:p-7 space-y-6 relative max-h-[90vh] overflow-y-auto">
+    <Dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="settings-modal-title"
+      className="max-w-lg"
+    >
+      <div className="w-full rounded-3xl bg-[#0d101e] border border-white/[0.12] shadow-2xl p-6 sm:p-7 space-y-6 relative max-h-[90vh] overflow-y-auto">
         
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
           <div className="flex items-center gap-2">
-            <span className="text-base font-bold text-white font-display">Lotti Preferences</span>
+            <span id="settings-modal-title" className="text-base font-bold text-white font-display">Lotti Preferences</span>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors"
+            aria-label="Close preferences"
+            className="p-1.5 rounded-xl hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -315,7 +322,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                 }`}
               >
                 <div className="font-bold">{item.label}</div>
-                <div className="text-[10px] opacity-75 font-mono mt-0.5">{item.desc}</div>
+                <div className="text-[11px] opacity-75 font-mono mt-0.5">{item.desc}</div>
               </button>
             ))}
           </div>
@@ -374,7 +381,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
               <Cloud className="w-4 h-4 text-cyan-400" />
               <span>Cloud Sync & Cross-Device Pairing</span>
             </span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-bold ${
               syncConfig.status === 'synced'
                 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
                 : syncConfig.status === 'syncing'
@@ -399,8 +406,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
           {/* Sync Endpoint URL */}
           <div className="space-y-1.5 pt-1">
             <div className="flex items-center justify-between">
-              <label className="text-[10px] uppercase font-mono font-bold text-slate-400">Remote Sync Endpoint URL</label>
-              <span className="text-[10px] text-slate-500 font-sans">Cloudflare Worker / Custom API</span>
+              <label className="text-[11px] uppercase font-mono font-bold text-slate-400">Remote Sync Endpoint URL</label>
+              <span className="text-[11px] text-slate-500 font-sans">Cloudflare Worker / Custom API</span>
             </div>
             <input 
               type="url"
@@ -414,8 +421,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
           {/* Sync Token Input & Generator */}
           <div className="space-y-1.5 pt-1">
             <div className="flex items-center justify-between">
-              <label className="text-[10px] uppercase font-mono font-bold text-slate-400">Device Pairing Token</label>
-              <span className="text-[10px] text-slate-500 font-sans">Shared secret between devices</span>
+              <label className="text-[11px] uppercase font-mono font-bold text-slate-400">Device Pairing Token</label>
+              <span className="text-[11px] text-slate-500 font-sans">Shared secret between devices</span>
             </div>
             <div className="flex gap-2">
               <input 
@@ -492,7 +499,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
               <BellRing className="w-4 h-4 text-amber-400" />
               <span>Daily Habit Loop Notifications</span>
             </span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-bold ${
               notifSettings.enabled && notifPerm === 'granted'
                 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
                 : notifPerm === 'denied'
@@ -508,7 +515,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
           </p>
 
           <div className="space-y-1.5 pt-1">
-            <label className="text-[10px] uppercase font-mono font-bold text-slate-400">Preferred Daily Reminder Time</label>
+            <label className="text-[11px] uppercase font-mono font-bold text-slate-400">Preferred Daily Reminder Time</label>
             <div className="grid grid-cols-5 gap-1.5">
               {[
                 { hour: 17, label: '5 PM' },
@@ -571,7 +578,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
               <Volume2 className="w-4 h-4 text-pink-400" />
               <span>Audio Chimes & Tactile Micro-Haptics</span>
             </span>
-            <span className="text-[10px] text-pink-300 font-mono">Sensory Polish</span>
+            <span className="text-[11px] text-pink-300 font-mono">Sensory Polish</span>
           </div>
 
           <p className="text-xs text-slate-400 leading-relaxed font-sans">
@@ -583,13 +590,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
             <div className="p-3 rounded-xl bg-slate-900/80 border border-white/[0.06] flex items-center justify-between">
               <div className="space-y-0.5">
                 <span className="text-xs font-bold text-white block">Sound Effects</span>
-                <span className="text-[10px] text-slate-400">Marimba & chime feedback</span>
+                <span className="text-[11px] text-slate-400">Marimba & chime feedback</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => soundEngine.playCorrectChime()}
-                  className="text-[10px] text-indigo-300 hover:text-white underline cursor-pointer"
+                  className="text-[11px] text-indigo-300 hover:text-white underline cursor-pointer"
                 >
                   Test
                 </button>
@@ -616,13 +623,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
             <div className="p-3 rounded-xl bg-slate-900/80 border border-white/[0.06] flex items-center justify-between">
               <div className="space-y-0.5">
                 <span className="text-xs font-bold text-white block">Micro-Haptics</span>
-                <span className="text-[10px] text-slate-400">Tactile vibration on tap</span>
+                <span className="text-[11px] text-slate-400">Tactile vibration on tap</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => haptics.success()}
-                  className="text-[10px] text-pink-300 hover:text-white underline cursor-pointer"
+                  className="text-[11px] text-pink-300 hover:text-white underline cursor-pointer"
                 >
                   Test
                 </button>
@@ -654,7 +661,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
               <Download className="w-4 h-4 text-emerald-400" />
               <span>Data Portability & Anki Sync</span>
             </span>
-            <span className="text-[10px] text-slate-500 font-mono">Local-First</span>
+            <span className="text-[11px] text-slate-500 font-mono">Local-First</span>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed font-sans">
             Export your entire study history, streaks, and FSRS schedules, or export your flashcards directly to Anki.
@@ -720,6 +727,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
         </div>
 
       </div>
-    </div>
+    </Dialog>
   );
 };

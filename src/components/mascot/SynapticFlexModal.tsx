@@ -101,7 +101,7 @@ export const SynapticFlexModal: React.FC<SynapticFlexModalProps> = ({
             <div className="relative w-full h-full rounded-2xl overflow-hidden bg-slate-950 border border-pink-500/40 shadow-xl p-0.5">
               <img src="/lottie.png" alt="Lottie Trophy" className="w-full h-full object-cover rounded-[14px]" />
             </div>
-            <div className="absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full bg-slate-950 border border-pink-500/40 text-[9px] font-bold text-pink-300 flex items-center gap-1 shadow-md">
+            <div className="absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full bg-slate-950 border border-pink-500/40 text-[11px] font-bold text-pink-300 flex items-center gap-1 shadow-md">
               <Sparkles className="w-2.5 h-2.5 text-pink-400" />
               <span>Mastery</span>
             </div>
@@ -109,7 +109,7 @@ export const SynapticFlexModal: React.FC<SynapticFlexModalProps> = ({
 
           {/* Session Title & Badge */}
           <div className="space-y-1">
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
+            <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
               {session.category} • Certified Cognitive Cycle
             </span>
             <h3 className="text-lg font-black text-white tracking-tight font-display">
@@ -120,7 +120,7 @@ export const SynapticFlexModal: React.FC<SynapticFlexModalProps> = ({
           {/* Key Metrics Grid */}
           <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/[0.08]">
             <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-              <div className="text-[10px] text-slate-400 font-mono">Focus</div>
+              <div className="text-[11px] text-slate-400 font-mono">Focus</div>
               <div className="text-base font-black text-white font-mono flex items-center justify-center gap-1 mt-0.5">
                 <Clock className="w-3 h-3 text-indigo-400" />
                 <span>{minutes}m</span>
@@ -128,7 +128,7 @@ export const SynapticFlexModal: React.FC<SynapticFlexModalProps> = ({
             </div>
 
             <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-              <div className="text-[10px] text-slate-400 font-mono">Nodes</div>
+              <div className="text-[11px] text-slate-400 font-mono">Nodes</div>
               <div className="text-base font-black text-white font-mono flex items-center justify-center gap-1 mt-0.5">
                 <Award className="w-3 h-3 text-purple-400" />
                 <span>{session.concepts.length}</span>
@@ -136,7 +136,7 @@ export const SynapticFlexModal: React.FC<SynapticFlexModalProps> = ({
             </div>
 
             <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-              <div className="text-[10px] text-slate-400 font-mono">FSRS Reps</div>
+              <div className="text-[11px] text-slate-400 font-mono">FSRS Reps</div>
               <div className="text-base font-black text-white font-mono flex items-center justify-center gap-1 mt-0.5">
                 <Layers className="w-3 h-3 text-cyan-400" />
                 <span>{totalCards}</span>

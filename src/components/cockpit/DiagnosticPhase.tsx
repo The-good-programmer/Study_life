@@ -225,7 +225,7 @@ export const DiagnosticPhase: React.FC<DiagnosticPhaseProps> = ({ session, onCom
                       {probe.conceptTitle}
                     </span>
                   </div>
-                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                  <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
                     isCorrect
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                       : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
@@ -271,7 +271,7 @@ export const DiagnosticPhase: React.FC<DiagnosticPhaseProps> = ({ session, onCom
           <div>
             <div className="font-bold text-white font-display flex items-center gap-2">
               <span>Phase 0: Pre-Flight Diagnostic Probe</span>
-              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+              <span className="text-[11px] uppercase font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                 Pre-Testing Effect
               </span>
             </div>

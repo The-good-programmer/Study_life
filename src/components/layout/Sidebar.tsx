@@ -145,11 +145,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}>
               <div className="flex items-center gap-1.5">
                 <span className="font-extrabold text-base text-white tracking-tight font-display">Lotti</span>
-                <span className="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded-full bg-gradient-to-r from-pink-500/20 to-cyan-500/20 text-pink-300 border border-pink-500/30">
+                <span className="text-[11px] font-bold uppercase px-1.5 py-0.2 rounded-full bg-gradient-to-r from-pink-500/20 to-cyan-500/20 text-pink-300 border border-pink-500/30">
                   RECALL
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400 font-medium truncate">Daily Micro-Mastery</p>
+              <p className="text-[11px] text-slate-400 font-medium truncate">Daily Micro-Mastery</p>
             </div>
           </div>
 
@@ -268,7 +268,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap shrink-0 ${
                 isExpanded ? 'opacity-100 max-w-[50px]' : 'opacity-0 max-w-0 pointer-events-none'
               }`}>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">
                   {dueCardsCount}
                 </span>
               </div>
@@ -306,7 +306,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap shrink-0 ${
               isExpanded ? 'opacity-100 max-w-[50px]' : 'opacity-0 max-w-0 pointer-events-none'
             }`}>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400">
+              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400">
                 {savedDecksCount}
               </span>
             </div>
@@ -338,7 +338,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap shrink-0 ${
                 isExpanded ? 'opacity-100 max-w-[50px]' : 'opacity-0 max-w-0 pointer-events-none'
               }`}>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
                   {starredCardsCount}
                 </span>
               </div>
@@ -377,11 +377,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               isExpanded ? 'opacity-100 max-w-[65px]' : 'opacity-0 max-w-0 pointer-events-none'
             }`}>
               {dueCardsCount > 0 ? (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   {dueCardsCount} due
                 </span>
               ) : (
-                <span className="text-[10px] font-medium text-slate-500">Done</span>
+                <span className="text-[11px] font-medium text-slate-500">Done</span>
               )}
             </div>
           </button>
@@ -417,7 +417,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap shrink-0 ${
               isExpanded ? 'opacity-100 max-w-[40px]' : 'opacity-0 max-w-0 pointer-events-none'
             }`}>
-              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-gradient-to-r from-pink-500/30 to-purple-500/30 text-pink-300 border border-pink-500/30 font-mono">
+              <span className="text-[11px] font-black uppercase px-1.5 py-0.5 rounded-full bg-gradient-to-r from-pink-500/30 to-purple-500/30 text-pink-300 border border-pink-500/30 font-mono">
                 3D
               </span>
             </div>
@@ -516,7 +516,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap shrink-0 ${
               isExpanded ? 'opacity-100 max-w-[50px]' : 'opacity-0 max-w-0 pointer-events-none'
             }`}>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
                 {curatedCount}
               </span>
             </div>
@@ -548,6 +548,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* 40Hz Audio Toggle */}
         <button
           onClick={toggleSound}
+          aria-label={!isMuted ? 'Mute focus audio' : 'Play focus audio'}
           title={!isMuted ? '40Hz Focus Active (Click to mute)' : 'Soundscape Muted (Click to play)'}
           className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer overflow-hidden ${
             isExpanded ? 'justify-between px-3 py-2' : 'justify-center px-0 h-10'
@@ -567,7 +568,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {!isMuted ? '40Hz Active' : 'Muted'}
             </span>
           </div>
-          <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[10px] text-slate-500 uppercase ${
+          <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[11px] text-slate-500 uppercase ${
             isExpanded ? 'opacity-100 max-w-[30px]' : 'opacity-0 max-w-0 pointer-events-none'
           }`}>
             {!isMuted ? 'ON' : 'OFF'}
@@ -580,6 +581,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             if (onOpenAuth) onOpenAuth(currentUser ? 'profile' : 'login');
             if (onCloseMobile) onCloseMobile();
           }}
+          aria-label={currentUser ? `Profile for ${currentUser.name}` : 'Sign in or register'}
           className={`w-full flex items-center rounded-xl text-xs font-semibold bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.08] hover:border-indigo-500/40 text-slate-300 hover:text-white transition-all duration-300 cursor-pointer group overflow-hidden ${
             isExpanded ? 'justify-between px-3 py-2' : 'justify-center px-0 h-10'
           }`}
@@ -601,12 +603,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="text-xs font-bold text-white truncate">
                 {currentUser ? currentUser.name : 'Guest Student'}
               </div>
-              <div className="text-[10px] text-indigo-300 truncate">
+              <div className="text-[11px] text-indigo-300 truncate">
                 {currentUser ? `${currentUser.grade} • ${currentUser.country}` : 'Log In / Register'}
               </div>
             </div>
           </div>
-          <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[10px] text-slate-500 group-hover:text-indigo-400 shrink-0 font-mono ${
+          <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[11px] text-slate-500 group-hover:text-indigo-400 shrink-0 font-mono ${
             isExpanded ? 'opacity-100 max-w-[45px]' : 'opacity-0 max-w-0 pointer-events-none'
           }`}>
             {currentUser ? 'Profile' : 'Sign In'}
@@ -619,6 +621,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onOpenSettings();
             if (onCloseMobile) onCloseMobile();
           }}
+          aria-label="Settings"
           title={`Settings (Level ${stats.level})`}
           className={`w-full flex items-center rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-300 cursor-pointer overflow-hidden ${
             isExpanded ? 'justify-between px-3 py-2' : 'justify-center px-0 h-10'
@@ -634,7 +637,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Settings
             </span>
           </div>
-          <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[10px] text-slate-500 ${
+          <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[11px] text-slate-500 ${
             isExpanded ? 'opacity-100 max-w-[40px]' : 'opacity-0 max-w-0 pointer-events-none'
           }`}>
             Lvl {stats.level}
@@ -645,6 +648,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {!isMobile && (
           <button
             onClick={toggleCollapse}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={isCollapsed ? "Pin sidebar open [Ctrl+[]" : "Shrink sidebar (leave only icons) [Ctrl+[]"}
             className={`w-full flex items-center rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-200 hover:bg-white/[0.06] transition-all duration-300 cursor-pointer overflow-hidden border border-transparent hover:border-white/[0.08] ${
               isExpanded ? 'justify-between px-3 py-2' : 'justify-center px-0 h-10'
@@ -664,7 +668,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {isCollapsed ? 'Pin Sidebar' : 'Shrink Sidebar'}
               </span>
             </div>
-            <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[9px] font-mono text-slate-500 bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.05] ${
+            <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[11px] font-mono text-slate-500 bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.05] ${
               isExpanded ? 'opacity-100 max-w-[45px]' : 'opacity-0 max-w-0 pointer-events-none'
             }`}>
               Ctrl+[

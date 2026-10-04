@@ -198,7 +198,7 @@ export const SplitSourceReader: React.FC<SplitSourceReaderProps> = ({
               <h3 className="text-xs sm:text-sm font-bold text-white truncate font-display">
                 {sourceDocument?.name || 'Primary Source Document'}
               </h3>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                 Ground Truth
               </span>
             </div>
@@ -260,7 +260,7 @@ export const SplitSourceReader: React.FC<SplitSourceReaderProps> = ({
               >
                 <ZoomOut className="w-3.5 h-3.5" />
               </button>
-              <span className="text-[10px] font-mono px-1 font-bold text-slate-300">
+              <span className="text-[11px] font-mono px-1 font-bold text-slate-300">
                 {Math.round(zoomLevel * 100)}%
               </span>
               <button
@@ -325,7 +325,7 @@ export const SplitSourceReader: React.FC<SplitSourceReaderProps> = ({
         <div className="px-4 py-2.5 bg-indigo-950/70 border-b border-indigo-500/30 flex items-start gap-2.5 text-xs text-indigo-200">
           <Bookmark className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <span className="font-bold text-white uppercase text-[10px] tracking-wider block font-display">
+            <span className="font-bold text-white uppercase text-[11px] tracking-wider block font-display">
               Active Concept Grounding Evidence (Page {currentPage}):
             </span>
             <p className="italic text-slate-300 truncate font-serif">
@@ -333,7 +333,7 @@ export const SplitSourceReader: React.FC<SplitSourceReaderProps> = ({
             </p>
           </div>
           {activeAnchorSnippet.length > 80 && (
-            <span className="text-[10px] font-mono text-indigo-400 shrink-0">100% Match</span>
+            <span className="text-[11px] font-mono text-indigo-400 shrink-0">100% Match</span>
           )}
         </div>
       )}

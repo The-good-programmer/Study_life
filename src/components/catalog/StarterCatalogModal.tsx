@@ -141,7 +141,8 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+            aria-label="Close catalog"
+            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -230,19 +231,19 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
                     {/* Top Meta Header */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
                           {deck.category}
                         </span>
 
                         <div className="flex items-center gap-1.5">
                           {deck.hasImageOcclusion && (
-                            <span className="text-[10px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30" title="Includes anatomical / diagram image occlusion cards">
+                            <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30" title="Includes anatomical / diagram image occlusion cards">
                               <Eye className="w-3 h-3 text-amber-400" />
                               <span>Image Occlusion</span>
                             </span>
                           )}
                           {deck.hasSourcePdf && (
-                            <span className="text-[10px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-300 border border-sky-500/30" title="Includes primary source PDF with page coordinates">
+                            <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-300 border border-sky-500/30" title="Includes primary source PDF with page coordinates">
                               <FileText className="w-3 h-3 text-sky-400" />
                               <span>PDF Grounded</span>
                             </span>
@@ -261,7 +262,7 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
                       {/* Tag badges */}
                       <div className="flex flex-wrap gap-1 pt-1">
                         {deck.tags.map((tag) => (
-                          <span key={tag} className="text-[10px] text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded-md">
+                          <span key={tag} className="text-[11px] text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded-md">
                             #{tag}
                           </span>
                         ))}
@@ -286,7 +287,7 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
                           </span>
                         </div>
 
-                        <span className="text-[10px] text-slate-500 font-medium">
+                        <span className="text-[11px] text-slate-500 font-medium">
                           {deck.difficulty}
                         </span>
                       </div>
@@ -382,7 +383,7 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
             {/* Inspector Header */}
             <div className="p-6 border-b border-white/[0.08] bg-slate-950/80 flex items-start justify-between">
               <div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
                   {previewDeck.category}
                 </span>
                 <h3 className="text-lg font-bold text-white mt-1 font-display">
@@ -415,7 +416,7 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
                     >
                       <div className="flex items-center justify-between text-xs font-bold text-white">
                         <span className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 flex items-center justify-center text-[10px]">
+                          <span className="w-5 h-5 rounded-full bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 flex items-center justify-center text-[11px]">
                             {idx + 1}
                           </span>
                           <span>{concept.title}</span>
@@ -430,7 +431,7 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
                       </div>
 
                       <div className="space-y-1 pt-1">
-                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Key Takeaways:</span>
+                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Key Takeaways:</span>
                         <ul className="text-xs text-slate-400 space-y-1 pl-4 list-disc">
                           {concept.coreTakeaways.map((takeaway, tIdx) => (
                             <li key={tIdx}>{takeaway}</li>
@@ -439,7 +440,7 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
                       </div>
 
                       {concept.sourceAnchor && (
-                        <div className="pt-2 flex items-center gap-1.5 text-[10px] text-sky-400">
+                        <div className="pt-2 flex items-center gap-1.5 text-[11px] text-sky-400">
                           <FileText className="w-3 h-3" />
                           <span>Grounded in {concept.sourceAnchor.sourceName} (Page {concept.sourceAnchor.pageNumber})</span>
                         </div>
@@ -457,7 +458,7 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
                 <div className="space-y-2">
                   {previewDeck.session.concepts.flatMap(c => c.retrievalCards).slice(0, 3).map((card) => (
                     <div key={card.id} className="p-3 rounded-xl bg-slate-950/40 border border-white/[0.06] text-xs space-y-1">
-                      <div className="flex items-center justify-between text-[10px] text-slate-500">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500">
                         <span className="uppercase font-semibold text-indigo-400">{card.cardType || 'standard'} card</span>
                         {card.cardType === 'image-occlusion' && (
                           <span className="text-amber-400 flex items-center gap-1">

@@ -404,7 +404,7 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
             <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight font-display">
               Image Occlusion Card Architect
             </h2>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono uppercase font-bold">
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono uppercase font-bold">
               Visual Recall
             </span>
           </div>
@@ -660,7 +660,7 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
                       height: `${mask.height}%`,
                     }}
                   >
-                    <span className="text-[10px] font-bold font-mono px-1 truncate select-none pointer-events-none">
+                    <span className="text-[11px] font-bold font-mono px-1 truncate select-none pointer-events-none">
                       #{idx + 1} {mask.label || 'Covered'}
                     </span>
                   </div>
@@ -696,7 +696,7 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
         <div className="lg:col-span-4 space-y-4">
           <div className="text-xs font-bold text-white uppercase tracking-wider font-display px-1 flex items-center justify-between">
             <span>Mask Inspector</span>
-            <span className="text-[10px] font-mono text-indigo-400 font-bold">
+            <span className="text-[11px] font-mono text-indigo-400 font-bold">
               {masks.length} Created
             </span>
           </div>
@@ -777,7 +777,7 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-2 truncate">
-                      <span className="w-5 h-5 rounded-md bg-white/[0.08] flex items-center justify-center font-mono font-bold text-[10px]">
+                      <span className="w-5 h-5 rounded-md bg-white/[0.08] flex items-center justify-center font-mono font-bold text-[11px]">
                         {idx + 1}
                       </span>
                       <span className="font-medium truncate">{m.label || 'Unlabeled Mask'}</span>

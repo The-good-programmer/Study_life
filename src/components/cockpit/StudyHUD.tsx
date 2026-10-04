@@ -67,10 +67,10 @@ export const StudyHUD: React.FC<StudyHUDProps> = ({
           </div>
 
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold">
               <span className="text-indigo-300 font-display uppercase tracking-wider font-mono">Cognitive Cockpit</span>
               {combo >= 2 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono text-[9px] flex items-center gap-0.5">
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono text-[11px] flex items-center gap-0.5">
                   <Flame className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
                   {combo}x Flow
                 </span>
@@ -134,7 +134,7 @@ export const StudyHUD: React.FC<StudyHUDProps> = ({
 
             <div className="space-y-3 text-xs">
               <div className="space-y-1.5">
-                <div className="font-bold text-slate-300 uppercase text-[10px] tracking-wider font-mono">
+                <div className="font-bold text-slate-300 uppercase text-[11px] tracking-wider font-mono">
                   Keyboard Controls
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-slate-300">
@@ -166,7 +166,7 @@ export const StudyHUD: React.FC<StudyHUDProps> = ({
               </div>
 
               <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
-                <div className="font-bold text-slate-300 uppercase text-[10px] tracking-wider font-mono flex items-center gap-1.5">
+                <div className="font-bold text-slate-300 uppercase text-[11px] tracking-wider font-mono flex items-center gap-1.5">
                   <Gamepad2 className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Bluetooth Controller (Joy-Con / 8BitDo / Xbox)</span>
                 </div>

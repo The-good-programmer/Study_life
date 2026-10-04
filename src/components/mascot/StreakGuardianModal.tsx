@@ -186,19 +186,19 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
         {/* Synaptic Freeze & Stats Details */}
         <div className="grid grid-cols-2 gap-3 z-10 relative">
           <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08] text-left space-y-1">
-            <div className="text-[10px] text-slate-400 font-mono">Today's Focus</div>
+            <div className="text-[11px] text-slate-400 font-mono">Today's Focus</div>
             <div className="text-sm font-bold text-white flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-indigo-400" />
               <span>{stats.todayMinutes}m / {stats.dailyGoalMinutes}m</span>
             </div>
-            <div className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+            <div className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
               {isProtectedToday ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3 text-amber-400" />}
               <span>{isProtectedToday ? 'Goal Achieved' : 'Pending Review'}</span>
             </div>
           </div>
 
           <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08] text-left space-y-1">
-            <div className="text-[10px] text-slate-400 font-mono">Synaptic Freeze</div>
+            <div className="text-[11px] text-slate-400 font-mono">Synaptic Freeze</div>
             <div className="text-sm font-bold text-white flex items-center gap-1.5">
               <Snowflake className="w-3.5 h-3.5 text-cyan-400" />
               <span>{hasFreeze ? 'Equipped' : 'Not Active'}</span>
@@ -206,12 +206,12 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
             {!hasFreeze ? (
               <button
                 onClick={handleBuyFreeze}
-                className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold underline cursor-pointer"
+                className="text-[11px] text-cyan-400 hover:text-cyan-300 font-bold underline cursor-pointer"
               >
                 Equip (100 XP)
               </button>
             ) : (
-              <span className="text-[10px] text-cyan-300">Shields 1 Missed Day</span>
+              <span className="text-[11px] text-cyan-300">Shields 1 Missed Day</span>
             )}
           </div>
         </div>
@@ -225,7 +225,7 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
               </div>
               <div>
                 <span className="text-xs font-bold text-white block">Streak Push Reminders</span>
-                <span className="text-[10px] text-slate-400">Lottie nudges you at 7:00 PM</span>
+                <span className="text-[11px] text-slate-400">Lottie nudges you at 7:00 PM</span>
               </div>
             </div>
             <button
@@ -242,7 +242,7 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
           </div>
 
           {notifEnabled && (
-            <div className="flex items-center justify-between pt-1 border-t border-white/[0.06] text-[10px]">
+            <div className="flex items-center justify-between pt-1 border-t border-white/[0.06] text-[11px]">
               <span className="text-emerald-400 font-medium">Daily alarm set for 19:00</span>
               <button
                 type="button"

@@ -33,6 +33,7 @@ import { AuthService } from '../../services/authService';
 import { GoogleAuthService } from '../../services/googleAuthService';
 import { StorageService } from '../../services/storageService';
 import { EDUCATION_COUNTRIES, EducationCatalog } from '../../services/educationCatalog';
+import { Dialog } from '../common/Dialog';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -461,10 +462,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const currentStats = StorageService.getStats();
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn">
+    <Dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      titleId="auth-modal-title"
+      className="max-w-lg"
+    >
       <div 
-        className="relative w-full max-w-lg bg-[#0e111d] border border-white/[0.12] rounded-3xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[92vh]"
-        onClick={e => e.stopPropagation()}
+        className="relative w-full bg-[#0e111d] border border-white/[0.12] rounded-3xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[92vh]"
       >
         {/* Top Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-white/[0.02]">
@@ -473,7 +478,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <ShieldCheck className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white font-display flex items-center gap-2">
+              <h2 id="auth-modal-title" className="text-base font-bold text-white font-display flex items-center gap-2">
                 {currentUser
                   ? 'Student Account'
                   : tab === 'google-setup'
@@ -481,7 +486,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   : tab === 'register'
                   ? 'Create Account'
                   : 'Welcome Back'}
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <span className="text-[11px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                   100% Offline
                 </span>
               </h2>
@@ -497,6 +502,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <button
             onClick={onClose}
+            aria-label="Close student account"
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer"
             title="Close"
           >
@@ -711,7 +717,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                               <span>{acc.name}</span>
                               {acc.provider === 'google' && <GoogleIcon className="w-2.5 h-2.5 shrink-0" />}
                             </div>
-                            <div className="text-[10px] text-slate-400 truncate">{acc.email}</div>
+                            <div className="text-[11px] text-slate-400 truncate">{acc.email}</div>
                           </div>
                         </button>
                       ))}
@@ -794,7 +800,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
                   <span>Choose Profile Avatar</span>
-                  <span className="text-[10px] text-slate-500">Selected: {regAvatar}</span>
+                  <span className="text-[11px] text-slate-500">Selected: {regAvatar}</span>
                 </label>
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                   {AVATAR_OPTIONS.map(av => (
@@ -855,7 +861,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Create Password
                   </span>
                   {regPassword && (
-                    <span className={`text-[10px] font-semibold ${regStrength.color.split(' ')[0]}`}>
+                    <span className={`text-[11px] font-semibold ${regStrength.color.split(' ')[0]}`}>
                       {regStrength.label}
                     </span>
                   )}
@@ -895,7 +901,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />
                     Educational System & Grade
                   </span>
-                  <span className="text-[10px] text-slate-400">Calibrates AI study depth</span>
+                  <span className="text-[11px] text-slate-400">Calibrates AI study depth</span>
                 </div>
 
                 {/* Country Dropdown */}
@@ -905,7 +911,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <Globe className="w-3 h-3 text-indigo-400" />
                       Country & System
                     </span>
-                    <span className="text-[10px] text-slate-500">{regCountryConfig.systemName}</span>
+                    <span className="text-[11px] text-slate-500">{regCountryConfig.systemName}</span>
                   </label>
                   <div className="relative">
                     <button
@@ -970,9 +976,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         >
                           <div className="flex items-center justify-between">
                             <span className="font-semibold truncate">{g.label}</span>
-                            <span className="text-[9px] font-mono text-slate-400 shrink-0">~{g.typicalAge}y</span>
+                            <span className="text-[11px] font-mono text-slate-400 shrink-0">~{g.typicalAge}y</span>
                           </div>
-                          <span className="text-[10px] text-slate-500 block truncate">{g.stage}</span>
+                          <span className="text-[11px] text-slate-500 block truncate">{g.stage}</span>
                         </button>
                       );
                     })}
@@ -987,7 +993,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       }`}
                     >
                       <div className="font-semibold">Other / Custom Grade</div>
-                      <span className="text-[10px] text-slate-500 block">Type custom level</span>
+                      <span className="text-[11px] text-slate-500 block">Type custom level</span>
                     </button>
                   </div>
 
@@ -1058,7 +1064,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
                       Guest Study Progress Detected
                     </span>
-                    <span className="text-[10px] font-mono text-slate-400">
+                    <span className="text-[11px] font-mono text-slate-400">
                       {guestSummary.deckCount} decks • {guestSummary.cardCount} cards • {guestSummary.xp} XP
                     </span>
                   </div>
@@ -1128,7 +1134,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-white truncate flex items-center gap-1.5">
                       <span>{googleProfilePending.name}</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1 font-mono">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1 font-mono">
                         <CheckCircle2 className="w-2.5 h-2.5 text-blue-400" />
                         Verified Google
                       </span>
@@ -1153,7 +1159,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />
                     Target Grade & Educational System
                   </span>
-                  <span className="text-[10px] text-slate-400">Calibrates AI study depth</span>
+                  <span className="text-[11px] text-slate-400">Calibrates AI study depth</span>
                 </div>
 
                 {/* Country Dropdown */}
@@ -1163,7 +1169,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <Globe className="w-3 h-3 text-indigo-400" />
                       Country & System
                     </span>
-                    <span className="text-[10px] text-slate-500">{googleCountryConfig.systemName}</span>
+                    <span className="text-[11px] text-slate-500">{googleCountryConfig.systemName}</span>
                   </label>
                   <div className="relative">
                     <button
@@ -1228,9 +1234,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         >
                           <div className="flex items-center justify-between">
                             <span className="font-semibold truncate">{g.label}</span>
-                            <span className="text-[9px] font-mono text-slate-400 shrink-0">~{g.typicalAge}y</span>
+                            <span className="text-[11px] font-mono text-slate-400 shrink-0">~{g.typicalAge}y</span>
                           </div>
-                          <span className="text-[10px] text-slate-500 block truncate">{g.stage}</span>
+                          <span className="text-[11px] text-slate-500 block truncate">{g.stage}</span>
                         </button>
                       );
                     })}
@@ -1245,7 +1251,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       }`}
                     >
                       <div className="font-semibold">Other / Custom Grade</div>
-                      <span className="text-[10px] text-slate-500 block">Type custom level</span>
+                      <span className="text-[11px] text-slate-500 block">Type custom level</span>
                     </button>
                   </div>
 
@@ -1301,7 +1307,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
                       Guest Study Progress Detected
                     </span>
-                    <span className="text-[10px] font-mono text-slate-400">
+                    <span className="text-[11px] font-mono text-slate-400">
                       {guestSummary.deckCount} decks • {guestSummary.cardCount} cards • {guestSummary.xp} XP
                     </span>
                   </div>
@@ -1367,12 +1373,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <h3 className="text-base font-extrabold text-white flex items-center gap-2 flex-wrap">
                       <span>{currentUser.name}</span>
                       {currentUser.provider === 'google' && (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white text-slate-900 flex items-center gap-1 shadow-sm">
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-white text-slate-900 flex items-center gap-1 shadow-sm">
                           <GoogleIcon className="w-3 h-3" />
                           <span>Google</span>
                         </span>
                       )}
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5">
+                      <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5">
                         <span>{EducationCatalog.getCountry(currentUser.country).flag}</span>
                         <span>{currentUser.grade} • Age {currentUser.age}</span>
                       </span>
@@ -1409,7 +1415,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <span>Level {currentStats.level}</span>
                   </div>
                   <div className="text-sm font-bold text-white truncate">{currentStats.levelTitle}</div>
-                  <div className="text-[10px] text-slate-500">{currentStats.xp} XP total</div>
+                  <div className="text-[11px] text-slate-500">{currentStats.xp} XP total</div>
                 </div>
 
                 <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/[0.08] space-y-1">
@@ -1418,7 +1424,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <span>Streak</span>
                   </div>
                   <div className="text-sm font-bold text-white">{currentStats.currentStreak} Days</div>
-                  <div className="text-[10px] text-slate-500">Active consistency</div>
+                  <div className="text-[11px] text-slate-500">Active consistency</div>
                 </div>
 
                 <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/[0.08] space-y-1">
@@ -1427,7 +1433,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <span>Total Time</span>
                   </div>
                   <div className="text-sm font-bold text-white">{currentStats.totalStudyMinutes}m</div>
-                  <div className="text-[10px] text-slate-500">Deep study focus</div>
+                  <div className="text-[11px] text-slate-500">Deep study focus</div>
                 </div>
 
                 <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/[0.08] space-y-1">
@@ -1436,7 +1442,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <span>Retention</span>
                   </div>
                   <div className="text-sm font-bold text-white">{Math.round((currentStats.targetRetention || 0.90) * 100)}%</div>
-                  <div className="text-[10px] text-slate-500">FSRS Target rate</div>
+                  <div className="text-[11px] text-slate-500">FSRS Target rate</div>
                 </div>
               </div>
 
@@ -1488,7 +1494,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
                   <span>Profile Avatar</span>
-                  <span className="text-[10px] text-slate-500">Selected: {editAvatar}</span>
+                  <span className="text-[11px] text-slate-500">Selected: {editAvatar}</span>
                 </label>
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                   {AVATAR_OPTIONS.map(av => (
@@ -1530,7 +1536,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />
                     Target Grade & Educational System
                   </span>
-                  <span className="text-[10px] text-slate-400">Calibrates AI study depth</span>
+                  <span className="text-[11px] text-slate-400">Calibrates AI study depth</span>
                 </div>
 
                 {/* Country Dropdown */}
@@ -1540,7 +1546,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <Globe className="w-3 h-3 text-indigo-400" />
                       Country & System
                     </span>
-                    <span className="text-[10px] text-slate-500">{editCountryConfig.systemName}</span>
+                    <span className="text-[11px] text-slate-500">{editCountryConfig.systemName}</span>
                   </label>
                   <div className="relative">
                     <button
@@ -1605,9 +1611,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         >
                           <div className="flex items-center justify-between">
                             <span className="font-semibold truncate">{g.label}</span>
-                            <span className="text-[9px] font-mono text-slate-400 shrink-0">~{g.typicalAge}y</span>
+                            <span className="text-[11px] font-mono text-slate-400 shrink-0">~{g.typicalAge}y</span>
                           </div>
-                          <span className="text-[10px] text-slate-500 block truncate">{g.stage}</span>
+                          <span className="text-[11px] text-slate-500 block truncate">{g.stage}</span>
                         </button>
                       );
                     })}
@@ -1622,7 +1628,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       }`}
                     >
                       <div className="font-semibold">Other / Custom Grade</div>
-                      <span className="text-[10px] text-slate-500 block">Type custom level</span>
+                      <span className="text-[11px] text-slate-500 block">Type custom level</span>
                     </button>
                   </div>
 
@@ -1760,18 +1766,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           <div className="text-xs font-bold text-white truncate flex items-center gap-2">
                             {acc.name}
                             {acc.provider === 'google' && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white text-slate-900 font-medium flex items-center gap-1 shadow-sm">
+                              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-white text-slate-900 font-medium flex items-center gap-1 shadow-sm">
                                 <GoogleIcon className="w-2.5 h-2.5" />
                                 Google
                               </span>
                             )}
                             {isCurrent && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 font-mono">
+                              <span className="text-[11px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 font-mono">
                                 Active
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] text-slate-400 truncate">{acc.email}</div>
+                          <div className="text-[11px] text-slate-400 truncate">{acc.email}</div>
                         </div>
                       </div>
 
@@ -1829,7 +1835,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div>
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
                     <span>Connect Google Account</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
                       OAuth 2.0
                     </span>
                   </h3>
@@ -1861,7 +1867,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </li>
                 <li>Click <strong>+ Create Credentials</strong> → <strong>OAuth client ID</strong> (Web application)</li>
                 <li>
-                  Add Authorized JavaScript origin: <code className="px-1.5 py-0.5 rounded bg-slate-900 text-indigo-300 font-mono text-[10px] select-all">http://localhost:5173</code>
+                  Add Authorized JavaScript origin: <code className="px-1.5 py-0.5 rounded bg-slate-900 text-indigo-300 font-mono text-[11px] select-all">http://localhost:5173</code>
                 </li>
               </ol>
             </div>
@@ -1886,7 +1892,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   onChange={e => setCustomClientIdInput(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-white/[0.12] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono"
                 />
-                <span className="text-[10px] text-slate-500 block">
+                <span className="text-[11px] text-slate-500 block">
                   You can also save this permanently in <code className="text-slate-400">.env.local</code> as <code className="text-slate-400">VITE_GOOGLE_CLIENT_ID</code>.
                 </span>
               </div>
@@ -1918,6 +1924,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </Dialog>
   );
 };

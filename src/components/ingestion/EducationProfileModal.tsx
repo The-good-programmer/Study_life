@@ -103,7 +103,7 @@ export const EducationProfileModal: React.FC<EducationProfileModalProps> = ({
             <div>
               <h2 className="text-base font-bold text-white font-display flex items-center gap-2">
                 {title}
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                <span className="text-[11px] uppercase font-mono px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
                   AI Calibrated
                 </span>
               </h2>
@@ -129,7 +129,7 @@ export const EducationProfileModal: React.FC<EducationProfileModalProps> = ({
                 <Globe className="w-3.5 h-3.5 text-indigo-400" />
                 Country & Educational System
               </span>
-              <span className="text-[10px] text-slate-400">{countryConfig.systemName}</span>
+              <span className="text-[11px] text-slate-400">{countryConfig.systemName}</span>
             </label>
 
             <div className="relative">
@@ -141,7 +141,7 @@ export const EducationProfileModal: React.FC<EducationProfileModalProps> = ({
                 <div className="flex items-center gap-2.5">
                   <span className="text-xl">{countryConfig.flag}</span>
                   <span className="font-semibold">{countryConfig.name}</span>
-                  <span className="text-[10px] text-slate-500 font-mono">({countryConfig.systemName})</span>
+                  <span className="text-[11px] text-slate-500 font-mono">({countryConfig.systemName})</span>
                 </div>
                 <ChevronDown className="w-4 h-4 text-slate-400" />
               </button>
@@ -163,7 +163,7 @@ export const EducationProfileModal: React.FC<EducationProfileModalProps> = ({
                         <span className="text-lg">{c.flag}</span>
                         <div>
                           <span className="font-semibold text-xs block">{c.name}</span>
-                          <span className={`text-[10px] ${selectedCountryName === c.name ? 'text-indigo-200' : 'text-slate-500'}`}>
+                          <span className={`text-[11px] ${selectedCountryName === c.name ? 'text-indigo-200' : 'text-slate-500'}`}>
                             {c.systemName}
                           </span>
                         </div>
@@ -183,7 +183,7 @@ export const EducationProfileModal: React.FC<EducationProfileModalProps> = ({
                 <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />
                 Select Your Grade in {countryConfig.name}
               </span>
-              <span className="text-[10px] text-indigo-300">Sets difficulty & curriculum</span>
+              <span className="text-[11px] text-indigo-300">Sets difficulty & curriculum</span>
             </label>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
@@ -202,11 +202,11 @@ export const EducationProfileModal: React.FC<EducationProfileModalProps> = ({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-100">{g.label}</span>
-                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-white/[0.08] text-slate-400">
+                      <span className="text-[11px] font-mono px-1.5 py-0.2 rounded bg-white/[0.08] text-slate-400">
                         ~{g.typicalAge} yrs
                       </span>
                     </div>
-                    <span className="text-[10px] text-slate-400 block mt-0.5">{g.stage}</span>
+                    <span className="text-[11px] text-slate-400 block mt-0.5">{g.stage}</span>
                   </button>
                 );
               })}
@@ -223,11 +223,11 @@ export const EducationProfileModal: React.FC<EducationProfileModalProps> = ({
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-200">Other / Custom Grade</span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-white/[0.08] text-slate-400">
+                  <span className="text-[11px] font-mono px-1.5 py-0.2 rounded bg-white/[0.08] text-slate-400">
                     Type own
                   </span>
                 </div>
-                <span className="text-[10px] text-slate-400 block mt-0.5">Custom academic level</span>
+                <span className="text-[11px] text-slate-400 block mt-0.5">Custom academic level</span>
               </button>
             </div>
 
@@ -282,7 +282,7 @@ export const EducationProfileModal: React.FC<EducationProfileModalProps> = ({
                 +
               </button>
             </div>
-            <p className="text-[10px] text-slate-500">
+            <p className="text-[11px] text-slate-500">
               Gemini adjusts sentence structures, vocabulary, and relatable analogies directly to a {age}-year-old mind.
             </p>
           </div>

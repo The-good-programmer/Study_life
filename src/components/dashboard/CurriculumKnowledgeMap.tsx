@@ -289,7 +289,7 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
               <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight font-display">
                 Macro-Curriculum Knowledge Tree
               </h2>
-              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono font-bold uppercase tracking-wider">
+              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 text-[11px] font-mono font-bold uppercase tracking-wider">
                 Knowledge Space Theory
               </span>
             </div>
@@ -338,7 +338,7 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
             <Layers className="w-4 h-4 text-indigo-400" />
           </div>
           <div className="text-2xl font-black text-white font-mono">{aggregateStats.totalNodes}</div>
-          <div className="text-[10px] text-slate-500">Atomic Checkpoints</div>
+          <div className="text-[11px] text-slate-500">Atomic Checkpoints</div>
         </div>
 
         <div className="p-4 rounded-2xl glass-panel space-y-1">
@@ -347,7 +347,7 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-black text-emerald-400 font-mono">{aggregateStats.masteredCount}</div>
-          <div className="text-[10px] text-slate-500">Stability ≥ 7 Days</div>
+          <div className="text-[11px] text-slate-500">Stability ≥ 7 Days</div>
         </div>
 
         <div className="p-4 rounded-2xl glass-panel space-y-1">
@@ -356,7 +356,7 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
             <Zap className="w-4 h-4 text-cyan-400" />
           </div>
           <div className="text-2xl font-black text-cyan-400 font-mono">{aggregateStats.consolidatingCount}</div>
-          <div className="text-[10px] text-slate-500">Stability 1–7 Days</div>
+          <div className="text-[11px] text-slate-500">Stability 1–7 Days</div>
         </div>
 
         <div className="p-4 rounded-2xl glass-panel space-y-1">
@@ -365,7 +365,7 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
             <AlertTriangle className="w-4 h-4 text-rose-400" />
           </div>
           <div className="text-2xl font-black text-rose-400 font-mono">{aggregateStats.fragileCount}</div>
-          <div className="text-[10px] text-slate-500">Lapsed / Pre-Test Misses</div>
+          <div className="text-[11px] text-slate-500">Lapsed / Pre-Test Misses</div>
         </div>
 
         <div className="p-4 rounded-2xl glass-panel space-y-1 col-span-2 sm:col-span-1">
@@ -417,7 +417,7 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
                 <div className="p-5 rounded-3xl glass-panel flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[10px] font-mono font-bold uppercase">
+                      <span className="px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[11px] font-mono font-bold uppercase">
                         {session.category || 'General Subject'}
                       </span>
                       <span className="text-xs text-slate-500 font-mono">
@@ -434,7 +434,7 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
                       <div className="text-xs font-mono font-bold text-indigo-300">
                         {courseMasteredCount} / {nodes.length} Mastered
                       </div>
-                      <div className="text-[10px] text-slate-500 font-mono">
+                      <div className="text-[11px] text-slate-500 font-mono">
                         {courseProgress}% Schema Consolidation
                       </div>
                     </div>
@@ -490,24 +490,24 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div className="space-y-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-[10px] font-mono text-slate-400 font-bold uppercase">
+                                <span className="text-[11px] font-mono text-slate-400 font-bold uppercase">
                                   Checkpoint {String(nodeIdx + 1).padStart(2, '0')}
                                 </span>
                                 
                                 {node.isFrontier && (
-                                  <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-mono font-bold flex items-center gap-1">
+                                  <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[11px] font-mono font-bold flex items-center gap-1">
                                     <Target className="w-3 h-3 text-indigo-400" />
                                     Active Frontier (ZPD)
                                   </span>
                                 )}
 
-                                <span className={`px-2 py-0.5 rounded-md border text-[10px] font-mono font-semibold flex items-center gap-1 ${style.badge}`}>
+                                <span className={`px-2 py-0.5 rounded-md border text-[11px] font-mono font-semibold flex items-center gap-1 ${style.badge}`}>
                                   <StatusIcon className="w-3 h-3" />
                                   <span>{node.statusLabel}</span>
                                 </span>
 
                                 {node.diagnosticState === 'missed' && (
-                                  <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-mono font-bold">
+                                  <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[11px] font-mono font-bold">
                                     Pre-Flight Attention Gap
                                   </span>
                                 )}
@@ -524,7 +524,7 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
                                 <div className="text-slate-200 font-bold">
                                   {node.totalCards} cards
                                 </div>
-                                <div className="text-[10px] text-slate-500">
+                                <div className="text-[11px] text-slate-500">
                                   {node.stabilityAvg > 0 ? `S: ${node.stabilityAvg.toFixed(1)}d` : 'Unrated'}
                                 </div>
                               </div>
@@ -560,14 +560,14 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
             <div className="p-6 border-b border-white/[0.08] flex items-start justify-between gap-4 bg-slate-950/60">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono font-bold uppercase">
+                  <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-mono font-bold uppercase">
                     Checkpoint {String(selectedNode.index + 1).padStart(2, '0')}
                   </span>
                   <span className="text-xs text-slate-400 font-mono">
                     {selectedNode.concept.estimatedMinutes || 10} min estimated
                   </span>
                   {selectedNode.isFrontier && (
-                    <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold">
+                    <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-mono font-bold">
                       Recommended Next Target
                     </span>
                   )}
@@ -702,7 +702,7 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
                       <div className="truncate flex-1 font-medium text-slate-300">
                         {idx + 1}. <MathRenderer text={card.question} />
                       </div>
-                      <span className="text-[10px] font-mono text-slate-500 shrink-0">
+                      <span className="text-[11px] font-mono text-slate-500 shrink-0">
                         {card.stability ? `S: ${card.stability.toFixed(1)}d` : 'New'}
                       </span>
                     </div>

@@ -281,7 +281,7 @@ export const MatchArena: React.FC<MatchArenaProps> = ({ session, onBack, onLaunc
       {!isCompleted ? (
         <div className="space-y-4">
           <div className="flex items-center justify-between text-xs text-slate-400 px-2">
-            <span>Tap or press numeric keys <span className="font-mono text-indigo-300 bg-white/[0.08] px-1.5 py-0.5 rounded text-[10px]">1-9</span> to match prompts with answers.</span>
+            <span>Tap or press numeric keys <span className="font-mono text-indigo-300 bg-white/[0.08] px-1.5 py-0.5 rounded text-[11px]">1-9</span> to match prompts with answers.</span>
             <span>
               {tiles.filter(t => t.isMatched).length / 2} / {tiles.length / 2} Pairs Matched
             </span>
@@ -328,11 +328,11 @@ export const MatchArena: React.FC<MatchArenaProps> = ({ session, onBack, onLaunc
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                       {tile.type === 'question' ? 'Prompt' : 'Target Match'}
                     </span>
                     {activeIndex >= 0 && activeIndex < 9 && (
-                      <span className="text-[9px] font-mono text-slate-500 bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded">
+                      <span className="text-[11px] font-mono text-slate-500 bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded">
                         {activeIndex + 1}
                       </span>
                     )}
@@ -343,7 +343,7 @@ export const MatchArena: React.FC<MatchArenaProps> = ({ session, onBack, onLaunc
                   </div>
 
                   {isSelected && (
-                    <div className="mt-2 text-[10px] font-semibold text-indigo-300 flex items-center gap-1">
+                    <div className="mt-2 text-[11px] font-semibold text-indigo-300 flex items-center gap-1">
                       <Sparkles className="w-3 h-3 text-indigo-400" />
                       <span>Select match...</span>
                     </div>
@@ -374,21 +374,21 @@ export const MatchArena: React.FC<MatchArenaProps> = ({ session, onBack, onLaunc
 
           <div className="grid grid-cols-3 gap-3 p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] text-center">
             <div className="space-y-0.5">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold">Time</span>
+              <span className="text-[11px] text-slate-400 uppercase font-semibold">Time</span>
               <div className="text-lg font-bold text-amber-400 font-mono">
                 {formatSeconds(elapsedMs)}s
               </div>
             </div>
 
             <div className="space-y-0.5 border-x border-white/[0.08]">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold">Max Combo</span>
+              <span className="text-[11px] text-slate-400 uppercase font-semibold">Max Combo</span>
               <div className="text-lg font-bold text-indigo-400 font-mono">
                 {maxStreak}x
               </div>
             </div>
 
             <div className="space-y-0.5">
-              <span className="text-[10px] text-slate-400 uppercase font-semibold">Errors</span>
+              <span className="text-[11px] text-slate-400 uppercase font-semibold">Errors</span>
               <div className="text-lg font-bold text-rose-400 font-mono">
                 {mistakesCount}
               </div>
