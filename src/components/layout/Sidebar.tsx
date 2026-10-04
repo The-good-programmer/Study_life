@@ -10,13 +10,13 @@ import {
   Play, 
   Settings, 
   X,
-  Volume2,
   VolumeX,
   WifiOff,
   BrainCircuit,
   User,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  BookOpen
 } from 'lucide-react';
 import type { UserStats, UserAccount } from '../../types';
 import { soundEngine } from '../../services/soundEngine';
@@ -74,7 +74,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   });
 
   const isCollapsed = propIsCollapsed !== undefined ? propIsCollapsed : internalCollapsed;
-  const [isHovered, setIsHovered] = useState(false);
 
   const toggleCollapse = useCallback(() => {
     const next = !isCollapsed;
@@ -117,54 +116,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Effective expanded state for desktop:
-  // Expanded if NOT collapsed, OR if collapsed but currently hovered
-  const isEffectiveExpanded = !isCollapsed || isHovered;
-
   const renderNavContent = (isExpanded: boolean, isMobile: boolean = false) => (
-    <div className="flex flex-col h-full justify-between gap-4">
-      {/* Top Header & Navigation Links */}
-      <div className="space-y-5 flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-white/10 pr-0.5">
-        {/* Brand & Collapse Control */}
-        <div className="flex items-center justify-between min-h-[42px] relative">
+    <div className="flex flex-col h-full justify-between select-none relative z-10">
+      {/* Top Header & Main Navigation */}
+      <div className="space-y-4 flex-1 overflow-y-auto overflow-x-hidden no-scrollbar pr-0.5">
+        
+        {/* Brand & Collapse Header */}
+        <div className={`flex items-center min-h-[46px] shrink-0 ${isExpanded ? 'justify-between px-1' : 'justify-center'}`}>
           <div 
             onClick={() => {
               onNavigate('home');
               if (onCloseMobile) onCloseMobile();
             }}
-            className={`flex items-center cursor-pointer group select-none min-w-0 ${
-              isExpanded ? 'gap-2.5' : 'justify-center w-full'
-            }`}
+            className={`flex items-center gap-3 cursor-pointer group select-none ${isExpanded ? 'min-w-0' : 'justify-center'}`}
             title="Lotti • Daily Micro-Mastery"
           >
-            <div className="relative w-9 h-9 rounded-xl overflow-hidden p-0.5 bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 shadow-lg shadow-pink-500/25 group-hover:scale-105 transition-all shrink-0">
+            <div className="relative w-9 h-9 rounded-xl p-[1.5px] bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-500 shadow-md shadow-pink-500/20 group-hover:scale-105 transition-transform duration-200 shrink-0">
               <img src="/lottie.png" alt="Lotti" className="w-full h-full object-cover rounded-[10px]" />
             </div>
-            <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap min-w-0 ${
-              isExpanded ? 'opacity-100 max-w-[150px]' : 'opacity-0 max-w-0 pointer-events-none'
-            }`}>
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-base text-white tracking-tight font-display">Lotti</span>
-                <span className="text-[11px] font-bold uppercase px-1.5 py-0.2 rounded-full bg-gradient-to-r from-pink-500/20 to-cyan-500/20 text-pink-300 border border-pink-500/30">
-                  RECALL
-                </span>
+
+            {isExpanded && (
+              <div className="flex flex-col min-w-0 overflow-hidden">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-[16px] text-white tracking-tight leading-none font-display">
+                    Lotti
+                  </span>
+                  <span className="text-[10px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded-full bg-gradient-to-r from-pink-500/15 to-indigo-500/15 text-pink-300 border border-pink-500/25 leading-none">
+                    FSRS
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-medium tracking-tight mt-1 leading-none truncate">
+                  Daily Micro-Mastery
+                </p>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium truncate">Daily Micro-Mastery</p>
-            </div>
+            )}
           </div>
 
           {/* Desktop Toggle Button in Header */}
           {!isMobile && isExpanded && (
             <button
               onClick={toggleCollapse}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer shrink-0"
-              title={isCollapsed ? "Pin sidebar open" : "Shrink sidebar (only icons) [Ctrl+[]"}
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar [Ctrl+[]"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer shrink-0"
             >
-              {isCollapsed ? (
-                <PanelLeftOpen className="w-4 h-4 text-cyan-400 hover:text-cyan-300" />
-              ) : (
-                <PanelLeftClose className="w-4 h-4 text-slate-400 hover:text-slate-200" />
-              )}
+              <PanelLeftClose className="w-4 h-4" />
             </button>
           )}
 
@@ -172,6 +168,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {isMobile && onCloseMobile && (
             <button
               onClick={onCloseMobile}
+              aria-label="Close menu"
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.08] cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -179,8 +176,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* Primary CTA Buttons (Study & Create) */}
-        <div className="space-y-2">
+        {/* Primary CTAs (Quick Study & New Deck) */}
+        <div className="space-y-2 shrink-0">
           {onQuickStudy && (
             <button
               onClick={() => {
@@ -188,21 +185,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 if (onCloseMobile) onCloseMobile();
               }}
               title="Quick Study (Review Due Cards)"
-              className={`w-full h-10 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 flex items-center transition-all duration-300 hover:scale-[1.02] cursor-pointer overflow-hidden relative group ${
-                isExpanded ? 'px-3 justify-center gap-2' : 'px-0 justify-center'
+              aria-label="Quick Study"
+              className={`w-full rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-indigo-600/25 hover:shadow-indigo-600/40 border border-white/10 flex items-center transition-all duration-200 active:scale-[0.98] cursor-pointer group relative ${
+                isExpanded ? 'h-10 px-3.5 justify-between' : 'h-10 justify-center px-0'
               }`}
             >
-              <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-                <Play className="w-3.5 h-3.5 fill-white" />
+              <div className="flex items-center gap-2.5">
+                <Play className="w-3.5 h-3.5 fill-white shrink-0 group-hover:scale-110 transition-transform" />
+                {isExpanded && <span>Quick Study</span>}
               </div>
-              <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap ${
-                isExpanded ? 'opacity-100 max-w-[120px]' : 'opacity-0 max-w-0 pointer-events-none'
-              }`}>
-                Quick Study
-              </span>
-              {/* Pulsing indicator when due cards exist in collapsed mode */}
+
+              {isExpanded && (
+                dueCardsCount > 0 ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-sm shadow-sm">
+                    {dueCardsCount} due
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium text-indigo-200/80">
+                    Ready
+                  </span>
+                )
+              )}
+
+              {/* Pulsing indicator when collapsed and cards due */}
               {!isExpanded && dueCardsCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-[#090a10] animate-pulse" />
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-pink-500 ring-2 ring-[#0b0d18] animate-pulse" />
+              )}
+
+              {/* Floating Tooltip in collapsed mode */}
+              {!isExpanded && (
+                <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                  Quick Study {dueCardsCount > 0 ? `(${dueCardsCount} due)` : ''}
+                </div>
               )}
             </button>
           )}
@@ -213,65 +227,71 @@ export const Sidebar: React.FC<SidebarProps> = ({
               if (onCloseMobile) onCloseMobile();
             }}
             title="Create New Deck"
-            className={`w-full h-9 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] text-slate-200 hover:text-white font-semibold text-xs flex items-center transition-all duration-300 cursor-pointer overflow-hidden ${
-              isExpanded ? 'px-3 justify-center gap-2' : 'px-0 justify-center'
+            aria-label="Create New Deck"
+            className={`w-full rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] hover:border-white/[0.14] text-slate-300 hover:text-white font-medium text-xs flex items-center transition-all duration-200 cursor-pointer group relative ${
+              isExpanded ? 'h-9 px-3 justify-center gap-2' : 'h-10 justify-center px-0'
             }`}
           >
-            <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-              <Plus className="w-3.5 h-3.5" />
-            </div>
-            <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap ${
-              isExpanded ? 'opacity-100 max-w-[120px]' : 'opacity-0 max-w-0 pointer-events-none'
-            }`}>
-              New Deck
-            </span>
+            <Plus className="w-3.5 h-3.5 text-slate-400 group-hover:text-white shrink-0 transition-transform group-hover:rotate-90 duration-200" />
+            {isExpanded && <span>New Deck</span>}
+
+            {!isExpanded && (
+              <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                New Deck
+              </div>
+            )}
           </button>
         </div>
 
-        {/* Navigation Group 1: Core Study Pillars */}
+        {/* Navigation Group 1: Core Daily Focus */}
         <div className="space-y-1">
-          <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[11px] font-bold uppercase tracking-wider text-slate-500 ${
-            isExpanded ? 'opacity-100 max-h-6 px-3 py-1' : 'opacity-0 max-h-0 p-0 pointer-events-none'
-          }`}>
-            Core Navigation
-          </div>
+          {isExpanded && (
+            <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Core Navigation
+            </div>
+          )}
 
-          {/* Today's Mission (Home) */}
+          {/* Today's Mission */}
           <button
             onClick={() => {
               onNavigate('home');
               if (onCloseMobile) onCloseMobile();
             }}
-            title="Today's Mission (Daily Queue)"
-            className={`w-full h-10 flex items-center rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer overflow-hidden relative group ${
-              isExpanded ? 'px-3 justify-between' : 'px-0 justify-center'
+            title="Today's Mission"
+            aria-label="Today's Mission"
+            className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+              isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
             } ${
               activeView === 'home'
-                ? 'bg-indigo-600/25 text-indigo-200 border border-indigo-500/30 shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                ? 'bg-white/[0.08] text-white border border-white/[0.12] shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium'
             }`}
           >
-            {activeView === 'home' && !isExpanded && (
-              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-indigo-500 shadow-sm shadow-indigo-500" />
+            {activeView === 'home' && (
+              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-indigo-500 shadow-sm shadow-indigo-500/50" />
             )}
-            <div className={`flex items-center gap-2.5 min-w-0 ${!isExpanded ? 'justify-center w-full' : ''}`}>
-              <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-                <Home className="w-4 h-4 text-indigo-400 transition-transform group-hover:scale-110" />
-              </div>
-              <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-left truncate ${
-                isExpanded ? 'opacity-100 max-w-[130px]' : 'opacity-0 max-w-0 pointer-events-none'
-              }`}>
-                Today's Mission
-              </span>
+            <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+              <Home className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
+                activeView === 'home' ? 'text-indigo-400' : 'text-slate-400 group-hover:text-slate-200'
+              }`} />
+              {isExpanded && <span className="truncate">Today's Mission</span>}
             </div>
-            {dueCardsCount > 0 && (
-              <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap shrink-0 ${
-                isExpanded ? 'opacity-100 max-w-[50px]' : 'opacity-0 max-w-0 pointer-events-none'
-              }`}>
-                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">
-                  {dueCardsCount}
-                </span>
-              </div>
+
+            {isExpanded && dueCardsCount > 0 && (
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 shrink-0">
+                {dueCardsCount}
+              </span>
+            )}
+
+            {!isExpanded && (
+              <>
+                {dueCardsCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-pink-500 ring-2 ring-[#0b0d18]" />
+                )}
+                <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                  Today's Mission {dueCardsCount > 0 ? `(${dueCardsCount})` : ''}
+                </div>
+              </>
             )}
           </button>
 
@@ -282,37 +302,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
               if (onCloseMobile) onCloseMobile();
             }}
             title={`Decks & Studio (${savedDecksCount} decks)`}
-            className={`w-full h-10 flex items-center rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer overflow-hidden relative group ${
-              isExpanded ? 'px-3 justify-between' : 'px-0 justify-center'
+            aria-label="Decks & Studio"
+            className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+              isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
             } ${
               activeView === 'studio'
-                ? 'bg-indigo-600/25 text-indigo-200 border border-indigo-500/30 shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                ? 'bg-white/[0.08] text-white border border-white/[0.12] shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium'
             }`}
           >
-            {activeView === 'studio' && !isExpanded && (
-              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-indigo-500 shadow-sm shadow-indigo-500" />
+            {activeView === 'studio' && (
+              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-purple-500 shadow-sm shadow-purple-500/50" />
             )}
-            <div className={`flex items-center gap-2.5 min-w-0 ${!isExpanded ? 'justify-center w-full' : ''}`}>
-              <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-                <Layers className="w-4 h-4 text-purple-400 transition-transform group-hover:scale-110" />
-              </div>
-              <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-left truncate ${
-                isExpanded ? 'opacity-100 max-w-[130px]' : 'opacity-0 max-w-0 pointer-events-none'
-              }`}>
-                Decks & Studio
-              </span>
+            <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+              <Layers className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
+                activeView === 'studio' ? 'text-purple-400' : 'text-slate-400 group-hover:text-slate-200'
+              }`} />
+              {isExpanded && <span className="truncate">Decks & Studio</span>}
             </div>
-            <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap shrink-0 ${
-              isExpanded ? 'opacity-100 max-w-[50px]' : 'opacity-0 max-w-0 pointer-events-none'
-            }`}>
-              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400">
+
+            {isExpanded && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/[0.06] text-slate-400 border border-white/[0.06] shrink-0">
                 {savedDecksCount}
               </span>
-            </div>
+            )}
+
+            {!isExpanded && (
+              <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                Decks & Studio ({savedDecksCount})
+              </div>
+            )}
           </button>
 
-          {/* Starred Focus */}
+          {/* Starred Focus (if cards starred) */}
           {starredCardsCount > 0 && (
             <button
               onClick={() => {
@@ -321,69 +343,148 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 if (onCloseMobile) onCloseMobile();
               }}
               title={`Starred Focus (${starredCardsCount} cards)`}
-              className={`w-full h-10 flex items-center rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-300 cursor-pointer overflow-hidden relative group ${
-                isExpanded ? 'px-3 justify-between' : 'px-0 justify-center'
-              }`}
+              aria-label="Starred Focus"
+              className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+                isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
+              } text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium`}
             >
-              <div className={`flex items-center gap-2.5 min-w-0 ${!isExpanded ? 'justify-center w-full' : ''}`}>
-                <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-                  <Star className="w-4 h-4 text-amber-400 transition-transform group-hover:scale-110" />
-                </div>
-                <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-left truncate ${
-                  isExpanded ? 'opacity-100 max-w-[130px]' : 'opacity-0 max-w-0 pointer-events-none'
-                }`}>
-                  Starred Focus
-                </span>
+              <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+                <Star className="w-4 h-4 text-amber-400 shrink-0 transition-transform group-hover:scale-110" />
+                {isExpanded && <span className="truncate">Starred Focus</span>}
               </div>
-              <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap shrink-0 ${
-                isExpanded ? 'opacity-100 max-w-[50px]' : 'opacity-0 max-w-0 pointer-events-none'
-              }`}>
-                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+
+              {isExpanded && (
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25 shrink-0">
                   {starredCardsCount}
                 </span>
-              </div>
+              )}
+
+              {!isExpanded && (
+                <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                  Starred Focus ({starredCardsCount})
+                </div>
+              )}
             </button>
           )}
 
-          {/* Daily Review & Analytics */}
+          {/* FSRS Retention Review */}
           <button
             onClick={() => {
               onNavigate('dashboard');
               if (onCloseMobile) onCloseMobile();
             }}
-            title={`Daily Review & Retention (${dueCardsCount} due)`}
-            className={`w-full h-10 flex items-center rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer overflow-hidden relative group ${
-              isExpanded ? 'px-3 justify-between' : 'px-0 justify-center'
+            title="FSRS Retention Review"
+            aria-label="FSRS Retention Review"
+            className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+              isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
             } ${
               activeView === 'dashboard'
-                ? 'bg-emerald-600/25 text-emerald-200 border border-emerald-500/30 shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+                ? 'bg-white/[0.08] text-white border border-white/[0.12] shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium'
             }`}
           >
-            {activeView === 'dashboard' && !isExpanded && (
-              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-emerald-500 shadow-sm shadow-emerald-500" />
+            {activeView === 'dashboard' && (
+              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-emerald-500 shadow-sm shadow-emerald-500/50" />
             )}
-            <div className={`flex items-center gap-2.5 min-w-0 ${!isExpanded ? 'justify-center w-full' : ''}`}>
-              <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-                <BrainCircuit className="w-4 h-4 text-emerald-400 transition-transform group-hover:scale-110" />
-              </div>
-              <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-left truncate ${
-                isExpanded ? 'opacity-100 max-w-[130px]' : 'opacity-0 max-w-0 pointer-events-none'
-              }`}>
-                FSRS Review
-              </span>
+            <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+              <BrainCircuit className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
+                activeView === 'dashboard' ? 'text-emerald-400' : 'text-slate-400 group-hover:text-slate-200'
+              }`} />
+              {isExpanded && <span className="truncate">FSRS Review</span>}
             </div>
-            <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap shrink-0 ${
-              isExpanded ? 'opacity-100 max-w-[65px]' : 'opacity-0 max-w-0 pointer-events-none'
-            }`}>
-              {dueCardsCount > 0 ? (
-                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+
+            {isExpanded && (
+              dueCardsCount > 0 ? (
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 shrink-0">
                   {dueCardsCount} due
                 </span>
               ) : (
-                <span className="text-[11px] font-medium text-slate-500">Done</span>
-              )}
+                <span className="text-[11px] font-medium text-slate-500 shrink-0">
+                  Done
+                </span>
+              )
+            )}
+
+            {!isExpanded && (
+              <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                FSRS Review {dueCardsCount > 0 ? `(${dueCardsCount} due)` : '(Done)'}
+              </div>
+            )}
+          </button>
+        </div>
+
+        {/* Navigation Group 2: Practice Arenas */}
+        <div className="space-y-1 pt-2 border-t border-white/[0.05]">
+          {isExpanded && (
+            <div className="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Practice Arenas
             </div>
+          )}
+
+          {/* Timed Mock Exam */}
+          <button
+            onClick={() => {
+              onNavigate('exam');
+              if (onCloseMobile) onCloseMobile();
+            }}
+            title="Timed Mock Exam Simulator"
+            aria-label="Timed Mock Exam Simulator"
+            className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+              isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
+            } ${
+              activeView === 'exam'
+                ? 'bg-white/[0.08] text-white border border-white/[0.12] shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium'
+            }`}
+          >
+            {activeView === 'exam' && (
+              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-indigo-500 shadow-sm shadow-indigo-500/50" />
+            )}
+            <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+              <Award className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
+                activeView === 'exam' ? 'text-indigo-400' : 'text-slate-400 group-hover:text-slate-200'
+              }`} />
+              {isExpanded && <span className="truncate">Mock Exam</span>}
+            </div>
+
+            {!isExpanded && (
+              <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                Mock Exam (Timed)
+              </div>
+            )}
+          </button>
+
+          {/* Interleaving Decks */}
+          <button
+            onClick={() => {
+              onNavigate('interleave');
+              if (onCloseMobile) onCloseMobile();
+            }}
+            title="Interleaving Arena"
+            aria-label="Interleaving Arena"
+            className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+              isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
+            } ${
+              activeView === 'interleave'
+                ? 'bg-white/[0.08] text-white border border-white/[0.12] shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium'
+            }`}
+          >
+            {activeView === 'interleave' && (
+              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-purple-500 shadow-sm shadow-purple-500/50" />
+            )}
+            <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+              <Shuffle className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
+                activeView === 'interleave' ? 'text-purple-400' : 'text-slate-400 group-hover:text-slate-200'
+              }`} />
+              {isExpanded && <span className="truncate">Mix Decks</span>}
+            </div>
+
+            {!isExpanded && (
+              <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                Mix Decks (Interleaving)
+              </div>
+            )}
           </button>
 
           {/* 3D Axolotl Sanctuary */}
@@ -393,226 +494,171 @@ export const Sidebar: React.FC<SidebarProps> = ({
               if (onCloseMobile) onCloseMobile();
             }}
             title="3D Axolotl Sanctuary & Habitat"
-            className={`w-full h-10 flex items-center rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer overflow-hidden relative group ${
-              isExpanded ? 'px-3 justify-between' : 'px-0 justify-center'
+            aria-label="3D Axolotl Sanctuary"
+            className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+              isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
             } ${
               activeView === 'sanctuary'
-                ? 'bg-gradient-to-r from-pink-600/30 to-purple-600/30 text-pink-200 border border-pink-500/40 shadow-sm'
-                : 'text-pink-300 hover:text-white hover:bg-pink-500/10'
+                ? 'bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-transparent text-white border border-pink-500/30 shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium'
             }`}
           >
-            {activeView === 'sanctuary' && !isExpanded && (
-              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-pink-500 shadow-sm shadow-pink-500" />
+            {activeView === 'sanctuary' && (
+              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-pink-500 shadow-sm shadow-pink-500/50" />
             )}
-            <div className={`flex items-center gap-2.5 min-w-0 ${!isExpanded ? 'justify-center w-full' : ''}`}>
-              <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-pink-400 animate-pulse transition-transform group-hover:scale-110" />
-              </div>
-              <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-left truncate ${
-                isExpanded ? 'opacity-100 max-w-[130px]' : 'opacity-0 max-w-0 pointer-events-none'
-              }`}>
-                3D Sanctuary
-              </span>
+            <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+              <Sparkles className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
+                activeView === 'sanctuary' ? 'text-pink-400' : 'text-pink-400/80 group-hover:text-pink-300'
+              }`} />
+              {isExpanded && <span className="truncate">3D Sanctuary</span>}
             </div>
-            <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap shrink-0 ${
-              isExpanded ? 'opacity-100 max-w-[40px]' : 'opacity-0 max-w-0 pointer-events-none'
-            }`}>
-              <span className="text-[11px] font-black uppercase px-1.5 py-0.5 rounded-full bg-gradient-to-r from-pink-500/30 to-purple-500/30 text-pink-300 border border-pink-500/30 font-mono">
+
+            {isExpanded && (
+              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 border border-pink-500/30 shrink-0 font-mono">
                 3D
               </span>
-            </div>
-          </button>
-        </div>
-
-        {/* Navigation Group 2: Practice Modes */}
-        <div className="space-y-1 pt-2 border-t border-white/[0.06]">
-          <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[11px] font-bold uppercase tracking-wider text-slate-500 ${
-            isExpanded ? 'opacity-100 max-h-6 px-3 py-1' : 'opacity-0 max-h-0 p-0 pointer-events-none'
-          }`}>
-            Practice Arenas
-          </div>
-
-          {/* Mock Exam */}
-          <button
-            onClick={() => {
-              onNavigate('exam');
-              if (onCloseMobile) onCloseMobile();
-            }}
-            title="Timed Mock Exam Simulator"
-            className={`w-full h-10 flex items-center rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer overflow-hidden relative group ${
-              isExpanded ? 'px-3 justify-between' : 'px-0 justify-center'
-            } ${
-              activeView === 'exam'
-                ? 'bg-indigo-600/25 text-indigo-200 border border-indigo-500/30 shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-            }`}
-          >
-            {activeView === 'exam' && !isExpanded && (
-              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-indigo-500 shadow-sm shadow-indigo-500" />
             )}
-            <div className={`flex items-center gap-2.5 min-w-0 ${!isExpanded ? 'justify-center w-full' : ''}`}>
-              <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-                <Award className="w-4 h-4 text-indigo-400 transition-transform group-hover:scale-110" />
-              </div>
-              <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-left truncate ${
-                isExpanded ? 'opacity-100 max-w-[130px]' : 'opacity-0 max-w-0 pointer-events-none'
-              }`}>
-                Mock Exam
-              </span>
-            </div>
-          </button>
 
-          {/* Mix Decks */}
-          <button
-            onClick={() => {
-              onNavigate('interleave');
-              if (onCloseMobile) onCloseMobile();
-            }}
-            title="Interleaving Arena (Mix diverse subjects)"
-            className={`w-full h-10 flex items-center rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer overflow-hidden relative group ${
-              isExpanded ? 'px-3 justify-between' : 'px-0 justify-center'
-            } ${
-              activeView === 'interleave'
-                ? 'bg-purple-600/25 text-purple-200 border border-purple-500/30 shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-            }`}
-          >
-            {activeView === 'interleave' && !isExpanded && (
-              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-purple-500 shadow-sm shadow-purple-500" />
+            {!isExpanded && (
+              <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                3D Sanctuary
+              </div>
             )}
-            <div className={`flex items-center gap-2.5 min-w-0 ${!isExpanded ? 'justify-center w-full' : ''}`}>
-              <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-                <Shuffle className="w-4 h-4 text-purple-400 transition-transform group-hover:scale-110" />
-              </div>
-              <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-left truncate ${
-                isExpanded ? 'opacity-100 max-w-[130px]' : 'opacity-0 max-w-0 pointer-events-none'
-              }`}>
-                Mix Decks
-              </span>
-            </div>
           </button>
 
-          {/* Public Starter Catalog */}
+          {/* Public Curated Decks */}
           <button
             onClick={() => {
               onOpenStarterCatalog();
               if (onCloseMobile) onCloseMobile();
             }}
             title={`Public Decks (${curatedCount} catalogs)`}
-            className={`w-full h-10 flex items-center rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-300 cursor-pointer overflow-hidden relative group ${
-              isExpanded ? 'px-3 justify-between' : 'px-0 justify-center'
-            }`}
+            aria-label="Public Decks"
+            className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+              isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
+            } text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium`}
           >
-            <div className={`flex items-center gap-2.5 min-w-0 ${!isExpanded ? 'justify-center w-full' : ''}`}>
-              <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-amber-400 transition-transform group-hover:scale-110" />
-              </div>
-              <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-left truncate ${
-                isExpanded ? 'opacity-100 max-w-[130px]' : 'opacity-0 max-w-0 pointer-events-none'
-              }`}>
-                Public Decks
-              </span>
+            <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+              <BookOpen className="w-4 h-4 text-indigo-400/90 shrink-0 transition-transform group-hover:scale-110" />
+              {isExpanded && <span className="truncate">Public Decks</span>}
             </div>
-            <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap shrink-0 ${
-              isExpanded ? 'opacity-100 max-w-[50px]' : 'opacity-0 max-w-0 pointer-events-none'
-            }`}>
-              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+
+            {isExpanded && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/[0.06] text-slate-400 border border-white/[0.06] shrink-0">
                 {curatedCount}
               </span>
-            </div>
+            )}
+
+            {!isExpanded && (
+              <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                Public Decks ({curatedCount})
+              </div>
+            )}
           </button>
         </div>
       </div>
 
-      {/* Bottom User HUD & Quick Preferences */}
-      <div className="pt-3 border-t border-white/[0.06] space-y-2 shrink-0">
-        {/* Offline Badge */}
+      {/* Bottom Dock: Audio, Account, Settings, & Collapse */}
+      <div className="pt-3 border-t border-white/[0.06] space-y-1.5 shrink-0">
+        
+        {/* Offline indicator */}
         {!isOnline && (
           <div 
             title="Working Offline • All local decks and reviews available"
-            className={`rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[11px] font-semibold flex items-center transition-all duration-300 overflow-hidden ${
-              isExpanded ? 'px-3 py-1.5 gap-2' : 'h-10 justify-center px-0'
+            className={`rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-semibold flex items-center overflow-hidden ${
+              isExpanded ? 'px-3 py-1.5 gap-2' : 'h-9 justify-center px-0'
             }`}
           >
-            <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-              <WifiOff className="w-3.5 h-3.5" />
-            </div>
-            <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap truncate ${
-              isExpanded ? 'opacity-100 max-w-[130px]' : 'opacity-0 max-w-0 pointer-events-none'
-            }`}>
-              Working Offline
-            </span>
+            <WifiOff className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+            {isExpanded && <span className="truncate">Working Offline</span>}
           </div>
         )}
 
-        {/* 40Hz Audio Toggle */}
+        {/* 40Hz Audio Focus Toggle */}
         <button
           onClick={toggleSound}
-          aria-label={!isMuted ? 'Mute focus audio' : 'Play focus audio'}
+          aria-label={!isMuted ? 'Mute focus audio' : 'Play 40Hz focus audio'}
           title={!isMuted ? '40Hz Focus Active (Click to mute)' : 'Soundscape Muted (Click to play)'}
-          className={`w-full flex items-center rounded-xl text-xs font-semibold transition-all duration-300 cursor-pointer overflow-hidden ${
+          className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer flex items-center relative group ${
             isExpanded ? 'justify-between px-3 py-2' : 'justify-center px-0 h-10'
           } ${
             !isMuted
-              ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-300'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+              ? 'bg-indigo-600/15 border border-indigo-500/30 text-indigo-200'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent'
           }`}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-              {!isMuted ? <Volume2 className="w-4 h-4 text-indigo-400 animate-pulse" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
-            </div>
-            <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap truncate ${
-              isExpanded ? 'opacity-100 max-w-[110px]' : 'opacity-0 max-w-0 pointer-events-none'
-            }`}>
-              {!isMuted ? '40Hz Active' : 'Muted'}
-            </span>
+          <div className="flex items-center gap-2.5 min-w-0">
+            {!isMuted ? (
+              <div className="flex items-end gap-0.5 h-4 w-4 shrink-0 px-0.5">
+                <span className="w-0.5 bg-indigo-400 animate-eq-1 rounded-full" />
+                <span className="w-0.5 bg-indigo-400 animate-eq-2 rounded-full" />
+                <span className="w-0.5 bg-indigo-400 animate-eq-3 rounded-full" />
+                <span className="w-0.5 bg-indigo-400 animate-eq-4 rounded-full" />
+              </div>
+            ) : (
+              <VolumeX className="w-4 h-4 text-slate-500 shrink-0" />
+            )}
+            {isExpanded && (
+              <span className="truncate font-medium">
+                {!isMuted ? '40Hz Focus' : 'Focus Audio'}
+              </span>
+            )}
           </div>
-          <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[11px] text-slate-500 uppercase ${
-            isExpanded ? 'opacity-100 max-w-[30px]' : 'opacity-0 max-w-0 pointer-events-none'
-          }`}>
-            {!isMuted ? 'ON' : 'OFF'}
-          </span>
+
+          {isExpanded && (
+            <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+              !isMuted ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-500'
+            }`}>
+              {!isMuted ? 'ON' : 'OFF'}
+            </span>
+          )}
+
+          {!isExpanded && (
+            <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+              Focus Audio: {!isMuted ? 'ON' : 'OFF'}
+            </div>
+          )}
         </button>
 
-        {/* Account / User HUD button */}
+        {/* User Account / Profile Card */}
         <button
           onClick={() => {
             if (onOpenAuth) onOpenAuth(currentUser ? 'profile' : 'login');
             if (onCloseMobile) onCloseMobile();
           }}
           aria-label={currentUser ? `Profile for ${currentUser.name}` : 'Sign in or register'}
-          className={`w-full flex items-center rounded-xl text-xs font-semibold bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.08] hover:border-indigo-500/40 text-slate-300 hover:text-white transition-all duration-300 cursor-pointer group overflow-hidden ${
+          title={currentUser ? `Logged in as ${currentUser.name}` : 'Log In or Create Account'}
+          className={`w-full rounded-xl text-xs bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.07] hover:border-indigo-500/30 text-slate-300 hover:text-white transition-all duration-150 cursor-pointer flex items-center relative group ${
             isExpanded ? 'justify-between px-3 py-2' : 'justify-center px-0 h-10'
           }`}
-          title={currentUser ? `Logged in as ${currentUser.name}` : 'Log In or Create Account'}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-              {currentUser ? (
-                <span className="text-base select-none">{currentUser.avatar}</span>
-              ) : (
-                <div className="w-5 h-5 rounded-md bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                  <User className="w-3 h-3" />
-                </div>
-              )}
+            <div className="w-6 h-6 rounded-lg bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center text-indigo-300 text-xs shrink-0">
+              {currentUser ? currentUser.avatar || <User className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
             </div>
-            <div className={`transition-all duration-300 overflow-hidden whitespace-nowrap truncate text-left ${
-              isExpanded ? 'opacity-100 max-w-[110px]' : 'opacity-0 max-w-0 pointer-events-none'
-            }`}>
-              <div className="text-xs font-bold text-white truncate">
-                {currentUser ? currentUser.name : 'Guest Student'}
+            {isExpanded && (
+              <div className="flex flex-col text-left min-w-0">
+                <span className="font-semibold text-white truncate leading-tight">
+                  {currentUser ? currentUser.name : 'Guest Student'}
+                </span>
+                <span className="text-[10px] text-slate-400 truncate leading-tight mt-0.5">
+                  {currentUser ? `${currentUser.grade || 'Student'}` : 'Sign in to sync'}
+                </span>
               </div>
-              <div className="text-[11px] text-indigo-300 truncate">
-                {currentUser ? `${currentUser.grade} • ${currentUser.country}` : 'Log In / Register'}
-              </div>
-            </div>
+            )}
           </div>
-          <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[11px] text-slate-500 group-hover:text-indigo-400 shrink-0 font-mono ${
-            isExpanded ? 'opacity-100 max-w-[45px]' : 'opacity-0 max-w-0 pointer-events-none'
-          }`}>
-            {currentUser ? 'Profile' : 'Sign In'}
-          </span>
+
+          {isExpanded && (
+            <span className="text-[10px] font-semibold text-indigo-300 bg-indigo-500/15 border border-indigo-500/25 px-2 py-0.5 rounded-md shrink-0">
+              {currentUser ? 'Profile' : 'Sign In'}
+            </span>
+          )}
+
+          {!isExpanded && (
+            <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+              {currentUser ? currentUser.name : 'Sign In / Register'}
+            </div>
+          )}
         </button>
 
         {/* Settings Button */}
@@ -623,56 +669,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }}
           aria-label="Settings"
           title={`Settings (Level ${stats.level})`}
-          className={`w-full flex items-center rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/[0.04] transition-all duration-300 cursor-pointer overflow-hidden ${
+          className={`w-full rounded-xl text-xs text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-all duration-150 cursor-pointer flex items-center relative group ${
             isExpanded ? 'justify-between px-3 py-2' : 'justify-center px-0 h-10'
           }`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-              <Settings className="w-4 h-4" />
-            </div>
-            <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap ${
-              isExpanded ? 'opacity-100 max-w-[100px]' : 'opacity-0 max-w-0 pointer-events-none'
-            }`}>
-              Settings
-            </span>
+            <Settings className="w-4 h-4 text-slate-400 group-hover:text-slate-200 shrink-0" />
+            {isExpanded && <span className="font-medium">Settings</span>}
           </div>
-          <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[11px] text-slate-500 ${
-            isExpanded ? 'opacity-100 max-w-[40px]' : 'opacity-0 max-w-0 pointer-events-none'
-          }`}>
-            Lvl {stats.level}
-          </span>
+
+          {isExpanded && (
+            <span className="text-[10px] font-semibold text-slate-400 bg-white/[0.05] border border-white/[0.06] px-1.5 py-0.5 rounded">
+              Lvl {stats.level}
+            </span>
+          )}
+
+          {!isExpanded && (
+            <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+              Settings (Lvl {stats.level})
+            </div>
+          )}
         </button>
 
-        {/* Dedicated Desktop Collapse / Expand Button */}
+        {/* Desktop Collapse / Expand Dock Button */}
         {!isMobile && (
           <button
             onClick={toggleCollapse}
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={isCollapsed ? "Pin sidebar open [Ctrl+[]" : "Shrink sidebar (leave only icons) [Ctrl+[]"}
-            className={`w-full flex items-center rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-200 hover:bg-white/[0.06] transition-all duration-300 cursor-pointer overflow-hidden border border-transparent hover:border-white/[0.08] ${
+            title={isCollapsed ? "Expand sidebar [Ctrl+[]" : "Collapse sidebar [Ctrl+[]"}
+            className={`w-full rounded-xl text-xs text-slate-500 hover:text-slate-300 hover:bg-white/[0.04] transition-all duration-150 cursor-pointer flex items-center relative group ${
               isExpanded ? 'justify-between px-3 py-2' : 'justify-center px-0 h-10'
             }`}
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-5 h-5 shrink-0 flex items-center justify-center">
-                {isCollapsed ? (
-                  <PanelLeftOpen className="w-4 h-4 text-indigo-400" />
-                ) : (
-                  <PanelLeftClose className="w-4 h-4 text-slate-400" />
-                )}
-              </div>
-              <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap ${
-                isExpanded ? 'opacity-100 max-w-[120px]' : 'opacity-0 max-w-0 pointer-events-none'
-              }`}>
-                {isCollapsed ? 'Pin Sidebar' : 'Shrink Sidebar'}
-              </span>
+              {isCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4 text-indigo-400 shrink-0" />
+              ) : (
+                <PanelLeftClose className="w-4 h-4 text-slate-400 shrink-0" />
+              )}
+              {isExpanded && <span className="font-medium">Collapse</span>}
             </div>
-            <span className={`transition-all duration-300 overflow-hidden whitespace-nowrap text-[11px] font-mono text-slate-500 bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.05] ${
-              isExpanded ? 'opacity-100 max-w-[45px]' : 'opacity-0 max-w-0 pointer-events-none'
-            }`}>
-              Ctrl+[
-            </span>
+
+            {isExpanded && (
+              <kbd className="text-[10px] font-mono text-slate-500 bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.06]">
+                Ctrl+[
+              </kbd>
+            )}
+
+            {!isExpanded && (
+              <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                Expand Sidebar (Ctrl+[)
+              </div>
+            )}
           </button>
         )}
       </div>
@@ -681,27 +729,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Desktop Persistent Sidebar Container (Spacer) */}
+      {/* Desktop Persistent Sidebar */}
       <aside 
-        className={`hidden md:block shrink-0 relative z-30 select-none transition-[width] duration-300 ease-in-out ${
-          isCollapsed ? 'w-[72px]' : 'w-60 xl:w-64'
+        className={`hidden md:block shrink-0 relative z-40 select-none transition-[width] duration-300 ease-in-out ${
+          isCollapsed ? 'w-[68px]' : 'w-64'
         }`}
       >
-        {/* Floating / Sliding Visual Sidebar Panel */}
         <div 
-          onMouseEnter={() => {
-            if (isCollapsed) setIsHovered(true);
-          }}
-          onMouseLeave={() => {
-            if (isCollapsed) setIsHovered(false);
-          }}
-          className={`h-screen sticky top-0 flex flex-col border-r border-white/[0.08] bg-[#090a10]/95 backdrop-blur-xl transition-[width,box-shadow,border-color,background-color] duration-300 ease-in-out overflow-x-hidden ${
-            isEffectiveExpanded 
-              ? 'w-60 xl:w-64 ' + (isCollapsed && isHovered ? 'shadow-2xl shadow-indigo-950/70 bg-[#090a10]/98 border-r border-indigo-500/40 z-50' : '')
-              : 'w-[72px]'
-          } ${isEffectiveExpanded ? 'p-4' : 'px-3 py-4'}`}
+          className={`h-screen sticky top-0 flex flex-col border-r border-white/[0.07] bg-[#0b0d18]/95 backdrop-blur-2xl transition-[width] duration-300 ease-in-out overflow-hidden ${
+            isCollapsed ? 'w-[68px] px-2 py-4' : 'w-64 p-3.5'
+          }`}
         >
-          {renderNavContent(isEffectiveExpanded, false)}
+          {/* Subtle top ambient glow */}
+          <div className="pointer-events-none absolute -top-20 -left-20 w-52 h-52 rounded-full bg-gradient-to-br from-indigo-600/15 via-purple-600/10 to-transparent blur-3xl" />
+          
+          {renderNavContent(!isCollapsed, false)}
         </div>
       </aside>
 
@@ -709,10 +751,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {isOpenMobile && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div 
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity" 
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity" 
             onClick={onCloseMobile}
           />
-          <aside className="relative w-72 max-w-[80vw] bg-[#090a10] border-r border-white/[0.1] h-full p-4 flex flex-col z-10 shadow-2xl">
+          <aside className="relative w-72 max-w-[85vw] bg-[#0b0d18] border-r border-white/[0.08] h-full p-4 flex flex-col z-10 shadow-2xl">
             {renderNavContent(true, true)}
           </aside>
         </div>

@@ -16,7 +16,6 @@ import {
   Compass,
   Menu,
   User,
-  PanelLeftClose,
   PanelLeftOpen,
   Sun,
   Moon
@@ -192,19 +191,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>3D Axolotl</span>
           </button>
 
-          {/* Desktop Sidebar Shrink / Expand Toggle */}
-          {onToggleSidebarCollapse && (
+          {/* Desktop Sidebar Expand Toggle (visible when sidebar is collapsed) */}
+          {onToggleSidebarCollapse && isSidebarCollapsed && (
             <button
               onClick={onToggleSidebarCollapse}
-              className="hidden md:flex p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-white transition-all cursor-pointer mr-1"
-              aria-label={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-              title={isSidebarCollapsed ? "Expand Sidebar [Ctrl+[]" : "Shrink Sidebar (only icons) [Ctrl+[]"}
+              className="hidden md:flex p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-indigo-400 hover:text-indigo-300 transition-all cursor-pointer mr-1"
+              aria-label="Expand Sidebar"
+              title="Expand Sidebar [Ctrl+[]"
             >
-              {isSidebarCollapsed ? (
-                <PanelLeftOpen className="w-4 h-4 text-cyan-400" />
-              ) : (
-                <PanelLeftClose className="w-4 h-4 text-slate-400" />
-              )}
+              <PanelLeftOpen className="w-4 h-4" />
             </button>
           )}
 
