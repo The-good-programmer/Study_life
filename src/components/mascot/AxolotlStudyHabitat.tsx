@@ -734,7 +734,7 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                 { id: 'off', label: 'Mute / Off', desc: 'Silent study', icon: VolumeX },
                 { id: 'rain', label: 'Rainfall on Window', desc: 'Calming rain soundscape', icon: CloudRain },
                 { id: 'binaural-alpha-10hz', label: 'Lo-Fi Alpha 10Hz', desc: 'Relaxed focus waves', icon: Headphones },
-                { id: 'binaural-40hz', label: 'Deep Gamma 40Hz', desc: 'Peak cognitive recall', icon: Sparkles },
+                { id: 'binaural-40hz', label: '40 Hz Tone', desc: 'Steady background tone', icon: Sparkles },
                 { id: 'brown-noise', label: 'Warm Brown Noise', desc: 'Deep background mask', icon: Radio },
               ].map((snd) => {
                 const isActive = currentSound === snd.id;

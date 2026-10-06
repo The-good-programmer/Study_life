@@ -145,7 +145,7 @@ export class AIService {
         // retry the same model immediately without thinkingConfig
         if (enableThinking && (errMsg.includes('thinking') || errMsg.includes('INVALID_ARGUMENT'))) {
           try {
-            console.warn(`[Lotti AI] Model ${model} failed with thinkingConfig, retrying without thinking...`, err);
+            console.warn(`[Studify AI] Model ${model} failed with thinkingConfig, retrying without thinking...`, err);
             const fallbackConfig = buildConfig(false);
             const response = await ai.models.generateContent({
               model,
@@ -158,7 +158,7 @@ export class AIService {
           }
         }
 
-        console.warn(`[Lotti AI] Model ${model} failed, trying next candidate...`, err);
+        console.warn(`[Studify AI] Model ${model} failed, trying next candidate...`, err);
       }
     }
     throw lastError;

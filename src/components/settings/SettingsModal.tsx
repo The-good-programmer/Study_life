@@ -243,7 +243,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
           <div className="flex items-center gap-2">
-            <span id="settings-modal-title" className="text-base font-bold text-white font-display">Lotti Preferences</span>
+            <span id="settings-modal-title" className="text-base font-bold text-white font-display">Studify Preferences</span>
           </div>
           <button
             onClick={onClose}
@@ -335,7 +335,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
             <span>Google Gemini API Key (Optional)</span>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed font-sans">
-            Lotti includes intelligent local cognitive heuristics by default. For unlimited custom PDF parsing and high-precision Socratic evaluations, enter your free Gemini API key.
+            Studify includes intelligent local cognitive heuristics by default. For unlimited custom PDF parsing and high-precision Socratic evaluations, enter your free Gemini API key.
           </p>
 
           <form onSubmit={handleSaveKey} className="space-y-2">

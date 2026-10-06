@@ -153,7 +153,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const soundPresets: { id: SoundType; label: string; desc: string; icon: string }[] = [
     { id: 'off', label: 'Mute Audio', desc: 'Silence focus synthesizers', icon: '🔇' },
-    { id: 'binaural-40hz', label: '40Hz Gamma Waves', desc: 'Focus soundscape & acoustic masking', icon: '🧠' },
+    { id: 'binaural-40hz', label: '40 Hz Tone', desc: 'Steady background tone', icon: '🎧' },
     { id: 'binaural-alpha-10hz', label: '10Hz Alpha Waves', desc: 'Relaxed focus & anxiety reduction', icon: '🧘' },
     { id: 'brown-noise', label: 'Brownian Deep Noise', desc: 'Acoustic masking of speech & background', icon: '🌊' },
     { id: 'pink-noise', label: 'Spectral Pink Noise', desc: 'Balanced frequencies for memory stabilization', icon: '🌸' },
@@ -316,7 +316,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300 shadow-md shadow-indigo-500/15'
                   : 'bg-slate-900/80 border-white/[0.08] text-slate-400 hover:text-white'
               }`}
-              title="Focus Soundscapes (40Hz Gamma, Alpha Waves, Noise, Rain)"
+              title="Focus Soundscapes (noise, rain, tones)"
             >
               {currentSound !== 'off' ? (
                 <div className="flex items-center gap-1.5">

@@ -1603,7 +1603,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                           <span className="text-sm shrink-0">💡</span>
                           <div className="space-y-0.5">
                             <div className="font-bold text-rose-300 flex items-center gap-1.5">
-                              <span>Lotti's Diagnostic ({misconception.trapTitle || misconception.trapType}):</span>
+                              <span>Studify's Diagnostic ({misconception.trapTitle || misconception.trapType}):</span>
                             </div>
                             <p className="text-[12px] text-slate-200 leading-relaxed font-sans font-normal">
                               {misconception.trapExplanation}

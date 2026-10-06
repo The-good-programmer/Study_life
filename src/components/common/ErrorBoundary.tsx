@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   public override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('[Lotti ErrorBoundary] Uncaught runtime exception caught:', error, errorInfo);
+    console.error('[Studify ErrorBoundary] Uncaught runtime exception caught:', error, errorInfo);
     this.setState({ errorInfo });
   }
 

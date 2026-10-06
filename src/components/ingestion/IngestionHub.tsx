@@ -540,7 +540,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-pink-500/15 text-pink-300 border border-pink-500/30 flex items-center gap-1.5">
                 <Brain className="w-3 h-3 text-pink-400" />
-                <span>Lotti Study Autopilot</span>
+                <span>Studify Study Autopilot</span>
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                 <Flame className="w-3 h-3 fill-amber-400 text-amber-400" />
@@ -559,7 +559,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
               What shall we <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-300 to-cyan-400">Master Today?</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-400">
-              Type any subject, drop a lecture PDF, or paste notes. Lotti turns it into delightful 3-minute micro-practice.
+              Type any subject, drop a lecture PDF, or paste notes. Studify turns it into delightful 3-minute micro-practice.
             </p>
           </div>
 
@@ -825,7 +825,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                     Drag and drop your lecture PDF or chapter here
                   </h3>
                   <p className="text-xs text-slate-400 max-w-md mb-2">
-                    Lotti extracts structured knowledge anchors with PDF.js and links each flashcard to its source page.
+                    Studify extracts structured knowledge anchors with PDF.js and links each flashcard to its source page.
                   </p>
                   <span className="px-3 py-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-xs font-semibold text-slate-200 transition-all">
                     Browse Files (.pdf)

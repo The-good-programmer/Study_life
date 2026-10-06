@@ -86,11 +86,11 @@ const TOUR_STEPS: TourStep[] = [
     badge: "Memory Consolidation",
     badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
     quote: "Your brain doesn't store memories while you're grinding—it locks them in during offline rest! 3 minutes of box breathing triggers 10x hippocampal replay.",
-    description: "Long-term potentiation requires neural recovery. Studify orchestrates a guided 3-minute rest with an animated 4-4-4-4 Box Breathing visualizer, 20-20-20 eye strain relaxation, and 40Hz soundscape resets.",
+    description: "Short breaks help you stay fresh between study blocks. Studify offers a guided 3-minute rest with a 4-4-4-4 box-breathing visualizer, 20-20-20 eye-strain relief, and optional calm background audio.",
     highlights: [
       "Dynamic 4-4-4-4 Box Breathing visualizer",
       "Hippocampal memory consolidation protocol",
-      "Synthesized 40Hz acoustic focus soundscape"
+      "Optional focus soundscapes (noise, rain, tones)"
     ],
     icon: Coffee
   }

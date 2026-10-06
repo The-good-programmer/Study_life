@@ -348,7 +348,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
       title: title.trim(),
       category: category.trim() || 'General Studies',
       folderId: folderId || undefined,
-      description: description.trim() || `Custom study deck created in Lotti Deck Studio.`,
+      description: description.trim() || `Custom study deck created in Studify Deck Studio.`,
       currentConceptIndex: 0,
       currentPhase: 'priming',
       elapsedSeconds: initialSession?.elapsedSeconds || 0,

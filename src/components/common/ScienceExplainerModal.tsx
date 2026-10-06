@@ -161,34 +161,34 @@ const TOPICS: ScienceTopic[] = [
     keyTakeaways: [
       '2 minutes of priming reduces cognitive friction during subsequent retrieval and explanation phases.',
       'Visual knowledge graphs map the architecture of ideas before details fill the rooms.',
-      'Creates anticipatory curiosity, significantly boosting dopamine release during answer validation.'
+      'Previewing the big picture gives new details somewhere to fit, which makes them easier to remember.'
     ],
     protocolTip: 'Spend 60 seconds reviewing the key terms and knowledge graph before launching straight into flashcards.'
   },
   {
     id: 'audio',
-    title: '40Hz Gamma & Focus Soundscapes',
-    badge: 'Acoustic Focus Masking',
+    title: 'Focus Soundscapes',
+    badge: 'Noise Masking',
     icon: Volume2,
     color: 'from-cyan-500 to-blue-500',
-    lead: 'Steady acoustic textures and auditory beat frequencies provide consistent acoustic masking, minimizing auditory distractibility.',
-    paperCitation: 'Herrmann (2001), "Human EEG Responses to 1-100 Hz Flutter Stimuli"; Sörqvist et al. (2012)',
+    lead: 'Steady background sound can mask sudden noises and nearby speech that pull your attention away. It is a comfort tool, not a memory booster: evidence for tone-based "brainwave" effects is mixed.',
+    paperCitation: 'Banbury et al. (2001), "Auditory Distraction and Short-Term Memory"; Sörqvist (2010)',
     comparison: {
       flawed: {
-        label: 'Silence or Pop Songs with Lyrics',
-        description: 'Silence leaves room for task-unrelated thoughts; lyrics hijack the phonological loop needed for reading.'
+        label: 'Lyrics or Nearby Conversation',
+        description: 'Speech, including song lyrics, competes for the verbal memory you use while reading (the irrelevant speech effect).'
       },
       science: {
-        label: '40Hz Gamma Beat + Brown Noise',
-        description: 'Auditory beat frequencies provide steady acoustic texture; brown noise blankets sudden ambient acoustic spikes.'
+        label: 'Steady Noise or a Constant Tone',
+        description: 'Masks sudden sounds without adding words to process. Use whichever you find least distracting, or silence if that works for you.'
       }
     },
     keyTakeaways: [
-      'Use headphones for true binaural stereo channel separation (Left: 200Hz, Right: 240Hz = 40Hz beat).',
-      'Auditory beat soundscapes provide predictable acoustic rhythms without linguistic distraction.',
-      'Brown and pink noise utilize stochastic acoustic smoothing to blanket distracting environmental sounds.'
+      'Lyrics and nearby speech are the most disruptive background sounds for reading and recall.',
+      'Brown, pink or rain noise can mask distracting conversations in a noisy room.',
+      'Claims that 40 Hz tones or binaural beats improve memory are not well established; use them only if you like how they feel.'
     ],
-    protocolTip: 'Turn on 40Hz Gamma Binaural Beats in the top audio bar whenever you enter a high-stakes focus session.'
+    protocolTip: 'In a noisy place, try brown noise or rain at low volume. In a quiet room, silence is fine.'
   }
 ];
 

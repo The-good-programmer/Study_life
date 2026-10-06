@@ -85,7 +85,7 @@ export const SynapticFlexModal: React.FC<SynapticFlexModalProps> = ({
           {/* Card Top Brand */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <span className="font-black text-sm text-white tracking-tight font-display">Lotti</span>
+              <span className="font-black text-sm text-white tracking-tight font-display">Studify</span>
               <span className="text-[8px] font-mono uppercase px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                 Spaced Recall
               </span>

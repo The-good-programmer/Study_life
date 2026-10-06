@@ -170,7 +170,7 @@ export const StudyHUD: React.FC<StudyHUDProps> = ({
                   <span>Bluetooth Controller (Joy-Con / 8BitDo / Xbox)</span>
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Turn on your controller and press any button. Lotti pairs automatically.
+                  Turn on your controller and press any button. Studify pairs automatically.
                   Use Button A/B to flip, D-Pad/face buttons to rate effortlessly!
                 </p>
               </div>

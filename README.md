@@ -1,91 +1,99 @@
 # Studify — Learn Anything in 3 Minutes a Day
 
-> **The delightfully habit-forming spaced recall platform powered by cognitive neuroscience and customizable 3D Student Avatars.**
+> **A spaced-repetition study app built on well-tested learning techniques: retrieval practice, spacing, and interleaving.**
 
-Studify eliminates study planning friction, decision fatigue, and ineffective passive habits (like re-reading notes or highlight bingeing). When you open Studify, you can jump straight into a 3-minute tactile practice sprint or drop a lecture PDF for instant micro-mastery.
-
-### 🎓 Fully Customizable 3D Student Avatar
-Instead of generic cartoon mascots, **Studify puts you at the center with a real-time Three.js 3D character**:
-* **Complete Customization:** Customize hairstyle & hair color, gender/sex & body build, skin tone, eye color, wardrobe (hoodies, varsity jackets, oxford shirts, knit sweaters, lab coats, jeans, pleated skirts, chinos, joggers), footwear, and accessories (eyewear, headphones with LED glow, graduation caps, beanies, halos, crowns).
-* **3D Study Campus:** Your customized 3D character inhabits your 3D study estate, animates with idle, wave, study, and cheer poses, and reacts to your focus streaks.
-* **Persistent & Offline:** Instant local persistence with zero asset-loading latency via procedural Three.js PBR geometry.
+Open Studify, pick a starter deck or turn your own notes or a lecture PDF into flashcards, and review for a few minutes a day. The scheduler decides what you should see next, so you don't have to plan.
 
 ---
 
-## 🧠 Scientific Principles Built-In
+## 🔁 The core study loop
 
-Lotti is engineered directly from empirical cognitive psychology and neuroscience:
+1. **Add material** — pick a ready-made starter deck (ranked for your level), paste notes, import Anki/Quizlet/CSV, or drop a PDF.
+2. **Review** — active recall flashcards, rated *Again / Hard / Good / Easy*.
+3. **Let the scheduler work** — reviews are spaced with the open-source FSRS algorithm (`ts-fsrs`), so cards come back just before you would forget them.
+4. **See progress** — the retention dashboard shows what's due, what's sticking, and which cards keep failing.
 
-1. **Phase 1: Priming & Dual Coding (Sweller / Paivio)**
-   - Before reading granular text, Lotti primes the brain with an intuitive visual mental model, 3 high-yield takeaways, and interactive terminology chips.
-   - Dual-coding concept graph visualizes conceptual relations and hierarchies.
+## 🧠 What the techniques are (and the evidence behind them)
 
-2. **Phase 2: The Feynman Technique / Elaborative Interrogation (Dunlosky et al., 2013)**
-   - Forces active encoding: *"Explain this concept simply without reading notes or relying on jargon."*
-   - Honest Socratic evaluation analyzes your submission against core takeaways (or offline self-assessment when offline), highlighting points you mastered, nuances you missed, and giving constructive feedback.
-   - Optional speech-to-text oral defense with natural vocal pacing.
+- **Retrieval practice** (Roediger & Karpicke, 2006): recalling an answer strengthens memory more than re-reading it. Every review is a recall attempt.
+- **Spacing** (Cepeda et al., 2006): reviews spread over days beat cramming. FSRS schedules the gaps.
+- **Interleaving** (Rohrer & Taylor, 2007): the *Mix Decks* arena mixes subjects so you practise telling problem types apart.
+- **Explain it simply** (the Feynman technique / elaborative interrogation, Dunlosky et al., 2013): the guided mode asks you to explain a concept in your own words and checks it against the key ideas.
+- **Short breaks**: an optional 3-minute rest with box breathing and eye-strain relief between study blocks.
 
-3. **Phase 3: Active Retrieval Practice & FSRS Spaced Repetition (Roediger & Karpicke, 2006)**
-   - Interactive flashcards force active recall (The Testing Effect).
-   - 4-tier effort rating (*Again, Hard, Good, Easy*) dynamically schedules future reviews using the official Free Spaced Repetition Scheduler (`ts-fsrs`) to counteract the Ebbinghaus forgetting curve.
-   - Leech Hunter Lab detects cards with repeated lapses and helps decompose them into atomic, high-retention concepts.
+## 🎯 Practice modes
 
-4. **Phase 4: Neuroscience Micro-Rest & Ultradian Reset (Kleitman)**
-   - Long-term memory consolidation happens during offline rest.
-   - 3-minute guided rest with interactive **4-4-4-4 Box Breathing visualizer**, 20-20-20 eye strain relaxation, and hydration prompts.
+- **Quick practice** — straight to your due cards.
+- **Guided session** — priming → explain-it-simply → recall → rest.
+- **Mock Exam** — timed test conditions with flagging and a post-exam breakdown.
+- **Mix Decks** — interleaved cards across subjects.
+- **Speed Match** — fast term/definition matching, with keyboard shortcuts 1–9.
+- **Image Occlusion** — hide labels on diagrams and recall them (Anki-style).
+- **Leech Hunter** — finds cards you keep failing and helps split them into simpler ones.
+- **Gamepad review** — flip and grade cards with a Bluetooth controller (HTML5 Gamepad API).
 
-5. **Study Arenas & Multi-Modal Cognition**
-   - **Interleaving Arena:** Mixes flashcards across multiple diverse subjects to counter the illusion of mastery from blocked practice.
-   - **Exam Simulator:** Simulates real test conditions with strict timers, flagging, and detailed post-exam analytics.
-   - **Match Arena:** Rapid-fire prompt-and-target matching with combo multipliers and keyboard hotkeys (keys 1–9) for reflex-level indexing.
-   - **Image Occlusion Studio:** Draw visual occlusion masks over anatomical, architectural, or technical diagrams (Anki-style).
-   - **Dual-Coding Canvas:** Freehand sketching whiteboard for visual thinking, offloaded to IndexedDB.
-   - **Bluetooth Gamepad Review:** Ergonomic one-handed card flipping and grading using 8BitDo Zero 2, 8BitDo Micro, Nintendo Switch Joy-Cons, Xbox, or PlayStation controllers via the HTML5 Gamepad API.
+### Focus audio (optional)
 
-6. **Built-in Web Audio Focus Sound Engine**
-   - Synthesizes **40Hz Gamma Beats & Alpha Soundscapes** (for acoustic masking, working memory buffer support, and sustained attention).
-   - Real-time Brownian Noise generator to mask distracting ambient speech.
-   - Gentle Rain and Lo-Fi meditative drones.
+Built-in background audio generated with the Web Audio API: brown noise, rain, and steady tones. Steady noise can mask distracting speech nearby. Claims that 40 Hz tones or binaural beats improve memory are not well established, so treat these as a comfort setting.
+
+## ✨ Extras
+
+Optional, non-study features live in the sidebar's collapsed **Extras** group: a customizable 3D student avatar and a home and room designer where you spend tokens earned by studying.
 
 ---
 
 ## 🚀 Getting Started
 
-### 1. Run Development Server
+### Frontend
 ```bash
 npm install
 npm run dev
 ```
-Open [http://localhost:5173/](http://localhost:5173/) in your browser.
+Open [http://localhost:5173/](http://localhost:5173/). Everything works offline without the backend: decks and reviews are stored locally, and AI features use your own Gemini key (Settings) or a built-in offline fallback.
 
-### 2. Build for Production
+### Backend (optional: accounts, cloud sync, shared AI)
+```bash
+cp server/.env.example server/.env   # then fill it in
+npm run server
+```
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `JWT_SECRET` | **Production** | Signs login tokens. At least 32 characters; the server refuses to start in production without it. In development a random secret is generated per run. |
+| `GOOGLE_CLIENT_ID` | For Google sign-in | Must match the frontend's `VITE_GOOGLE_CLIENT_ID`. Used to verify Google tokens on the server. |
+| `GEMINI_API_KEY` | For shared AI | Enables the AI proxy. Only signed-in users can use it. |
+| `AI_DAILY_QUOTA` | No (default 200) | Shared AI requests per user per day. |
+| `ALLOWED_ORIGINS` | No | Comma-separated browser origins allowed to call the API. Defaults to the local dev and preview ports. |
+| `PORT`, `DATABASE_PATH` | No | Server port (3001) and SQLite file location. |
+
+### Tests, types and lint
+```bash
+npm test
+npx tsc -b
+npm run lint
+```
+
+### Build for production
 ```bash
 npm run build
 ```
 
 ---
 
-## 📱 Mobile App Readiness (iOS & Android)
+## 📱 Mobile (PWA & Capacitor)
 
-Lotti is architected mobile-first and is ready to run as an app in two ways:
+### PWA
+- **iPhone / iPad:** open in Safari → **Share** → **Add to Home Screen**.
+- **Android:** open in Chrome → ⋮ → **Install App**.
 
-### A. Instant PWA (Progressive Web App)
-- **iPhone / iPad:** Open in Safari, tap the **Share** button $\rightarrow$ **Add to Home Screen**.
-- **Android:** Open in Chrome, tap the three dots $\rightarrow$ **Install App**.
-- The app runs in standalone mode with full offline capability, app icon, and no browser address bar.
+The app runs standalone and works offline.
 
-### B. Native iOS & Android Build (via Capacitor)
-The project includes pre-configured `capacitor.config.ts`. To export to native iOS and Android projects:
+### Native iOS & Android (Capacitor)
 ```bash
-# Add platforms
 npx cap add ios
 npx cap add android
-
-# Build and sync web assets
 npm run build
 npx cap sync
-
-# Open in Xcode or Android Studio
 npx cap open ios
 npx cap open android
 ```
@@ -93,10 +101,9 @@ npx cap open android
 ---
 
 ## 🛠️ Technology Stack
-- **Frontend:** React 19 + TypeScript + Vite 8
-- **Styling:** Tailwind CSS v4 (Distraction-free dark study aesthetic)
-- **Icons & UI:** Lucide React + Canvas Confetti
-- **Audio Synthesis:** Native Web Audio API (Zero external audio downloads needed)
-- **AI Intelligence:** Google Gemini (`@google/genai` with `gemini-3.5-flash` cascade) + Intelligent local heuristic cognitive fallback
-- **Storage:** Local-First (`localStorage` + `IndexedDB`) — Zero sign-up barrier to start studying immediately
-- **Portability:** Full round-trip `.json`, `.md`, `.tsv` deck export and import
+- **Frontend:** React 19 + TypeScript + Vite 8, Tailwind CSS v4, Lucide icons
+- **Scheduling:** `ts-fsrs` (Free Spaced Repetition Scheduler)
+- **AI:** Google Gemini via `@google/genai` (`gemini-2.5-flash` with fallbacks), plus an offline heuristic fallback
+- **Storage:** local-first (`localStorage` + IndexedDB); optional Node + SQLite backend (`node:sqlite`) for accounts and sync
+- **3D (Extras only, lazy-loaded):** Three.js
+- **Portability:** round-trip `.json`, `.md`, `.tsv` deck export and import

@@ -415,7 +415,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
 
         <p className="text-xs text-slate-300 leading-relaxed font-sans">
           {missedProbes.length > 0 
-            ? `Your pre-test registered attention gaps in ${missedProbes.map(p => p.conceptTitle).join(', ')}. Lotti can isolate these exact items into a hyper-focused 3-minute rescue session.`
+            ? `Your pre-test registered attention gaps in ${missedProbes.map(p => p.conceptTitle).join(', ')}. Studify can isolate these exact items into a hyper-focused 3-minute rescue session.`
             : `All diagnostic probes were mastered. You can still generate an instant rapid consolidation deck for quick review before your exam.`}
         </p>
 

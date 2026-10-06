@@ -362,7 +362,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
                   <div className="space-y-1">
                     {[
                       { id: 'off', label: 'Mute' },
-                      { id: 'binaural-40hz', label: '🧠 40Hz Gamma Focus' },
+                      { id: 'binaural-40hz', label: '🎧 40 Hz Tone' },
                       { id: 'binaural-alpha-10hz', label: '🧘 10Hz Alpha Waves' },
                       { id: 'brown-noise', label: '🌊 Brownian Deep Noise' },
                       { id: 'pink-noise', label: '🌸 Pink Noise (Memory)' },

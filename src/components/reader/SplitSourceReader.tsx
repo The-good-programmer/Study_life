@@ -495,7 +495,7 @@ export const SplitSourceReader: React.FC<SplitSourceReaderProps> = ({
 
               {/* Page Footer */}
               <div className="border-t border-white/[0.06] pt-3 flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                <span>Lotti Coordinate Deep-Linking</span>
+                <span>Studify Coordinate Deep-Linking</span>
                 <span>Ground Truth Verified</span>
               </div>
 

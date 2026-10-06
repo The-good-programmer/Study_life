@@ -721,11 +721,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* 40Hz Audio Focus Toggle */}
+        {/* Focus Audio Toggle */}
         <button
           onClick={toggleSound}
-          aria-label={!isMuted ? 'Mute focus audio' : 'Play 40Hz focus audio'}
-          title={!isMuted ? '40Hz Focus Active (Click to mute)' : 'Soundscape Muted (Click to play)'}
+          aria-label={!isMuted ? 'Mute focus audio' : 'Play focus audio'}
+          title={!isMuted ? 'Focus audio on (click to mute)' : 'Focus audio off (click to play)'}
           className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer flex items-center relative group ${
             isExpanded ? 'justify-between px-3 py-2' : 'justify-center px-0 h-10'
           } ${
@@ -747,7 +747,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
             {isExpanded && (
               <span className="truncate font-medium">
-                {!isMuted ? '40Hz Focus' : 'Focus Audio'}
+                {!isMuted ? 'Focus Audio On' : 'Focus Audio'}
               </span>
             )}
           </div>
