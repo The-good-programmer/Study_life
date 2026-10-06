@@ -134,7 +134,7 @@ export const DailyLedgerWidget: React.FC<DailyLedgerWidgetProps> = ({
               <span key={b.id} className="text-xs text-white font-medium flex items-center gap-1">
                 <span>{b.emoji}</span>
                 <span>{b.name}</span>
-                <span className="text-[11px] text-pink-300/80">({b.buffType === 'coin_multiplier' ? `+${Math.round((b.buffValue - 1) * 100)}% Coins` : '+XP'})</span>
+                <span className="text-[11px] text-pink-300/80">({b.buffType === 'coin_multiplier' ? `+${Math.round((b.buffValue - 1) * 100)}% Coins` : '+Wage Boost'})</span>
               </span>
             ))}
           </div>

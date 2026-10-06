@@ -6,59 +6,56 @@
       <stop offset="100%" stop-color="#050811" />
     </linearGradient>
 
-    <!-- Bioluminescent Gill Glow -->
-    <linearGradient id="rose-glow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fb7185" />
-      <stop offset="100%" stop-color="#f43f5e" />
+    <!-- Indigo to Violet Gradient -->
+    <linearGradient id="indigo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8" />
+      <stop offset="100%" stop-color="#4f46e5" />
     </linearGradient>
 
-    <!-- Synapse Cyan -->
+    <!-- Synapse Cyan Gradient -->
     <linearGradient id="cyan-glow" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#38bdf8" />
       <stop offset="100%" stop-color="#06b6d4" />
     </linearGradient>
 
+    <!-- Gold Accent Gradient -->
+    <linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+
     <!-- Filter Glow -->
     <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feGaussianBlur stdDeviation="3.5" result="blur" />
       <feComposite in="SourceGraphic" in2="blur" operator="over" />
     </filter>
   </defs>
 
   <!-- Container App Icon -->
-  <rect width="128" height="128" rx="32" fill="url(#bg-grad)" stroke="#38bdf8" stroke-width="2" stroke-opacity="0.3" />
+  <rect width="128" height="128" rx="32" fill="url(#bg-grad)" stroke="#38bdf8" stroke-width="2" stroke-opacity="0.35" />
 
-  <!-- Outer Axolotl Gill Filaments (Left & Right) -->
-  <g filter="url(#neon-glow)">
-    <!-- Left Gills -->
-    <path d="M 38 48 C 22 42 16 34 22 28 C 30 24 38 38 44 46" fill="none" stroke="url(#rose-glow)" stroke-width="4.5" stroke-linecap="round" />
-    <path d="M 34 62 C 16 60 12 52 18 46 C 26 42 34 54 40 60" fill="none" stroke="url(#rose-glow)" stroke-width="4" stroke-linecap="round" />
-    <path d="M 36 76 C 20 80 16 90 24 94 C 32 96 38 84 42 74" fill="none" stroke="url(#rose-glow)" stroke-width="3.5" stroke-linecap="round" />
+  <!-- Ambient Glow Behind Avatar Headwear -->
+  <circle cx="64" cy="64" r="32" fill="#6366f1" opacity="0.15" filter="url(#neon-glow)" />
 
-    <!-- Right Gills -->
-    <path d="M 90 48 C 106 42 112 34 106 28 C 98 24 90 38 84 46" fill="none" stroke="url(#rose-glow)" stroke-width="4.5" stroke-linecap="round" />
-    <path d="M 94 62 C 112 60 116 52 110 46 C 102 42 94 54 88 60" fill="none" stroke="url(#rose-glow)" stroke-width="4" stroke-linecap="round" />
-    <path d="M 92 76 C 108 80 112 90 104 94 C 96 96 90 84 86 74" fill="none" stroke="url(#rose-glow)" stroke-width="3.5" stroke-linecap="round" />
-  </g>
+  <!-- 3D Student Diamond Mortarboard Rhombus Top -->
+  <path d="M 64 26 L 102 44 L 64 62 L 26 44 Z" fill="url(#indigo-grad)" stroke="#38bdf8" stroke-width="2.5" filter="url(#neon-glow)" />
+  
+  <!-- Mortarboard Cap Skull Cap Base -->
+  <path d="M 40 51 L 40 66 C 40 76 88 76 88 66 L 88 51" fill="#1e1b4b" stroke="#6366f1" stroke-width="2" />
 
-  <!-- Central Head & Synapse Core -->
-  <circle cx="64" cy="62" r="26" fill="#0f172a" stroke="#f43f5e" stroke-width="2.5" />
+  <!-- Golden Tassel & Hanging Cord -->
+  <path d="M 64 44 L 94 48 L 96 74" fill="none" stroke="url(#gold-grad)" stroke-width="2.5" stroke-linecap="round" />
+  <circle cx="96" cy="76" r="3.5" fill="url(#gold-grad)" filter="url(#neon-glow)" />
 
-  <!-- 40Hz Audio Headband Arc -->
-  <path d="M 44 48 C 44 32 84 32 84 48" fill="none" stroke="#64748b" stroke-width="4" stroke-linecap="round" />
-  <!-- Headphone ear cups -->
-  <rect x="38" y="44" width="8" height="14" rx="4" fill="url(#cyan-glow)" filter="url(#neon-glow)" />
-  <rect x="82" y="44" width="8" height="14" rx="4" fill="url(#cyan-glow)" filter="url(#neon-glow)" />
+  <!-- Stylized 3D Student Head / Focus Core -->
+  <circle cx="64" cy="80" r="16" fill="#0f172a" stroke="url(#cyan-glow)" stroke-width="2" />
 
-  <!-- Axolotl Friendly Eyes -->
-  <circle cx="53" cy="58" r="3.5" fill="#f8fafc" />
-  <circle cx="75" cy="58" r="3.5" fill="#f8fafc" />
-  <circle cx="54" cy="57" r="1.5" fill="#0f172a" />
-  <circle cx="76" cy="57" r="1.5" fill="#0f172a" />
+  <!-- 3D Student Smart Headphone Arc -->
+  <path d="M 44 80 C 44 68 84 68 84 80" fill="none" stroke="#64748b" stroke-width="3" stroke-linecap="round" />
+  <rect x="42" y="74" width="5" height="12" rx="2.5" fill="url(#cyan-glow)" filter="url(#neon-glow)" />
+  <rect x="81" y="74" width="5" height="12" rx="2.5" fill="url(#cyan-glow)" filter="url(#neon-glow)" />
 
-  <!-- Gentle Smile -->
-  <path d="M 58 67 Q 64 72 70 67" fill="none" stroke="#f43f5e" stroke-width="2.5" stroke-linecap="round" />
-
-  <!-- Glowing Synapse / 40Hz Waves below -->
-  <path d="M 52 82 Q 58 86 64 82 Q 70 78 76 82" fill="none" stroke="url(#cyan-glow)" stroke-width="2.5" stroke-linecap="round" filter="url(#neon-glow)" />
+  <!-- Synaptic Radiance Arc -->
+  <path d="M 48 104 Q 64 96 80 104" fill="none" stroke="url(#cyan-glow)" stroke-width="3" stroke-linecap="round" opacity="0.8" />
+  <circle cx="64" cy="100" r="2.5" fill="#38bdf8" filter="url(#neon-glow)" />
 </svg>

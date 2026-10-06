@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Play, 
   Star, 
@@ -21,10 +21,12 @@ import {
   Share2,
   FileJson
 } from 'lucide-react';
-import type { StudySession, RetrievalCard } from '../../types';
+import type { StudySession, RetrievalCard, SubjectFolder } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { ExportService } from '../../services/exportService';
 import { soundEngine } from '../../services/soundEngine';
+import { MoveToFolderModal } from './MoveToFolderModal';
+import { SubjectFolderModal, FOLDER_COLORS } from './SubjectFolderModal';
 
 interface DeckStationModalProps {
   isOpen: boolean;
@@ -73,6 +75,15 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
   const [cardSearch, setCardSearch] = useState('');
   const [cardFilter, setCardFilter] = useState<'all' | 'starred' | 'image-occlusion' | 'cloze'>('all');
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
+  const [currentFolderId, setCurrentFolderId] = useState<string | undefined>(session?.folderId);
+  const [folders, setFolders] = useState<SubjectFolder[]>(() => StorageService.getFolders());
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+
+  useEffect(() => {
+    setCurrentFolderId(session?.folderId);
+    setFolders(StorageService.getFolders());
+  }, [session]);
   const [starredCardIds, setStarredCardIds] = useState<Set<string>>(() => {
     if (!session) return new Set();
     const starred = session.concepts.flatMap(c => c.retrievalCards).filter(rc => rc.isStarred).map(rc => rc.id);
@@ -131,10 +142,41 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
         <div className="p-6 border-b border-white/[0.08] bg-slate-950/70 shrink-0 space-y-4">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
                   {session.category || 'General Curriculum'}
                 </span>
+
+                {/* Subject Folder Badge */}
+                {(() => {
+                  const folder = folders.find(f => f.id === currentFolderId);
+                  if (folder) {
+                    const colDef = FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0];
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setIsMoveModalOpen(true)}
+                        className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${colDef.bg} ${colDef.text} border ${colDef.border} flex items-center gap-1 hover:scale-105 transition-transform cursor-pointer`}
+                        title="Subject Folder — Click to change or reassign"
+                      >
+                        <span>{folder.icon || '📁'}</span>
+                        <span>{folder.name}</span>
+                      </button>
+                    );
+                  }
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setIsMoveModalOpen(true)}
+                      className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-slate-400 hover:text-slate-200 border border-white/[0.08] flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Organize deck into a Subject Folder"
+                    >
+                      <span>📁</span>
+                      <span>+ Subject Folder</span>
+                    </button>
+                  );
+                })()}
+
                 {session.sourceDocument && (
                   <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">
                     <FileText className="w-3 h-3 text-sky-400" />
@@ -591,6 +633,35 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Move to Folder Modal */}
+      {isMoveModalOpen && (
+        <MoveToFolderModal
+          isOpen={isMoveModalOpen}
+          session={{ ...session, folderId: currentFolderId }}
+          onClose={() => setIsMoveModalOpen(false)}
+          onMoved={(updated) => {
+            setCurrentFolderId(updated.folderId);
+          }}
+          onOpenNewFolderModal={() => {
+            setIsMoveModalOpen(false);
+            setIsFolderModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Subject Folder Creation Modal */}
+      {isFolderModalOpen && (
+        <SubjectFolderModal
+          isOpen={isFolderModalOpen}
+          onClose={() => setIsFolderModalOpen(false)}
+          onFolderSaved={(newFolder) => {
+            setFolders(StorageService.getFolders());
+            StorageService.setDeckFolder(session.id, newFolder.id);
+            setCurrentFolderId(newFolder.id);
+          }}
+        />
+      )}
     </div>
   );
 };

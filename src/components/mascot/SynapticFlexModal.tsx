@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { StudySession, UserStats } from '../../types';
 import { soundEngine } from '../../services/soundEngine';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
 interface SynapticFlexModalProps {
   isOpen: boolean;
@@ -33,11 +34,11 @@ export const SynapticFlexModal: React.FC<SynapticFlexModalProps> = ({
 
   if (!isOpen) return null;
 
-  const flexText = `🧠 Just conquered a ${minutes}m study session on Lotti!
+  const flexText = `🧠 Just conquered a ${minutes}m study session on Studify!
 📚 Topic: "${session.title}"
 ⚡ Cleared: ${session.concepts.length} Concept Nodes • ${totalCards} FSRS Active Recall Reps
 🔥 Streak: ${stats.currentStreak} Days
-🦎 Lottie: "Synapses wire when they fire."`;
+✨ "Synapses wire when they fire. Zero passive reading."`;
 
   const handleCopyText = async () => {
     try {
@@ -95,14 +96,14 @@ export const SynapticFlexModal: React.FC<SynapticFlexModalProps> = ({
             </div>
           </div>
 
-          {/* Lottie Mascot Hero Avatar */}
+          {/* Character Hero Avatar */}
           <div className="relative w-24 h-24 mx-auto group">
-            <div className="absolute -inset-2.5 rounded-full bg-gradient-to-tr from-pink-500/40 via-purple-500/30 to-cyan-400/40 blur-lg animate-pulse" />
-            <div className="relative w-full h-full rounded-2xl overflow-hidden bg-slate-950 border border-pink-500/40 shadow-xl p-0.5">
-              <img src="/lottie.png" alt="Lottie Trophy" className="w-full h-full object-cover rounded-[14px]" />
+            <div className="absolute -inset-2.5 rounded-full bg-gradient-to-tr from-indigo-500/40 via-purple-500/30 to-cyan-400/40 blur-lg animate-pulse" />
+            <div className="relative w-full h-full rounded-2xl overflow-hidden bg-slate-950 border border-indigo-500/40 shadow-xl flex items-center justify-center p-0.5">
+              <UserAvatarBadge size="lg" />
             </div>
-            <div className="absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full bg-slate-950 border border-pink-500/40 text-[11px] font-bold text-pink-300 flex items-center gap-1 shadow-md">
-              <Sparkles className="w-2.5 h-2.5 text-pink-400" />
+            <div className="absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full bg-slate-950 border border-indigo-500/40 text-[11px] font-bold text-indigo-300 flex items-center gap-1 shadow-md">
+              <Sparkles className="w-2.5 h-2.5 text-indigo-400" />
               <span>Mastery</span>
             </div>
           </div>
@@ -144,9 +145,9 @@ export const SynapticFlexModal: React.FC<SynapticFlexModalProps> = ({
             </div>
           </div>
 
-          {/* Mascot Lore Tagline */}
-          <div className="p-2.5 rounded-xl bg-pink-500/10 border border-pink-500/20 text-[11px] text-pink-200 font-medium">
-            🦎 Lottie: "Synapses wire when they fire. Zero passive reading."
+          {/* Tagline */}
+          <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-indigo-200 font-medium">
+            ✨ Cognitive Creed: "Synapses wire when they fire. Zero passive reading."
           </div>
 
         </div>

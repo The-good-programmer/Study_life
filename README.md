@@ -1,14 +1,14 @@
-# Lotti — Learn Anything in 3 Minutes a Day
+# Studify — Learn Anything in 3 Minutes a Day
 
-> **The delightfully habit-forming spaced recall platform powered by cognitive neuroscience.**
+> **The delightfully habit-forming spaced recall platform powered by cognitive neuroscience and customizable 3D Student Avatars.**
 
-Lotti eliminates study planning friction, decision fatigue, and ineffective passive habits (like re-reading notes or highlight bingeing). When you open Lotti, you can jump straight into a 3-minute tactile practice sprint or drop a lecture PDF for instant micro-mastery.
+Studify eliminates study planning friction, decision fatigue, and ineffective passive habits (like re-reading notes or highlight bingeing). When you open Studify, you can jump straight into a 3-minute tactile practice sprint or drop a lecture PDF for instant micro-mastery.
 
-### 🦎 Meet Lottie — The Neuro-Axolotl Mascot
-Duolingo has Duo the Owl; **Lotti has Lottie the Neuro-Axolotl**. 
-* Axolotls are the only vertebrates on Earth capable of **regenerating their own brain cells**. 
-* Lottie embodies **neuroplasticity**: every active retrieval repetition reinforces memory retention.
-* Lottie guides you through active recall puzzles, tracks your leeches, masks distractions with focus soundscapes, and tracks your personal weekly study output!
+### 🎓 Fully Customizable 3D Student Avatar
+Instead of generic cartoon mascots, **Studify puts you at the center with a real-time Three.js 3D character**:
+* **Complete Customization:** Customize hairstyle & hair color, gender/sex & body build, skin tone, eye color, wardrobe (hoodies, varsity jackets, oxford shirts, knit sweaters, lab coats, jeans, pleated skirts, chinos, joggers), footwear, and accessories (eyewear, headphones with LED glow, graduation caps, beanies, halos, crowns).
+* **3D Study Campus:** Your customized 3D character inhabits your 3D study estate, animates with idle, wave, study, and cheer poses, and reacts to your focus streaks.
+* **Persistent & Offline:** Instant local persistence with zero asset-loading latency via procedural Three.js PBR geometry.
 
 ---
 

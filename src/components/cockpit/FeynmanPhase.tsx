@@ -21,21 +21,28 @@ import {
   RotateCcw,
   PenTool,
   BookOpen,
-  Brain
+  Brain,
+  Link2
 } from 'lucide-react';
-import type { ConceptCheckpoint, FeynmanEvaluation, SocraticTurn, VivaDefenseVerdict } from '../../types';
+import type { ConceptCheckpoint, FeynmanEvaluation, SocraticTurn, VivaDefenseVerdict, CrossDeckBridge } from '../../types';
 import { AIService } from '../../services/aiService';
 import { soundEngine } from '../../services/soundEngine';
 import { speechService } from '../../services/speechService';
 import { StorageService } from '../../services/storageService';
+import { FSRSService } from '../../services/fsrsService';
+import { KnowledgeGraphService } from '../../services/knowledgeGraphService';
+import { AudioWaveformVisualizer } from './AudioWaveformVisualizer';
 import { MathRenderer } from '../common/MathRenderer';
 import { DualCodingWhiteboard } from '../canvas/DualCodingWhiteboard';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
+import { characterService } from '../../services/characterService';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
 interface FeynmanPhaseProps {
   concept: ConceptCheckpoint;
   onComplete: () => void;
-  onInspectSource?: (pageNumber?: number) => void;
+  onInspectSource?: (pageNumber?: number, snippet?: string) => void;
+  sessionId?: string;
 }
 
 interface IWindow extends Window {
@@ -47,11 +54,22 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
   concept, 
   onComplete,
   onInspectSource,
+  sessionId,
 }) => {
   // Mode selection: Oral Viva Voce (Socratic Board) vs Written Rubric
   const [feynmanMode, setFeynmanMode] = useState<'viva' | 'written'>('viva');
   const [showWhiteboard, setShowWhiteboard] = useState<boolean>(false);
   const [showScienceModal, setShowScienceModal] = useState(false);
+  const [showCrossBridges, setShowCrossBridges] = useState(false);
+  const [pedState, setPedState] = useState(() => FSRSService.getConceptPedagogicalState(concept.retrievalCards || []));
+  const [crossBridges, setCrossBridges] = useState<CrossDeckBridge[]>([]);
+
+  useEffect(() => {
+    setPedState(FSRSService.getConceptPedagogicalState(concept.retrievalCards || []));
+    if (sessionId) {
+      setCrossBridges(KnowledgeGraphService.findCrossDeckBridges(concept, sessionId, 4));
+    }
+  }, [concept, sessionId]);
 
   // Shared Speech Recognition & Synthesis State
   const [isListening, setIsListening] = useState(false);
@@ -69,7 +87,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
     {
       id: `turn-init-${concept.id}`,
       role: 'examiner',
-      text: `Welcome to your oral defense on "${concept.title}"! I am Lottie, your Socratic Examiner. ${concept.feynmanPrompt} Defend this mechanism clearly in your own words—no jargon crutches!`,
+      text: `Welcome to your oral defense on "${concept.title}"! I am ${characterService.getCharacter().name || 'your Socratic Study Partner'}. ${concept.feynmanPrompt} Defend this mechanism clearly in your own words—no jargon crutches!`,
       timestamp: Date.now(),
       turnType: 'initial-prompt',
       reaction: 'probing',
@@ -221,15 +239,38 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
     setCandidateSpeech('');
     setIsVivaThinking(true);
 
+    const streamingTurnId = `turn-examiner-${Date.now()}`;
+    const placeholderExaminerTurn: SocraticTurn = {
+      id: streamingTurnId,
+      role: 'examiner',
+      text: '',
+      timestamp: Date.now(),
+      turnType: vivaRounds >= 3 ? 'verdict' : 'mechanism-probe',
+      reaction: 'probing',
+    };
+    setVivaTurns([...currentHistory, placeholderExaminerTurn]);
+
     try {
-      const response = await AIService.conductVivaVoceTurn(
+      let accumulatedText = '';
+      const response = await AIService.streamVivaVoceTurn(
         concept,
         currentHistory,
         cleanInput,
-        vivaRounds
+        vivaRounds,
+        (chunk) => {
+          accumulatedText += chunk;
+          setVivaTurns(prev =>
+            prev.map(t => (t.id === streamingTurnId ? { ...t, text: accumulatedText } : t))
+          );
+        },
+        undefined,
+        sessionId
       );
 
-      setVivaTurns([...currentHistory, response.nextTurn]);
+      // Finalize turn with completed response
+      setVivaTurns(prev =>
+        prev.map(t => (t.id === streamingTurnId ? { ...response.nextTurn, id: streamingTurnId } : t))
+      );
 
       if (response.verdict) {
         setVivaVerdict(response.verdict);
@@ -245,7 +286,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
         speechService.speak(response.nextTurn.text, () => {
           setSpeakingTurnId(null);
         });
-        setSpeakingTurnId(response.nextTurn.id);
+        setSpeakingTurnId(streamingTurnId);
       }
     } catch (err) {
       console.error('Viva Voce evaluation failed:', err);
@@ -298,7 +339,8 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
 
     setIsEvaluating(true);
     try {
-      const result = await AIService.evaluateFeynmanExplanation(concept, explanation);
+      const diagramDataUrl = StorageService.getConceptDiagram(concept.id) || concept.diagramDataUrl;
+      const result = await AIService.evaluateFeynmanExplanation(concept, explanation, diagramDataUrl || undefined, sessionId);
       setEvaluation(result);
       soundEngine.playCompletionChime();
       StorageService.addXP(50);
@@ -345,7 +387,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
           <button
             type="button"
             onClick={() => {
-              soundEngine.playAxolotlBubble();
+              soundEngine.playCompanionBubble();
               setShowScienceModal(true);
             }}
             className="px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 hover:text-purple-200 border border-purple-500/30 shadow-sm cursor-pointer"
@@ -408,7 +450,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
             {concept.sourceAnchor && onInspectSource && (
               <button
                 type="button"
-                onClick={() => onInspectSource(concept.sourceAnchor?.pageNumber)}
+                onClick={() => onInspectSource(concept.sourceAnchor?.pageNumber, concept.sourceAnchor?.snippet)}
                 className="px-3 py-1.5 rounded-xl border border-indigo-500/30 bg-slate-900/90 hover:bg-indigo-950/80 text-indigo-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
                 title={`Jump to Page ${concept.sourceAnchor.pageNumber} in original source`}
               >
@@ -486,6 +528,98 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
               </div>
             </div>
 
+            {/* Adaptive Socratic Strictness HUD & Cross-Deck Knowledge Connections */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-slate-950/70 border border-white/[0.06]">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div
+                  className={`px-3 py-1 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 border shadow-sm ${
+                    pedState.mode === 'scaffolding'
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : pedState.mode === 'adversarial'
+                      ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                      : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                  }`}
+                  title={pedState.guidanceDirective}
+                >
+                  <span className="w-2 h-2 rounded-full animate-pulse bg-current" />
+                  <span>FSRS Retrievability: {Math.round(pedState.retrievability)}%</span>
+                  <span className="opacity-40">|</span>
+                  <span className="uppercase tracking-wider">
+                    {pedState.mode === 'scaffolding'
+                      ? 'Scaffolding Mode'
+                      : pedState.mode === 'adversarial'
+                      ? 'Adversarial Inoculation'
+                      : 'Dialectic Mode'}
+                  </span>
+                </div>
+
+                {crossBridges.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCrossBridges(!showCrossBridges)}
+                    className="px-2.5 py-1 rounded-full text-xs font-mono font-semibold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 transition-all flex items-center gap-1 cursor-pointer"
+                    title="View Cross-Deck Knowledge Connections"
+                  >
+                    <Link2 className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{crossBridges.length} Cross-Deck {crossBridges.length === 1 ? 'Bridge' : 'Bridges'}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Real-time Audio Waveform Visualizer */}
+              {(isListening || Boolean(speakingTurnId && isSpeakingTutor)) && (
+                <AudioWaveformVisualizer
+                  isActive={true}
+                  mode={isListening ? 'candidate' : 'examiner'}
+                  barCount={14}
+                />
+              )}
+            </div>
+
+            {/* Expandable Cross-Deck Knowledge Bridges Popover */}
+            {showCrossBridges && crossBridges.length > 0 && (
+              <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 space-y-2 text-xs animate-fadeIn">
+                <div className="font-bold text-indigo-200 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Link2 className="w-4 h-4 text-indigo-400" />
+                    <span>Cross-Deck Knowledge Graph Bridges</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowCrossBridges(false)}
+                    className="text-slate-400 hover:text-white text-[11px]"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {crossBridges.map(b => (
+                    <div
+                      key={b.targetConceptId}
+                      className="p-2.5 rounded-xl bg-slate-900/80 border border-white/[0.06] space-y-1"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-white truncate max-w-[170px]">{b.targetConceptTitle}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-mono font-bold ${
+                          b.relationshipType === 'prerequisite'
+                            ? 'bg-amber-500/20 text-amber-300'
+                            : 'bg-indigo-500/20 text-indigo-300'
+                        }`}>
+                          {b.relationshipType}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        In deck: <span className="text-slate-200 font-medium">{b.targetDeckTitle}</span>
+                      </div>
+                      <div className="text-[10px] text-indigo-300 font-mono">
+                        Shared: {b.sharedTerms.slice(0, 3).join(', ')} • Retrievability: {Math.round(b.retrievabilityScore)}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Conversation Transcript Feed */}
             <div className="space-y-4 max-h-[460px] overflow-y-auto pr-1 sm:pr-2">
               {vivaTurns.map((turn) => {
@@ -500,15 +634,15 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                     }`}
                   >
                     {isExaminer && (
-                      <div className="relative w-9 h-9 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 border border-pink-400/40 flex items-center justify-center shrink-0 shadow-lg shadow-pink-500/20 mt-1">
-                        <img src="/lottie.png" alt="Lottie Socratic Examiner" className="w-full h-full object-cover rounded-[14px]" />
+                      <div className="relative w-9 h-9 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 border border-indigo-400/40 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-500/20 mt-1">
+                        <UserAvatarBadge size="xs" showBorder={false} />
                       </div>
                     )}
 
                     <div
                       className={`max-w-[85%] rounded-3xl p-4 sm:p-5 space-y-2 border text-xs sm:text-sm leading-relaxed ${
                         isExaminer
-                          ? 'bg-slate-900/90 border-pink-500/25 text-slate-100 shadow-xl'
+                          ? 'bg-slate-900/90 border-indigo-500/25 text-slate-100 shadow-xl'
                           : 'bg-indigo-950/60 border-indigo-500/40 text-indigo-50 shadow-xl'
                       }`}
                     >
@@ -516,8 +650,8 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                       <div className="flex items-center justify-between gap-3 text-[11px] pb-1 border-b border-white/[0.06]">
                         <div className="flex items-center gap-1.5 font-bold font-display">
                           {isExaminer ? (
-                            <span className="text-pink-300 flex items-center gap-1.5">
-                              <span>Lottie</span>
+                            <span className="text-cyan-300 flex items-center gap-1.5">
+                              <span>{characterService.getCharacter().name || 'Socratic Examiner'}</span>
                               <span className="text-[11px] font-mono text-cyan-400 font-normal px-1.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
                                 {AIService.isAvailable() ? 'AI Socratic Examiner' : 'Offline Guided Review'}
                               </span>
@@ -677,6 +811,25 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                       </button>
                     )}
 
+                    {/* Live Interrupt Examiner Button */}
+                    {isSpeakingTutor && speakingTurnId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          speechService.stop();
+                          setSpeakingTurnId(null);
+                          if (speechSupported && !isListening) {
+                            toggleVoiceDictation();
+                          }
+                        }}
+                        className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white border border-rose-400 shadow-xl shadow-rose-600/30 flex items-center gap-1.5 animate-pulse cursor-pointer"
+                        title="Interrupt the examiner mid-sentence and interject aloud"
+                      >
+                        <VolumeX className="w-4 h-4" />
+                        <span>Interrupt & Interject</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => setCandidateSpeech(concept.sampleMasteryExplanation)}
@@ -719,8 +872,8 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                       </div>
                     </div>
 
-                    <div className="px-3.5 py-1.5 rounded-xl bg-purple-500/20 border border-purple-500/40 text-purple-300 font-mono text-xs font-bold text-center">
-                      +100 XP Honors Awarded
+                    <div className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono text-xs font-bold text-center">
+                      +50 🪙 Honors Wage Awarded
                     </div>
                   </div>
 
@@ -1051,6 +1204,36 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
                         <li key={i}>{gap}</li>
                       ))}
                     </ul>
+                  </div>
+                )}
+
+                {/* Multimodal Dual-Coding Diagram Inspection */}
+                {evaluation.diagramAnalysis && (
+                  <div className="p-5 rounded-2xl bg-indigo-950/25 border border-indigo-500/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold text-indigo-300 flex items-center gap-1.5 uppercase tracking-wide font-display">
+                        <PenTool className="w-4 h-4 text-indigo-400" />
+                        <span>Dual-Coding Whiteboard Diagram Inspection</span>
+                      </div>
+                      <span className="text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        Visual Alignment: {evaluation.diagramAnalysis.alignmentScore}%
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs leading-relaxed">
+                      {evaluation.diagramAnalysis.visualStrengths && (
+                        <div className="p-3 rounded-xl bg-slate-900/60 border border-emerald-500/20 text-slate-200 space-y-1">
+                          <span className="text-[11px] font-bold text-emerald-400 block font-display">✓ Visual Intuition Strengths</span>
+                          <p>{evaluation.diagramAnalysis.visualStrengths}</p>
+                        </div>
+                      )}
+                      {evaluation.diagramAnalysis.visualFlawsOrGaps && (
+                        <div className="p-3 rounded-xl bg-slate-900/60 border border-amber-500/20 text-slate-200 space-y-1">
+                          <span className="text-[11px] font-bold text-amber-400 block font-display">⚠ Visual Flaws or Missing Flow</span>
+                          <p>{evaluation.diagramAnalysis.visualFlawsOrGaps}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

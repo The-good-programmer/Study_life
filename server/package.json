@@ -1,0 +1,14 @@
+{
+  "name": "studify-server",
+  "version": "1.0.0",
+  "description": "Production-ready backend API & AI Gateway for Studify",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.25.0"
+  }
+}

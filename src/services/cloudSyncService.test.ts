@@ -9,14 +9,14 @@ describe('CloudSyncService', () => {
   it('generates a valid formatted cryptographic sync token', () => {
     const token = CloudSyncService.generateSyncToken();
     expect(token).toBeDefined();
-    expect(token.startsWith('LOTTI-SYNC-')).toBe(true);
+    expect(token.startsWith('STUDIFY-SYNC-')).toBe(true);
     expect(token.length).toBeGreaterThan(15);
   });
 
   it('fails honestly when remote endpoint URL is not configured', async () => {
     CloudSyncService.saveConfig({
       enabled: true,
-      cloudToken: 'LOTTI-SYNC-TEST-1234',
+      cloudToken: 'STUDIFY-SYNC-TEST-1234',
       endpointUrl: '',
     });
 
@@ -28,30 +28,32 @@ describe('CloudSyncService', () => {
   it('saves and reads sync configuration accurately', () => {
     const saved = CloudSyncService.saveConfig({
       enabled: true,
-      cloudToken: 'LOTTI-SYNC-AAA-BBB',
+      cloudToken: 'STUDIFY-SYNC-AAA-BBB',
       endpointUrl: 'https://example.com/sync',
       autoSyncOnReview: true,
     });
 
     expect(saved.enabled).toBe(true);
-    expect(saved.cloudToken).toBe('LOTTI-SYNC-AAA-BBB');
+    expect(saved.cloudToken).toBe('STUDIFY-SYNC-AAA-BBB');
     expect(saved.endpointUrl).toBe('https://example.com/sync');
 
     const retrieved = CloudSyncService.getConfig();
-    expect(retrieved.cloudToken).toBe('LOTTI-SYNC-AAA-BBB');
+    expect(retrieved.cloudToken).toBe('STUDIFY-SYNC-AAA-BBB');
     expect(retrieved.endpointUrl).toBe('https://example.com/sync');
   });
 
-  it('includes axolotl sanctuary state in createSyncPayload', () => {
-    const mockAxolotl = {
-      level: 5,
-      xp: 320,
-      decorations: ['crystal_rock', 'seaweed'],
+  it('includes 3D character and legacy state in createSyncPayload', () => {
+    const mockCharacter = {
+      name: 'Dr. Turing',
+      hairStyle: 'quiff',
+      hairColor: '#4b2e1e',
+      gender: 'male',
+      coins: 450,
     };
-    localStorage.setItem('studify_axolotl_sanctuary_v1', JSON.stringify(mockAxolotl));
+    localStorage.setItem('studify_user_character_v1', JSON.stringify(mockCharacter));
 
     const payload = CloudSyncService.createSyncPayload();
-    expect(payload.axolotlState).toEqual(mockAxolotl);
+    expect(payload.characterState).toEqual(mockCharacter);
     expect(payload.version).toBe(2);
     expect(payload.checksum).toBeDefined();
   });
@@ -73,6 +75,11 @@ describe('CloudSyncService', () => {
         todayMinutes: 20,
         lastStudyDate: new Date().toISOString(),
       },
+      characterState: {
+        name: 'Ada Lovelace',
+        coins: 888,
+        hairStyle: 'twin-braids',
+      },
       axolotlState: {
         level: 8,
         xp: 750,
@@ -81,6 +88,10 @@ describe('CloudSyncService', () => {
     };
 
     CloudSyncService.mergeRemoteData(remotePayload as any);
+
+    const charStored = JSON.parse(localStorage.getItem('studify_user_character_v1') || '{}');
+    expect(charStored.name).toBe('Ada Lovelace');
+    expect(charStored.coins).toBe(888);
 
     const axolotlStored = JSON.parse(localStorage.getItem('studify_axolotl_sanctuary_v1') || '{}');
     expect(axolotlStored.level).toBe(8);

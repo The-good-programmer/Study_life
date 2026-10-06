@@ -14,7 +14,9 @@ import { FSRSService } from '../../services/fsrsService';
 import { StorageService } from '../../services/storageService';
 import { AIService } from '../../services/aiService';
 import { soundEngine } from '../../services/soundEngine';
+import { lifeSimService } from '../../services/lifeSimService';
 import { MathRenderer } from '../common/MathRenderer';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
 interface LeechHunterLabProps {
   onBack: () => void;
@@ -69,6 +71,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
     const updatedCards = StorageService.getAllCards();
     setAllCards(updatedCards);
     StorageService.addXP(40);
+    lifeSimService.awardStudyWage('Mnemonic Leech Cure', 25);
     soundEngine.playCompletionChime();
 
     setCuredNotice(`Cured! Mnemonic anchor attached. Synaptic stability restored.`);
@@ -103,6 +106,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
     setAllCards(updatedCards);
 
     StorageService.addXP(60);
+    lifeSimService.awardStudyWage('Atomic Leech Decomposition', 30);
     soundEngine.playCompletionChime();
 
     setCuredNotice(`Decomposed into ${newCards.length} atomic cloze cards! Minimum Information Principle applied.`);
@@ -192,10 +196,10 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
       {/* Main Grid: Leech Queue & Rewiring Studio */}
       {leeches.length === 0 ? (
         <div className="p-10 text-center rounded-3xl glass-panel space-y-4 max-w-lg mx-auto border border-emerald-500/20">
-          <div className="relative w-20 h-20 mx-auto">
+          <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
             <div className="absolute -inset-2 rounded-3xl bg-emerald-500/20 blur-md animate-pulse" />
-            <div className="relative w-full h-full rounded-2xl overflow-hidden border border-emerald-500/30 p-0.5 bg-slate-950">
-              <img src="/lottie.png" alt="Lottie Detective" className="w-full h-full object-cover rounded-[14px]" />
+            <div className="relative w-full h-full rounded-2xl overflow-hidden border border-emerald-500/30 p-0.5 bg-slate-950 flex items-center justify-center">
+              <UserAvatarBadge size="lg" showBorder={false} />
             </div>
           </div>
           <div className="space-y-1">
@@ -203,7 +207,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
               Zero Synaptic Leeches Detected!
             </h3>
             <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
-              Lottie inspected your memory stability graph. Every flashcard demonstrates healthy retention—no memory bottlenecks!
+              Your memory stability graph has been thoroughly analyzed. Every flashcard demonstrates healthy retention—no memory bottlenecks!
             </p>
           </div>
           <button
@@ -348,7 +352,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
                                 className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-purple-600/25 shrink-0 self-start sm:self-auto"
                               >
                                 <Split className="w-3.5 h-3.5" />
-                                <span>Decompose into 2 Cards (+60 XP)</span>
+                                <span>Decompose into 2 Cards (+30 🪙 Wage)</span>
                               </button>
                             ) : (
                               <button
@@ -356,7 +360,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
                                 className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/25 shrink-0 self-start sm:self-auto"
                               >
                                 <Check className="w-3.5 h-3.5" />
-                                <span>Apply Mnemonic Cure (+40 XP)</span>
+                                <span>Apply Mnemonic Cure (+25 🪙 Wage)</span>
                               </button>
                             )}
                           </div>

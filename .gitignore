@@ -24,3 +24,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Database & Server Data
+server/data/*.sqlite*
+server/.env
+!server/.env.example

@@ -12,6 +12,8 @@ import {
   CheckCircle2 
 } from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
+import { characterService } from '../../services/characterService';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
 interface CognitiveTourModalProps {
   isOpen: boolean;
@@ -25,7 +27,7 @@ interface TourStep {
   citations: string;
   badge: string;
   badgeColor: string;
-  lottieQuote: string;
+  quote: string;
   description: string;
   highlights: string[];
   icon: React.ElementType;
@@ -38,8 +40,8 @@ const TOUR_STEPS: TourStep[] = [
     citations: "Sweller (Cognitive Load Theory) • Paivio (Dual Coding)",
     badge: "Active Priming",
     badgeColor: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30",
-    lottieQuote: "Never read cold text! We prime your working memory with concept graphs and core anchors first so new facts click into place effortlessly.",
-    description: "Before diving into complex paragraphs, Lotti synthesizes an intuitive mental graph, 3 high-yield takeaways, and interactive terminology chips to drastically reduce cognitive load.",
+    quote: "Never read cold text! We prime your working memory with concept graphs and core anchors first so new facts click into place effortlessly.",
+    description: "Before diving into complex paragraphs, Studify synthesizes an intuitive mental graph, 3 high-yield takeaways, and interactive terminology chips to drastically reduce cognitive load.",
     highlights: [
       "Visual concept relationship graph",
       "Key terminology chips with instant definitions",
@@ -53,10 +55,10 @@ const TOUR_STEPS: TourStep[] = [
     citations: "Dunlosky et al. (2013) • Richard Feynman",
     badge: "Elaborative Interrogation",
     badgeColor: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-    lottieQuote: "If you can't explain it simply to an aquatic salamander, you don't own it yet! No jargon crutches allowed—let's test your real understanding.",
-    description: "Forces active generation. You explain the concept in your own voice or text. Lottie acts as your Socratic Examiner, evaluating causality, catching logical gaps, and pushing for simplicity.",
+    quote: "If you can't explain it simply in plain words, you don't own it yet! No jargon crutches allowed—let's test your real understanding.",
+    description: "Forces active generation. You explain the concept in your own voice or text. Your customized 3D study partner acts as your Socratic Examiner, evaluating causality, catching logical gaps, and pushing for simplicity.",
     highlights: [
-      "Live Socratic examiner AI (Lottie)",
+      "Live Socratic Examiner AI",
       "Speech-to-text oral defense with real-time feedback",
       "Nuance and misconception detection"
     ],
@@ -68,7 +70,7 @@ const TOUR_STEPS: TourStep[] = [
     citations: "Roediger & Karpicke (Testing Effect) • ts-fsrs Algorithm",
     badge: "Memory Stabilization",
     badgeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
-    lottieQuote: "Re-reading notes gives a counterfeit feeling of knowing. Real learning is the struggle to pull memories out of the void. And yes, you can do it with a Nintendo Switch Joy-Con!",
+    quote: "Re-reading notes gives a counterfeit feeling of knowing. Real learning is the struggle to pull memories out of the void. And yes, you can do it with a Nintendo Switch Joy-Con!",
     description: "Interactive flashcards force active memory retrieval. Four-tier effort ratings feed directly into the modern Free Spaced Repetition Scheduler (FSRS) algorithm to defy the Ebbinghaus forgetting curve.",
     highlights: [
       "Official ts-fsrs spaced repetition with leech auto-detection",
@@ -83,8 +85,8 @@ const TOUR_STEPS: TourStep[] = [
     citations: "Kleitman (Ultradian Rhythms) • Stanford Neuroscience",
     badge: "Memory Consolidation",
     badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-    lottieQuote: "Your brain doesn't store memories while you're grinding—it locks them in during offline rest! 3 minutes of box breathing triggers 10x hippocampal replay.",
-    description: "Long-term potentiation requires neural recovery. Lotti orchestrates a guided 3-minute rest with an animated 4-4-4-4 Box Breathing visualizer, 20-20-20 eye strain relaxation, and 40Hz soundscape resets.",
+    quote: "Your brain doesn't store memories while you're grinding—it locks them in during offline rest! 3 minutes of box breathing triggers 10x hippocampal replay.",
+    description: "Long-term potentiation requires neural recovery. Studify orchestrates a guided 3-minute rest with an animated 4-4-4-4 Box Breathing visualizer, 20-20-20 eye strain relaxation, and 40Hz soundscape resets.",
     highlights: [
       "Dynamic 4-4-4-4 Box Breathing visualizer",
       "Hippocampal memory consolidation protocol",
@@ -142,13 +144,13 @@ export const CognitiveTourModal: React.FC<CognitiveTourModalProps> = ({
         {/* Top Header */}
         <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] relative z-10">
           <div className="flex items-center gap-2.5">
-            <div className="relative w-8 h-8 rounded-xl overflow-hidden p-0.5 bg-gradient-to-tr from-pink-500 to-cyan-400">
-              <img src="/lottie.png" alt="Lottie" className="w-full h-full object-cover rounded-[10px]" />
+            <div className="relative w-8 h-8 rounded-xl overflow-hidden p-0.5 bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center">
+              <UserAvatarBadge size="xs" showBorder={false} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-extrabold text-white font-display">Lotti Architecture</span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">
+                <span className="text-sm font-extrabold text-white font-display">Studify Architecture</span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   Step {currentStep + 1} of 4
                 </span>
               </div>
@@ -198,18 +200,18 @@ export const CognitiveTourModal: React.FC<CognitiveTourModalProps> = ({
             </span>
           </div>
 
-          {/* Lottie Dialogue Card */}
-          <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-gradient-to-r from-pink-500/10 via-purple-500/5 to-cyan-500/10 border border-pink-500/25">
-            <div className="relative w-12 h-12 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-pink-500 to-cyan-400 shrink-0 shadow-md">
-              <img src="/lottie.png" alt="Lottie" className="w-full h-full object-cover rounded-[14px]" />
+          {/* Companion Dialogue Card */}
+          <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-cyan-500/10 border border-indigo-500/25">
+            <div className="relative w-12 h-12 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-indigo-500 to-cyan-400 shrink-0 shadow-md flex items-center justify-center">
+              <UserAvatarBadge size="sm" showBorder={false} />
             </div>
             <div className="space-y-1">
-              <div className="text-[11px] font-bold text-pink-300 flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3 text-pink-400" />
-                <span>Lottie's Neuro Insight</span>
+              <div className="text-[11px] font-bold text-cyan-300 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-cyan-400" />
+                <span>{characterService.getCharacter().name || 'Study Partner'}'s Neuro Insight</span>
               </div>
               <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
-                "{step.lottieQuote}"
+                "{step.quote}"
               </p>
             </div>
           </div>

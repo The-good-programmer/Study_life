@@ -8,11 +8,13 @@ import { soundEngine } from '../../services/soundEngine';
 import { ConceptGraph } from './ConceptGraph';
 import { DualCodingWhiteboard } from '../canvas/DualCodingWhiteboard';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
+import { characterService } from '../../services/characterService';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
 interface PrimingPhaseProps {
   concept: ConceptCheckpoint;
   onComplete: () => void;
-  onInspectSource?: (pageNumber?: number) => void;
+  onInspectSource?: (pageNumber?: number, snippet?: string) => void;
   diagnosticMissed?: boolean;
   isCasualMode?: boolean;
 }
@@ -52,15 +54,11 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fadeIn py-2">
       
-      {/* Phase 1: Lottie Co-Pilot Priming Briefing */}
+      {/* Phase 1: Co-Pilot Priming Briefing */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-3xl bg-gradient-to-r from-indigo-950/60 via-slate-900/70 to-purple-950/50 border border-indigo-500/25 backdrop-blur-xl shadow-lg">
         <div className="flex items-center gap-3 text-xs sm:text-sm text-indigo-300">
-          <div className="relative w-9 h-9 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 shrink-0 shadow-md">
-            <img 
-              src="/lottie.png" 
-              alt="Lottie Co-Pilot" 
-              className="w-full h-full object-cover rounded-[14px]"
-            />
+          <div className="relative w-9 h-9 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 shrink-0 shadow-md flex items-center justify-center">
+            <UserAvatarBadge size="xs" showBorder={false} />
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-cyan-400 ring-2 ring-slate-950 animate-ping" />
           </div>
           <div>
@@ -69,7 +67,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  soundEngine.playAxolotlBubble();
+                  soundEngine.playCompanionBubble();
                   setShowScienceModal(true);
                 }}
                 className="px-2 py-0.5 rounded-full bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-300 hover:text-white border border-indigo-500/30 text-[11px] font-mono flex items-center gap-1 cursor-pointer transition-all shadow-sm"
@@ -80,7 +78,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
               </button>
             </div>
             <div className="text-[11px] text-slate-300">
-              <span className="text-pink-300 font-semibold font-display">Lottie:</span> "Get the big picture in 30 seconds before you test your recall!"
+              <span className="text-cyan-300 font-semibold font-display">{characterService.getCharacter().name || 'Study Co-Pilot'}:</span> "Get the big picture in 30 seconds before you test your recall!"
             </div>
           </div>
         </div>
@@ -89,7 +87,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
           {concept.sourceAnchor && onInspectSource && (
             <button
               type="button"
-              onClick={() => onInspectSource(concept.sourceAnchor?.pageNumber)}
+              onClick={() => onInspectSource(concept.sourceAnchor?.pageNumber, concept.sourceAnchor?.snippet)}
               className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-white border border-indigo-500/30 flex items-center gap-1.5 transition-all shadow-sm"
               title={`Jump to page ${concept.sourceAnchor.pageNumber} in source document`}
             >
@@ -97,8 +95,8 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
               <span>Source: p.{concept.sourceAnchor.pageNumber}</span>
             </button>
           )}
-          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shrink-0 font-mono">
-            +20 XP
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 font-mono">
+            +15 🪙 Wage
           </span>
         </div>
       </div>

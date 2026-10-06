@@ -22,6 +22,8 @@ import { soundEngine } from '../../services/soundEngine';
 import { MathRenderer } from '../common/MathRenderer';
 import { LeechHunterLab } from './LeechHunterLab';
 import { CurriculumKnowledgeMap } from './CurriculumKnowledgeMap';
+import { characterService } from '../../services/characterService';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
 import { gamepadService, type GamepadAction } from '../../services/gamepadService';
 
@@ -425,11 +427,11 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
         </div>
       </div>
 
-      {/* Daily Review Queue Action Banner with Lottie Guardian */}
+      {/* Daily Review Queue Action Banner with Character Coach */}
       <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-slate-900/90 via-indigo-950/40 to-slate-900/90 border border-indigo-500/30 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-5">
         <div className="flex items-center gap-3.5 text-center sm:text-left">
-          <div className="relative w-12 h-12 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 shrink-0 shadow-lg hidden sm:block">
-            <img src="/lottie.png" alt="Lottie Guardian" className="w-full h-full object-cover rounded-[14px]" />
+          <div className="relative w-12 h-12 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 shrink-0 shadow-lg hidden sm:flex items-center justify-center">
+            <UserAvatarBadge size="sm" showBorder={false} />
             {dueCards.length > 0 && (
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-slate-950 animate-ping" />
             )}
@@ -440,7 +442,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
               <h3 className="text-base font-bold text-white font-display">Daily Memory Reinforcement Queue</h3>
             </div>
             <p className="text-xs text-slate-300">
-              <span className="text-pink-300 font-semibold font-display">Lottie:</span> {dueCards.length > 0
+              <span className="text-cyan-300 font-semibold font-display">{characterService.getCharacter().name || 'Study Coach'}:</span> {dueCards.length > 0
                 ? `"You have ${dueCards.length} flashcard(s) due today. Clearing them today doubles their biological stability!"`
                 : '"All memory traces consolidated! Your neocortex is in peak shape today."'}
             </p>

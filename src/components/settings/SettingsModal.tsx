@@ -511,7 +511,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
           </div>
 
           <p className="text-xs text-slate-400 leading-relaxed font-sans">
-            Get a warm nudge before your streak resets. Lottie checks if you have pending review cards and alerts your device.
+            Get a warm nudge before your streak resets. Your study coach checks if you have pending review cards and alerts your device.
           </p>
 
           <div className="space-y-1.5 pt-1">

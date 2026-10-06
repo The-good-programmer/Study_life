@@ -11,7 +11,6 @@ import {
   BarChart3, 
   Timer,
   BookMarked,
-  Sparkles,
   Zap,
   HelpCircle
 } from 'lucide-react';
@@ -259,11 +258,12 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
     const { updatedCard } = FSRSService.schedule(currentCard, rating);
     StorageService.saveCard(updatedCard);
 
-    // Audio and XP
+    // Audio and Study Wage
     if (isCorrect) {
       soundEngine.playCorrectChime();
-      const baseXP = isContextShift ? 25 : 15; // Context switch resilience bonus
-      StorageService.addXP(baseXP);
+      const baseWage = isContextShift ? 25 : 15; // Context switch resilience bonus
+      StorageService.addXP(baseWage);
+      lifeSimService.awardStudyWage('Interleaving Shift Drill', baseWage);
       if (isContextShift) setContextShiftStreak(prev => prev + 1);
     } else {
       soundEngine.playIncorrectChime();
@@ -665,7 +665,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                 </span>
               </div>
               <span className="text-[11px] font-mono uppercase bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded border border-amber-400/30 font-bold hidden sm:inline">
-                +10 XP Resilience Bonus
+                +10 🪙 Context Shift Bonus
               </span>
             </div>
           )}
@@ -821,9 +821,9 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
               </p>
             </div>
 
-            <div className="px-3.5 py-1.5 rounded-xl bg-purple-500/20 border border-purple-500/30 text-purple-300 text-xs font-mono font-bold flex items-center gap-1.5 shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-              <span>+{finalReport.xpEarned} XP Earned</span>
+            <div className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-mono font-bold flex items-center gap-1.5 shadow-sm">
+              <span className="text-amber-400">🪙</span>
+              <span>+{finalReport.xpEarned} Wages Earned</span>
             </div>
           </div>
 

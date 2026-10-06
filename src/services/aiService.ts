@@ -12,10 +12,15 @@ import type {
   AcademicGradeLevel, 
   StudentEducationProfile,
   DiagnosticDistractor,
-  SocraticHintLadder 
+  SocraticHintLadder,
+  ConceptPedagogicalState
 } from '../types';
 import { StorageService } from './storageService';
+import { FSRSService } from './fsrsService';
+import { KnowledgeGraphService } from './knowledgeGraphService';
 import { DepthEstimationService, SUPPORTED_LANGUAGES } from './depthEstimationService';
+import { ApiConfig } from './apiConfig';
+import { FEYNMAN_EVALUATION_SCHEMA, VIVA_VOCE_TURN_SCHEMA, LEECH_ANALYSIS_SCHEMA, STUDY_SESSION_GENERATION_SCHEMA } from './aiSchemas';
 
 export interface VivaVoceTurnResponse {
   nextTurn: SocraticTurn;
@@ -25,10 +30,10 @@ export interface VivaVoceTurnResponse {
 
 export class AIService {
   /**
-   * Checks whether a user-configured Gemini API key is present
+   * Checks whether AI generation is available (via backend proxy or user-configured Gemini API key)
    */
   public static isAvailable(): boolean {
-    return Boolean(StorageService.getApiKey());
+    return Boolean(StorageService.getApiKey()) || ApiConfig.isServerReachableSync();
   }
 
   private static getClient(customKey?: string): GoogleGenAI | null {
@@ -41,6 +46,44 @@ export class AIService {
       console.error('Failed to initialize GoogleGenAI client:', err);
       return null;
     }
+  }
+
+  /**
+   * Unified generation entry point:
+   * 1. Attempts backend server proxy (/api/ai/generate) if server is reachable.
+   * 2. Otherwise falls back to client-side GoogleGenAI client (if user entered API key).
+   * 3. Throws if neither is available so calling functions can execute their cognitive heuristics.
+   */
+  public static async generateText(
+    contents: string | any,
+    responseMimeType?: string,
+    enableThinking: boolean = false,
+    responseSchema?: Record<string, unknown>
+  ): Promise<string> {
+    // 1. Try server proxy if server is reachable
+    try {
+      const isServerUp = await ApiConfig.isServerReachable();
+      if (isServerUp) {
+        const res = await ApiConfig.request<{ text: string }>('/ai/generate', {
+          method: 'POST',
+          body: JSON.stringify({ contents, responseMimeType, enableThinking, responseSchema }),
+        });
+        if (res.ok && res.data?.text) {
+          return res.data.text;
+        }
+      }
+    } catch (err) {
+      console.warn('[AIService] Backend AI proxy request failed, checking client key...', err);
+    }
+
+    // 2. Try client-side API key with candidate models
+    const client = this.getClient();
+    if (client) {
+      const response = await this.generateContentWithFallback(client, contents, responseMimeType, enableThinking, responseSchema);
+      return response.text || '';
+    }
+
+    throw new Error('No AI provider available (server offline and no client API key configured).');
   }
 
   private static readonly MODEL_CANDIDATES = [
@@ -61,15 +104,19 @@ export class AIService {
 
   private static async generateContentWithFallback(
     ai: GoogleGenAI,
-    contents: string,
+    contents: string | any,
     responseMimeType?: string,
-    enableThinking: boolean = false
+    enableThinking: boolean = false,
+    responseSchema?: Record<string, unknown>
   ) {
     let lastError: unknown = null;
     for (const model of this.MODEL_CANDIDATES) {
       const buildConfig = (includeThinking: boolean) => {
         const config: Record<string, unknown> = {};
-        if (responseMimeType) {
+        if (responseSchema) {
+          config.responseSchema = responseSchema;
+          config.responseMimeType = 'application/json';
+        } else if (responseMimeType) {
           config.responseMimeType = responseMimeType;
         }
         if (includeThinking && this.supportsThinking(model)) {
@@ -145,14 +192,20 @@ export class AIService {
   }
 
   /**
-   * Evaluates student's Feynman explanation using Gemini or intelligent cognitive heuristic fallback
+   * Evaluates student's Feynman explanation using Gemini or intelligent cognitive heuristic fallback.
+   * Supports multimodal inspection of whiteboard sketches and adapts to student cognitive memory.
    */
   public static async evaluateFeynmanExplanation(
     concept: ConceptCheckpoint,
-    userExplanation: string
+    userExplanation: string,
+    diagramDataUrl?: string,
+    currentSessionId?: string
   ): Promise<FeynmanEvaluation> {
-    const ai = this.getClient();
     const cleanExplanation = userExplanation.trim();
+    const pedState = FSRSService.getConceptPedagogicalState(concept.retrievalCards || []);
+    const crossBridges = currentSessionId
+      ? KnowledgeGraphService.findCrossDeckBridges(concept, currentSessionId, 2)
+      : [];
 
     if (cleanExplanation.length < 25) {
       return {
@@ -165,8 +218,20 @@ export class AIService {
       };
     }
 
-    if (ai) {
+    if (this.isAvailable() || this.getClient()) {
       try {
+        const memoryProfile = StorageService.getCognitiveMemoryProfile();
+        const profileContext = memoryProfile.totalCards > 0
+          ? `
+LONGITUDINAL STUDENT COGNITIVE PROFILE:
+- Known Vulnerability Traps: ${memoryProfile.vulnerableTrapTypes.length > 0 ? memoryProfile.vulnerableTrapTypes.join(', ') : 'None'}
+- Frequent Cognitive Bottlenecks: ${memoryProfile.frequentLapseConcepts.length > 0 ? memoryProfile.frequentLapseConcepts.slice(0, 3).join(', ') : 'None'}
+- Overall Mastery Ratio: ${memoryProfile.masteredCards} / ${memoryProfile.totalCards} cards stable
+`
+          : '';
+
+        const hasDiagram = Boolean(diagramDataUrl && diagramDataUrl.trim().length > 50);
+
         const prompt = `
 You are a cognitive psychology tutor evaluating a student's explanation using the Feynman Technique.
 Target Concept: "${concept.title}"
@@ -174,28 +239,61 @@ Mental Model: "${concept.mentalModel}"
 Core Takeaways to cover: ${JSON.stringify(concept.coreTakeaways)}
 Key Terms: ${JSON.stringify(concept.keyTerms.map(k => k.term))}
 Challenge Prompt: "${concept.feynmanPrompt}"
+${profileContext}
+
+ADAPTIVE SOCRATIC PEDAGOGY (FSRS-5):
+- Target Concept Retrievability: ${pedState.retrievability}% (${pedState.mode.toUpperCase()})
+- Examiner Directive: ${pedState.guidanceDirective}
+${crossBridges.length > 0 ? `
+CROSS-DECK KNOWLEDGE BRIDGES:
+The student has related concepts in their other decks:
+${crossBridges.map(b => `- "${b.targetConceptTitle}" in deck "${b.targetDeckTitle}" (${b.relationshipType}, Shared Terms: ${b.sharedTerms.join(', ')})`).join('\n')}
+` : ''}
 
 Student's Explanation:
 """${cleanExplanation}"""
 
-Evaluate the student's submission. Return ONLY valid JSON with this exact schema:
-{
-  "score": number between 0 and 100,
-  "grade": "Novice" | "Developing" | "Solid Understanding" | "Complete Mastery",
-  "masteredPoints": string[],
-  "missingNuances": string[],
-  "jargonDetected": string[],
-  "actionableFeedback": string
-}
+${hasDiagram ? `
+MULTIMODAL DUAL-CODING DIAGRAM INSPECTION:
+The student also drew an accompanying visual schematic on their dual-coding whiteboard (image payload attached).
+Inspect the student's visual sketch carefully:
+- Check for accurate spatial layout, labeled entities, and arrow directionality.
+- Populate "diagramAnalysis":
+  * "visualStrengths": Key elements, relationships, or flows the student drew accurately.
+  * "visualFlawsOrGaps": Missing arrows, reversed cause-and-effect vectors, or spatial misconceptions.
+  * "alignmentScore": 0-100 objective score evaluating diagram alignment with the scientific concept.
+` : ''}
+
+CALIBRATED SCORING RUBRIC & ANCHOR BENCHMARKS:
+- 0-45% (Novice / Pure Jargon): Student mentions buzzwords or textbook definitions without articulating cause-and-effect. Uses circular definitions or commits major factual errors.
+- 46-75% (Developing / Partial Understanding): Identifies core entities and partial facts, but misses the underlying causal mechanism, driving force, or key boundary conditions.
+- 76-90% (Solid Understanding): Clear cause-and-effect chain. Explains how A leads to B, uses minimal jargon crutches, and demonstrates genuine mechanical intuition.
+- 91-100% (Complete Mastery): Lucid, intuitive explanation of the governing mechanism with an accessible mental model or analogy, perfectly explaining why the phenomenon occurs without ungrounded jargon.
+
+CHAIN-OF-THOUGHT INSTRUCTION:
+Before assigning the final score, you MUST articulate your step-by-step cognitive analysis in "reasoningTrace", explicitly evaluating the presence of causal mechanisms versus ungrounded jargon${hasDiagram ? ' and integrating your inspection of their visual diagram' : ''}.
 `;
 
-        const response = await this.generateContentWithFallback(
-          ai,
-          prompt,
-          'application/json'
-        );
+        let contentsPayload: any = prompt;
+        if (hasDiagram && diagramDataUrl) {
+          const base64Data = diagramDataUrl.includes(',') ? diagramDataUrl.split(',')[1] : diagramDataUrl;
+          contentsPayload = [
+            {
+              role: 'user',
+              parts: [
+                { text: prompt },
+                {
+                  inlineData: {
+                    mimeType: 'image/png',
+                    data: base64Data,
+                  },
+                },
+              ],
+            },
+          ];
+        }
 
-        const text = response.text || '';
+        const text = await this.generateText(contentsPayload, 'application/json', true, FEYNMAN_EVALUATION_SCHEMA);
         const parsed = this.safeParseJSON<Partial<FeynmanEvaluation>>(text, {});
         return {
           score: Math.min(100, Math.max(0, parsed.score || 75)),
@@ -203,7 +301,8 @@ Evaluate the student's submission. Return ONLY valid JSON with this exact schema
           masteredPoints: parsed.masteredPoints || ['Captured the core high-level idea.'],
           missingNuances: parsed.missingNuances || ['Consider expanding on the underlying mechanism.'],
           jargonDetected: parsed.jargonDetected || [],
-          actionableFeedback: parsed.actionableFeedback || 'Great active recall attempt! Solidifying the nuances will lock this into long-term memory.'
+          actionableFeedback: parsed.actionableFeedback || 'Great active recall attempt! Solidifying the nuances will lock this into long-term memory.',
+          diagramAnalysis: parsed.diagramAnalysis,
         };
       } catch (err) {
         console.warn('Gemini API call failed, falling back to cognitive heuristic analysis:', err);
@@ -211,7 +310,7 @@ Evaluate the student's submission. Return ONLY valid JSON with this exact schema
     }
 
     // High quality cognitive fallback when API key is not present or offline
-    return this.heuristicFeynmanEvaluation(concept, cleanExplanation);
+    return this.heuristicFeynmanEvaluation(concept, cleanExplanation, pedState);
   }
 
   /**
@@ -222,11 +321,10 @@ Evaluate the student's submission. Return ONLY valid JSON with this exact schema
     userExplanation: string,
     studentQuestion: string
   ): Promise<string> {
-    const ai = this.getClient();
     const cleanQ = studentQuestion.trim();
     if (!cleanQ) return 'Please ask a specific clarifying question regarding this concept.';
 
-    if (ai) {
+    if (this.isAvailable() || this.getClient()) {
       try {
         const prompt = `
 You are a warm, concise Socratic science tutor helping a student deeply understand "${concept.title}".
@@ -237,13 +335,13 @@ Student's question: "${cleanQ}"
 
 Answer the student in 2 to 3 concise, illuminating sentences. Use an intuitive analogy where helpful. Directly illuminate the underlying mechanism.
 `;
-        const response = await this.generateContentWithFallback(ai, prompt);
+        const text = await this.generateText(prompt);
 
-        if (response.text?.trim()) {
-          return response.text.trim();
+        if (text?.trim()) {
+          return text.trim();
         }
       } catch (err) {
-        console.warn('Gemini follow-up failed, using heuristic guidance:', err);
+        console.warn('AI follow-up failed, using heuristic guidance:', err);
       }
     }
 
@@ -262,19 +360,43 @@ Answer the student in 2 to 3 concise, illuminating sentences. Use an intuitive a
     concept: ConceptCheckpoint,
     history: SocraticTurn[],
     studentResponse: string,
-    targetRound: number
+    targetRound: number,
+    currentSessionId?: string
   ): Promise<VivaVoceTurnResponse> {
-    const ai = this.getClient();
     const cleanResponse = studentResponse.trim();
+    const pedState = FSRSService.getConceptPedagogicalState(concept.retrievalCards || []);
+    const crossBridges = currentSessionId
+      ? KnowledgeGraphService.findCrossDeckBridges(concept, currentSessionId, 2)
+      : [];
 
-    if (ai) {
+    if (this.isAvailable() || this.getClient()) {
       try {
         const isFinalRound = targetRound >= 3;
+        const memoryProfile = StorageService.getCognitiveMemoryProfile();
+        const profileContext = memoryProfile.totalCards > 0
+          ? `
+LONGITUDINAL STUDENT COGNITIVE PROFILE:
+- Known Vulnerability Traps: ${memoryProfile.vulnerableTrapTypes.length > 0 ? memoryProfile.vulnerableTrapTypes.join(', ') : 'None'}
+- Frequent Concept Bottlenecks: ${memoryProfile.frequentLapseConcepts.length > 0 ? memoryProfile.frequentLapseConcepts.slice(0, 3).join(', ') : 'None'}
+`
+          : '';
+
         const prompt = `
 You are an esteemed, intellectually demanding yet constructive Socratic Examiner presiding over an oral viva voce examination on "${concept.title}".
 Context / Mental Model: "${concept.mentalModel}"
 Core Takeaways to master: ${JSON.stringify(concept.coreTakeaways)}
 Key Technical Terms: ${JSON.stringify(concept.keyTerms.map(k => k.term))}
+${profileContext}
+
+ADAPTIVE SOCRATIC PEDAGOGY (FSRS-5):
+- Candidate Retrievability: ${pedState.retrievability}% (${pedState.mode.toUpperCase()})
+- Examiner Directive: ${pedState.guidanceDirective}
+${crossBridges.length > 0 ? `
+CROSS-DECK KNOWLEDGE BRIDGES:
+The candidate previously studied related concepts in other decks:
+${crossBridges.map(b => `- "${b.targetConceptTitle}" in deck "${b.targetDeckTitle}" (${b.relationshipType}, Shared Terms: ${b.sharedTerms.join(', ')})`).join('\n')}
+If relevant, challenge or acknowledge connections to these prerequisite/analogous domains.
+` : ''}
 
 Current Examination Round: ${targetRound} of 3.
 Full Transcript so far:
@@ -286,7 +408,7 @@ Candidate's Latest Statement:
 Instructions:
 ${!isFinalRound ? `
 1. Evaluate the candidate's latest response. Check if they used textbook buzzwords without unpacking them, if their reasoning has circular logic, or if they articulated cause-and-effect well.
-2. Formulate your next verbal Socratic challenge (2 to 3 sentences).
+2. Formulate your next verbal Socratic challenge (2 to 3 sentences) in line with your pedagogical directive (${pedState.mode.toUpperCase()}).
    - If going into Round 2: Challenge the candidate on the exact physical/biological mechanism or boundary condition ("What would happen if X were missing?").
    - If going into Round 3: Request a real-world, intuitive physical analogy or ask why a counter-scenario cannot occur.
 3. Select an examiner reaction: "satisfied" | "skeptical" | "probing" | "impressed".
@@ -330,9 +452,9 @@ Return ONLY valid JSON matching this schema:
 `}
 `;
 
-        const response = await this.generateContentWithFallback(ai, prompt, 'application/json');
+        const text = await this.generateText(prompt, 'application/json', true, VIVA_VOCE_TURN_SCHEMA);
 
-        const parsed = this.safeParseJSON<Record<string, any>>(response.text || '', {});
+        const parsed = this.safeParseJSON<Record<string, any>>(text || '', {});
         const nextTurn: SocraticTurn = {
           id: `turn-examiner-${Date.now()}`,
           role: 'examiner',
@@ -355,13 +477,162 @@ Return ONLY valid JSON matching this schema:
     }
 
     // Cognitive Heuristic Examiner Fallback
-    return this.heuristicVivaVoceTurn(concept, cleanResponse, targetRound);
+    return this.heuristicVivaVoceTurn(concept, cleanResponse, targetRound, pedState);
+  }
+
+  /**
+   * Conducts a Socratic Oral Viva Voce defense turn with real-time SSE streaming.
+   * Invokes onChunk as tokens stream from the model.
+   */
+  public static async streamVivaVoceTurn(
+    concept: ConceptCheckpoint,
+    history: SocraticTurn[],
+    studentResponse: string,
+    targetRound: number,
+    onChunk: (chunk: string) => void,
+    signal?: AbortSignal,
+    currentSessionId?: string
+  ): Promise<VivaVoceTurnResponse> {
+    const cleanResponse = studentResponse.trim();
+    const isFinalRound = targetRound >= 3;
+    const pedState = FSRSService.getConceptPedagogicalState(concept.retrievalCards || []);
+    const crossBridges = currentSessionId
+      ? KnowledgeGraphService.findCrossDeckBridges(concept, currentSessionId, 2)
+      : [];
+
+    const memoryProfile = StorageService.getCognitiveMemoryProfile();
+    const profileContext = memoryProfile.totalCards > 0
+      ? `
+LONGITUDINAL STUDENT COGNITIVE PROFILE:
+- Known Vulnerability Traps: ${memoryProfile.vulnerableTrapTypes.length > 0 ? memoryProfile.vulnerableTrapTypes.join(', ') : 'None'}
+- Frequent Concept Bottlenecks: ${memoryProfile.frequentLapseConcepts.length > 0 ? memoryProfile.frequentLapseConcepts.slice(0, 3).join(', ') : 'None'}
+`
+      : '';
+
+    const streamPrompt = `
+You are an esteemed, intellectually demanding yet constructive Socratic Examiner presiding over an oral viva voce examination on "${concept.title}".
+Context / Mental Model: "${concept.mentalModel}"
+Core Takeaways to master: ${JSON.stringify(concept.coreTakeaways)}
+Key Technical Terms: ${JSON.stringify(concept.keyTerms.map(k => k.term))}
+${profileContext}
+
+ADAPTIVE SOCRATIC PEDAGOGY (FSRS-5):
+- Candidate Retrievability: ${pedState.retrievability}% (${pedState.mode.toUpperCase()})
+- Examiner Directive: ${pedState.guidanceDirective}
+${crossBridges.length > 0 ? `
+CROSS-DECK KNOWLEDGE BRIDGES:
+The candidate previously studied related concepts in other decks:
+${crossBridges.map(b => `- "${b.targetConceptTitle}" in deck "${b.targetDeckTitle}" (${b.relationshipType}, Shared Terms: ${b.sharedTerms.join(', ')})`).join('\n')}
+If relevant, challenge or acknowledge connections to these prerequisite/analogous domains.
+` : ''}
+
+Current Examination Round: ${targetRound} of 3.
+Full Transcript so far:
+${JSON.stringify(history.map(h => ({ role: h.role, text: h.text })))}
+
+Candidate's Latest Statement:
+"""${cleanResponse}"""
+
+${!isFinalRound ? `
+Formulate your verbal Socratic response (2-3 concise sentences) directly addressing the candidate as an Oxford/MIT professor adhering to your pedagogical directive (${pedState.mode.toUpperCase()}). Challenge their causal mechanism, analogy, or boundary condition. Speak naturally with academic poise.
+` : `
+Deliver your official oral Viva Voce verdict to the candidate in 3 concise sentences. Declare whether their defense is approved, summarizing their greatest strength and their principal vulnerability.
+`}
+`;
+
+    // 1. Try server SSE stream if server is reachable
+    try {
+      const isServerUp = await ApiConfig.isServerReachable();
+      if (isServerUp) {
+        let accumulated = '';
+        const streamResult = await ApiConfig.streamRequest(
+          '/ai/stream',
+          { contents: streamPrompt, enableThinking: true },
+          (chunk) => {
+            accumulated += chunk;
+            onChunk(chunk);
+          },
+          signal
+        );
+
+        if (streamResult.ok && accumulated.trim()) {
+          const nextTurn: SocraticTurn = {
+            id: `turn-examiner-${Date.now()}`,
+            role: 'examiner',
+            text: accumulated.trim(),
+            timestamp: Date.now(),
+            turnType: isFinalRound ? 'verdict' : 'mechanism-probe',
+            reaction: isFinalRound ? 'satisfied' : 'probing',
+            reactionNote: isFinalRound ? 'Oral defense concluded.' : 'Probing candidate mechanism.',
+            jargonDetected: concept.keyTerms.filter(k => cleanResponse.toLowerCase().includes(k.term.toLowerCase())).map(k => k.term),
+          };
+
+          return {
+            nextTurn,
+            isComplete: isFinalRound,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[AIService] SSE stream request failed, falling back:', err);
+    }
+
+    // 2. Try client-side direct streaming if client API key is configured
+    const client = this.getClient();
+    if (client) {
+      try {
+        let accumulated = '';
+        for (const model of this.MODEL_CANDIDATES) {
+          try {
+            const stream = await client.models.generateContentStream({
+              model,
+              contents: streamPrompt,
+            });
+            for await (const chunk of stream) {
+              if (chunk.text) {
+                accumulated += chunk.text;
+                onChunk(chunk.text);
+              }
+            }
+            if (accumulated.trim()) {
+              const nextTurn: SocraticTurn = {
+                id: `turn-examiner-${Date.now()}`,
+                role: 'examiner',
+                text: accumulated.trim(),
+                timestamp: Date.now(),
+                turnType: isFinalRound ? 'verdict' : 'mechanism-probe',
+                reaction: isFinalRound ? 'satisfied' : 'probing',
+                reactionNote: isFinalRound ? 'Oral defense concluded.' : 'Probing candidate mechanism.',
+                jargonDetected: concept.keyTerms.filter(k => cleanResponse.toLowerCase().includes(k.term.toLowerCase())).map(k => k.term),
+              };
+
+              return {
+                nextTurn,
+                isComplete: isFinalRound,
+              };
+            }
+          } catch {}
+        }
+      } catch (clientStreamErr) {
+        console.warn('[AIService] Client SDK stream failed:', clientStreamErr);
+      }
+    }
+
+    // 3. Fallback to standard/heuristic call with responsive typewriter chunking
+    const fallbackRes = await this.conductVivaVoceTurn(concept, history, studentResponse, targetRound, currentSessionId);
+    const words = fallbackRes.nextTurn.text.split(' ');
+    for (let i = 0; i < words.length; i++) {
+      onChunk((i > 0 ? ' ' : '') + words[i]);
+      await new Promise(r => setTimeout(r, 22));
+    }
+    return fallbackRes;
   }
 
   private static heuristicVivaVoceTurn(
     concept: ConceptCheckpoint,
     cleanResponse: string,
-    targetRound: number
+    targetRound: number,
+    pedState?: ConceptPedagogicalState
   ): VivaVoceTurnResponse {
     const lower = cleanResponse.toLowerCase();
     const words = cleanResponse.split(/\s+/).filter(Boolean);
@@ -377,9 +648,16 @@ Return ONLY valid JSON matching this schema:
 
     if (targetRound === 1) {
       const isShort = wordCount < 18;
-      const examinerText = isShort
-        ? `You have touched on the topic, but an oral viva requires causal rigor. Do not merely state that "${concept.title}" occurs. Trace the exact sequence: what physical trigger initiates the cascade, and how does component A affect component B?`
-        : `Your opening defense captures the broad architecture of ${concept.title}. However, a scholar must explain the governing constraint: What prevents this mechanism from running in reverse, or what occurs if the primary gradient or energy supply is interrupted? Answer without using textbook buzzwords.`;
+      let examinerText = '';
+      if (pedState?.mode === 'scaffolding') {
+        examinerText = `I see your starting thought on "${concept.title}". Let us deconstruct the mechanism step-by-step: what is the fundamental starting condition or initial force that triggers the first transition? Trace what happens immediately next.`;
+      } else if (pedState?.mode === 'adversarial') {
+        examinerText = `Your opening premise on "${concept.title}" is noted, but an advanced defense demands stress-testing. Under what precise physical conditions or boundary constraints does this mechanism fail or reverse? Defend why alternative pathways do not occur.`;
+      } else {
+        examinerText = isShort
+          ? `You have touched on the topic, but an oral viva requires causal rigor. Do not merely state that "${concept.title}" occurs. Trace the exact sequence: what physical trigger initiates the cascade, and how does component A affect component B?`
+          : `Your opening defense captures the broad architecture of ${concept.title}. However, a scholar must explain the governing constraint: What prevents this mechanism from running in reverse, or what occurs if the primary gradient or energy supply is interrupted? Answer without using textbook buzzwords.`;
+      }
 
       return {
         nextTurn: {
@@ -388,7 +666,7 @@ Return ONLY valid JSON matching this schema:
           text: examinerText,
           timestamp: Date.now(),
           turnType: 'mechanism-probe',
-          reaction: isShort ? 'skeptical' : 'probing',
+          reaction: isShort ? 'skeptical' : (pedState?.mode === 'scaffolding' ? 'probing' : 'probing'),
           reactionNote: isShort ? 'Explanation too terse; probing for causal mechanism.' : 'Premise accepted; probing for boundary conditions.',
           jargonDetected: detectedJargon,
         },
@@ -397,9 +675,18 @@ Return ONLY valid JSON matching this schema:
     }
 
     if (targetRound === 2) {
-      const examinerText = hasAnalogy
-        ? `I note your analogy. Now clarify the precision: At which specific boundary does your analogy fail to match the real physical behavior of ${concept.title}? What microscopic reality differs from your macroscopic picture?`
-        : `Your mechanical reasoning is taking shape. Now for the true test of Feynman comprehension: Translate this entire mechanism into an everyday physical analogy (such as a watermill, airport baggage system, or musical orchestra) so a novice can grasp the intuitive dynamic.`;
+      let examinerText = '';
+      if (pedState?.mode === 'scaffolding') {
+        examinerText = hasAnalogy
+          ? `Your analogy is helpful. Now, can you connect this analogy directly back to the actual mechanism of ${concept.title}? What part of the analogy represents the primary driving force?`
+          : `You are making steady progress on the mechanism. Now try to explain this using an everyday physical analogy—like water in a pipe or a simple machine—so the underlying logic becomes undeniable.`;
+      } else if (pedState?.mode === 'adversarial') {
+        examinerText = `A sharp defense. Now consider a deceptive counter-hypothesis: Suppose a critic asserts that ${concept.title} is an inefficient byproduct rather than an essential driver. What decisive experimental evidence or thermodynamic principle proves the critic wrong?`;
+      } else {
+        examinerText = hasAnalogy
+          ? `I note your analogy. Now clarify the precision: At which specific boundary does your analogy fail to match the real physical behavior of ${concept.title}? What microscopic reality differs from your macroscopic picture?`
+          : `Your mechanical reasoning is taking shape. Now for the true test of Feynman comprehension: Translate this entire mechanism into an everyday physical analogy (such as a watermill, airport baggage system, or musical orchestra) so a novice can grasp the intuitive dynamic.`;
+      }
 
       return {
         nextTurn: {
@@ -471,9 +758,7 @@ Return ONLY valid JSON matching this schema:
     card: RetrievalCard,
     concept?: ConceptCheckpoint
   ): Promise<LeechAnalysis> {
-    const ai = this.getClient();
-
-    if (ai) {
+    if (this.isAvailable() || this.getClient()) {
       try {
         const prompt = `
 You are a cognitive psychologist and expert mnemonist specializing in fixing memory bottlenecks in medical and board exam flashcards.
@@ -524,9 +809,9 @@ Return ONLY valid JSON matching this schema:
 }
 `;
 
-        const response = await this.generateContentWithFallback(ai, prompt, 'application/json');
+        const text = await this.generateText(prompt, 'application/json', true, LEECH_ANALYSIS_SCHEMA);
 
-        const parsed = this.safeParseJSON<Record<string, any>>(response.text || '', {});
+        const parsed = this.safeParseJSON<Record<string, any>>(text || '', {});
         if (parsed.rootCause && parsed.rewiringOptions?.length > 0) {
           return {
             cardId: card.id,
@@ -634,7 +919,6 @@ Return ONLY valid JSON matching this schema:
     gradeLevel?: AcademicGradeLevel,
     studentProfile?: StudentEducationProfile
   ): Promise<StudySession> {
-    const ai = this.getClient();
     const sessionId = `session-${Date.now()}`;
 
     const targetLang = languageCode
@@ -645,7 +929,7 @@ Return ONLY valid JSON matching this schema:
     const effectiveTier: DepthTier = depthTier || depthEstimate.tier;
     const effectiveGradeLevel: AcademicGradeLevel = gradeLevel || depthEstimate.gradeLevel;
 
-    if (ai) {
+    if (this.isAvailable() || this.getClient()) {
       try {
         const checkpointCountInstruction = isRawNotes
           ? '3 to 5 sequential bite-sized concept checkpoints'
@@ -710,10 +994,16 @@ For each concept:
    - Card 1: Standard conceptual question & answer.
    - Card 2: Cloze deletion card ("cardType": "cloze", "question": sentence with "{{target_concept}}", "answer": target word, "clozeTemplate": same sentence). You MUST wrap the target word in {{...}} in the question!
    - Card 3: Multiple choice card ("cardType": "multiple-choice", "question": diagnostic question, "options": [4 distinct plausible options WITHOUT letter prefixes like 'A)'], "answer": the exact matching correct option from options).
-     * For Card 3, the 3 incorrect options in "options" MUST be engineered around real cognitive misconceptions and mapped in "diagnosticDistractors":
-       - trapType: "inversion" | "semantic-twin" | "naive-intuition" | "partial-truth"
-       - trapTitle: Short label (e.g. "Inversion Trap")
-       - trapExplanation: A friendly 1-sentence breakdown of why a student's brain fell for that specific distractor and the true scientific dynamic.
+      * For Card 3, the 3 incorrect options in "options" MUST be engineered around real cognitive misconceptions and mapped in "diagnosticDistractors":
+        - trapType: "inversion" | "semantic-twin" | "naive-intuition" | "partial-truth"
+        - trapTitle: Short label (e.g. "Inversion Trap")
+        - trapExplanation: A friendly 1-sentence breakdown of why a student's brain fell for that specific distractor and the true scientific dynamic.
+
+7. SOURCE CITATION & GROUNDING:
+   If the source text includes page markers (e.g. "--- Page X ---" or "[Page X]"), you MUST ground each concept and retrieval card with an exact "sourceAnchor":
+   - "pageNumber": Exact integer page number where the concept or card fact is stated in the material.
+   - "snippet": Verbatim 1-2 sentence quote snippet from that page verifying the ground truth.
+   - "relevanceReason": Brief 1-sentence note explaining why this page anchors the concept.
 
 Return ONLY a valid JSON object with this exact structure:
 {
@@ -729,6 +1019,11 @@ Return ONLY a valid JSON object with this exact structure:
       "keyTerms": [{ "term": string, "definition": string }],
       "feynmanPrompt": string,
       "sampleMasteryExplanation": string,
+      "sourceAnchor": {
+        "pageNumber": number,
+        "snippet": string,
+        "relevanceReason": string
+      },
       "retrievalCards": [
         {
           "cardType": "standard" | "cloze" | "multiple-choice",
@@ -738,6 +1033,11 @@ Return ONLY a valid JSON object with this exact structure:
           "explanation": string,
           "options": string[],
           "clozeTemplate": string,
+          "sourceAnchor": {
+            "pageNumber": number,
+            "snippet": string,
+            "relevanceReason": string
+          },
           "socraticHintLadder": {
             "level1Prompt": string,
             "level2Analogy": string,
@@ -758,10 +1058,8 @@ Return ONLY a valid JSON object with this exact structure:
 }
 `;
 
-        const response = await this.generateContentWithFallback(ai, prompt, 'application/json', true);
-
-        const text = response.text || '';
-        const parsed = this.safeParseJSON<Record<string, any>>(text, {});
+        const text = await this.generateText(prompt, 'application/json', true, STUDY_SESSION_GENERATION_SCHEMA);
+        const parsed = this.safeParseJSON<Record<string, any>>(text || '', {});
 
         const concepts: ConceptCheckpoint[] = (parsed.concepts || []).map((c: Partial<ConceptCheckpoint>, idx: number) => {
           const conceptId = `c-${sessionId}-${idx + 1}`;
@@ -781,6 +1079,13 @@ Return ONLY a valid JSON object with this exact structure:
               }
             }
 
+            const cardSourceAnchor = rc.sourceAnchor?.pageNumber ? {
+              pageNumber: Number(rc.sourceAnchor.pageNumber),
+              snippet: rc.sourceAnchor.snippet || '',
+              sourceName: rc.sourceAnchor.sourceName,
+              relevanceReason: rc.sourceAnchor.relevanceReason,
+            } : undefined;
+
             return {
               id: `rc-${conceptId}-${cIdx + 1}`,
               conceptId: conceptId,
@@ -793,12 +1098,20 @@ Return ONLY a valid JSON object with this exact structure:
               diagnosticDistractors: rc.diagnosticDistractors,
               socraticHintLadder: rc.socraticHintLadder,
               clozeTemplate: clozeTemplate || (question && question.includes('{{') ? question : undefined),
+              sourceAnchor: cardSourceAnchor,
               stability: 1,
               difficulty: 5,
               reps: 0,
               lapses: 0,
             };
           });
+
+          const conceptSourceAnchor = c.sourceAnchor?.pageNumber ? {
+            pageNumber: Number(c.sourceAnchor.pageNumber),
+            snippet: c.sourceAnchor.snippet || '',
+            sourceName: c.sourceAnchor.sourceName,
+            relevanceReason: c.sourceAnchor.relevanceReason,
+          } : undefined;
 
           return {
             id: conceptId,
@@ -810,6 +1123,7 @@ Return ONLY a valid JSON object with this exact structure:
             keyTerms: c.keyTerms || [],
             feynmanPrompt: c.feynmanPrompt || 'Explain this concept simply without reading notes.',
             sampleMasteryExplanation: c.sampleMasteryExplanation || '',
+            sourceAnchor: conceptSourceAnchor,
             retrievalCards: cards,
           };
         });
@@ -945,34 +1259,67 @@ Return ONLY a valid JSON object with this exact structure:
     };
   }
 
-  private static heuristicFeynmanEvaluation(concept: ConceptCheckpoint, text: string): FeynmanEvaluation {
+  private static heuristicFeynmanEvaluation(
+    concept: ConceptCheckpoint,
+    text: string,
+    pedState?: ConceptPedagogicalState
+  ): FeynmanEvaluation {
     const lower = text.toLowerCase();
-    
+    const words = text.split(/\s+/).filter(Boolean);
+    const wordCount = words.length;
+
     // Check coverage of key terms
     const matchedTerms = concept.keyTerms.filter(k => lower.includes(k.term.toLowerCase()));
     const missingTerms = concept.keyTerms.filter(k => !lower.includes(k.term.toLowerCase()));
 
+    // Causal connectors detection
+    const causalMatches = Array.from(new Set(lower.match(/\b(because|leads to|causes|therefore|gradient|forces|triggers|results in|drives|transforms|inhibits|regulates|generates|binds to|converts|allows)\b/g) || []));
+    
+    // Intuitive analogy detection
+    const hasAnalogy = /\b(like|as if|similar to|imagine|analogy|resembles|think of it as|water|dam|gears|factory|switch|engine)\b/i.test(lower);
+
     const masteredPoints: string[] = [];
     if (matchedTerms.length > 0) {
-      masteredPoints.push(`Key terms mentioned: ${matchedTerms.map(t => t.term).join(', ')}.`);
+      masteredPoints.push(`Core terminology utilized: ${matchedTerms.map(t => t.term).join(', ')}.`);
     } else {
       masteredPoints.push('Expressed explanation in your own words.');
+    }
+    if (causalMatches.length > 0) {
+      masteredPoints.push(`Articulated cause-and-effect transitions (${causalMatches.slice(0, 3).join(', ')}).`);
+    }
+    if (hasAnalogy) {
+      masteredPoints.push('Integrated an intuitive physical analogy to clarify the mechanism.');
     }
 
     const missingNuances: string[] = [];
     if (missingTerms.length > 0) {
       missingNuances.push(`Terms you might incorporate: ${missingTerms.map(t => t.term).join(', ')}.`);
     }
+    if (causalMatches.length === 0) {
+      missingNuances.push('Articulate the precise driving force or causal trigger connecting step A to step B.');
+    }
     missingNuances.push(...concept.coreTakeaways.slice(0, 2));
+
+    const modeHint = pedState?.mode === 'scaffolding' 
+      ? ' Focus on step-by-step foundation.'
+      : pedState?.mode === 'adversarial'
+      ? ' Test boundary limits and edge cases.'
+      : '';
+
+    const actionableFeedback = `Offline Causal Analysis: Evaluated ${wordCount} words, ${matchedTerms.length} key terms, and ${causalMatches.length} causal mechanisms.${modeHint} ${
+      causalMatches.length > 0
+        ? 'Great job establishing direct cause-and-effect relationships without pure buzzwords.'
+        : 'Deepen elaborative encoding by explicitly explaining why this phenomenon occurs.'
+    }`;
 
     return {
       score: 0,
       grade: 'Self-Review',
       masteredPoints,
       missingNuances: missingNuances.slice(0, 3),
-      jargonDetected: [],
+      jargonDetected: concept.keyTerms.filter(k => lower.includes(k.term.toLowerCase()) && causalMatches.length === 0).map(k => k.term),
       isOfflineSelfCheck: true,
-      actionableFeedback: 'Offline Self-Check: Automated scoring is unavailable without an active Gemini API key. Compare your explanation against the core takeaways above, then self-evaluate your confidence to proceed.'
+      actionableFeedback,
     };
   }
 

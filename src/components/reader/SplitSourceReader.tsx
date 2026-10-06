@@ -12,7 +12,10 @@ import {
   Minimize2,
   RefreshCw,
   Layers,
-  Upload
+  Upload,
+  Copy,
+  Check,
+  ExternalLink
 } from 'lucide-react';
 import type { SourceDocument } from '../../types';
 import { PDFService } from '../../services/pdfService';
@@ -56,10 +59,41 @@ export const SplitSourceReader: React.FC<SplitSourceReaderProps> = ({
   const [renderError, setRenderError] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [hasCopied, setHasCopied] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textContainerRef = useRef<HTMLDivElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCopySnippet = () => {
+    if (!activeAnchorSnippet) return;
+    navigator.clipboard.writeText(activeAnchorSnippet);
+    setHasCopied(true);
+    setTimeout(() => setHasCopied(false), 2000);
+  };
+
+  const handleLocateSnippet = () => {
+    setViewMode('text');
+    setTimeout(() => {
+      const el = textContainerRef.current?.querySelector('.ground-truth-anchor');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 120);
+  };
+
+  // Auto-scroll to anchor snippet when in text mode
+  useEffect(() => {
+    if (activeAnchorSnippet && viewMode === 'text') {
+      const timer = setTimeout(() => {
+        const el = textContainerRef.current?.querySelector('.ground-truth-anchor');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [activeAnchorSnippet, viewMode, currentPage]);
 
   // When currentPage changes, notify parent
   const handleGoToPage = (newPage: number) => {
@@ -126,8 +160,17 @@ export const SplitSourceReader: React.FC<SplitSourceReaderProps> = ({
       return <p className="italic text-slate-500">No readable text found on page {currentPage}.</p>;
     }
 
+    const cleanSnippet = (activeAnchorSnippet || '')
+      .replace(/^\.\.\.|\.\.\.$/g, '')
+      .replace(/[^\w\s-]/g, ' ')
+      .trim();
+    const snippetKeyPhrases = cleanSnippet.length > 10
+      ? cleanSnippet.split(/\s+/).filter(w => w.length > 3).slice(0, 10)
+      : [];
+
     const termsToHighlight = [
       ...highlightTerms.map(t => t.trim()).filter(t => t.length > 2),
+      ...snippetKeyPhrases,
       ...(searchQuery.trim().length > 1 ? [searchQuery.trim()] : []),
     ];
 
@@ -157,12 +200,15 @@ export const SplitSourceReader: React.FC<SplitSourceReaderProps> = ({
                 const isMatch = termsToHighlight.some(t => t.toLowerCase() === part.toLowerCase());
                 if (isMatch) {
                   const isSearchHit = searchQuery && part.toLowerCase() === searchQuery.toLowerCase();
+                  const isGroundTruth = snippetKeyPhrases.some(sk => sk.toLowerCase() === part.toLowerCase());
                   return (
                     <mark
                       key={partIdx}
                       className={`px-1 py-0.5 rounded font-bold font-sans transition-colors ${
                         isSearchHit
                           ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300 shadow-sm'
+                          : isGroundTruth
+                          ? 'ground-truth-anchor bg-emerald-500/25 text-emerald-200 border border-emerald-400/40 ring-1 ring-emerald-400/30 shadow-sm'
                           : 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/40'
                       }`}
                     >
@@ -322,19 +368,46 @@ export const SplitSourceReader: React.FC<SplitSourceReaderProps> = ({
 
       {/* Active Concept Grounding Anchor Banner */}
       {activeAnchorSnippet && (
-        <div className="px-4 py-2.5 bg-indigo-950/70 border-b border-indigo-500/30 flex items-start gap-2.5 text-xs text-indigo-200">
-          <Bookmark className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <span className="font-bold text-white uppercase text-[11px] tracking-wider block font-display">
-              Active Concept Grounding Evidence (Page {currentPage}):
-            </span>
-            <p className="italic text-slate-300 truncate font-serif">
-              "{activeAnchorSnippet}"
-            </p>
+        <div className="px-4 py-3 bg-gradient-to-r from-emerald-950/70 via-indigo-950/70 to-slate-950 border-b border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-indigo-200">
+          <div className="flex items-start gap-2.5 min-w-0 flex-1">
+            <Bookmark className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0 space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-emerald-300 uppercase text-[11px] tracking-wider font-display">
+                  Ground Truth Evidence (Page {currentPage}):
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Grounding Verified
+                </span>
+              </div>
+              <p className="italic text-slate-200 text-xs font-serif leading-relaxed line-clamp-2">
+                "{activeAnchorSnippet}"
+              </p>
+            </div>
           </div>
-          {activeAnchorSnippet.length > 80 && (
-            <span className="text-[11px] font-mono text-indigo-400 shrink-0">100% Match</span>
-          )}
+
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+            {viewMode === 'canvas' && (
+              <button
+                type="button"
+                onClick={handleLocateSnippet}
+                className="px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.1] text-[11px] font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                title="Switch to Text Reader to highlight and locate snippet"
+              >
+                <ExternalLink className="w-3 h-3 text-indigo-400" />
+                <span>Locate in Text</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleCopySnippet}
+              className="px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.1] text-[11px] font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+              title="Copy ground truth citation snippet to clipboard"
+            >
+              {hasCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
+              <span>{hasCopied ? 'Copied Quote!' : 'Copy Citation'}</span>
+            </button>
+          </div>
         </div>
       )}
 

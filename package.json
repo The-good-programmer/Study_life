@@ -1,10 +1,12 @@
 {
-  "name": "lotti",
+  "name": "studify",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "node server/src/index.js",
+    "server:dev": "node --watch server/src/index.js",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
@@ -12,11 +14,13 @@
   },
   "dependencies": {
     "@google/genai": "^2.25.0",
+    "@types/three": "^0.186.0",
     "canvas-confetti": "^1.9.4",
     "lucide-react": "^1.49.0",
     "pdfjs-dist": "^6.3.289",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "three": "^0.186.1",
     "ts-fsrs": "^5.4.2"
   },
   "devDependencies": {

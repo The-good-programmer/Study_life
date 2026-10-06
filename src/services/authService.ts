@@ -1,5 +1,6 @@
 import type { UserAccount, RegisterDTO, LoginDTO, AuthResponse, GoogleAuthDTO } from '../types';
 import { StorageService } from './storageService';
+import { ApiConfig } from './apiConfig';
 
 const ACCOUNTS_STORAGE_KEY = 'studify_accounts_v1';
 const ACTIVE_USER_STORAGE_KEY = 'studify_active_user_id';
@@ -133,6 +134,33 @@ export class AuthService {
 
     if (!password || password.length < 6) {
       return { success: false, error: 'Password must be at least 6 characters long.' };
+    }
+
+    // Attempt remote server registration if backend is reachable
+    try {
+      if (await ApiConfig.isServerReachable()) {
+        const res = await ApiConfig.request<{ user: UserAccount; token: string }>('/auth/register', {
+          method: 'POST',
+          body: JSON.stringify(dto),
+        });
+        if (res.ok && res.data?.user && res.data?.token) {
+          ApiConfig.setToken(res.data.token);
+          const serverUser = res.data.user;
+          const accounts = this.getAllAccounts();
+          const existingIdx = accounts.findIndex(a => a.email === serverUser.email);
+          if (existingIdx >= 0) accounts[existingIdx] = serverUser;
+          else accounts.push(serverUser);
+          this.saveAccounts(accounts);
+          localStorage.setItem(ACTIVE_USER_STORAGE_KEY, serverUser.id);
+          StorageService.setActiveUserId(serverUser.id);
+          this.notifySubscribers(serverUser);
+          return { success: true, user: serverUser };
+        } else if (res.error && res.status >= 400 && res.status < 500) {
+          return { success: false, error: res.error };
+        }
+      }
+    } catch (err) {
+      console.warn('[AuthService] Server registration failed, falling back to local storage:', err);
     }
 
     const accounts = this.getAllAccounts();
@@ -275,6 +303,33 @@ export class AuthService {
       return { success: false, error: 'Please provide both email and password.' };
     }
 
+    // Attempt remote server login if backend is reachable
+    try {
+      if (await ApiConfig.isServerReachable()) {
+        const res = await ApiConfig.request<{ user: UserAccount; token: string }>('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify(dto),
+        });
+        if (res.ok && res.data?.user && res.data?.token) {
+          ApiConfig.setToken(res.data.token);
+          const serverUser = res.data.user;
+          const accounts = this.getAllAccounts();
+          const existingIdx = accounts.findIndex(a => a.email === serverUser.email);
+          if (existingIdx >= 0) accounts[existingIdx] = serverUser;
+          else accounts.push(serverUser);
+          this.saveAccounts(accounts);
+          localStorage.setItem(ACTIVE_USER_STORAGE_KEY, serverUser.id);
+          StorageService.setActiveUserId(serverUser.id);
+          this.notifySubscribers(serverUser);
+          return { success: true, user: serverUser };
+        } else if (res.error && res.status >= 400 && res.status < 500) {
+          return { success: false, error: res.error };
+        }
+      }
+    } catch (err) {
+      console.warn('[AuthService] Server login failed, falling back to local credentials:', err);
+    }
+
     const accounts = this.getAllAccounts();
     const user = accounts.find(a => a.email === email);
 
@@ -354,6 +409,7 @@ export class AuthService {
    * Logs out from current user into Guest mode
    */
   public static logout(): void {
+    ApiConfig.setToken(null);
     localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
     StorageService.setActiveUserId(null);
     this.notifySubscribers(null);

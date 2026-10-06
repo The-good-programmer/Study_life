@@ -23,6 +23,7 @@ export interface CloudSyncPayload {
   userId: string | null;
   stats: UserStats;
   sessions: StudySession[];
+  characterState?: Record<string, unknown>;
   axolotlState?: Record<string, unknown>;
   checksum: string;
 }
@@ -35,7 +36,7 @@ export class CloudSyncService {
 
   /**
    * Generates a user-friendly, cryptographically random sync token
-   * e.g. AXON-SYNC-A4B7-C9X2
+   * e.g. STUDIFY-SYNC-A4B7-C9X2
    */
   public static generateSyncToken(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -44,7 +45,7 @@ export class CloudSyncService {
       crypto.getRandomValues(bytes);
       return Array.from(bytes, b => chars[b % chars.length]).join('');
     };
-    return `LOTTI-SYNC-${randPart(4)}-${randPart(4)}`;
+    return `STUDIFY-SYNC-${randPart(4)}-${randPart(4)}`;
   }
 
   /**
@@ -97,13 +98,19 @@ export class CloudSyncService {
     const sessions = StorageService.getSessions();
     const activeUserId = StorageService.getActiveUserId();
 
+    let characterState: Record<string, unknown> | undefined;
+    try {
+      const charRaw = localStorage.getItem('studify_user_character_v1');
+      if (charRaw) characterState = JSON.parse(charRaw);
+    } catch {}
+
     let axolotlState: Record<string, unknown> | undefined;
     try {
       const axRaw = localStorage.getItem('studify_axolotl_sanctuary_v1') || localStorage.getItem('axon_axolotl_state');
       if (axRaw) axolotlState = JSON.parse(axRaw);
     } catch {}
 
-    const payloadRaw = JSON.stringify({ stats, sessions, axolotlState });
+    const payloadRaw = JSON.stringify({ stats, sessions, characterState, axolotlState });
     // Simple fast DJB2-based hash for checksum
     let hash = 5381;
     for (let i = 0; i < payloadRaw.length; i++) {
@@ -117,6 +124,7 @@ export class CloudSyncService {
       userId: activeUserId,
       stats,
       sessions,
+      characterState,
       axolotlState,
       checksum,
     };
@@ -257,7 +265,14 @@ export class CloudSyncService {
       StorageService.saveStats(mergedStats);
     }
 
-    // Merge axolotl habitat state if present in remote payload
+    // Merge 3D student character state if present in remote payload
+    if (remote.characterState) {
+      try {
+        localStorage.setItem('studify_user_character_v1', JSON.stringify(remote.characterState));
+      } catch {}
+    }
+
+    // Merge axolotl habitat state if present in remote payload (legacy fallback)
     if (remote.axolotlState) {
       try {
         localStorage.setItem('studify_axolotl_sanctuary_v1', JSON.stringify(remote.axolotlState));

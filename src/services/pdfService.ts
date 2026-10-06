@@ -55,16 +55,21 @@ export class PDFService {
         }
       }
 
-      // Convert file to Base64 data URL for instant live split-screen rendering
+      // Generate lightweight preview URL for split-screen rendering
       let pdfDataUrl: string | undefined;
       try {
-        const reader = new FileReader();
-        pdfDataUrl = await new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
+        if (typeof window !== 'undefined' && typeof window.URL?.createObjectURL === 'function') {
+          // Object URLs have zero memory duplication and instant allocation
+          pdfDataUrl = window.URL.createObjectURL(file);
+        } else {
+          const reader = new FileReader();
+          pdfDataUrl = await new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
+        }
       } catch (err) {
-        console.warn('Could not generate base64 data URL for PDF preview:', err);
+        console.warn('Could not generate data URL for PDF preview:', err);
       }
 
       const fullText = pageTexts.join('\n\n');

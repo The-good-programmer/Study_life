@@ -1,4 +1,4 @@
-import type { ExamReport, InterleavingSessionReport, RetrievalCard, StudySession, UserStats, StudentEducationProfile } from '../types';
+import type { ExamReport, InterleavingSessionReport, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
 import { IndexedDbService } from './indexedDbService';
 
 const STORAGE_KEYS = {
@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
   SOUND_PREF: 'studify_sound_pref',
   ACTIVITY: 'studify_activity_history_v1',
   GUEST_PROFILE: 'studify_guest_education_profile_v1',
+  FOLDERS: 'studify_folders_v1',
 };
 
 const LEVEL_TITLES = [
@@ -691,6 +692,90 @@ export class StorageService {
     }
   }
 
+  public static getFolders(): SubjectFolder[] {
+    const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.FOLDERS));
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public static saveFolders(folders: SubjectFolder[]): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.FOLDERS), JSON.stringify(folders));
+    this.notifyMutation();
+  }
+
+  public static createFolder(name: string, color: string = 'indigo', icon: string = '📚', description: string = ''): SubjectFolder {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Folder name cannot be empty');
+    const folders = this.getFolders();
+    const newFolder: SubjectFolder = {
+      id: `folder-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: trimmed,
+      color,
+      icon,
+      description: description.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    folders.push(newFolder);
+    this.saveFolders(folders);
+    return newFolder;
+  }
+
+  public static updateFolder(id: string, updates: Partial<Omit<SubjectFolder, 'id' | 'createdAt'>>): SubjectFolder | null {
+    const folders = this.getFolders();
+    const idx = folders.findIndex(f => f.id === id);
+    if (idx === -1) return null;
+    const updated: SubjectFolder = {
+      ...folders[idx],
+      ...updates,
+      name: updates.name !== undefined ? updates.name.trim() : folders[idx].name,
+    };
+    folders[idx] = updated;
+    this.saveFolders(folders);
+    return updated;
+  }
+
+  public static deleteFolder(id: string): void {
+    const folders = this.getFolders().filter(f => f.id !== id);
+    this.saveFolders(folders);
+
+    // Unassign this folderId from any sessions so decks remain safe!
+    const sessions = this.getSessions();
+    let hasChanges = false;
+    const updatedSessions = sessions.map(s => {
+      if (s.folderId === id) {
+        hasChanges = true;
+        const copy = { ...s };
+        delete copy.folderId;
+        return copy;
+      }
+      return s;
+    });
+
+    if (hasChanges) {
+      this.saveSessions(updatedSessions);
+    } else {
+      this.notifyMutation();
+    }
+  }
+
+  public static setDeckFolder(sessionId: string, folderId: string | null | undefined): void {
+    const sessions = this.getSessions();
+    const idx = sessions.findIndex(s => s.id === sessionId);
+    if (idx !== -1) {
+      if (folderId) {
+        sessions[idx].folderId = folderId;
+      } else {
+        delete sessions[idx].folderId;
+      }
+      this.saveSessions(sessions);
+    }
+  }
+
   /**
    * Exports all student data to JSON
    */
@@ -701,6 +786,7 @@ export class StorageService {
       stats: this.getStats(),
       cards: this.getAllCards(),
       sessions: this.getSessions(),
+      folders: this.getFolders(),
     };
     return JSON.stringify(data, null, 2);
   }
@@ -711,7 +797,7 @@ export class StorageService {
   public static importDataFromJSON(jsonString: string): { success: boolean; message: string } {
     try {
       const data = JSON.parse(jsonString);
-      if (!data.cards && !data.stats && !data.sessions) {
+      if (!data.cards && !data.stats && !data.sessions && !data.folders) {
         return { success: false, message: 'Invalid backup format.' };
       }
       if (data.stats) this.saveStats(data.stats);
@@ -719,9 +805,12 @@ export class StorageService {
       if (data.sessions && Array.isArray(data.sessions)) {
         localStorage.setItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(data.sessions));
       }
+      if (data.folders && Array.isArray(data.folders)) {
+        this.saveFolders(data.folders);
+      }
       return { 
         success: true, 
-        message: `Successfully restored ${data.cards?.length || 0} flashcards and ${data.sessions?.length || 0} sessions!` 
+        message: `Successfully restored ${data.cards?.length || 0} flashcards, ${data.sessions?.length || 0} sessions, and ${data.folders?.length || 0} subject folders!` 
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Corrupted file';
@@ -1170,5 +1259,78 @@ export class StorageService {
     } catch (e) {
       console.warn('[StorageService] Failed to save guest education profile:', e);
     }
+  }
+
+  /**
+   * Synthesizes longitudinal student cognitive history (lapse triggers, trap vulnerabilities, mastery ratio)
+   */
+  public static getCognitiveMemoryProfile(): CognitiveMemoryProfile {
+    const cards = this.getAllCards();
+    const totalCards = cards.length;
+    
+    let masteredCards = 0;
+    let strugglingCards = 0;
+    let totalStability = 0;
+    const frequentLapseMap = new Map<string, number>();
+    const trapFrequencyMap = new Map<string, number>();
+    const weakTopicSet = new Set<string>();
+
+    for (const card of cards) {
+      totalStability += (card.stability || 1);
+      if ((card.stability || 1) >= 21 && (card.lapses || 0) === 0 && (card.reps || 0) >= 2) {
+        masteredCards++;
+      }
+      if ((card.lapses || 0) >= 2 || (card.difficulty || 5) >= 7) {
+        strugglingCards++;
+        const topic = card.question.slice(0, 50).trim();
+        frequentLapseMap.set(topic, (frequentLapseMap.get(topic) || 0) + (card.lapses || 1));
+        weakTopicSet.add(topic);
+      }
+
+      if (card.diagnosticDistractors) {
+        for (const distractor of card.diagnosticDistractors) {
+          if (distractor.trapType) {
+            trapFrequencyMap.set(distractor.trapType, (trapFrequencyMap.get(distractor.trapType) || 0) + 1);
+          }
+        }
+      }
+    }
+
+    // Inspect exam reports for incorrect cognitive traps
+    const examReports = this.getExamReports();
+    for (const report of examReports) {
+      if (report.questionResults) {
+        for (const qr of report.questionResults) {
+          if (!qr.isCorrect && qr.card?.diagnosticDistractors) {
+            const trap = qr.card.diagnosticDistractors.find(d => d.optionText === qr.userAnswer)?.trapType;
+            if (trap) {
+              trapFrequencyMap.set(trap, (trapFrequencyMap.get(trap) || 0) + 2);
+            }
+          }
+        }
+      }
+    }
+
+    const frequentLapseConcepts = Array.from(frequentLapseMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([concept]) => concept);
+
+    const vulnerableTrapTypes = Array.from(trapFrequencyMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([trap]) => trap);
+
+    const averageStabilityDays = totalCards > 0 ? Math.round((totalStability / totalCards) * 10) / 10 : 1;
+
+    return {
+      totalCards,
+      masteredCards,
+      strugglingCards,
+      frequentLapseConcepts,
+      vulnerableTrapTypes,
+      recentWeakTopics: Array.from(weakTopicSet).slice(0, 5),
+      averageStabilityDays,
+    };
   }
 }

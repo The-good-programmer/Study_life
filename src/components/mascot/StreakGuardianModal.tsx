@@ -15,8 +15,9 @@ import {
 import type { UserStats } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
-import { ExpressiveAxolotl } from './ExpressiveAxolotl';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 import { NotificationService } from '../../services/notificationService';
+import { characterService } from '../../services/characterService';
 
 interface StreakGuardianModalProps {
   isOpen: boolean;
@@ -58,7 +59,7 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
           origin: { y: 0.7 },
           colors: ['#38bdf8', '#34d399']
         });
-        setNotice("Streak protection active! Lottie will nudge you at 7:00 PM if your practice is pending.");
+        setNotice("Streak protection active! You will receive a reminder at 7:00 PM if your practice is pending.");
       } else {
         setNotice("Please enable notifications in your browser permissions to receive reminders.");
       }
@@ -77,14 +78,15 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
   };
 
   const handleBuyFreeze = () => {
-    if (stats.xp < 100) {
-      setNotice("You need at least 100 XP to equip a Synaptic Freeze!");
-      setTimeout(() => setNotice(null), 3000);
+    const currentCoins = characterService.getCharacter().coins;
+    if (currentCoins < 50) {
+      setNotice("You need at least 🪙 50 Tokens to equip a Synaptic Freeze! Complete a study sprint to earn wages.");
+      setTimeout(() => setNotice(null), 3500);
       return;
     }
 
     try {
-      StorageService.addXP(-100);
+      characterService.spendCoins(50);
       StorageService.setSynapticFreeze(true);
       setHasFreeze(true);
       soundEngine.playSuccess();
@@ -94,7 +96,7 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
         origin: { y: 0.7 },
         colors: ['#38bdf8', '#a855f7']
       });
-      setNotice("Synaptic Freeze equipped! Your streak is shielded for 1 missed day.");
+      setNotice("Synaptic Freeze equipped for 🪙 50 Tokens! Your streak is shielded for 1 missed day.");
       setTimeout(() => setNotice(null), 4000);
     } catch {
       // Storage error
@@ -105,6 +107,8 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
     onClose();
     if (onLaunchStreakSaver) onLaunchStreakSaver();
   };
+
+  const charName = characterService.getCharacter().name || 'Student';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
@@ -117,7 +121,7 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
         {/* Top Header */}
         <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] relative z-10 text-left">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-extrabold text-white font-display">Lottie's Streak Guardian</span>
+            <span className="text-sm font-extrabold text-white font-display">Study Streak Guardian</span>
           </div>
           <button
             onClick={onClose}
@@ -127,17 +131,14 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
           </button>
         </div>
 
-        {/* Mascot + Streak Centerpiece */}
+        {/* Character + Streak Centerpiece */}
         <div className="relative py-2 z-10 space-y-3">
           <div className="relative w-24 h-24 mx-auto">
             <div className={`absolute -inset-3 rounded-full blur-xl animate-pulse ${
               isProtectedToday ? 'bg-gradient-to-tr from-amber-500/30 to-pink-500/30' : 'bg-gradient-to-tr from-rose-500/30 to-amber-500/30'
             }`} />
             <div className="relative w-full h-full rounded-3xl overflow-hidden bg-slate-950 p-1 border border-amber-500/30 shadow-2xl flex items-center justify-center">
-              <ExpressiveAxolotl 
-                mood={isProtectedToday ? 'celebrating' : 'thinking'} 
-                size="md" 
-              />
+              <UserAvatarBadge size="lg" />
             </div>
             <div className="absolute -bottom-2 -right-1 p-1.5 rounded-full bg-slate-950 border border-amber-500/40 text-amber-400 shadow-lg">
               <Flame className="w-4 h-4 fill-amber-400 text-amber-400 animate-bounce" />
@@ -164,16 +165,16 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
           </div>
         )}
 
-        {/* Lottie Dialogue */}
+        {/* Character Dialogue */}
         <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/[0.08] text-left space-y-2 z-10 relative">
-          <div className="flex items-center gap-1.5 text-[11px] font-bold text-pink-300">
-            <Sparkles className="w-3.5 h-3.5 text-pink-400" />
-            <span>Lottie says:</span>
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-300">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            <span>{charName} says:</span>
           </div>
           <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-medium">
             {isProtectedToday
               ? `"Awesome work! Long-term potentiation requires daily rhythm. Your brain cells are thanking you right now!"`
-              : `"Duo kidnaps families for a broken streak. I just don't want your prefrontal cortex to prune those memory nodes! Complete a quick 3-minute session to lock today in."`}
+              : `"Consistency is everything! Complete a quick 3-minute session to lock today's progress in and protect your streak."`}
           </p>
         </div>
 
@@ -202,7 +203,7 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
                 onClick={handleBuyFreeze}
                 className="text-[11px] text-cyan-400 hover:text-cyan-300 font-bold underline cursor-pointer"
               >
-                Equip (100 XP)
+                Equip (🪙 50 Tokens)
               </button>
             ) : (
               <span className="text-[11px] text-cyan-300">Shields 1 Missed Day</span>
@@ -219,7 +220,7 @@ export const StreakGuardianModal: React.FC<StreakGuardianModalProps> = ({
               </div>
               <div>
                 <span className="text-xs font-bold text-white block">Streak Push Reminders</span>
-                <span className="text-[11px] text-slate-400">Lottie nudges you at 7:00 PM</span>
+                <span className="text-[11px] text-slate-400">Daily reminder nudges at 7:00 PM</span>
               </div>
             </div>
             <button

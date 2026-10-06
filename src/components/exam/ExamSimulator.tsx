@@ -36,6 +36,7 @@ import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
 import { MathRenderer } from '../common/MathRenderer';
 
 import { evaluateTextAnswer } from './examEvaluator';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
 interface ExamSimulatorProps {
   onBack: () => void;
@@ -448,17 +449,17 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     return (
       <div className="max-w-2xl mx-auto space-y-6 py-6 animate-fadeIn">
         
-        {/* Header with Lottie Proctor */}
+        {/* Header with AI Proctor */}
         <div className="text-center space-y-3">
           <div className="flex items-center justify-center gap-3.5">
-            <div className="relative w-12 h-12 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-amber-500 via-pink-500 to-indigo-500 shadow-xl shadow-amber-500/20 shrink-0">
-              <img src="/lottie.png" alt="Lottie Exam Proctor" className="w-full h-full object-cover rounded-[14px]" />
+            <div className="relative w-12 h-12 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-amber-500 via-indigo-500 to-cyan-500 shadow-xl shadow-amber-500/20 shrink-0">
+              <UserAvatarBadge size="sm" showBorder={false} />
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-slate-950 animate-ping" />
             </div>
             <div className="text-left">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-semibold">
                 <Award className="w-3 h-3 text-amber-400" />
-                <span>Lotti High-Stakes Simulator</span>
+                <span>Studify High-Stakes Simulator</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight font-display">
                 Mock Exam Simulator
@@ -466,7 +467,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             </div>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">
-            Test yourself under genuine exam conditions with <strong>Confidence-Weighted Scoring</strong>. Lottie proctors your session to eliminate illusions of competence before exam day.
+            Test yourself under genuine exam conditions with <strong>Confidence-Weighted Scoring</strong>. Your customized study partner proctors your session to eliminate illusions of competence before exam day.
           </p>
         </div>
 
@@ -1012,14 +1013,14 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
           </div>
 
-          {/* Lottie Metacognitive Assessment */}
+          {/* Metacognitive Assessment */}
           <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-950 via-indigo-950/40 to-slate-950 border border-white/[0.08] flex flex-col sm:flex-row items-center gap-3.5 text-left">
-            <div className="relative w-12 h-12 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 shrink-0 shadow-md">
-              <img src="/lottie.png" alt="Lottie" className="w-full h-full object-cover rounded-[14px]" />
+            <div className="relative w-12 h-12 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 shrink-0 shadow-md">
+              <UserAvatarBadge size="sm" showBorder={false} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-pink-300 font-display">Lottie's Metacognitive Assessment</span>
+                <span className="text-xs font-bold text-indigo-300 font-display">Metacognitive Assessment</span>
                 <span className={`px-2 py-0.2 rounded-full text-[11px] font-mono font-bold ${
                   finalReport.calibrationPercent >= 80 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                 }`}>
@@ -1037,7 +1038,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             <button
               type="button"
               onClick={() => {
-                const shareText = `🎓 Lotti Mock Exam Scorecard\nDeck: ${finalReport.deckTitle}\nWeighted Score: ${finalReport.confidenceWeightedScore}/${finalReport.maxPossibleScore} (${finalReport.rawAccuracyPercent}% Raw Accuracy)\nMetacognitive Calibration: ${finalReport.calibrationPercent}%\nMastery Grade: ${grade}\n🎯 Calibrated Mastery: ${finalReport.masteryCount} | ⚠️ Blindspots: ${finalReport.blindspotCount}\n\nPowered by Lotti Spaced Recall 🦎🧠`;
+                const shareText = `🎓 Studify Mock Exam Scorecard\nDeck: ${finalReport.deckTitle}\nWeighted Score: ${finalReport.confidenceWeightedScore}/${finalReport.maxPossibleScore} (${finalReport.rawAccuracyPercent}% Raw Accuracy)\nMetacognitive Calibration: ${finalReport.calibrationPercent}%\nMastery Grade: ${grade}\n🎯 Calibrated Mastery: ${finalReport.masteryCount} | ⚠️ Blindspots: ${finalReport.blindspotCount}\n\nPowered by Studify 3D Study Platform 🎓✨`;
                 navigator.clipboard.writeText(shareText);
                 setCopiedShare(true);
                 soundEngine.playSuccess();

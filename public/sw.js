@@ -101,7 +101,7 @@ self.addEventListener('fetch', (event) => {
 // Push: Handle incoming Web Push notifications from cloud server
 self.addEventListener('push', (event) => {
   let data = {
-    title: 'Lottie Study Reminder 🐾',
+    title: 'Studify Study Reminder 🎯',
     body: 'Time for your daily 3-minute study practice! Keep your streak alive! 🔥',
     url: '/?launch=quick_sprint'
   };

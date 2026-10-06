@@ -1,8 +1,8 @@
 {
-  "id": "com.lotti.app",
-  "name": "Lotti — Micro-Mastery & Spaced Recall",
-  "short_name": "Lotti",
-  "description": "Zero-friction micro-mastery with FSRS spaced repetition, 4-choice tap puzzles, 40Hz gamma focus, and Lottie the Neuro-Axolotl.",
+  "id": "com.studify.app",
+  "name": "Studify — Micro-Mastery & Spaced Recall",
+  "short_name": "Studify",
+  "description": "Zero-friction micro-mastery with FSRS spaced repetition, 4-choice tap puzzles, 40Hz gamma focus, and customizable 3D Student Avatar.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

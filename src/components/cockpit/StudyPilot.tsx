@@ -144,12 +144,21 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
     }
   };
 
-  const handleInspectSource = (pageNumber?: number) => {
+  const [activeSourceSnippet, setActiveSourceSnippet] = useState<string | undefined>(() => currentConcept.sourceAnchor?.snippet);
+
+  // Sync active snippet when concept advances
+  useEffect(() => {
+    setActiveSourceSnippet(currentConcept.sourceAnchor?.snippet);
+  }, [currentConcept]);
+
+  const handleInspectSource = (pageNumber?: number, snippet?: string) => {
     if (pageNumber) {
       setSourceTargetPage(pageNumber);
     } else if (currentConcept.sourceAnchor?.pageNumber) {
       setSourceTargetPage(currentConcept.sourceAnchor.pageNumber);
     }
+    const resolvedSnippet = snippet || (pageNumber && pageNumber === currentConcept.sourceAnchor?.pageNumber ? currentConcept.sourceAnchor.snippet : currentConcept.sourceAnchor?.snippet);
+    setActiveSourceSnippet(resolvedSnippet);
     setIsSourceReaderOpen(true);
   };
 
@@ -194,6 +203,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
           concept={currentConcept}
           onComplete={() => setPhase('retrieval')}
           onInspectSource={handleInspectSource}
+          sessionId={session.id}
         />
       )}
 
@@ -478,7 +488,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
                   ...currentConcept.coreTakeaways,
                   ...currentConcept.keyTerms.map(k => k.term),
                 ]}
-                activeAnchorSnippet={currentConcept.sourceAnchor?.snippet}
+                activeAnchorSnippet={activeSourceSnippet || currentConcept.sourceAnchor?.snippet}
                 onClose={() => setIsSourceReaderOpen(false)}
                 onPageChange={(page) => setSourceTargetPage(page)}
                 onAttachSource={async (file) => {

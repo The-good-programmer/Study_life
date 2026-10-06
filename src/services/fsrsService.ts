@@ -9,7 +9,7 @@ import {
   type Grade,
   type RecordLogItem,
 } from 'ts-fsrs';
-import type { FSRSRating, RetrievalCard } from '../types';
+import type { FSRSRating, RetrievalCard, ConceptPedagogicalState, AdaptivePedagogyMode } from '../types';
 
 export interface SchedulingResult {
   updatedCard: RetrievalCard;
@@ -222,6 +222,63 @@ export class FSRSService {
       stability: Math.max(1.0, card.stability || 1.0),
       nextReviewDate: now.toISOString(),
       retrievability: 100,
+    };
+  }
+
+  /**
+   * Dynamically calculates the pedagogical learning state and strictness mode for a concept
+   * based on mathematical FSRS retrievability R(t), stability, and lapse count.
+   */
+  public static getConceptPedagogicalState(cards: RetrievalCard[] = [], now: Date = new Date()): ConceptPedagogicalState {
+    if (!cards || cards.length === 0) {
+      return {
+        retrievability: 85,
+        averageStabilityDays: 1,
+        totalCards: 0,
+        lapseCount: 0,
+        mode: 'dialectic',
+        guidanceDirective: 'Standard Socratic examination: Probe cause-and-effect mechanisms and examine candidate intuition.',
+      };
+    }
+
+    let sumRetrievability = 0;
+    let sumStability = 0;
+    let totalLapses = 0;
+    let hasLeech = false;
+
+    cards.forEach(c => {
+      const r = this.calculateRetrievability(c, now);
+      sumRetrievability += r;
+      sumStability += (c.stability && c.stability > 0 ? c.stability : 1);
+      totalLapses += (c.lapses || 0);
+      if (this.isLeech(c)) hasLeech = true;
+    });
+
+    const count = cards.length;
+    const avgR = Math.round((sumRetrievability / count) * 10) / 10;
+    const avgStability = Math.round((sumStability / count) * 10) / 10;
+
+    let mode: AdaptivePedagogyMode = 'dialectic';
+    let guidanceDirective = '';
+
+    if (avgR < 70 || totalLapses >= 2 || hasLeech) {
+      mode = 'scaffolding';
+      guidanceDirective = `Socratic Scaffolding Mode: The student demonstrates fragile memory retention (R: ${Math.round(avgR)}%, ${totalLapses} lapses${hasLeech ? ', includes leech cards' : ''}). Act as an encouraging diagnostic mentor. Deconstruct complex mechanisms into accessible sub-steps. Provide analogical scaffolding and check foundational definitions before demanding high-level synthesis.`;
+    } else if (avgR >= 90 && avgStability >= 14 && totalLapses === 0) {
+      mode = 'adversarial';
+      guidanceDirective = `Adversarial Inoculation Mode: The candidate possesses high retention and stability (R: ${Math.round(avgR)}%, stability: ${avgStability}d). Act as a rigorous Oxford/MIT peer reviewer. Inoculate them against overconfidence by challenging boundary conditions, presenting counter-intuitive edge cases, and asking why counter-hypotheses fail.`;
+    } else {
+      mode = 'dialectic';
+      guidanceDirective = `Dialectic Inquest Mode: Standard balanced Socratic examination (R: ${Math.round(avgR)}%). Challenge their causal mechanism, verify the absence of ungrounded jargon crutches, and demand precise cause-and-effect reasoning.`;
+    }
+
+    return {
+      retrievability: avgR,
+      averageStabilityDays: avgStability,
+      totalCards: count,
+      lapseCount: totalLapses,
+      mode,
+      guidanceDirective,
     };
   }
 }

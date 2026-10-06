@@ -789,6 +789,22 @@ class SoundEngine {
 
     this.scheduleTransientCleanup(gain, [osc, lfo], 900);
   }
+
+  public playCompanionBubble() {
+    this.playAxolotlBubble();
+  }
+
+  public playCompanionChirp() {
+    this.playAxolotlChirp();
+  }
+
+  public playCompanionChomp() {
+    this.playAxolotlChomp();
+  }
+
+  public playCompanionPurr() {
+    this.playAxolotlPurr();
+  }
 }
 
 export const soundEngine = new SoundEngine();

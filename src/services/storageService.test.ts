@@ -352,5 +352,185 @@ describe('StorageService', () => {
     expect(localStorage.getItem('studify_sessions_v1')).toBeNull();
     expect(localStorage.getItem('studify_stats_v1')).toBeNull();
   });
+
+  describe('Subject Folders', () => {
+    it('creates, retrieves, and updates subject folders', () => {
+      expect(StorageService.getFolders()).toEqual([]);
+
+      const folder = StorageService.createFolder('Neuroscience 101', 'purple', '🧠', 'Brain anatomy & synapses');
+      expect(folder.id).toBeDefined();
+      expect(folder.name).toBe('Neuroscience 101');
+      expect(folder.color).toBe('purple');
+      expect(folder.icon).toBe('🧠');
+      expect(folder.description).toBe('Brain anatomy & synapses');
+
+      const all = StorageService.getFolders();
+      expect(all.length).toBe(1);
+      expect(all[0].name).toBe('Neuroscience 101');
+
+      // Update folder
+      const updated = StorageService.updateFolder(folder.id, { name: 'Advanced Neuroscience', color: 'indigo' });
+      expect(updated?.name).toBe('Advanced Neuroscience');
+      expect(updated?.color).toBe('indigo');
+      expect(StorageService.getFolders()[0].name).toBe('Advanced Neuroscience');
+    });
+
+    it('assigns and removes decks from folders using setDeckFolder', () => {
+      const folder = StorageService.createFolder('Biology', 'emerald', '🧬');
+      const session: any = {
+        id: 'test-session-bio-1',
+        title: 'Cell Division',
+        category: 'Science',
+        concepts: [],
+        currentConceptIndex: 0,
+        currentPhase: 'priming',
+        elapsedSeconds: 0,
+        createdAt: new Date().toISOString(),
+      };
+      StorageService.saveSession(session);
+
+      // Assign to folder
+      StorageService.setDeckFolder('test-session-bio-1', folder.id);
+      let loadedSession = StorageService.getSessions().find(s => s.id === 'test-session-bio-1');
+      expect(loadedSession?.folderId).toBe(folder.id);
+
+      // Remove from folder
+      StorageService.setDeckFolder('test-session-bio-1', null);
+      loadedSession = StorageService.getSessions().find(s => s.id === 'test-session-bio-1');
+      expect(loadedSession?.folderId).toBeUndefined();
+    });
+
+    it('deleting a folder unassigns the folder from decks without deleting the decks', () => {
+      const folder = StorageService.createFolder('Physics', 'sky', '⚛️');
+      const session: any = {
+        id: 'test-session-phys-1',
+        title: 'Classical Mechanics',
+        category: 'Physics',
+        folderId: folder.id,
+        concepts: [],
+        currentConceptIndex: 0,
+        currentPhase: 'priming',
+        elapsedSeconds: 0,
+        createdAt: new Date().toISOString(),
+      };
+      StorageService.saveSession(session);
+
+      expect(StorageService.getFolders().length).toBe(1);
+      expect(StorageService.getSessions().find(s => s.id === 'test-session-phys-1')?.folderId).toBe(folder.id);
+
+      // Delete folder
+      StorageService.deleteFolder(folder.id);
+
+      expect(StorageService.getFolders().length).toBe(0);
+      // The deck MUST still exist!
+      const deckAfterDelete = StorageService.getSessions().find(s => s.id === 'test-session-phys-1');
+      expect(deckAfterDelete).toBeDefined();
+      expect(deckAfterDelete?.folderId).toBeUndefined();
+    });
+
+    it('exports and imports subject folders in JSON backup', () => {
+      const folder = StorageService.createFolder('Chemistry', 'amber', '🧪');
+      const session: any = {
+        id: 'test-chem-1',
+        title: 'Periodic Table',
+        category: 'Chemistry',
+        folderId: folder.id,
+        concepts: [],
+        currentConceptIndex: 0,
+        currentPhase: 'priming',
+        elapsedSeconds: 0,
+        createdAt: new Date().toISOString(),
+      };
+      StorageService.saveSession(session);
+
+      const json = StorageService.exportAllDataAsJSON();
+      expect(json).toContain('"name": "Chemistry"');
+      expect(json).toContain('"folderId": "' + folder.id + '"');
+
+      // Clear storage
+      localStorage.clear();
+      expect(StorageService.getFolders().length).toBe(0);
+      expect(StorageService.getSessions().length).toBe(0);
+
+      // Restore
+      const res = StorageService.importDataFromJSON(json);
+      expect(res.success).toBe(true);
+      expect(StorageService.getFolders().length).toBe(1);
+      expect(StorageService.getFolders()[0].name).toBe('Chemistry');
+      expect(StorageService.getSessions().find(s => s.id === 'test-chem-1')?.folderId).toBe(folder.id);
+    });
+
+    it('synthesizes longitudinal student cognitive memory profile correctly', () => {
+      // Empty state
+      const initialProfile = StorageService.getCognitiveMemoryProfile();
+      expect(initialProfile.totalCards).toBe(0);
+      expect(initialProfile.masteredCards).toBe(0);
+      expect(initialProfile.strugglingCards).toBe(0);
+
+      // Save a session with structured cards
+      const testSession: any = {
+        id: 'session-memory-test',
+        title: 'Neurology & Synapses',
+        category: 'Medical',
+        description: 'Neurophysiology deck',
+        currentConceptIndex: 0,
+        currentPhase: 'retrieval',
+        elapsedSeconds: 120,
+        createdAt: new Date().toISOString(),
+        concepts: [
+          {
+            id: 'c-1',
+            order: 1,
+            title: 'Synaptic Transmission',
+            estimatedMinutes: 10,
+            mentalModel: 'Electrical to chemical bridge',
+            coreTakeaways: ['Action potential triggers calcium influx', 'Vesicle fusion releases neurotransmitter'],
+            keyTerms: [{ term: 'SNARE', definition: 'Fusion protein complex' }],
+            feynmanPrompt: 'Explain vesicle fusion simply',
+            sampleMasteryExplanation: 'Action potential depolarizes terminal...',
+            retrievalCards: [
+              {
+                id: 'card-mastered-1',
+                conceptId: 'c-1',
+                question: 'What ion triggers exocytosis?',
+                answer: 'Calcium (Ca2+)',
+                stability: 30,
+                difficulty: 3,
+                reps: 4,
+                lapses: 0,
+              },
+              {
+                id: 'card-struggling-1',
+                conceptId: 'c-1',
+                question: 'Which protein binds calcium during fusion?',
+                answer: 'Synaptotagmin',
+                stability: 1.5,
+                difficulty: 8,
+                reps: 5,
+                lapses: 3,
+                diagnosticDistractors: [
+                  {
+                    optionText: 'Synaptobrevin',
+                    trapType: 'semantic-twin',
+                    trapExplanation: 'Confused with v-SNARE',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      StorageService.saveSession(testSession);
+
+      const profile = StorageService.getCognitiveMemoryProfile();
+      expect(profile.totalCards).toBe(2);
+      expect(profile.masteredCards).toBe(1);
+      expect(profile.strugglingCards).toBe(1);
+      expect(profile.frequentLapseConcepts.length).toBeGreaterThan(0);
+      expect(profile.vulnerableTrapTypes).toContain('semantic-twin');
+      expect(profile.averageStabilityDays).toBeGreaterThan(0);
+    });
+  });
 });
 

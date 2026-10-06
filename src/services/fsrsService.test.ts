@@ -86,4 +86,30 @@ describe('FSRSService', () => {
     const relaxedInterval = FSRSService.calculateInterval(30, 0.80);
     expect(relaxedInterval).toBeGreaterThan(30);
   });
+
+  it('determines dynamic concept pedagogical strictness correctly', () => {
+    // 1. Empty cards defaults to dialectic
+    const emptyState = FSRSService.getConceptPedagogicalState([]);
+    expect(emptyState.mode).toBe('dialectic');
+    expect(emptyState.retrievability).toBe(85);
+
+    // 2. High lapse or decayed cards trigger scaffolding
+    const pastDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const strugglingCards = [
+      createMockCard({ lapses: 3, stability: 1, lastReviewDate: pastDate }),
+      createMockCard({ lapses: 1, stability: 2, lastReviewDate: pastDate }),
+    ];
+    const scaffoldState = FSRSService.getConceptPedagogicalState(strugglingCards);
+    expect(scaffoldState.mode).toBe('scaffolding');
+    expect(scaffoldState.guidanceDirective).toContain('Socratic Scaffolding Mode');
+
+    // 3. High stability with 0 lapses triggers adversarial mode
+    const masteredCards = [
+      createMockCard({ reps: 5, stability: 25, lapses: 0, lastReviewDate: new Date().toISOString() }),
+      createMockCard({ reps: 6, stability: 30, lapses: 0, lastReviewDate: new Date().toISOString() }),
+    ];
+    const advState = FSRSService.getConceptPedagogicalState(masteredCards);
+    expect(advState.mode).toBe('adversarial');
+    expect(advState.guidanceDirective).toContain('Adversarial Inoculation Mode');
+  });
 });

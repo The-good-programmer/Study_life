@@ -12,10 +12,11 @@ import {
   BookOpen,
   Eye
 } from 'lucide-react';
-import type { CardType, ConceptCheckpoint, RetrievalCard, StudySession } from '../../types';
+import type { CardType, ConceptCheckpoint, RetrievalCard, StudySession, SubjectFolder } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
 import { ImageOcclusionStudio } from './ImageOcclusionStudio';
+import { SubjectFolderModal } from './SubjectFolderModal';
 
 interface DeckStudioModalProps {
   isOpen: boolean;
@@ -43,7 +44,10 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
   // Deck metadata
   const [title, setTitle] = useState(initialSession?.title || '');
   const [category, setCategory] = useState(initialSession?.category || 'General Studies');
+  const [folderId, setFolderId] = useState<string | undefined>(initialSession?.folderId);
   const [description, setDescription] = useState(initialSession?.description || '');
+  const [folders, setFolders] = useState<SubjectFolder[]>(() => StorageService.getFolders());
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
 
   // Active concepts & cards
   const [concepts, setConcepts] = useState<ConceptCheckpoint[]>(() => {
@@ -296,6 +300,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
       id: sessionId,
       title: deckName,
       category: importCategory.trim() || 'Imported Deck',
+      folderId: folderId || undefined,
       description: `Contains ${cards.length} flashcards imported via Deck Studio.`,
       currentConceptIndex: 0,
       currentPhase: 'priming',
@@ -342,6 +347,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
       id: sessionId,
       title: title.trim(),
       category: category.trim() || 'General Studies',
+      folderId: folderId || undefined,
       description: description.trim() || `Custom study deck created in Lotti Deck Studio.`,
       currentConceptIndex: 0,
       currentPhase: 'priming',
@@ -439,7 +445,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
             <div className="space-y-6">
               
               {/* Deck Metadata row */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-display">
                     Deck Title
@@ -455,7 +461,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
 
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-display">
-                    Category / Domain
+                    Category / Tag
                   </label>
                   <input
                     type="text"
@@ -464,6 +470,33 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
                     placeholder="e.g. Neuroscience, CS, Physics"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-white/[0.1] focus:border-indigo-500 text-white text-xs outline-none"
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-display">
+                      Subject Folder
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsFolderModalOpen(true)}
+                      className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer"
+                    >
+                      + New
+                    </button>
+                  </div>
+                  <select
+                    value={folderId || ''}
+                    onChange={(e) => setFolderId(e.target.value || undefined)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-white/[0.1] focus:border-indigo-500 text-white text-xs outline-none cursor-pointer"
+                  >
+                    <option value="">📂 None (Uncategorized)</option>
+                    {folders.map(f => (
+                      <option key={f.id} value={f.id}>
+                        {f.icon || '📁'} {f.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-1">
@@ -724,7 +757,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
           {activeTab === 'import' && (
             <div className="space-y-6">
               
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-display">
                     Import Deck Title
@@ -740,7 +773,7 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
 
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-display">
-                    Category / Subject
+                    Category / Tag
                   </label>
                   <input
                     type="text"
@@ -749,6 +782,33 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
                     placeholder="e.g. Biology, CS, History"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-white/[0.1] focus:border-purple-500 text-white text-xs outline-none"
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-display">
+                      Subject Folder
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsFolderModalOpen(true)}
+                      className="text-[10px] text-purple-400 hover:text-purple-300 font-bold cursor-pointer"
+                    >
+                      + New
+                    </button>
+                  </div>
+                  <select
+                    value={folderId || ''}
+                    onChange={(e) => setFolderId(e.target.value || undefined)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-white/[0.1] focus:border-purple-500 text-white text-xs outline-none cursor-pointer"
+                  >
+                    <option value="">📂 None (Uncategorized)</option>
+                    {folders.map(f => (
+                      <option key={f.id} value={f.id}>
+                        {f.icon || '📁'} {f.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-1">
@@ -901,6 +961,17 @@ export const DeckStudioModal: React.FC<DeckStudioModalProps> = ({
         )}
 
       </div>
+
+      {isFolderModalOpen && (
+        <SubjectFolderModal
+          isOpen={isFolderModalOpen}
+          onClose={() => setIsFolderModalOpen(false)}
+          onFolderSaved={(newFolder) => {
+            setFolders(StorageService.getFolders());
+            setFolderId(newFolder.id);
+          }}
+        />
+      )}
     </div>
   );
 };

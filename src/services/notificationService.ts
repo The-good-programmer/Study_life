@@ -118,13 +118,13 @@ export class NotificationService {
   }
 
   /**
-   * Trigger a test notification so the user immediately experiences Lottie's coaching
+   * Trigger a test notification so the user immediately experiences the coaching
    */
   public static async sendTestNotification(): Promise<boolean> {
     const granted = await this.requestPermission();
     if (!granted) return false;
 
-    return this.showNotification("Lottie is proud of you! 🐾", {
+    return this.showNotification("Momentum Guard Active! 🎯", {
       body: "High five! Streak notifications are now active. We'll remind you to do a quick 3-minute study session before your streak breaks!",
       data: { url: '/' },
     });
@@ -157,7 +157,7 @@ export class NotificationService {
         : `Keep your study momentum alive today! ✨`;
 
       const success = await this.showNotification(streakText, {
-        body: `Just 3 minutes of quick flashcard practice will lock in today's progress. Lottie is waiting for you! 🐾`,
+        body: `Just 3 minutes of quick flashcard practice will lock in today's progress. Your 3D study partner is ready! 🎯`,
         data: { url: '/?launch=quick_sprint' },
         requireInteraction: true,
       });

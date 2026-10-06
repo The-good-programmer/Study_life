@@ -8,7 +8,8 @@ import {
   Zap, 
   Check, 
   AlertCircle,
-  Coins
+  Coins,
+  Moon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -82,6 +83,7 @@ export const CampusCafeteriaModal: React.FC<CampusCafeteriaModalProps> = ({
   const filteredMeals = CAFETERIA_MENU.filter((m) => {
     if (selectedCategory === 'breakfast') return m.category === 'breakfast';
     if (selectedCategory === 'lunch') return m.category === 'lunch';
+    if (selectedCategory === 'dinner') return m.category === 'dinner';
     return m.category === 'drink' || m.category === 'snack';
   });
 
@@ -176,6 +178,20 @@ export const CampusCafeteriaModal: React.FC<CampusCafeteriaModalProps> = ({
 
             <button
               type="button"
+              onClick={() => setSelectedCategory('dinner')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                selectedCategory === 'dinner'
+                  ? 'bg-indigo-500/20 border border-indigo-500/40 text-indigo-200'
+                  : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+              }`}
+            >
+              <Moon className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Evening Dinner</span>
+              {ledger.dinnerId && <Check className="w-3 h-3 text-emerald-400" />}
+            </button>
+
+            <button
+              type="button"
               onClick={() => setSelectedCategory('drink')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 selectedCategory === 'drink'
@@ -212,7 +228,8 @@ export const CampusCafeteriaModal: React.FC<CampusCafeteriaModalProps> = ({
               const isAffordable = walletCoins >= meal.cost;
               const isPurchasedToday = 
                 (meal.category === 'breakfast' && ledger.breakfastId === meal.id) ||
-                (meal.category === 'lunch' && ledger.lunchId === meal.id);
+                (meal.category === 'lunch' && ledger.lunchId === meal.id) ||
+                (meal.category === 'dinner' && ledger.dinnerId === meal.id);
 
               return (
                 <div

@@ -54,7 +54,7 @@ const TOPICS: ScienceTopic[] = [
         description: 'Brain recognizes familiar shapes on the page, tricking you into feeling prepared while neurons remain passive.'
       },
       science: {
-        label: 'Active Cold Recall (Lotti)',
+        label: 'Active Cold Recall (Studify)',
         description: 'Reconstructing the memory from scratch without looking triggers long-term potentiation and structural dendrite growth.'
       }
     },
@@ -129,8 +129,8 @@ const TOPICS: ScienceTopic[] = [
         description: 'Doing 20 cards of the same topic creates a rhythmic autopilot where you never learn when to apply which formula.'
       },
       science: {
-        label: 'Interleaved Practice (Lotti)',
-        description: 'Lotti injects cards from earlier concepts, forcing your brain to first diagnose *which* tool is needed before solving.'
+        label: 'Interleaved Practice (Studify)',
+        description: 'Studify injects cards from earlier concepts, forcing your brain to first diagnose *which* tool is needed before solving.'
       }
     },
     keyTakeaways: [
@@ -232,7 +232,7 @@ export const ScienceExplainerModal: React.FC<ScienceExplainerModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 id="science-explainer-title" className="text-lg font-bold text-white font-display">The Cognitive Science of Lotti</h2>
+                <h2 id="science-explainer-title" className="text-lg font-bold text-white font-display">The Cognitive Science of Studify</h2>
                 <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   Empirical Foundations
                 </span>
@@ -243,7 +243,7 @@ export const ScienceExplainerModal: React.FC<ScienceExplainerModalProps> = ({
           <button 
             type="button"
             onClick={() => {
-              soundEngine.playAxolotlBubble();
+              soundEngine.playCompanionBubble();
               onClose();
             }}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer"
@@ -264,7 +264,7 @@ export const ScienceExplainerModal: React.FC<ScienceExplainerModalProps> = ({
                 key={topic.id}
                 type="button"
                 onClick={() => {
-                  soundEngine.playAxolotlBubble();
+                  soundEngine.playCompanionBubble();
                   setSelectedTopicId(topic.id);
                 }}
                 className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
@@ -322,7 +322,7 @@ export const ScienceExplainerModal: React.FC<ScienceExplainerModalProps> = ({
             <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-2">
               <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span>The Lotti Method ({currentTopic.comparison.science.label})</span>
+                <span>The Studify Method ({currentTopic.comparison.science.label})</span>
               </div>
               <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
                 {currentTopic.comparison.science.description}

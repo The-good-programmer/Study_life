@@ -25,8 +25,10 @@ const MatchArena = lazy(() => import('./components/game/MatchArena').then(m => (
 const AudioBriefingBar = lazy(() => import('./components/audio/AudioBriefingBar').then(m => ({ default: m.AudioBriefingBar })));
 const DeckStationModal = lazy(() => import('./components/studio/DeckStationModal').then(m => ({ default: m.DeckStationModal })));
 const AuthModal = lazy(() => import('./components/auth/AuthModal').then(m => ({ default: m.AuthModal })));
-const AxolotlStudyHabitat = lazy(() => import('./components/mascot/AxolotlStudyHabitat').then(m => ({ default: m.AxolotlStudyHabitat })));
+const StudyEstateCampus = lazy(() => import('./components/mascot/AxolotlStudyHabitat').then(m => ({ default: m.StudyEstateCampus })));
 const DailyMissionHome = lazy(() => import('./components/home/DailyMissionHome').then(m => ({ default: m.DailyMissionHome })));
+const FoldersPage = lazy(() => import('./components/folders/FoldersPage').then(m => ({ default: m.FoldersPage })));
+const CharacterCustomizerModal = lazy(() => import('./components/character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal })));
 
 const LazyLoadingFallback = () => (
   <div className="flex flex-col items-center justify-center min-h-[350px] w-full p-8 animate-fadeIn">
@@ -58,11 +60,12 @@ export function App() {
   const [stationSession, setStationSession] = useState<StudySession | null>(null);
   const [isStationOpen, setIsStationOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<StudySession | null>(null);
-  const [view, setView] = useState<'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio'>('home');
+  const [view, setView] = useState<'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders'>('home');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isDeckStudioOpen, setIsDeckStudioOpen] = useState(false);
   const [isStarterCatalogOpen, setIsStarterCatalogOpen] = useState(false);
+  const [isCharacterCustomizerOpen, setIsCharacterCustomizerOpen] = useState(false);
   const [deckStudioTab, setDeckStudioTab] = useState<'create' | 'import' | 'occlusion'>('create');
   const [libraryTab, setLibraryTab] = useState<'my-decks' | 'starred' | 'curated'>('my-decks');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -155,7 +158,7 @@ export function App() {
     setStats(StorageService.getStats());
   };
 
-  const handleNavigate = (targetView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio') => {
+  const handleNavigate = (targetView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders') => {
     setView(targetView);
     setStats(StorageService.getStats());
   };
@@ -244,35 +247,39 @@ export function App() {
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={handleToggleSidebarCollapse}
+        onOpenCharacterCustomizer={() => setIsCharacterCustomizerOpen(true)}
       />
 
       {/* Main App Column */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
-        {/* Top Navbar */}
-        <Navbar
-          stats={stats}
-          currentUser={currentUser}
-          onOpenAuth={handleOpenAuth}
-          activeView={view}
-          onNavigate={handleNavigate}
-          isOnline={isOnline}
-          isInstallable={isInstallable}
-          onPromptInstall={promptInstall}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          onOpenDashboard={() => handleNavigate('dashboard')}
-          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-          onOpenStarterCatalog={() => setIsStarterCatalogOpen(true)}
-          onOpenExam={() => handleNavigate('exam')}
-          onOpenInterleaving={() => handleNavigate('interleave')}
-          onOpenSanctuary={() => handleNavigate('sanctuary')}
-          onLogoClick={() => handleNavigate('home')}
-          onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
-          isSidebarCollapsed={isSidebarCollapsed}
-          onToggleSidebarCollapse={() => handleToggleSidebarCollapse()}
-        />
+      <div className={`flex-1 flex flex-col min-w-0 ${view === 'sanctuary' ? 'h-screen overflow-hidden' : 'overflow-x-hidden'}`}>
+        {/* Top Navbar - hidden in sanctuary 3D mode to give full screen height */}
+        {view !== 'sanctuary' && (
+          <Navbar
+            stats={stats}
+            currentUser={currentUser}
+            onOpenAuth={handleOpenAuth}
+            activeView={view}
+            onNavigate={handleNavigate}
+            isOnline={isOnline}
+            isInstallable={isInstallable}
+            onPromptInstall={promptInstall}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onOpenDashboard={() => handleNavigate('dashboard')}
+            onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+            onOpenStarterCatalog={() => setIsStarterCatalogOpen(true)}
+            onOpenExam={() => handleNavigate('exam')}
+            onOpenInterleaving={() => handleNavigate('interleave')}
+            onOpenSanctuary={() => handleNavigate('sanctuary')}
+            onOpenCharacterCustomizer={() => setIsCharacterCustomizerOpen(true)}
+            onLogoClick={() => handleNavigate('home')}
+            onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebarCollapse={() => handleToggleSidebarCollapse()}
+          />
+        )}
 
         {/* Offline Mode Banner */}
-        {!isOnline && (
+        {!isOnline && view !== 'sanctuary' && (
           <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 text-center text-xs font-semibold text-amber-300 flex items-center justify-center gap-2">
             <WifiOff className="w-4 h-4 text-amber-400" />
             <span>Offline Mode Active • All local decks, image occlusions, and FSRS reviews work 100% offline.</span>
@@ -280,7 +287,11 @@ export function App() {
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8">
+        <main className={`flex-1 w-full ${
+          view === 'sanctuary'
+            ? 'h-full max-w-none p-0 overflow-hidden flex flex-col'
+            : 'max-w-7xl mx-auto p-3 sm:p-6 lg:p-8'
+        }`}>
           <Suspense fallback={<LazyLoadingFallback />}>
             {view === 'home' && (
               <DailyMissionHome
@@ -297,6 +308,7 @@ export function App() {
                 onOpenDashboard={() => handleNavigate('dashboard')}
                 onOpenSanctuary={() => handleNavigate('sanctuary')}
                 onOpenExam={() => handleNavigate('exam')}
+                onOpenFolders={() => handleNavigate('folders')}
               />
             )}
             {view === 'studio' && (
@@ -340,7 +352,7 @@ export function App() {
               />
             )}
             {view === 'sanctuary' && (
-              <AxolotlStudyHabitat
+              <StudyEstateCampus
                 onStartSession={handleStartSession}
                 onOpenDeckStation={handleOpenDeckStation}
                 onStartMatch={handleStartMatch}
@@ -354,19 +366,36 @@ export function App() {
                 }}
                 onOpenStarterCatalog={() => setIsStarterCatalogOpen(true)}
                 onOpenDashboard={() => handleNavigate('dashboard')}
+                onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
+                onNavigateHome={() => handleNavigate('home')}
+              />
+            )}
+            {view === 'folders' && (
+              <FoldersPage
+                onBack={() => handleNavigate('home')}
+                onStartSession={handleStartSession}
+                onOpenDeckStation={handleOpenDeckStation}
+                onOpenDeckStudio={() => {
+                  setEditingSession(null);
+                  setDeckStudioTab('create');
+                  setIsDeckStudioOpen(true);
+                }}
+                onStartMatch={handleStartMatch}
+                onOpenInterleaving={() => handleNavigate('interleave')}
               />
             )}
           </Suspense>
         </main>
 
-        {/* Footer */}
-        <footer className="w-full border-t border-white/[0.08] bg-slate-950/80 backdrop-blur-md py-6 px-4 text-center text-xs text-slate-500">
-          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-200 font-display text-sm tracking-tight">Lotti</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-slate-400">Micro-Mastery & Spaced Recall with Lottie the Axolotl</span>
-            </div>
+        {/* Footer - hidden in sanctuary 3D mode */}
+        {view !== 'sanctuary' && (
+          <footer className="w-full border-t border-white/[0.08] bg-slate-950/80 backdrop-blur-md py-6 px-4 text-center text-xs text-slate-500">
+            <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-200 font-display text-sm tracking-tight">Studify</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-400">Micro-Mastery &amp; Spaced Recall with Custom 3D Avatar</span>
+              </div>
             <div className="flex items-center gap-4 text-[12px] text-slate-400">
               <button 
                 type="button" 
@@ -378,9 +407,9 @@ export function App() {
               <button 
                 type="button" 
                 onClick={() => handleNavigate('sanctuary')}
-                className="hover:text-pink-400 transition-colors cursor-pointer"
+                className="hover:text-indigo-400 transition-colors cursor-pointer"
               >
-                Lottie Sanctuary
+                Campus Life
               </button>
               <button 
                 type="button" 
@@ -392,6 +421,7 @@ export function App() {
             </div>
           </div>
         </footer>
+      )}
       </div>
 
       {/* Floating NotebookLM-style Audio Briefing Bar */}
@@ -539,6 +569,16 @@ export function App() {
               setCurrentUser(user);
               setStats(StorageService.getStats());
             }}
+          />
+        </Suspense>
+      )}
+
+      {/* Global 3D Character Customizer Studio */}
+      {isCharacterCustomizerOpen && (
+        <Suspense fallback={null}>
+          <CharacterCustomizerModal
+            isOpen={isCharacterCustomizerOpen}
+            onClose={() => setIsCharacterCustomizerOpen(false)}
           />
         </Suspense>
       )}

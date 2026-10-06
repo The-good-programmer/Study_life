@@ -30,7 +30,7 @@ import { haptics } from '../../services/hapticsService';
 interface RetrievalPhaseProps {
   concept: ConceptCheckpoint;
   onComplete: () => void;
-  onInspectSource?: (pageNumber?: number) => void;
+  onInspectSource?: (pageNumber?: number, snippet?: string) => void;
   allConcepts?: ConceptCheckpoint[];
   conceptIndex?: number;
 }
@@ -879,8 +879,9 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const target = currentCard?.sourceAnchor?.pageNumber || concept.sourceAnchor?.pageNumber;
-                          onInspectSource(target);
+                          const targetPage = currentCard?.sourceAnchor?.pageNumber || concept.sourceAnchor?.pageNumber;
+                          const targetSnippet = currentCard?.sourceAnchor?.snippet || concept.sourceAnchor?.snippet;
+                          onInspectSource(targetPage, targetSnippet);
                         }}
                         className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-900/90 hover:bg-indigo-950/80 text-indigo-300 hover:text-indigo-200 border border-indigo-500/30 flex items-center gap-1 transition-all hover:scale-105 shadow-sm"
                         title={`Inspect Ground Truth on Page ${(currentCard?.sourceAnchor || concept.sourceAnchor)?.pageNumber}`}
@@ -1040,7 +1041,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                             {isCorrect ? 'Accurate recall! Synaptic trace reinforced.' : `Target Answer: ${currentCard.answer}`}
                           </span>
                         </div>
-                        <span className="font-mono font-bold text-xs">{isCorrect ? '+10 XP' : 'FSRS Grading Below'}</span>
+                        <span className="font-mono font-bold text-xs">{isCorrect ? '+5 🪙 Wage' : 'FSRS Grading Below'}</span>
                       </div>
                     )}
                   </div>
@@ -1419,7 +1420,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                     className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-600/25 transition-all hover:scale-[1.02]"
                   >
                     <Timer className="w-4 h-4" />
-                    <span>Start 60s Blurting Challenge (+40 XP)</span>
+                    <span>Start 60s Blurting Challenge (+25 🪙 Wage)</span>
                   </button>
                 ) : (
                   <button
@@ -1439,7 +1440,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                 <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
                   <div className="text-xs font-bold text-white flex items-center gap-2 font-display">
                     <Sparkles className="w-4 h-4 text-amber-400" />
-                    <span>Active Blurting Mastery Breakdown (+40 XP)</span>
+                    <span>Active Blurting Mastery Breakdown (+25 🪙 Wage)</span>
                   </div>
                   <span className="text-xs font-bold text-emerald-400 font-mono">
                     {blurtingResult.recalled.length} / {concept.keyTerms.length} Key Terms Recalled
@@ -1622,8 +1623,8 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                 <div className="text-base sm:text-lg font-black font-display flex items-center gap-2">
                   <span>{isCorrect ? (combo >= 3 ? `Brilliant! Combo x${combo} 🔥` : 'Nicely done!') : 'Incorrect'}</span>
                   {isCorrect && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
-                      +10 XP
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold">
+                      +5 🪙
                     </span>
                   )}
                 </div>

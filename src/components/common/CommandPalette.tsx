@@ -129,8 +129,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     })),
     {
       id: 'nav-3d-sanctuary',
-      title: 'Visit 3D Axolotl Sanctuary',
-      subtitle: 'Interact, pet, feed, and customize your living 3D Axolotl study co-pilot',
+      title: 'Student Home & Room Designer (Design Home)',
+      subtitle: 'Design your room, stage furniture, brew espresso & manage real-life student simulation',
       icon: Sparkles,
       category: 'Navigation' as const,
       action: () => {

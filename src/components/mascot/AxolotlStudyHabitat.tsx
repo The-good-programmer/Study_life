@@ -1,49 +1,86 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
+import confetti from 'canvas-confetti';
 import { 
   Sparkles, 
-  Heart, 
   Wind, 
   BookOpen, 
-  Edit3, 
-  Smile, 
-  Play, 
   Layers, 
-  Zap, 
   Plus, 
-  Search, 
-  Maximize2, 
-  Minimize2, 
-  X, 
   Check, 
-  TrendingUp, 
-  Headphones, 
-  Shuffle, 
-  Award, 
   Utensils, 
-  Sun, 
-  CloudSun, 
-  Moon 
+  X, 
+  Award, 
+  Shuffle, 
+  Flame, 
+  Headphones, 
+  Home, 
+  ShoppingBag, 
+  CheckCheck, 
+  Volume2, 
+  VolumeX, 
+  CloudRain, 
+  Radio 
 } from 'lucide-react';
-import { 
-  axolotlService, 
-  SKIN_PALETTES, 
-  ACCESSORIES_META, 
-  ENVIRONMENTS_META, 
-  TREATS_META, 
-  type AxolotlSkinId, 
-  type AxolotlAccessoryId, 
-  type AxolotlEnvironmentId,
-  type AxolotlTreatType,
-  type AxolotlState 
-} from '../../services/axolotlService';
+import { characterService } from '../../services/characterService';
 import { StorageService } from '../../services/storageService';
-import { ExpressiveAxolotl } from './ExpressiveAxolotl';
-import { CampusCafeteriaModal } from '../lifesim/CampusCafeteriaModal';
-import { DailyLedgerWidget } from '../lifesim/DailyLedgerWidget';
-import { lifeSimService, CAFETERIA_MENU, LIFESTYLE_TIERS } from '../../services/lifeSimService';
-import { type DailyLedger, type LifestyleTier } from '../../types/lifeSim';
+import { soundEngine, type SoundType } from '../../services/soundEngine';
+import { 
+  lifeSimService, 
+  CAFETERIA_MENU, 
+  HOUSING_CATALOG, 
+  STUDENT_GEAR_CATALOG 
+} from '../../services/lifeSimService';
+const HomeDesign3D = lazy(() => import('../lifesim/HomeDesign3D'));
+
+const HomeDesign3DSkeleton = () => (
+  <div className="relative w-full h-full min-h-[500px] flex-1 overflow-hidden bg-[#0a1128] shadow-2xl flex flex-col items-center justify-center p-8 select-none">
+    {/* Blueprint Grid Background Pattern */}
+    <div
+      className="absolute inset-0 opacity-20 pointer-events-none"
+      style={{
+        backgroundImage: `
+          linear-gradient(to right, rgba(56, 189, 248, 0.25) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(56, 189, 248, 0.25) 1px, transparent 1px)
+        `,
+        backgroundSize: '32px 32px',
+      }}
+    />
+
+    {/* Ambient Glowing Radial Center */}
+    <div className="absolute w-96 h-96 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+
+    {/* Blueprint Wireframe Cube Animation */}
+    <div className="relative z-10 flex flex-col items-center space-y-5 text-center">
+      <div className="relative w-20 h-20 flex items-center justify-center">
+        <div className="absolute inset-0 rounded-2xl border-2 border-cyan-400/40 rotate-6 animate-pulse" />
+        <div className="absolute inset-0 rounded-2xl border-2 border-amber-400/30 -rotate-6 animate-pulse [animation-delay:300ms]" />
+        <div className="w-14 h-14 rounded-xl bg-slate-900/90 border border-cyan-400/60 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <Layers className="w-7 h-7 text-cyan-300 animate-spin [animation-duration:8s]" />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="text-sm font-black tracking-widest text-cyan-200 uppercase font-display flex items-center justify-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+          <span>Architectural 3D Engine</span>
+        </div>
+        <p className="text-xs text-slate-400 font-mono">
+          Loading Three.js PBR shaders &amp; contact shadows...
+        </p>
+      </div>
+
+      {/* Progress Line */}
+      <div className="w-48 h-1 rounded-full bg-cyan-950 overflow-hidden border border-cyan-500/30">
+        <div className="w-full h-full bg-gradient-to-r from-transparent via-cyan-400 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]" />
+      </div>
+    </div>
+  </div>
+);
+import { 
+  type MealItem, 
+  type HousingTier 
+} from '../../types/lifeSim';
 import type { StudySession } from '../../types';
-import confetti from 'canvas-confetti';
 
 export interface AxolotlStudyHabitatProps {
   onStartSession: (session: StudySession) => void;
@@ -55,6 +92,8 @@ export interface AxolotlStudyHabitatProps {
   onOpenDeckStudio: () => void;
   onOpenStarterCatalog: () => void;
   onOpenDashboard: () => void;
+  onToggleMobileSidebar?: () => void;
+  onNavigateHome?: () => void;
 }
 
 export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
@@ -67,59 +106,47 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
   onOpenDeckStudio,
   onOpenStarterCatalog,
   onOpenDashboard,
+  onToggleMobileSidebar,
+  onNavigateHome,
 }) => {
-  const [state, setState] = useState<AxolotlState>(axolotlService.getState());
-  const [isZenMode, setIsZenMode] = useState(false);
-  const [breathingActive, setBreathingActive] = useState(false);
+  // Wallet & Student Identity
+  const [walletCoins, setWalletCoins] = useState<number>(lifeSimService.getWalletBalance());
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Audio Soundscape state
+  const [currentSound, setCurrentSound] = useState<SoundType>(soundEngine.getCurrentSound());
+  const [soundVolume, setSoundVolume] = useState<number>(soundEngine.getVolume());
+
+  // Active Overlay Drawer: null | 'cafe' | 'study' | 'housing' | 'gear' | 'audio' | 'breathe'
+  const [activeDrawer, setActiveDrawer] = useState<'cafe' | 'study' | 'housing' | 'gear' | 'audio' | 'breathe' | null>(null);
+  const [cafeTab, setCafeTab] = useState<'all' | 'breakfast' | 'lunch' | 'dinner' | 'drink'>('all');
+
+  // Box Breathing Timer (4-4-4)
   const [breathPhase, setBreathPhase] = useState<'Inhale' | 'Hold' | 'Exhale'>('Inhale');
   const [breathSeconds, setBreathSeconds] = useState(4);
-  const [isWardrobeOpen, setIsWardrobeOpen] = useState(false);
-  const [wardrobeTab, setWardrobeTab] = useState<'skin' | 'accessory' | 'biome'>('skin');
-  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-  const [librarySearch, setLibrarySearch] = useState('');
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState(state.name);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [isCafeteriaOpen, setIsCafeteriaOpen] = useState(false);
-  const [dailyLedger, setDailyLedger] = useState<DailyLedger>(lifeSimService.getDailyLedger());
-  const [lifestyleTier, setLifestyleTier] = useState<LifestyleTier>(lifeSimService.getLifestyleTier());
 
-  // Subscribe to live state updates
+  // Subscribe to live updates
   useEffect(() => {
-    const unsub = axolotlService.subscribe((newState) => {
-      setState(newState);
-      setNameInput(newState.name);
-    });
     const unsubLife = lifeSimService.subscribe(() => {
-      setDailyLedger(lifeSimService.getDailyLedger());
-      setLifestyleTier(lifeSimService.getLifestyleTier());
+      setWalletCoins(lifeSimService.getWalletBalance());
+    });
+    const unsubChar = characterService.subscribe((char) => {
+      setWalletCoins(char.coins || 0);
+    });
+    const unsubSound = soundEngine.subscribe((sound, vol) => {
+      setCurrentSound(sound);
+      setSoundVolume(vol);
     });
     return () => {
-      unsub();
       unsubLife();
+      unsubChar();
+      unsubSound();
     };
   }, []);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
-  // Saved decks & due cards from StorageService
-  const savedSessions = StorageService.getSessions();
-  const dueCards = StorageService.getDueCards();
-  const stats = StorageService.getStats();
-
-  // Filtered decks for drawer
-  const filteredDecks = useMemo(() => {
-    if (!librarySearch.trim()) return savedSessions;
-    const q = librarySearch.toLowerCase();
-    return savedSessions.filter(s => s.title.toLowerCase().includes(q));
-  }, [savedSessions, librarySearch]);
-
-  // Breathing Guide Timer (4s Inhale, 4s Hold, 4s Exhale)
+  // Box Breathing Guide Timer
   useEffect(() => {
-    if (!breathingActive) return;
+    if (activeDrawer !== 'breathe') return;
 
     let secondsLeft = 4;
     let currentStep: 'Inhale' | 'Hold' | 'Exhale' = 'Inhale';
@@ -143,820 +170,368 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [breathingActive]);
+  }, [activeDrawer]);
 
-  // Handle Feeding
-  const handleFeed = (treatType: AxolotlTreatType) => {
-    const currentCount = state.treatInventory?.[treatType] || 0;
-    if (currentCount <= 0) {
-      showToast(`Out of ${TREATS_META[treatType].name}! Review cards to earn more 🦐`);
-      return;
-    }
-
-    // Dispatch 3D treat drop into the WebGL scene
-    window.dispatchEvent(new CustomEvent('axolotl-feed', { detail: treatType }));
-    const res = axolotlService.feed(treatType);
-
-    showToast(`Fed ${TREATS_META[treatType].name}! +${res.xp} Friendship XP & +${TREATS_META[treatType].happinessGain} Happiness 🌟`);
-
-    if (res.leveledUp) {
-      try {
-        confetti({
-          particleCount: 50,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#38bdf8', '#f43f5e', '#a855f7'],
-        });
-      } catch {
-        // fallback
-      }
-      showToast(`🎉 Friendship Leveled Up to Level ${state.friendshipLevel + 1}! New items unlocked!`);
-    }
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3800);
   };
 
-  // Handle Petting
-  const handlePet = () => {
-    const res = axolotlService.pet();
-    showToast(`Pet ${state.name}! Gained +5 Friendship XP ✨`);
-    if (res.leveledUp) {
-      showToast(`🎉 Friendship Leveled Up to Level ${state.friendshipLevel + 1}!`);
-    }
-  };
+  // Saved Decks & Current Study Targets
+  const savedSessions = StorageService.getSessions();
+  const dueCards = StorageService.getDueCards();
+  const currentHousing = lifeSimService.getHousing();
+  const ownedGear = lifeSimService.getOwnedGear();
 
-  // Handle Trick
-  const handleTrick = () => {
-    window.dispatchEvent(new CustomEvent('axolotl-trick'));
-    const res = axolotlService.doTrick();
-    showToast(`🎪 ${state.name} performed a ${res.trickName}!`);
-  };
-
-  // Launch Quick Study for due cards or default deck
-  const handleLaunchQuickStudy = () => {
-    if (savedSessions.length === 0) {
-      onOpenStarterCatalog();
-      return;
-    }
-
+  // Currently active or primary deck
+  const primaryDeck = useMemo(() => {
+    if (savedSessions.length === 0) return null;
     if (dueCards.length > 0) {
-      const targetDeck = savedSessions.find(s => 
+      return savedSessions.find(s => 
         s.concepts.some(cp => (cp.retrievalCards || []).some(rc => dueCards.some(dc => dc.id === rc.id)))
       ) || savedSessions[0];
-      onStartSession(targetDeck);
+    }
+    return savedSessions[0];
+  }, [savedSessions, dueCards]);
+
+  // Order Meal
+  const handleOrderMeal = (meal: MealItem) => {
+    const res = lifeSimService.buyMeal(meal.id);
+    if (res.success) {
+      soundEngine.playSuccess();
+      showToast(`Served ${meal.name}! 🍽️`);
     } else {
-      onStartSession(savedSessions[0]);
+      showToast(res.error || 'Could not order meal');
     }
   };
 
-  const requiredXP = state.friendshipLevel * 50;
-  const xpPercent = Math.min(100, Math.round((state.friendshipXP / requiredXP) * 100));
-  const totalTreatCount = Object.values(state.treatInventory || {}).reduce((a, b) => a + b, 0);
+  // Rent / Upgrade Housing
+  const handleRentHousing = (housingId: HousingTier) => {
+    const res = lifeSimService.rentHousing(housingId);
+    if (res.success) {
+      try {
+        confetti({
+          particleCount: 65,
+          spread: 75,
+          origin: { y: 0.5 }
+        });
+      } catch {}
+      showToast(`Lease upgraded to ${lifeSimService.getHousing().name}! 🏠`);
+    } else {
+      showToast(res.error || 'Could not upgrade lease');
+    }
+  };
+
+  // Buy Gear
+  const handleBuyGear = (gearId: string) => {
+    const res = lifeSimService.buyGear(gearId);
+    if (res.success && res.item) {
+      try {
+        confetti({
+          particleCount: 40,
+          spread: 50,
+          origin: { y: 0.7 }
+        });
+      } catch {}
+      showToast(`Equipped ${res.item.name}! ${res.item.perk}`);
+    } else {
+      showToast(res.error || 'Could not purchase gear');
+    }
+  };
+
+  // Soundscape toggles
+  const handleToggleSound = (type: SoundType) => {
+    if (currentSound === type) {
+      soundEngine.stop();
+    } else {
+      soundEngine.play(type);
+    }
+  };
+
+  // Filtered menu
+  const menuList = useMemo(() => {
+    if (cafeTab === 'all') return CAFETERIA_MENU;
+    return CAFETERIA_MENU.filter(m => m.category === cafeTab);
+  }, [cafeTab]);
 
   return (
-    <div className="relative w-full space-y-4 animate-fadeIn">
-      {/* Toast Notification Banner */}
+    <div className="relative w-full h-full flex-1 overflow-hidden select-none animate-fadeIn">
+      {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-slate-900/95 border border-pink-500/40 text-pink-200 text-xs sm:text-sm font-semibold shadow-2xl backdrop-blur-xl animate-bounce">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-slate-900/95 border border-indigo-500/40 text-indigo-100 text-xs sm:text-sm font-semibold shadow-2xl backdrop-blur-xl animate-bounce">
           {toastMessage}
         </div>
       )}
 
-      {/* Main Living 2D Student Sanctuary & Habitat Stage */}
-      <div className={`relative w-full rounded-3xl overflow-hidden border border-white/[0.1] shadow-2xl transition-all duration-700 ${
-        isZenMode ? 'h-[85vh] sm:h-[90vh]' : 'h-[540px] sm:h-[620px] lg:h-[680px]'
-      } ${
-        new Date().getHours() >= 6 && new Date().getHours() < 12
-          ? 'bg-gradient-to-b from-amber-950/40 via-slate-900 to-slate-950'
-          : new Date().getHours() >= 12 && new Date().getHours() < 18
-            ? 'bg-gradient-to-b from-sky-950/40 via-slate-900 to-slate-950'
-            : 'bg-gradient-to-b from-indigo-950/50 via-slate-950 to-slate-950'
-      }`}>
-        
-        {/* Ambient Glows & Atmosphere Grid */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-0 right-1/4 w-96 h-96 rounded-full bg-gradient-to-br from-pink-500/10 via-purple-500/10 to-cyan-500/10 blur-3xl animate-pulse" />
-          <div className="absolute bottom-0 left-1/4 w-96 h-96 rounded-full bg-indigo-500/10 blur-3xl" />
-          <div className="absolute inset-0 bg-[radial-gradient(#ffffff08_1px,transparent_1px)] [background-size:24px_24px]" />
-        </div>
 
-        {/* --- TOP HUD BAR --- */}
-        <div className={`absolute top-3 sm:top-4 inset-x-3 sm:inset-x-5 flex items-center justify-between pointer-events-none transition-opacity duration-300 z-20 ${
-          isZenMode ? 'opacity-0 hover:opacity-100 pointer-events-auto' : 'opacity-100'
-        }`}>
-          {/* Pet Status & Progression Card */}
-          <div className="pointer-events-auto flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 pr-3 sm:pr-4 rounded-2xl bg-slate-950/85 hover:bg-slate-950/95 border border-white/[0.1] backdrop-blur-xl shadow-xl transition-all">
-            <div 
-              onClick={handlePet}
-              className="relative w-9 h-9 sm:w-11 sm:h-11 rounded-xl overflow-hidden p-0.5 bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 cursor-pointer shadow-md shadow-pink-500/20 hover:scale-105 transition-transform"
-              title="Click to pet Lottie!"
-            >
-              <img src="/lottie.png" alt={state.name} className="w-full h-full object-cover rounded-[10px]" />
-            </div>
 
-            <div className="flex flex-col">
-              <div className="flex items-center gap-1.5">
-                {isEditingName ? (
-                  <input
-                    type="text"
-                    value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
-                    onBlur={() => {
-                      axolotlService.updateName(nameInput);
-                      setIsEditingName(false);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        axolotlService.updateName(nameInput);
-                        setIsEditingName(false);
-                      }
-                    }}
-                    autoFocus
-                    className="w-24 px-1.5 py-0.5 rounded bg-slate-800 text-white text-xs font-bold border border-pink-500/40 outline-none"
-                  />
-                ) : (
-                  <span 
-                    onClick={() => setIsEditingName(true)}
-                    className="font-extrabold text-xs sm:text-sm text-white font-display cursor-pointer hover:text-pink-300 flex items-center gap-1"
-                    title="Click to rename your companion"
-                  >
-                    {state.name}
-                    <Edit3 className="w-2.5 h-2.5 text-slate-400" />
-                  </span>
-                )}
-                <span className="px-1.5 py-0.2 rounded-full text-[11px] font-black uppercase tracking-wider bg-pink-500/20 text-pink-300 border border-pink-500/30">
-                  Lvl {state.friendshipLevel}
-                </span>
-                <span className="hidden sm:inline-block px-1.5 py-0.2 rounded-full text-[11px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 font-mono">
-                  {state.evolutionStage}
-                </span>
-              </div>
-
-              {/* Friendship XP Progress Bar */}
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <div className="w-20 sm:w-28 h-1.5 bg-slate-800/90 rounded-full overflow-hidden border border-white/[0.05]">
-                  <div 
-                    className="h-full bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-400 transition-all duration-300"
-                    style={{ width: `${xpPercent}%` }}
-                  />
-                </div>
-                <span className="text-[11px] font-mono text-slate-400">
-                  {state.friendshipXP}/{requiredXP}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Top Controls: Cafeteria, Currency, Zen Mode, Wardrobe */}
-          <div className="pointer-events-auto flex items-center gap-2">
-            {/* Campus Cafeteria Button */}
-            <button
-              type="button"
-              onClick={() => setIsCafeteriaOpen(true)}
-              className="px-2.5 sm:px-3 py-1.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-pink-500/20 to-purple-500/20 hover:from-amber-500/30 hover:to-pink-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold backdrop-blur-xl shadow-lg transition-all cursor-pointer flex items-center gap-1.5 hover:scale-105"
-              title="Open Campus Cafeteria — Buy Meals with Study Wages"
-            >
-              <Utensils className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Cafeteria</span>
-              <span className="text-xs">🍳</span>
-            </button>
-
-            {/* Coins Badge */}
-            <div 
-              title="Axon Study Coins — Earned by reviewing cards & studying"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl bg-slate-950/85 border border-white/[0.1] text-amber-300 text-xs font-bold backdrop-blur-xl shadow-lg"
-            >
-              <span className="text-amber-400">🪙</span>
-              <span>{state.axonCoins || 0}</span>
-            </div>
-
-            {/* Treat Pouch Badge */}
-            <div 
-              title="Treats in Pouch — Feed Lottie to boost happiness and friendship level"
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-2xl bg-slate-950/85 border border-white/[0.1] text-pink-300 text-xs font-bold backdrop-blur-xl shadow-lg"
-            >
-              <span>🦐</span>
-              <span>{totalTreatCount} Treats</span>
-            </div>
-
-            {/* Wardrobe & Biomes Trigger */}
-            <button
-              type="button"
-              onClick={() => setIsWardrobeOpen(true)}
-              className="p-2 sm:px-3 sm:py-1.5 rounded-2xl bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 hover:from-pink-500/30 hover:to-cyan-500/30 border border-pink-500/40 text-pink-200 text-xs font-bold backdrop-blur-xl shadow-lg transition-all cursor-pointer flex items-center gap-1.5 hover:scale-105"
-              title="Customize Skins, Outfits & Biomes"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-pink-400" />
-              <span className="hidden sm:inline">Style</span>
-            </button>
-
-            {/* 1-Click Zen Mode Toggle */}
-            <button
-              type="button"
-              onClick={() => setIsZenMode(prev => !prev)}
-              className={`p-2 sm:px-3 sm:py-1.5 rounded-2xl border text-xs font-bold backdrop-blur-xl shadow-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                isZenMode 
-                  ? 'bg-cyan-500/30 border-cyan-400/50 text-cyan-200' 
-                  : 'bg-slate-950/85 hover:bg-slate-900 border-white/[0.1] text-slate-300 hover:text-white'
-              }`}
-              title={isZenMode ? "Exit Zen Mode (Show Study HUD)" : "Zen Aquarium Mode (Hide HUD for pure immersion)"}
-            >
-              {isZenMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              <span className="hidden md:inline">{isZenMode ? "Exit Zen" : "Zen Mode"}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* --- 2D LIVING SANCTUARY & STUDY DESK (Center Stage) --- */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none px-4 pt-10 pb-28">
-          
-          {/* Time of Day & Lifestyle Atmosphere Badge */}
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950/75 border border-white/[0.08] backdrop-blur-md text-[11px] font-semibold text-slate-300 mb-3 shadow-lg">
-            {new Date().getHours() >= 6 && new Date().getHours() < 12 ? (
-              <span className="flex items-center gap-1 text-amber-300"><Sun className="w-3.5 h-3.5" /> Morning Shift</span>
-            ) : new Date().getHours() >= 12 && new Date().getHours() < 18 ? (
-              <span className="flex items-center gap-1 text-sky-300"><CloudSun className="w-3.5 h-3.5" /> Campus Afternoon</span>
-            ) : (
-              <span className="flex items-center gap-1 text-purple-300"><Moon className="w-3.5 h-3.5" /> Night Focus</span>
-            )}
-            <span className="text-slate-600">•</span>
-            <span className="text-indigo-300 font-bold">{LIFESTYLE_TIERS[lifestyleTier].title}</span>
-            <span className="text-slate-600">•</span>
-            <span className={`font-mono font-bold ${dailyLedger.netBalance >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-              Net: {dailyLedger.netBalance >= 0 ? `+${dailyLedger.netBalance}` : dailyLedger.netBalance} 🪙
-            </span>
-          </div>
-
-          {/* The Living Companion Stage */}
-          <div 
-            className="relative pointer-events-auto cursor-pointer group flex flex-col items-center" 
-            onClick={handlePet}
-            title={`Pet ${state.name}!`}
-          >
-            {/* Breathing Guide Focus Halo */}
-            {breathingActive && (
-              <div className={`absolute -inset-10 rounded-full border-2 border-cyan-400/60 transition-all duration-1000 ${
-                breathPhase === 'Inhale' 
-                  ? 'scale-125 bg-cyan-500/10' 
-                  : breathPhase === 'Hold' 
-                    ? 'scale-110 bg-cyan-500/20' 
-                    : 'scale-90 bg-transparent'
-              }`} />
-            )}
-
-            {/* Ambient Companion Aura */}
-            <div className="absolute -inset-4 rounded-full bg-gradient-to-tr from-pink-500/20 via-purple-500/20 to-cyan-400/20 blur-xl group-hover:blur-2xl transition-all" />
-
-            {/* 2D Expressive Mascot */}
-            <div className="relative z-10 transform group-hover:scale-105 transition-transform duration-300">
-              <ExpressiveAxolotl
-                size="xl"
-                mood={state.mood as any}
-                accessory={state.accessory === 'none' ? 'none' : (state.accessory as any)}
-                animated={true}
-              />
-            </div>
-
-            {/* Interactive Speech & Pet Tag */}
-            <div className="mt-2 px-3 py-1 rounded-full bg-slate-950/85 border border-pink-500/30 text-[11px] font-bold text-pink-200 flex items-center gap-1.5 shadow-lg group-hover:border-pink-500/60 transition-all">
-              <Heart className="w-3 h-3 text-pink-400 fill-pink-400 animate-pulse" />
-              <span>Pet {state.name} (+5 XP)</span>
-            </div>
-          </div>
-
-          {/* The Cozy Student Desk / Biome Surface */}
-          <div className="w-full max-w-lg mt-3 p-3 rounded-2xl bg-slate-950/80 border border-white/[0.1] backdrop-blur-xl shadow-xl flex items-center justify-between gap-3 pointer-events-auto">
-            
-            {/* Left: Meal / Fuel Tray */}
-            {(() => {
-              const todayMeal = CAFETERIA_MENU.find(m => m.id === (dailyLedger.breakfastId || dailyLedger.lunchId)) || dailyLedger.expenses[0];
-              return (
-                <div 
-                  onClick={() => setIsCafeteriaOpen(true)}
-                  className="flex items-center gap-2.5 p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] transition-all cursor-pointer flex-1 min-w-0"
-                  title="Click to visit Cafeteria & order meals"
-                >
-                  <span className="text-2xl p-1 rounded-lg bg-white/[0.05] shrink-0">
-                    {todayMeal ? todayMeal.emoji : '🥪'}
-                  </span>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[11px] font-bold text-slate-400 leading-tight">Daily Sustenance</span>
-                    <span className="text-xs font-extrabold text-white truncate">
-                      {todayMeal ? todayMeal.name : 'Choose Today’s Fuel'}
-                    </span>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Right: Lifestyle Decor & Perks */}
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 shrink-0">
-              {lifestyleTier === 'scholar' ? (
-                <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-200" title="Dean's List Penthouse: +10% Study Wage">
-                  <span className="animate-spin">📻</span>
-                  <span className="hidden sm:inline">Vinyl Station</span>
-                </span>
-              ) : lifestyleTier === 'cozy' ? (
-                <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200" title="Cozy Scholar: Warm lighting & plants">
-                  <span>🪴</span>
-                  <span className="hidden sm:inline">Succulent & Mug</span>
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800/60 border border-white/[0.06] text-slate-400" title="Frugal Student: Humble beginnings">
-                  <span>📚</span>
-                  <span className="hidden sm:inline">Study Desk</span>
-                </span>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setIsCafeteriaOpen(true)}
-                className="p-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs cursor-pointer transition-colors"
-                title="Open Cafeteria"
-              >
-                🍳
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* --- BOTTOM CARE & STUDY DOCKS (Collapsible via Zen Mode) --- */}
-        {!isZenMode && (
-          <div className="absolute bottom-3 inset-x-3 sm:inset-x-5 flex flex-col md:flex-row items-end justify-between gap-3 pointer-events-none">
-            
-            {/* Left Dock: Feeding & Pet Care Bar */}
-            <div className="pointer-events-auto w-full md:w-auto flex flex-col gap-2 p-2.5 sm:p-3 rounded-3xl bg-slate-950/90 border border-white/[0.12] backdrop-blur-2xl shadow-2xl">
-              <div className="flex items-center justify-between gap-2 px-1 text-[11px] font-bold text-slate-300">
-                <span className="flex items-center gap-1 text-pink-300">
-                  <Smile className="w-3.5 h-3.5 text-pink-400" />
-                  <span>Feed & Care</span>
-                </span>
-                <span className="text-[11px] text-cyan-300/80">Energy: {state.energy || 85}%</span>
-              </div>
-
-              {/* Treat Dispenser */}
-              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-                {(['shrimp', 'berry', 'bean', 'pearl'] as AxolotlTreatType[]).map((tId) => {
-                  const meta = TREATS_META[tId];
-                  const count = state.treatInventory?.[tId] || 0;
-                  return (
-                    <button
-                      key={tId}
-                      type="button"
-                      onClick={() => handleFeed(tId)}
-                      className={`relative flex flex-col items-center p-2 rounded-2xl border transition-all cursor-pointer group ${
-                        count > 0 
-                          ? 'bg-white/[0.04] hover:bg-white/[0.1] border-white/[0.08] hover:border-pink-500/40' 
-                          : 'bg-white/[0.01] border-white/[0.04] opacity-50'
-                      }`}
-                      title={`Feed ${meta.name} (+${meta.xpReward} XP, +${meta.happinessGain} Happiness)`}
-                    >
-                      <span className="text-xl sm:text-2xl group-hover:scale-125 transition-transform">
-                        {meta.emoji}
-                      </span>
-                      <span className="text-[11px] font-bold text-white mt-1">{meta.name}</span>
-                      <span className={`text-[11px] font-mono font-bold px-1.5 rounded-full mt-0.5 ${
-                        count > 0 ? 'bg-pink-500/20 text-pink-300' : 'bg-slate-800 text-slate-500'
-                      }`}>
-                        x{count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Quick Actions Row */}
-              <div className="flex items-center gap-2 pt-1 border-t border-white/[0.06]">
-                <button
-                  type="button"
-                  onClick={handlePet}
-                  className="flex-1 py-1.5 px-2 rounded-xl bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <Heart className="w-3.5 h-3.5 text-pink-400 fill-pink-400" />
-                  <span>Pet (+5 XP)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleTrick}
-                  className="flex-1 py-1.5 px-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Acrobatic Trick</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBreathingActive(prev => {
-                      const next = !prev;
-                      if (next) {
-                        setBreathPhase('Inhale');
-                        setBreathSeconds(4);
-                      }
-                      return next;
-                    });
-                  }}
-                  className={`py-1.5 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                    breathingActive
-                      ? 'bg-cyan-500/25 border-cyan-400/50 text-cyan-200 animate-pulse'
-                      : 'bg-white/[0.05] hover:bg-white/[0.1] border-white/[0.08] text-slate-300'
-                  }`}
-                  title="4-4-4 Box Breathing with Lottie"
-                >
-                  <Wind className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>{breathingActive ? `${breathPhase} ${breathSeconds}s` : 'Breathe'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Right Dock: Quick Study & Deck Syllabus Hub */}
-            <div className="pointer-events-auto w-full md:w-80 lg:w-96 flex flex-col gap-2.5 p-3 rounded-3xl bg-slate-950/90 border border-white/[0.12] backdrop-blur-2xl shadow-2xl">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white font-display flex items-center gap-1.5">
-                  <BookOpen className="w-4 h-4 text-indigo-400" />
-                  <span>Study Cockpit</span>
-                </span>
-                <span className="text-[11px] font-mono text-slate-400">
-                  {stats.conceptsMastered || 0} Concepts Cleared
-                </span>
-              </div>
-
-              {/* Primary Quick Study CTA Button */}
-              <button
-                type="button"
-                onClick={handleLaunchQuickStudy}
-                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-black text-sm shadow-xl shadow-indigo-600/30 flex items-center justify-between transition-all hover:scale-[1.02] cursor-pointer group"
-              >
-                <div className="flex items-center gap-2">
-                  <Play className="w-4 h-4 fill-white text-white group-hover:scale-110 transition-transform" />
-                  <span>
-                    {dueCards.length > 0 ? `Review ${dueCards.length} Due Cards` : 'Start Focus Session'}
-                  </span>
-                </div>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-white/20 text-white font-mono">
-                  {dueCards.length > 0 ? 'FSRS DUE' : 'STUDY'}
-                </span>
-              </button>
-
-              {/* Quick Launch Actions Row */}
-              <div className="grid grid-cols-4 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setIsLibraryOpen(true)}
-                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[11px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
-                  title="Browse Saved Decks"
-                >
-                  <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Decks ({savedSessions.length})</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onOpenDeckStudio}
-                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[11px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
-                  title="Create New Deck or Import PDF"
-                >
-                  <Plus className="w-3.5 h-3.5 text-pink-400" />
-                  <span>New Deck</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (savedSessions.length > 0) onStartMatch(savedSessions[0]);
-                    else onOpenStarterCatalog();
-                  }}
-                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[11px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
-                  title="Speed Match 60s Game"
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Match</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onOpenDashboard}
-                  className="py-2 px-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white text-[11px] font-bold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer"
-                  title="View FSRS Memory Analytics"
-                >
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Analytics</span>
-                </button>
-              </div>
-
-              {/* Secondary Feature Row (Audio Briefing, Interleaving, Exam) */}
-              <div className="flex items-center gap-1.5 pt-1 border-t border-white/[0.06]">
-                {onStartAudioBriefing && savedSessions.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => onStartAudioBriefing(savedSessions[0])}
-                    className="flex-1 py-1 px-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Headphones className="w-3 h-3" />
-                    <span>Audio Brief</span>
-                  </button>
-                )}
-
-                {onOpenInterleaving && (
-                  <button
-                    type="button"
-                    onClick={onOpenInterleaving}
-                    className="flex-1 py-1 px-2 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Shuffle className="w-3 h-3" />
-                    <span>Mix Decks</span>
-                  </button>
-                )}
-
-                {onOpenExam && (
-                  <button
-                    type="button"
-                    onClick={onOpenExam}
-                    className="flex-1 py-1 px-2 rounded-lg bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Award className="w-3 h-3" />
-                    <span>Mock Exam</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-          </div>
-        )}
-      </div>
-
-      {/* Daily Student Ledger & Budget Tracker */}
-      <div className="w-full">
-        <DailyLedgerWidget 
-          onOpenCafeteria={() => setIsCafeteriaOpen(true)}
+      {/* 3D Architectural Estate */}
+      <Suspense fallback={<HomeDesign3DSkeleton />}>
+        <HomeDesign3D
+          onStartSession={onStartSession}
+          onOpenDeckStation={onOpenDeckStation}
+          onOpenStarterCatalog={onOpenStarterCatalog}
+          onOpenDashboard={onOpenDashboard}
+          onOpenCafeteria={() => {
+            setActiveDrawer('cafe');
+            setCafeTab('all');
+          }}
+          onOpenHousing={() => setActiveDrawer('housing')}
+          onToggleMobileSidebar={onToggleMobileSidebar}
+          onNavigateHome={onNavigateHome}
         />
-      </div>
+      </Suspense>
 
-      {/* --- SLIDE-OVER WARDROBE & BIOMES MODAL --- */}
-      {isWardrobeOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="relative max-w-2xl w-full max-h-[85vh] bg-slate-900 border border-white/[0.1] rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col space-y-4 overflow-hidden">
-            
+      {/* ======================================================== */}
+      {/* 4. CLEAN POP-OUT DRAWERS (When dock icons are clicked) */}
+      {/* ======================================================== */}
+      
+      {/* DRAWER 1: PANTRY & CAFE */}
+      {activeDrawer === 'cafe' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-white/[0.12] rounded-3xl p-5 shadow-2xl flex flex-col space-y-4 max-h-[85vh]">
             <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-pink-400" />
-                <h3 className="text-base font-bold text-white font-display">Lottie's Wardrobe & Habitats</h3>
+                <Utensils className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-white font-display">Campus Pantry &amp; Cafe</h3>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsWardrobeOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono font-bold text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                  🪙 {walletCoins} Tokens
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveDrawer(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            {/* Sub-tabs */}
-            <div className="flex items-center gap-2 border-b border-white/[0.06] pb-2">
-              <button
-                type="button"
-                onClick={() => setWardrobeTab('skin')}
-                className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  wardrobeTab === 'skin' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Skin Varieties (6)
-              </button>
-              <button
-                type="button"
-                onClick={() => setWardrobeTab('accessory')}
-                className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  wardrobeTab === 'accessory' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Accessories (7)
-              </button>
-              <button
-                type="button"
-                onClick={() => setWardrobeTab('biome')}
-                className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  wardrobeTab === 'biome' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Aquatic Biomes (4)
-              </button>
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'breakfast', label: '🥣 Breakfast' },
+                { id: 'lunch', label: '🥪 Lunch' },
+                { id: 'dinner', label: '🍜 Dinner' },
+                { id: 'drink', label: '☕ Drinks' },
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setCafeTab(cat.id as any)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                    cafeTab === cat.id
+                      ? 'bg-amber-500/25 border border-amber-500/50 text-amber-200'
+                      : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-400'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
             </div>
 
-            {/* Tab Contents */}
-            <div className="flex-1 overflow-y-auto pr-1 space-y-3">
-              {wardrobeTab === 'skin' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {(Object.keys(SKIN_PALETTES) as AxolotlSkinId[]).map((sId) => {
-                    const pal = SKIN_PALETTES[sId];
-                    const isSelected = state.skin === sId;
-                    const isUnlocked = state.unlockedSkins.includes(sId);
-                    return (
-                      <div
-                        key={sId}
-                        onClick={() => {
-                          if (isUnlocked) axolotlService.setSkin(sId);
-                          else showToast(`Reach Friendship Level ${sId === 'midnight' ? '2' : '3'} to unlock!`);
-                        }}
-                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
-                          isSelected
-                            ? 'bg-pink-500/20 border-pink-500/50 shadow-md shadow-pink-500/10'
-                            : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08]'
-                        } ${!isUnlocked ? 'opacity-60' : ''}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-10 h-10 rounded-xl border border-white/20 shadow-inner flex items-center justify-center font-bold text-sm"
-                            style={{ backgroundColor: pal.bodyColor, color: pal.eyeColor }}
-                          >
-                            🐾
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                              <span>{pal.name}</span>
-                              {isSelected && <Check className="w-3.5 h-3.5 text-pink-400" />}
-                            </div>
-                            <p className="text-[11px] text-slate-400 line-clamp-1">{pal.subtitle}</p>
-                          </div>
+            {/* Food Items List */}
+            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+              {menuList.map((meal) => {
+                const canAfford = walletCoins >= meal.cost;
+                return (
+                  <div
+                    key={meal.id}
+                    className="p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] transition-all flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-2xl p-2 rounded-xl bg-white/[0.05] border border-white/[0.06] shrink-0">
+                        {meal.emoji}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-bold text-white truncate">{meal.name}</h4>
+                          <span className="text-[10px] font-mono font-bold text-amber-300">
+                            {meal.cost === 0 ? 'FREE' : `🪙 ${meal.cost}`}
+                          </span>
                         </div>
-                        {!isUnlocked && (
-                          <span className="text-[11px] font-bold text-amber-300 uppercase px-2 py-0.5 rounded bg-amber-500/20">
-                            Locked
+                        <p className="text-[11px] text-slate-400 line-clamp-1">{meal.subtitle}</p>
+                        {meal.buffValue > 1 && (
+                          <span className="text-[10px] font-bold text-amber-300">
+                            ⚡ +{Math.round((meal.buffValue - 1) * 100)}% Study Wage Boost ({meal.buffDurationMinutes}m)
                           </span>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    </div>
 
-              {wardrobeTab === 'accessory' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {(Object.keys(ACCESSORIES_META) as AxolotlAccessoryId[]).map((accId) => {
-                    const acc = ACCESSORIES_META[accId];
-                    const isSelected = state.accessory === accId;
-                    const isUnlocked = state.unlockedAccessories.includes(accId);
-                    return (
-                      <div
-                        key={accId}
-                        onClick={() => {
-                          if (isUnlocked) axolotlService.setAccessory(accId);
-                          else showToast(`Reach Friendship Level ${acc.requiredLevel} to unlock ${acc.name}!`);
-                        }}
-                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
-                          isSelected
-                            ? 'bg-pink-500/20 border-pink-500/50 shadow-md shadow-pink-500/10'
-                            : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08]'
-                        } ${!isUnlocked ? 'opacity-60' : ''}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-slate-950 border border-white/[0.1] flex items-center justify-center text-xl">
-                            {acc.icon}
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                              <span>{acc.name}</span>
-                              {isSelected && <Check className="w-3.5 h-3.5 text-pink-400" />}
-                            </div>
-                            <p className="text-[11px] text-slate-400">{acc.description}</p>
-                          </div>
-                        </div>
-                        {!isUnlocked && (
-                          <span className="text-[11px] font-bold text-amber-300 uppercase px-2 py-0.5 rounded bg-amber-500/20">
-                            Lvl {acc.requiredLevel}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {wardrobeTab === 'biome' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {(Object.keys(ENVIRONMENTS_META) as AxolotlEnvironmentId[]).map((envId) => {
-                    const env = ENVIRONMENTS_META[envId];
-                    const isSelected = state.environment === envId;
-                    return (
-                      <div
-                        key={envId}
-                        onClick={() => axolotlService.setEnvironment(envId)}
-                        className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
-                          isSelected
-                            ? 'bg-cyan-500/20 border-cyan-500/50 shadow-md shadow-cyan-500/10'
-                            : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-slate-950 border border-white/[0.1] flex items-center justify-center text-xl">
-                            {env.icon}
-                          </div>
-                          <div>
-                            <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                              <span>{env.name}</span>
-                              {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400" />}
-                            </div>
-                            <p className="text-[11px] text-slate-400">{env.subtitle}</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="pt-2 border-t border-white/[0.08] flex justify-end">
-              <button
-                type="button"
-                onClick={() => setIsWardrobeOpen(false)}
-                className="py-2 px-5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs cursor-pointer shadow-lg shadow-pink-600/25"
-              >
-                Apply & Return
-              </button>
+                    <button
+                      type="button"
+                      disabled={!canAfford}
+                      onClick={() => {
+                        handleOrderMeal(meal);
+                        setActiveDrawer(null);
+                      }}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                        canAfford
+                          ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-md shadow-amber-500/20 hover:scale-105'
+                          : 'bg-white/[0.05] text-slate-500 cursor-not-allowed border border-white/[0.06]'
+                      }`}
+                    >
+                      {canAfford ? 'Order' : `Need 🪙${meal.cost}`}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
       )}
 
-      {/* --- SLIDE-OVER DECK SYLLABUS DRAWER --- */}
-      {isLibraryOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/70 backdrop-blur-sm animate-fadeIn">
-          <div className="relative w-full max-w-md h-full bg-slate-900 border-l border-white/[0.1] p-5 shadow-2xl flex flex-col space-y-4">
-            
+      {/* DRAWER 2: STUDY COCKPIT */}
+      {activeDrawer === 'study' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-white/[0.12] rounded-3xl p-5 shadow-2xl flex flex-col space-y-4 max-h-[85vh]">
             <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
               <div className="flex items-center gap-2">
-                <Layers className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-base font-bold text-white font-display">Study Deck Library</h3>
+                <BookOpen className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-base font-bold text-white font-display">Study Cockpit &amp; Decks</h3>
               </div>
               <button
                 type="button"
-                onClick={() => setIsLibraryOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08]"
+                onClick={() => setActiveDrawer(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Search */}
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search your decks..."
-                value={librarySearch}
-                onChange={(e) => setLibrarySearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 rounded-xl bg-white/[0.05] border border-white/[0.08] text-white text-xs outline-none focus:border-indigo-500/50"
-              />
+            {/* Quick Actions Grid */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveDrawer(null);
+                  onOpenDeckStudio();
+                }}
+                className="p-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-left transition-all cursor-pointer space-y-1"
+              >
+                <div className="flex items-center gap-1.5 text-pink-400 font-bold text-xs">
+                  <Plus className="w-4 h-4" />
+                  <span>Create Deck</span>
+                </div>
+                <p className="text-[10px] text-slate-400">PDF, AI or manual flashcards</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveDrawer(null);
+                  if (primaryDeck) onStartMatch(primaryDeck);
+                }}
+                className="p-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-left transition-all cursor-pointer space-y-1"
+              >
+                <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
+                  <Flame className="w-4 h-4" />
+                  <span>Match Arena</span>
+                </div>
+                <p className="text-[10px] text-slate-400">Speed match game</p>
+              </button>
+
+              {onOpenInterleaving && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDrawer(null);
+                    onOpenInterleaving();
+                  }}
+                  className="p-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-left transition-all cursor-pointer space-y-1"
+                >
+                  <div className="flex items-center gap-1.5 text-purple-400 font-bold text-xs">
+                    <Shuffle className="w-4 h-4" />
+                    <span>Mix Decks</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Interleaved cross-study</p>
+                </button>
+              )}
+
+              {onOpenExam && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDrawer(null);
+                    onOpenExam();
+                  }}
+                  className="p-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-left transition-all cursor-pointer space-y-1"
+                >
+                  <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-xs">
+                    <Award className="w-4 h-4" />
+                    <span>Mock Exam</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Full timed exam testing</p>
+                </button>
+              )}
+
+              {onStartAudioBriefing && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDrawer(null);
+                    if (primaryDeck) onStartAudioBriefing(primaryDeck);
+                  }}
+                  className="p-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-left transition-all cursor-pointer space-y-1"
+                >
+                  <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
+                    <Headphones className="w-4 h-4" />
+                    <span>Audio Pilot</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Podcast style review</p>
+                </button>
+              )}
             </div>
 
-            {/* Deck List */}
+            {/* Saved Decks List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {filteredDecks.length === 0 ? (
-                <div className="text-center py-8 text-slate-500 text-xs">
-                  No decks found. Create one or explore starter packs!
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Your Decks ({savedSessions.length})</span>
+              {savedSessions.length === 0 ? (
+                <div className="p-6 text-center text-slate-500 text-xs">
+                  No decks yet. Click "Create Deck" or explore starter catalog!
                 </div>
               ) : (
-                filteredDecks.map((deck) => {
+                savedSessions.map((deck) => {
                   const deckDueCount = deck.concepts.flatMap(cp => cp.retrievalCards || []).filter(rc => dueCards.some(dc => dc.id === rc.id)).length;
-                  const totalDeckCards = deck.concepts.reduce((acc, c) => acc + (c.retrievalCards?.length || 0), 0);
                   return (
                     <div
                       key={deck.id}
-                      className="p-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] space-y-2.5 transition-all"
+                      className="p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] flex items-center justify-between gap-3 transition-all"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h4 className="text-xs font-bold text-white line-clamp-1">{deck.title}</h4>
-                          <span className="text-[11px] text-slate-400 font-mono">
-                            {totalDeckCards} cards • {deck.category || 'Active Recall'}
-                          </span>
-                        </div>
-                        {deckDueCount > 0 && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30">
-                            {deckDueCount} due
-                          </span>
-                        )}
+                      <div>
+                        <h4 className="text-xs font-bold text-white">{deck.title}</h4>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          {deck.concepts.reduce((acc, c) => acc + (c.retrievalCards?.length || 0), 0)} cards
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {deckDueCount > 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-500/20 text-pink-300">
+                            {deckDueCount} due
+                          </span>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
-                            setIsLibraryOpen(false);
+                            setActiveDrawer(null);
                             onStartSession(deck);
                           }}
-                          className="flex-1 py-1.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 cursor-pointer"
+                          className="py-1 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer"
                         >
-                          <Play className="w-3 h-3 fill-white" />
-                          <span>Study Now</span>
+                          Study
                         </button>
-
                         <button
                           type="button"
                           onClick={() => {
-                            setIsLibraryOpen(false);
+                            setActiveDrawer(null);
                             onOpenDeckStation(deck);
                           }}
-                          className="py-1.5 px-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 hover:text-white text-[11px] font-semibold cursor-pointer"
+                          className="py-1 px-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-semibold cursor-pointer"
                         >
                           Details
                         </button>
@@ -966,46 +541,296 @@ export const AxolotlStudyHabitat: React.FC<AxolotlStudyHabitatProps> = ({
                 })
               )}
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Bottom Actions */}
-            <div className="pt-2 border-t border-white/[0.08] flex items-center gap-2">
+      {/* DRAWER 3: HOUSING AGENCY */}
+      {activeDrawer === 'housing' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-white/[0.12] rounded-3xl p-5 shadow-2xl flex flex-col space-y-4 max-h-[85vh]">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <div className="flex items-center gap-2">
+                <Home className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-base font-bold text-white font-display">Campus Housing Agency</h3>
+              </div>
               <button
                 type="button"
-                onClick={() => {
-                  setIsLibraryOpen(false);
-                  onOpenDeckStudio();
-                }}
-                className="flex-1 py-2 px-3 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-pink-600/20"
+                onClick={() => setActiveDrawer(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Create Deck</span>
+                <X className="w-5 h-5" />
               </button>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setIsLibraryOpen(false);
-                  onOpenStarterCatalog();
-                }}
-                className="py-2 px-3 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-slate-300 hover:text-white font-bold text-xs cursor-pointer"
-              >
-                Explore Catalog
-              </button>
+            <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+              {HOUSING_CATALOG.map((prop) => {
+                const isCurrent = currentHousing.id === prop.id;
+                const canAfford = walletCoins >= prop.rentPerDay;
+
+                return (
+                  <div
+                    key={prop.id}
+                    className={`p-4 rounded-2xl border transition-all ${
+                      isCurrent
+                        ? 'bg-emerald-500/10 border-emerald-500/40 shadow-lg shadow-emerald-500/5'
+                        : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl p-2 rounded-2xl bg-white/[0.05] border border-white/[0.08]">
+                          {prop.icon}
+                        </span>
+                        <div>
+                          <h4 className="text-sm font-extrabold text-white flex items-center gap-2">
+                            <span>{prop.name}</span>
+                            {isCurrent && (
+                              <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                                Current Home
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{prop.subtitle}</p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-mono font-bold text-amber-300">
+                          🪙 {prop.rentPerDay} / day
+                        </div>
+                        <div className="text-[10px] font-bold text-indigo-300 mt-0.5">
+                          {prop.wageMultiplier > 1.0 ? `+${Math.round((prop.wageMultiplier - 1) * 100)}% Wage` : 'Baseline Wage'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-white/[0.06] flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-slate-300">
+                        ✨ {prop.perkDescription}
+                      </span>
+
+                      {!isCurrent && (
+                        <button
+                          type="button"
+                          disabled={!canAfford}
+                          onClick={() => {
+                            handleRentHousing(prop.id);
+                            setActiveDrawer(null);
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                            canAfford
+                              ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 shadow-md shadow-emerald-500/20 hover:scale-105'
+                              : 'bg-white/[0.05] text-slate-500 cursor-not-allowed'
+                          }`}
+                        >
+                          {canAfford ? 'Move In & Lease' : `Need 🪙${prop.rentPerDay}`}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
       )}
 
-      {/* Campus Cafeteria & Bodega Modal */}
-      <CampusCafeteriaModal
-        isOpen={isCafeteriaOpen}
-        onClose={() => setIsCafeteriaOpen(false)}
-        onMealPurchased={(meal) => {
-          showToast(`🍽️ Enjoy your ${meal.name}! ${meal.buffDescription}`);
-        }}
-      />
+      {/* DRAWER 4: TECH GEAR SHOP */}
+      {activeDrawer === 'gear' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-white/[0.12] rounded-3xl p-5 shadow-2xl flex flex-col space-y-4 max-h-[85vh]">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-purple-400" />
+                <h3 className="text-base font-bold text-white font-display">Student Tech &amp; Desk Depot</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveDrawer(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 flex-1 overflow-y-auto pr-1">
+              {STUDENT_GEAR_CATALOG.map((item) => {
+                const isOwned = ownedGear.some(g => g.id === item.id);
+                const canAfford = walletCoins >= item.cost;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="p-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] transition-all flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-2xl p-2 rounded-xl bg-white/[0.05] border border-white/[0.06] shrink-0">
+                        {item.emoji}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-bold text-white truncate">{item.name}</h4>
+                          <span className="text-[10px] font-mono font-bold text-amber-300">
+                            🪙 {item.cost}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-purple-300 line-clamp-1">{item.perk}</p>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0">
+                      {isOwned ? (
+                        <span className="text-[11px] font-bold text-emerald-400 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1">
+                          <CheckCheck className="w-3.5 h-3.5" />
+                          <span>Owned</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={!canAfford}
+                          onClick={() => {
+                            handleBuyGear(item.id);
+                            setActiveDrawer(null);
+                          }}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                            canAfford
+                              ? 'bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white shadow-md shadow-purple-500/20 hover:scale-105'
+                              : 'bg-white/[0.05] text-slate-500 cursor-not-allowed border border-white/[0.06]'
+                          }`}
+                        >
+                          {canAfford ? 'Buy' : `Need 🪙${item.cost}`}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DRAWER 5: AMBIENT SOUNDSCAPE MIXER */}
+      {activeDrawer === 'audio' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-md bg-slate-900 border border-white/[0.12] rounded-3xl p-5 shadow-2xl flex flex-col space-y-4">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <div className="flex items-center gap-2">
+                <Radio className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-base font-bold text-white font-display">Ambient Focus Soundscapes</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveDrawer(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {[
+                { id: 'off', label: 'Mute / Off', desc: 'Silent study', icon: VolumeX },
+                { id: 'rain', label: 'Rainfall on Window', desc: 'Calming rain soundscape', icon: CloudRain },
+                { id: 'binaural-alpha-10hz', label: 'Lo-Fi Alpha 10Hz', desc: 'Relaxed focus waves', icon: Headphones },
+                { id: 'binaural-40hz', label: 'Deep Gamma 40Hz', desc: 'Peak cognitive recall', icon: Sparkles },
+                { id: 'brown-noise', label: 'Warm Brown Noise', desc: 'Deep background mask', icon: Radio },
+              ].map((snd) => {
+                const isActive = currentSound === snd.id;
+                const IconComponent = snd.icon;
+                return (
+                  <div
+                    key={snd.id}
+                    onClick={() => handleToggleSound(snd.id as any)}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                      isActive
+                        ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-100 shadow-md shadow-cyan-500/10'
+                        : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08] text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <IconComponent className={`w-5 h-5 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
+                      <div>
+                        <div className="text-xs font-bold text-white">{snd.label}</div>
+                        <p className="text-[10px] text-slate-400">{snd.desc}</p>
+                      </div>
+                    </div>
+                    {isActive && <Check className="w-4 h-4 text-cyan-400" />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Volume Slider */}
+            {currentSound !== 'off' && (
+              <div className="pt-2 border-t border-white/[0.08] flex items-center gap-3">
+                <Volume2 className="w-4 h-4 text-slate-400" />
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={soundVolume}
+                  onChange={(e) => soundEngine.setVolume(parseFloat(e.target.value))}
+                  className="w-full accent-cyan-400 cursor-pointer"
+                />
+                <span className="text-[11px] font-mono text-slate-400">{Math.round(soundVolume * 100)}%</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* DRAWER 6: BOX BREATHING GUIDE (4-4-4) */}
+      {activeDrawer === 'breathe' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-md bg-slate-900 border border-white/[0.12] rounded-3xl p-6 shadow-2xl flex flex-col items-center space-y-6 text-center">
+            <div className="w-full flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <div className="flex items-center gap-2">
+                <Wind className="w-5 h-5 text-teal-400" />
+                <h3 className="text-base font-bold text-white font-display">4-4-4 Box Breathing</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveDrawer(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Pulsating Breathing Circle */}
+            <div className="relative flex items-center justify-center my-4">
+              <div className={`w-40 h-40 rounded-full border-2 border-teal-400/50 flex flex-col items-center justify-center transition-all duration-1000 ${
+                breathPhase === 'Inhale'
+                  ? 'scale-125 bg-teal-500/20 shadow-2xl shadow-teal-500/30'
+                  : breathPhase === 'Hold'
+                    ? 'scale-110 bg-teal-500/30'
+                    : 'scale-90 bg-transparent'
+              }`}>
+                <span className="text-xl font-black text-white font-display">{breathPhase}</span>
+                <span className="text-2xl font-mono font-bold text-teal-300 mt-1">{breathSeconds}s</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
+              Box breathing resets your autonomic nervous system, clears mental fog, and boosts alpha waves before a study sprint.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setActiveDrawer(null)}
+              className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs cursor-pointer"
+            >
+              Ready to Study
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
+export const StudyEstateCampus = AxolotlStudyHabitat;
 export default AxolotlStudyHabitat;

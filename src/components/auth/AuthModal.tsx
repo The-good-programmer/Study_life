@@ -15,7 +15,6 @@ import {
   ShieldCheck,
   Layers,
   Flame,
-  Zap,
   GraduationCap,
   School,
   RefreshCw,
@@ -26,12 +25,14 @@ import {
   Globe,
   ChevronDown,
   Check,
-  Info
+  Info,
+  Coins
 } from 'lucide-react';
 import type { UserAccount, GoogleProfilePayload } from '../../types';
 import { AuthService } from '../../services/authService';
 import { GoogleAuthService } from '../../services/googleAuthService';
 import { StorageService } from '../../services/storageService';
+import { lifeSimService } from '../../services/lifeSimService';
 import { EDUCATION_COUNTRIES, EducationCatalog } from '../../services/educationCatalog';
 import { Dialog } from '../common/Dialog';
 
@@ -1065,7 +1066,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       Guest Study Progress Detected
                     </span>
                     <span className="text-[11px] font-mono text-slate-400">
-                      {guestSummary.deckCount} decks • {guestSummary.cardCount} cards • {guestSummary.xp} XP
+                      {guestSummary.deckCount} decks • {guestSummary.cardCount} cards
                     </span>
                   </div>
                   <label className="flex items-start gap-2.5 text-xs text-slate-300 cursor-pointer select-none">
@@ -1308,7 +1309,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       Guest Study Progress Detected
                     </span>
                     <span className="text-[11px] font-mono text-slate-400">
-                      {guestSummary.deckCount} decks • {guestSummary.cardCount} cards • {guestSummary.xp} XP
+                      {guestSummary.deckCount} decks • {guestSummary.cardCount} cards
                     </span>
                   </div>
                   <label className="flex items-start gap-2.5 text-xs text-slate-300 cursor-pointer select-none">
@@ -1410,12 +1411,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* Study Stats Matrix */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/[0.08] space-y-1">
-                  <div className="flex items-center gap-1.5 text-purple-400 text-xs font-semibold">
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>Level {currentStats.level}</span>
+                  <div className="flex items-center gap-1.5 text-amber-400 text-xs font-semibold">
+                    <Coins className="w-3.5 h-3.5" />
+                    <span>Study Wallet</span>
                   </div>
-                  <div className="text-sm font-bold text-white truncate">{currentStats.levelTitle}</div>
-                  <div className="text-[11px] text-slate-500">{currentStats.xp} XP total</div>
+                  <div className="text-sm font-bold text-white truncate">🪙 {lifeSimService.getWalletBalance()} Tokens</div>
+                  <div className="text-[11px] text-slate-500">Study wage balance</div>
                 </div>
 
                 <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/[0.08] space-y-1">

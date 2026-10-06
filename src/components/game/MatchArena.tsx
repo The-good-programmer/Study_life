@@ -13,6 +13,9 @@ import {
 import type { StudySession, RetrievalCard } from '../../types';
 import { soundEngine } from '../../services/soundEngine';
 import { StorageService } from '../../services/storageService';
+import { lifeSimService } from '../../services/lifeSimService';
+import { characterService } from '../../services/characterService';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
 interface MatchTile {
   id: string;
@@ -130,8 +133,9 @@ export const MatchArena: React.FC<MatchArenaProps> = ({ session, onBack, onLaunc
           // ignore
         }
 
-        // Award XP
+        // Award Study Wage & XP
         StorageService.addXP(45);
+        lifeSimService.awardStudyWage('Match Arena Clear', 20);
 
         // Update high score
         const finalTime = elapsedMs;
@@ -358,8 +362,8 @@ export const MatchArena: React.FC<MatchArenaProps> = ({ session, onBack, onLaunc
         <div className="p-8 sm:p-12 rounded-3xl glass-panel text-center space-y-6 max-w-xl mx-auto border-emerald-500/30 shadow-2xl shadow-emerald-500/10 animate-fade-in relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="relative w-20 h-20 rounded-3xl p-1 bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 mx-auto shadow-2xl shadow-purple-500/20">
-            <img src="/lottie.png" alt="Lottie Celebration" className="w-full h-full object-cover rounded-[20px]" />
+          <div className="relative w-20 h-20 rounded-3xl p-1 bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 mx-auto shadow-2xl shadow-purple-500/20 flex items-center justify-center">
+            <UserAvatarBadge size="lg" showBorder={false} />
             <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-400 ring-4 ring-slate-950 animate-ping" />
           </div>
 
@@ -367,8 +371,11 @@ export const MatchArena: React.FC<MatchArenaProps> = ({ session, onBack, onLaunc
             <h2 className="text-2xl font-black text-white font-display">
               Matching Arena Cleared!
             </h2>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold font-mono">
+              <span>🪙 +20 Study Wage Deposited</span>
+            </div>
             <p className="text-xs text-slate-300">
-              <span className="text-pink-300 font-bold font-display">Lottie:</span> "Blazing synaptic recall speed! Active association trains instant memory indexing."
+              <span className="text-cyan-300 font-bold font-display">{characterService.getCharacter().name || 'Study Partner'}:</span> "Blazing synaptic recall speed! Active association trains instant memory indexing."
             </p>
           </div>
 

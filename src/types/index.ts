@@ -121,10 +121,20 @@ export interface DiagnosticReport {
   completedAt: string;
 }
 
+export interface SubjectFolder {
+  id: string;
+  name: string;
+  color?: string; // 'indigo' | 'purple' | 'emerald' | 'amber' | 'rose' | 'cyan' | 'blue'
+  icon?: string;
+  description?: string;
+  createdAt: string;
+}
+
 export interface StudySession {
   id: string;
   title: string;
   category: string;
+  folderId?: string;
   description: string;
   concepts: ConceptCheckpoint[];
   currentConceptIndex: number;
@@ -149,6 +159,21 @@ export interface FeynmanEvaluation {
   jargonDetected: string[];
   actionableFeedback: string;
   isOfflineSelfCheck?: boolean;
+  diagramAnalysis?: {
+    visualStrengths: string;
+    visualFlawsOrGaps: string;
+    alignmentScore: number;
+  };
+}
+
+export interface CognitiveMemoryProfile {
+  totalCards: number;
+  masteredCards: number;
+  strugglingCards: number;
+  frequentLapseConcepts: string[];
+  vulnerableTrapTypes: string[];
+  recentWeakTopics: string[];
+  averageStabilityDays: number;
 }
 
 export type FSRSRating = 'again' | 'hard' | 'good' | 'easy';
@@ -400,4 +425,26 @@ export interface AuthResponse {
   user?: UserAccount;
   requiresProfileSetup?: boolean;
   partialProfile?: GoogleProfilePayload;
+}
+
+export type AdaptivePedagogyMode = 'scaffolding' | 'dialectic' | 'adversarial';
+
+export interface ConceptPedagogicalState {
+  retrievability: number; // 0 - 100%
+  averageStabilityDays: number;
+  totalCards: number;
+  lapseCount: number;
+  mode: AdaptivePedagogyMode;
+  guidanceDirective: string;
+}
+
+export interface CrossDeckBridge {
+  sourceConceptId: string;
+  targetDeckId: string;
+  targetDeckTitle: string;
+  targetConceptId: string;
+  targetConceptTitle: string;
+  relationshipType: 'prerequisite' | 'analogous' | 'contrast';
+  sharedTerms: string[];
+  retrievabilityScore: number;
 }

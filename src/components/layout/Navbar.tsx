@@ -6,7 +6,6 @@ import {
   VolumeX, 
   Settings, 
   Sparkles, 
-  Zap, 
   CheckCircle2, 
   Search, 
   Award, 
@@ -26,13 +25,15 @@ import type { UserStats, UserAccount } from '../../types';
 import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
 import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
 import { DailyLedgerWidget } from '../lifesim/DailyLedgerWidget';
+import { lifeSimService } from '../../services/lifeSimService';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
 interface NavbarProps {
   stats: UserStats;
   currentUser?: UserAccount | null;
   onOpenAuth?: (tab?: 'login' | 'register' | 'profile') => void;
-  activeView?: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio';
-  onNavigate?: (view: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio') => void;
+  activeView?: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders';
+  onNavigate?: (view: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders') => void;
   onOpenSettings: () => void;
   onOpenDashboard?: () => void;
   onOpenCommandPalette?: () => void;
@@ -47,6 +48,7 @@ interface NavbarProps {
   onPromptInstall?: () => void;
   isSidebarCollapsed?: boolean;
   onToggleSidebarCollapse?: () => void;
+  onOpenCharacterCustomizer?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ 
@@ -62,6 +64,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenInterleaving,
   onOpenStarterCatalog,
   onOpenSanctuary,
+  onOpenCharacterCustomizer,
   onLogoClick,
   onToggleMobileSidebar,
   isOnline = true,
@@ -140,9 +143,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   const goalPercent = Math.min(100, Math.round((todayMinutes / dailyGoal) * 100));
   const goalCompleted = goalPercent >= 100;
 
-  // XP progress to next level (150 XP per level)
-  const currentLevelXP = (stats.xp || 0) % 150;
-  const xpPercent = Math.round((currentLevelXP / 150) * 100);
+  // Student wallet balance
+  const [walletCoins, setWalletCoins] = useState(() => lifeSimService.getWalletBalance());
+  useEffect(() => {
+    const unsub = lifeSimService.subscribe(() => {
+      setWalletCoins(lifeSimService.getWalletBalance());
+    });
+    return unsub;
+  }, []);
 
   const soundPresets: { id: SoundType; label: string; desc: string; icon: string }[] = [
     { id: 'off', label: 'Mute Audio', desc: 'Silence focus synthesizers', icon: '🔇' },
@@ -176,20 +184,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={onLogoClick}
             className="flex items-center gap-2.5 cursor-pointer group select-none md:hidden"
           >
-            <div className="relative w-8 h-8 rounded-xl overflow-hidden p-0.5 bg-gradient-to-tr from-pink-500 via-purple-500 to-cyan-400 shadow-md shadow-pink-500/20 group-hover:scale-105 transition-all">
-              <img src="/lottie.png" alt="Lotti" className="w-full h-full object-cover rounded-[10px]" />
+            <div className="relative w-8 h-8 rounded-xl overflow-hidden p-0.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-all flex items-center justify-center">
+              <UserAvatarBadge size="xs" />
             </div>
-            <span className="font-extrabold text-base text-white tracking-tight font-display">Lotti</span>
+            <span className="font-extrabold text-base text-white tracking-tight font-display">Studify</span>
           </div>
 
-          {/* Mobile 3D Axolotl Quick Access */}
+          {/* Mobile 3D Sanctuary Quick Access */}
           <button
             onClick={() => onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.()}
-            className="md:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 border border-pink-500/40 text-pink-200 text-xs font-bold shadow-sm"
-            title="Visit 3D Axolotl Sanctuary"
+            className="md:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-cyan-500/20 border border-indigo-500/40 text-indigo-200 text-xs font-bold shadow-sm"
+            title="Visit 3D Campus Sanctuary"
           >
-            <Sparkles className="w-3.5 h-3.5 text-pink-400 animate-pulse" />
-            <span>3D Axolotl</span>
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+            <span>3D Campus</span>
           </button>
 
           {/* Desktop Sidebar Expand Toggle (visible when sidebar is collapsed) */}
@@ -207,29 +215,29 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="hidden md:flex items-center gap-2.5 text-xs font-semibold text-slate-400">
             <span className="text-indigo-400">⚡</span>
             <span className="text-slate-300 capitalize">
-              {activeView === 'home' ? 'Sanctuary & Decks' : activeView === 'dashboard' ? 'FSRS Retention' : activeView === 'exam' ? 'Mock Exam' : activeView === 'sanctuary' ? 'Student Sanctuary' : activeView === 'studio' ? 'Document Studio' : 'Interleaving'}
+              {activeView === 'home' ? 'Home & Decks' : activeView === 'dashboard' ? 'FSRS Retention' : activeView === 'exam' ? 'Mock Exam' : activeView === 'sanctuary' ? 'Home & Design' : activeView === 'studio' ? 'Document Studio' : 'Interleaving'}
             </span>
             
             <button
               onClick={() => onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.()}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-sm group ${
                 activeView === 'sanctuary'
-                  ? 'bg-pink-500/25 border-pink-500/50 text-pink-100 shadow-pink-500/10'
-                  : 'bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-cyan-500/15 hover:from-pink-500/30 hover:to-cyan-500/30 border-pink-500/40 text-pink-200 hover:text-white'
+                  ? 'bg-amber-500/25 border-amber-500/50 text-amber-100 shadow-amber-500/10'
+                  : 'bg-gradient-to-r from-amber-500/15 via-purple-500/15 to-indigo-500/15 hover:from-amber-500/30 hover:to-indigo-500/30 border-amber-500/40 text-amber-200 hover:text-white'
               }`}
-              title="Visit the Student Sanctuary & Life Sim"
+              title="Visit Student Home & Room Designer (Design Home)"
             >
-              <Sparkles className="w-3.5 h-3.5 text-pink-400 group-hover:rotate-12 transition-transform" />
-              <span className="text-[12px] font-bold">Sanctuary</span>
-              <span className="text-[11px] font-black uppercase px-1.5 py-0.5 rounded bg-pink-500/30 text-pink-300 font-mono">
-                LIFE SIM
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-12 transition-transform" />
+              <span className="text-[12px] font-bold">Home &amp; Design</span>
+              <span className="text-[11px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-300 font-mono">
+                SIM
               </span>
             </button>
 
             <button
               onClick={() => setIsTourModalOpen(true)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-white transition-all cursor-pointer shadow-sm group"
-              title="Interactive tour: How Lotti's 4-Phase Cognitive Architecture Works"
+              title="Interactive tour: How Studify's 4-Phase Cognitive Architecture Works"
             >
               <span className="text-[11px] font-semibold">How it Works</span>
             </button>
@@ -255,27 +263,23 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Right: Live Metrics & Controls */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           
-          {/* Level & XP Progression */}
-          <div 
-            title={`Level ${stats.level}: ${stats.levelTitle} (${currentLevelXP}/150 XP to next level)`}
-            className="hidden xl:flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900/80 border border-white/[0.08] text-xs font-medium cursor-help hover:border-purple-500/40 transition-colors"
+          {/* Student Token Wallet Badge */}
+          <button 
+            type="button"
+            onClick={() => onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.()}
+            title={`Student Wallet: 🪙 ${walletCoins} Tokens — Click to visit Campus Life & Cafeteria`}
+            className="hidden xl:flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-850 border border-amber-500/30 hover:border-amber-500/60 text-xs font-medium cursor-pointer transition-colors shadow-sm group"
           >
-            <div className="w-5 h-5 rounded-md bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 font-bold text-[11px]">
-              <Zap className="w-3 h-3 text-purple-400 fill-purple-400" />
+            <div className="w-5 h-5 rounded-md bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold text-xs">
+              🪙
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-white text-[11px]">Lvl {stats.level}</span>
-                <span className="text-[11px] text-purple-300 truncate max-w-[70px]">{stats.levelTitle}</span>
-              </div>
-              <div className="w-14 h-1 bg-slate-800 rounded-full overflow-hidden mt-0.5">
-                <div 
-                  className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-all duration-300"
-                  style={{ width: `${xpPercent}%` }}
-                />
-              </div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono font-black text-amber-300 text-xs">
+                {walletCoins}
+              </span>
+              <span className="text-[11px] text-slate-400 group-hover:text-amber-200 transition-colors">Tokens</span>
             </div>
-          </div>
+          </button>
 
           {/* Daily Goal Radial Ring */}
           <div 
@@ -323,7 +327,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button 
             type="button"
             onClick={() => setIsStreakModalOpen(true)}
-            title="Lottie's Streak Guardian — Click to check streak status & freeze"
+            title="Streak Guardian — Click to check streak status & freeze"
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-850 border border-white/[0.08] hover:border-amber-500/50 text-amber-400 text-xs font-semibold shadow-sm transition-all cursor-pointer group hover:scale-105"
           >
             <Flame className="w-4 h-4 fill-amber-400 text-amber-500 animate-pulse group-hover:scale-110 transition-transform" />
@@ -418,7 +422,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {!isOnline && (
             <div 
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold shadow-sm"
-              title="Lotti is operating offline. All local decks and FSRS reviews work without internet."
+              title="Studify is operating offline. All local decks and FSRS reviews work without internet."
             >
               <WifiOff className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden sm:inline">Offline</span>
@@ -430,10 +434,27 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onPromptInstall}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-semibold text-xs shadow-md shadow-indigo-600/30 transition-all cursor-pointer hover:scale-[1.02]"
-              title="Install Lotti Native App"
+              title="Install Studify Native App"
             >
               <Download className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Install</span>
+            </button>
+          )}
+
+          {/* 3D Scholar Avatar Customizer Trigger */}
+          {onOpenCharacterCustomizer && (
+            <button
+              type="button"
+              onClick={onOpenCharacterCustomizer}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/15 hover:from-indigo-500/25 hover:via-purple-500/25 hover:to-pink-500/25 border border-indigo-500/30 hover:border-indigo-400/60 text-slate-200 hover:text-white transition-all shadow-sm cursor-pointer group"
+              title="Customize 3D Scholar Avatar (Hair, Sex, Wardrobe, Style)"
+            >
+              <div className="w-5 h-5 rounded-lg overflow-hidden flex items-center justify-center p-0.5 bg-indigo-500/20 group-hover:scale-110 transition-transform">
+                <UserAvatarBadge size="xs" />
+              </div>
+              <span className="text-xs font-bold bg-gradient-to-r from-indigo-200 via-purple-200 to-pink-200 bg-clip-text text-transparent hidden sm:inline">
+                Edit 3D Model
+              </span>
             </button>
           )}
 
@@ -557,7 +578,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
     </header>
 
-    {/* Lottie's Streak Guardian Modal */}
+    {/* Streak Guardian Modal */}
     <StreakGuardianModal
       isOpen={isStreakModalOpen}
       onClose={() => setIsStreakModalOpen(false)}

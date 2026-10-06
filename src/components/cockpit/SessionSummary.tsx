@@ -22,9 +22,9 @@ import type { StudySession, ConceptCheckpoint } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
 import { ExportService } from '../../services/exportService';
-import { LottieMascot } from '../mascot/LottieMascot';
+import { CharacterCompanion } from '../character/CharacterCompanion';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 import { SynapticFlexModal } from '../mascot/SynapticFlexModal';
-import { axolotlService } from '../../services/axolotlService';
 import { lifeSimService } from '../../services/lifeSimService';
 import { haptics } from '../../services/hapticsService';
 
@@ -119,11 +119,12 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
     }
   };
 
-  const [rewards, setRewards] = useState<{
-    treatsEarned: Record<string, number>;
-    coinsEarned: number;
-    friendshipXPEarned: number;
-    leveledUp: boolean;
+  const [wageEarned, setWageEarned] = useState<{
+    rawAmount: number;
+    buffBonus: number;
+    totalAmount: number;
+    activity: string;
+    walletBalance: number;
   } | null>(null);
 
   useEffect(() => {
@@ -142,10 +143,9 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
       `Sprint: ${session.title ? session.title.slice(0, 24) : 'Active Recall'}`,
       rawCoins
     );
-    const r = axolotlService.awardStudySessionRewards(totalCards, minutes, 0.9, true);
-    r.coinsEarned = wage.totalAmount;
-    queueMicrotask(() => {
-      setRewards(r);
+    setWageEarned({
+      ...wage,
+      walletBalance: lifeSimService.getWalletBalance(),
     });
 
     try {
@@ -180,18 +180,14 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
   return (
     <div className="max-w-xl mx-auto space-y-6 text-center animate-fadeIn py-6">
       
-      {/* Lottie Mascot Celebrating Badge */}
+      {/* Character Celebrating Badge */}
       <div className="relative w-28 h-28 mx-auto group">
-        <div className="absolute -inset-3 rounded-full bg-gradient-to-tr from-pink-500/40 via-purple-500/20 to-cyan-400/40 blur-xl animate-pulse" />
-        <div className="relative w-full h-full rounded-3xl overflow-hidden bg-slate-950 border border-pink-500/40 shadow-2xl p-1">
-          <img 
-            src="/lottie.png" 
-            alt="Lottie Celebrating" 
-            className="w-full h-full object-cover rounded-2xl"
-          />
+        <div className="absolute -inset-3 rounded-full bg-gradient-to-tr from-indigo-500/40 via-purple-500/20 to-cyan-400/40 blur-xl animate-pulse" />
+        <div className="relative w-full h-full rounded-3xl overflow-hidden bg-slate-950 border border-indigo-500/40 shadow-2xl p-1 flex items-center justify-center">
+          <UserAvatarBadge size="xl" showBorder={false} />
         </div>
-        <div className="absolute -bottom-2 -right-1 px-2.5 py-0.5 rounded-full bg-slate-950 border border-pink-500/40 text-[11px] font-bold text-pink-300 flex items-center gap-1 shadow-lg">
-          <Sparkles className="w-3 h-3 text-pink-400" />
+        <div className="absolute -bottom-2 -right-1 px-2.5 py-0.5 rounded-full bg-slate-950 border border-indigo-500/40 text-[11px] font-bold text-cyan-300 flex items-center gap-1 shadow-lg">
+          <Sparkles className="w-3 h-3 text-cyan-400" />
           <span>Neurogenesis!</span>
         </div>
       </div>
@@ -205,16 +201,16 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
           Session Accomplished!
         </h2>
         <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed font-sans">
-          You conquered the complete cognitive sequence for <span className="text-pink-300 font-semibold">"{session.title}"</span>.
+          You conquered the complete cognitive sequence for <span className="text-cyan-300 font-semibold">"{session.title}"</span>.
         </p>
       </div>
 
-      {/* Mascot Praise */}
-      <LottieMascot 
+      {/* Companion Praise */}
+      <CharacterCompanion 
         variant="card" 
         size="sm" 
-        speech="Incredible focus! Your synapses just underwent long-term potentiation. Rest up and let the offline consolidation do its magic." 
-        className="max-w-md mx-auto !bg-slate-900/60 !border-pink-500/25"
+        speech="Incredible focus! Your synapses just underwent long-term potentiation. Rest up and let offline consolidation do its magic." 
+        className="max-w-md mx-auto !bg-slate-900/60 !border-indigo-500/25"
       />
 
       {/* Metrics Grid */}
@@ -244,53 +240,51 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
         </div>
       </div>
 
-      {/* Axolotl Care Rewards Card */}
-      {rewards && (
-        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-pink-950/40 via-purple-950/40 to-slate-900/90 border border-pink-500/30 text-left space-y-3 shadow-xl backdrop-blur-xl">
+      {/* Study Wage Paycheck Card */}
+      {wageEarned && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-950/40 via-slate-900/90 to-amber-950/30 border border-amber-500/30 text-left space-y-3.5 shadow-xl backdrop-blur-xl">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-pink-400" />
-              <h4 className="text-xs font-bold text-white font-display">Lottie's Care Rewards Earned!</h4>
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl">🪙</span>
+              <div>
+                <h4 className="text-xs sm:text-sm font-extrabold text-white font-display">
+                  Study Wage Deposited!
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Earned through focused active recall practice
+                </p>
+              </div>
             </div>
-            {rewards.leveledUp && (
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-pink-500/30 text-pink-300 border border-pink-500/50 animate-bounce">
-                🎉 Friendship Leveled Up!
-              </span>
-            )}
+            <div className="px-3 py-1 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono font-black text-sm sm:text-base flex items-center gap-1.5 shadow-inner">
+              <span>+🪙 {wageEarned.totalAmount}</span>
+              <span className="text-[11px] uppercase text-amber-400/80 font-sans font-bold">Tokens</span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
-            <div className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-              <span className="text-lg">🦐</span>
-              <div className="text-xs font-bold text-white mt-0.5">+{rewards.treatsEarned.shrimp || 0}</div>
-              <div className="text-[11px] text-slate-400">Shrimp</div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="p-2.5 rounded-2xl bg-white/[0.04] border border-white/[0.08]">
+              <span className="text-[11px] text-slate-400 block font-medium">Base Wage</span>
+              <div className="text-sm sm:text-base font-bold text-white mt-0.5 font-mono">
+                🪙 {wageEarned.rawAmount}
+              </div>
             </div>
-            <div className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-              <span className="text-lg">🍓</span>
-              <div className="text-xs font-bold text-white mt-0.5">+{rewards.treatsEarned.berry || 0}</div>
-              <div className="text-[11px] text-slate-400">Berries</div>
+            <div className="p-2.5 rounded-2xl bg-white/[0.04] border border-white/[0.08]">
+              <span className="text-[11px] text-slate-400 block font-medium">Meal Buff Bonus</span>
+              <div className="text-sm sm:text-base font-bold text-emerald-400 mt-0.5 font-mono">
+                {wageEarned.buffBonus > 0 ? `+🪙 ${wageEarned.buffBonus}` : '—'}
+              </div>
             </div>
-            <div className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-              <span className="text-lg">🫘</span>
-              <div className="text-xs font-bold text-white mt-0.5">+{rewards.treatsEarned.bean || 0}</div>
-              <div className="text-[11px] text-slate-400">Beans</div>
-            </div>
-            <div className="p-2 rounded-xl bg-white/[0.04] border border-white/[0.08]">
-              <span className="text-lg">✨</span>
-              <div className="text-xs font-bold text-white mt-0.5">+{rewards.treatsEarned.pearl || 0}</div>
-              <div className="text-[11px] text-slate-400">Pellets</div>
-            </div>
-            <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
-              <span className="text-lg">🪙</span>
-              <div className="text-xs font-bold text-amber-300 mt-0.5">+{rewards.coinsEarned}</div>
-              <div className="text-[11px] text-amber-400/80">Coins</div>
-            </div>
-            <div className="p-2 rounded-xl bg-pink-500/10 border border-pink-500/20">
-              <span className="text-lg">💖</span>
-              <div className="text-xs font-bold text-pink-300 mt-0.5">+{rewards.friendshipXPEarned}</div>
-              <div className="text-[11px] text-pink-400/80">Friendship XP</div>
+            <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+              <span className="text-[11px] text-amber-400/80 block font-medium">Wallet Balance</span>
+              <div className="text-sm sm:text-base font-bold text-amber-300 mt-0.5 font-mono">
+                🪙 {wageEarned.walletBalance}
+              </div>
             </div>
           </div>
+
+          <p className="text-xs text-slate-300 leading-relaxed font-sans pt-0.5">
+            Your study wage has been deposited into your student wallet. Use tokens to purchase breakfast, lunch, dinner, or coffee at the Campus Cafeteria, or maintain a healthy daily net balance to unlock luxury study dorms.
+          </p>
         </div>
       )}
 

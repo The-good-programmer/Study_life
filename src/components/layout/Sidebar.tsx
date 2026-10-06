@@ -16,14 +16,18 @@ import {
   User,
   PanelLeftClose,
   PanelLeftOpen,
-  BookOpen
+  BookOpen,
+  Folder
 } from 'lucide-react';
 import type { UserStats, UserAccount } from '../../types';
 import { soundEngine } from '../../services/soundEngine';
+import { StorageService } from '../../services/storageService';
+import { lifeSimService } from '../../services/lifeSimService';
+import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
 interface SidebarProps {
-  activeView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio';
-  onNavigate: (view: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio') => void;
+  activeView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders';
+  onNavigate: (view: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders') => void;
   stats: UserStats;
   currentUser?: UserAccount | null;
   onOpenAuth?: (tab?: 'login' | 'register' | 'profile') => void;
@@ -41,12 +45,13 @@ interface SidebarProps {
   onCloseMobile?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: (collapsed: boolean) => void;
+  onOpenCharacterCustomizer?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeView,
   onNavigate,
-  stats,
+  stats: _stats,
   currentUser,
   onOpenAuth,
   onOpenDeckStudio,
@@ -63,6 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
   isCollapsed: propIsCollapsed,
   onToggleCollapse,
+  onOpenCharacterCustomizer,
 }) => {
   // Local collapsed state fallback if not controlled from parent
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
@@ -105,6 +111,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleCollapse]);
 
+  const [foldersCount, setFoldersCount] = useState<number>(() => StorageService.getFolders().length);
+  const [walletCoins, setWalletCoins] = useState<number>(() => lifeSimService.getWalletBalance());
+
+  useEffect(() => {
+    const unsub = StorageService.addMutationListener(() => {
+      setFoldersCount(StorageService.getFolders().length);
+    });
+    const unsubLife = lifeSimService.subscribe(() => {
+      setWalletCoins(lifeSimService.getWalletBalance());
+    });
+    return () => {
+      unsub();
+      unsubLife();
+    };
+  }, []);
+
   const currentSound = soundEngine.getCurrentSound();
   const isMuted = currentSound === 'off';
 
@@ -129,19 +151,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               if (onCloseMobile) onCloseMobile();
             }}
             className={`flex items-center gap-3 cursor-pointer group select-none ${isExpanded ? 'min-w-0' : 'justify-center'}`}
-            title="Lotti • Daily Micro-Mastery"
+            title="Studify • Daily Micro-Mastery"
           >
-            <div className="relative w-9 h-9 rounded-xl p-[1.5px] bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-500 shadow-md shadow-pink-500/20 group-hover:scale-105 transition-transform duration-200 shrink-0">
-              <img src="/lottie.png" alt="Lotti" className="w-full h-full object-cover rounded-[10px]" />
+            <div className="relative w-9 h-9 rounded-xl p-[1.5px] bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-200 shrink-0 flex items-center justify-center">
+              <UserAvatarBadge size="xs" />
             </div>
 
             {isExpanded && (
               <div className="flex flex-col min-w-0 overflow-hidden">
                 <div className="flex items-center gap-1.5">
                   <span className="font-bold text-[16px] text-white tracking-tight leading-none font-display">
-                    Lotti
+                    Studify
                   </span>
-                  <span className="text-[10px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded-full bg-gradient-to-r from-pink-500/15 to-indigo-500/15 text-pink-300 border border-pink-500/25 leading-none">
+                  <span className="text-[10px] font-bold tracking-wide uppercase px-1.5 py-0.5 rounded-full bg-gradient-to-r from-indigo-500/15 to-purple-500/15 text-indigo-300 border border-indigo-500/25 leading-none">
                     FSRS
                   </span>
                 </div>
@@ -334,6 +356,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </button>
 
+          {/* Subject Folders */}
+          <button
+            onClick={() => {
+              onNavigate('folders');
+              if (onCloseMobile) onCloseMobile();
+            }}
+            title={`Subject Folders (${foldersCount})`}
+            aria-label="Subject Folders"
+            className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+              isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
+            } ${
+              activeView === 'folders'
+                ? 'bg-white/[0.08] text-white border border-white/[0.12] shadow-sm font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium'
+            }`}
+          >
+            {activeView === 'folders' && (
+              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-indigo-500 shadow-sm shadow-indigo-500/50" />
+            )}
+            <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+              <Folder className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
+                activeView === 'folders' ? 'text-indigo-400' : 'text-slate-400 group-hover:text-slate-200'
+              }`} />
+              {isExpanded && <span className="truncate">Subject Folders</span>}
+            </div>
+
+            {isExpanded && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 shrink-0 font-mono">
+                {foldersCount}
+              </span>
+            )}
+
+            {!isExpanded && (
+              <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                Subject Folders ({foldersCount})
+              </div>
+            )}
+          </button>
+
           {/* Starred Focus (if cards starred) */}
           {starredCardsCount > 0 && (
             <button
@@ -487,44 +548,78 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </button>
 
-          {/* Student Sanctuary & Life Sim */}
+          {/* Student Campus Life & Living Loft */}
           <button
             onClick={() => {
               onNavigate('sanctuary');
               if (onCloseMobile) onCloseMobile();
             }}
-            title="Student Sanctuary & Life Sim Habitat"
-            aria-label="Student Sanctuary"
+            title="Home & Room Designer (Design Home)"
+            aria-label="Home & Room Designer"
             className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
               isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
             } ${
               activeView === 'sanctuary'
-                ? 'bg-gradient-to-r from-pink-500/15 via-purple-500/15 to-transparent text-white border border-pink-500/30 shadow-sm font-semibold'
+                ? 'bg-gradient-to-r from-amber-500/20 via-indigo-500/20 to-transparent text-white border border-amber-500/40 shadow-sm font-semibold'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium'
             }`}
           >
             {activeView === 'sanctuary' && (
-              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-pink-500 shadow-sm shadow-pink-500/50" />
+              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-amber-500 shadow-sm shadow-amber-500/50" />
             )}
             <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
               <Sparkles className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
-                activeView === 'sanctuary' ? 'text-pink-400' : 'text-pink-400/80 group-hover:text-pink-300'
+                activeView === 'sanctuary' ? 'text-amber-400' : 'text-amber-400/80 group-hover:text-amber-300'
               }`} />
-              {isExpanded && <span className="truncate">Sanctuary</span>}
+              {isExpanded && <span className="truncate">Home &amp; Design</span>}
             </div>
 
             {isExpanded && (
-              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 border border-pink-500/30 shrink-0 font-mono">
-                SIM
+              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 font-mono">
+                DESIGN
               </span>
             )}
 
             {!isExpanded && (
               <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                Student Sanctuary
+                Home &amp; Design (Design Home)
               </div>
             )}
           </button>
+
+          {/* 3D Character Studio */}
+          {onOpenCharacterCustomizer && (
+            <button
+              onClick={() => {
+                onOpenCharacterCustomizer();
+                if (onCloseMobile) onCloseMobile();
+              }}
+              title="Customize 3D Character (Hair, Wardrobe, Gender, Style)"
+              aria-label="Customize 3D Character"
+              className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+                isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
+              } text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium`}
+            >
+              <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+                <div className="w-5 h-5 rounded-lg overflow-hidden flex items-center justify-center shrink-0 p-0.5 bg-indigo-500/20 group-hover:scale-110 transition-transform">
+                  <UserAvatarBadge size="xs" />
+                </div>
+                {isExpanded && <span className="truncate">Edit 3D Avatar</span>}
+              </div>
+
+              {isExpanded && (
+                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0 font-mono">
+                  3D
+                </span>
+              )}
+
+              {!isExpanded && (
+                <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                  Edit 3D Avatar
+                </div>
+              )}
+            </button>
+          )}
 
           {/* Public Curated Decks */}
           <button
@@ -668,7 +763,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             if (onCloseMobile) onCloseMobile();
           }}
           aria-label="Settings"
-          title={`Settings (Level ${stats.level})`}
+          title={`Settings • 🪙 ${walletCoins} Tokens`}
           className={`w-full rounded-xl text-xs text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-all duration-150 cursor-pointer flex items-center relative group ${
             isExpanded ? 'justify-between px-3 py-2' : 'justify-center px-0 h-10'
           }`}
@@ -679,14 +774,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {isExpanded && (
-            <span className="text-[10px] font-semibold text-slate-400 bg-white/[0.05] border border-white/[0.06] px-1.5 py-0.5 rounded">
-              Lvl {stats.level}
+            <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded font-mono">
+              🪙 {walletCoins}
             </span>
           )}
 
           {!isExpanded && (
             <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
-              Settings (Lvl {stats.level})
+              Settings (🪙 {walletCoins})
             </div>
           )}
         </button>

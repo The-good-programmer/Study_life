@@ -35,9 +35,12 @@ import {
   Globe,
   Compass,
   GraduationCap,
-  ChevronDown
+  ChevronDown,
+  Folder,
+  FolderPlus,
+  FolderInput
 } from 'lucide-react';
-import type { StudySession, StarterDeckMetadata, RetrievalCard, DepthTier, StudentEducationProfile, UserAccount } from '../../types';
+import type { StudySession, StarterDeckMetadata, RetrievalCard, DepthTier, StudentEducationProfile, UserAccount, SubjectFolder } from '../../types';
 import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
 import { AIService } from '../../services/aiService';
 import { PDFService } from '../../services/pdfService';
@@ -46,11 +49,14 @@ import { StorageService } from '../../services/storageService';
 import { AuthService } from '../../services/authService';
 import { ExportService } from '../../services/exportService';
 import { soundEngine } from '../../services/soundEngine';
-import { LottieMascot } from '../mascot/LottieMascot';
+import { lifeSimService } from '../../services/lifeSimService';
+import { CharacterCompanion } from '../character/CharacterCompanion';
 import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
 import { DepthEstimationService, SUPPORTED_LANGUAGES } from '../../services/depthEstimationService';
 import { EducationProfileModal } from './EducationProfileModal';
 import { EducationCatalog } from '../../services/educationCatalog';
+import { SubjectFolderModal, FOLDER_COLORS } from '../studio/SubjectFolderModal';
+import { MoveToFolderModal } from '../studio/MoveToFolderModal';
 
 const StarterCatalogModal = React.lazy(() => import('../catalog/StarterCatalogModal').then(m => ({ default: m.StarterCatalogModal })));
 const DeckStudioModal = React.lazy(() => import('../studio/DeckStudioModal').then(m => ({ default: m.DeckStudioModal })));
@@ -144,6 +150,15 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
     return unsub;
   }, []);
 
+  // LifeSim Token Wallet State
+  const [walletCoins, setWalletCoins] = useState(() => lifeSimService.getWalletBalance());
+  useEffect(() => {
+    const unsub = lifeSimService.subscribe(() => {
+      setWalletCoins(lifeSimService.getWalletBalance());
+    });
+    return unsub;
+  }, []);
+
   const effectiveProfile = useMemo((): StudentEducationProfile | null => {
     if (currentUser) {
       return {
@@ -208,6 +223,22 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   const [isDeckStudioOpen, setIsDeckStudioOpen] = useState(false);
   const [deckStudioTab, setDeckStudioTab] = useState<'create' | 'import' | 'occlusion'>('create');
   const [editingSession, setEditingSession] = useState<StudySession | null>(null);
+
+  // Subject Folders state
+  const [folders, setFolders] = useState<SubjectFolder[]>(() => StorageService.getFolders());
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<SubjectFolder | null>(null);
+  const [moveToFolderSession, setMoveToFolderSession] = useState<StudySession | null>(null);
+
+  // Sync folders and sessions with storage mutations
+  useEffect(() => {
+    const unsub = StorageService.addMutationListener(() => {
+      setFolders(StorageService.getFolders());
+      setSavedSessions(StorageService.getSessions());
+    });
+    return unsub;
+  }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -465,7 +496,10 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
       s.title.toLowerCase().includes(deckSearch.toLowerCase()) || 
       s.category.toLowerCase().includes(deckSearch.toLowerCase());
     const matchesCat = selectedCategory === 'All' || s.category === selectedCategory;
-    return matchesSearch && matchesCat;
+    const matchesFolder = 
+      selectedFolderId === 'all' || 
+      (selectedFolderId === 'uncategorized' ? !s.folderId : s.folderId === selectedFolderId);
+    return matchesSearch && matchesCat && matchesFolder;
   });
 
   // Filtered curated decks
@@ -490,8 +524,8 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   return (
     <div className="space-y-6 sm:space-y-8 py-2 sm:py-4 animate-fadeIn">
       
-      {/* AXON Mascot & Daily Neuro-Priming Hero */}
-      <LottieMascot 
+      {/* 3D Character Companion & Daily Neuro-Priming Hero */}
+      <CharacterCompanion 
         variant="hero" 
         size="lg" 
         onExploreTour={() => setIsTourModalOpen(true)} 
@@ -511,9 +545,13 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 <Flame className="w-3 h-3 fill-amber-400 text-amber-400" />
                 <span>{stats.currentStreak} Day Streak</span>
               </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                Lvl {stats.level} • {stats.levelTitle}
-              </span>
+              <button
+                onClick={onOpenSanctuary}
+                className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 hover:bg-emerald-500/25 transition-all cursor-pointer font-mono"
+                title="Student Habitat & Cafeteria"
+              >
+                <span>🪙 {walletCoins} Tokens</span>
+              </button>
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight font-display">
@@ -1215,6 +1253,138 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
           </div>
         </div>
 
+        {/* Subject Folders Bar */}
+        <div className="p-3.5 sm:p-4 rounded-3xl glass-panel space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Folder className="w-4 h-4 text-indigo-400" />
+              <h3 className="text-xs font-bold text-white font-display uppercase tracking-wider">
+                Subject Folders
+              </h3>
+              <span className="text-[11px] font-mono text-slate-400">
+                ({folders.length})
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setEditingFolder(null);
+                setIsFolderModalOpen(true);
+              }}
+              className="px-2.5 py-1 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer hover:scale-105"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              <span>New Subject</span>
+            </button>
+          </div>
+
+          {/* Folder Filter Chips */}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+            {/* All Decks chip */}
+            <button
+              type="button"
+              onClick={() => setSelectedFolderId('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                selectedFolderId === 'all'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-white/[0.06]'
+              }`}
+            >
+              <span>📚</span>
+              <span>All Decks</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 font-mono">
+                {savedSessions.length}
+              </span>
+            </button>
+
+            {/* Folders */}
+            {folders.map((folder) => {
+              const isSelected = selectedFolderId === folder.id;
+              const folderDeckCount = savedSessions.filter(s => s.folderId === folder.id).length;
+              const colDef = FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0];
+
+              return (
+                <div key={folder.id} className="relative group/folder flex items-center shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFolderId(isSelected ? 'all' : folder.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border ${
+                      isSelected
+                        ? `${colDef.bg} ${colDef.text} ${colDef.border} shadow-md ${colDef.glow} ring-1 ring-white/20`
+                        : 'bg-slate-900/60 text-slate-300 hover:text-white hover:bg-slate-900 border-white/[0.06]'
+                    }`}
+                  >
+                    <span>{folder.icon || '📁'}</span>
+                    <span>{folder.name}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                      isSelected ? 'bg-black/30' : 'bg-white/[0.08] text-slate-400'
+                    }`}>
+                      {folderDeckCount}
+                    </span>
+                  </button>
+
+                  {/* Quick Edit/Delete on Hover */}
+                  <div className="opacity-0 group-hover/folder:opacity-100 transition-opacity flex items-center gap-0.5 ml-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingFolder(folder);
+                        setIsFolderModalOpen(true);
+                      }}
+                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-300 hover:bg-white/[0.08] transition-colors cursor-pointer"
+                      title="Edit Subject Name / Theme"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Delete subject folder "${folder.name}"? Decks will remain safe in Uncategorized.`)) {
+                          StorageService.deleteFolder(folder.id);
+                          if (selectedFolderId === folder.id) setSelectedFolderId('all');
+                          setFolders(StorageService.getFolders());
+                          setSavedSessions(StorageService.getSessions());
+                          soundEngine.playCompanionBubble();
+                        }
+                      }}
+                      className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-white/[0.08] transition-colors cursor-pointer"
+                      title="Delete Subject Folder"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Unassigned Pill */}
+            {folders.length > 0 && (() => {
+              const uncatCount = savedSessions.filter(s => !s.folderId).length;
+              if (uncatCount === 0) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setSelectedFolderId(selectedFolderId === 'uncategorized' ? 'all' : 'uncategorized')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border shrink-0 ${
+                    selectedFolderId === 'uncategorized'
+                      ? 'bg-slate-700 text-white border-white/20 shadow-md'
+                      : 'bg-slate-900/60 text-slate-400 hover:text-slate-300 hover:bg-slate-900 border-white/[0.06]'
+                  }`}
+                >
+                  <span>📂</span>
+                  <span>Unassigned</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/[0.06] text-slate-400 font-mono">
+                    {uncatCount}
+                  </span>
+                </button>
+              );
+            })()}
+          </div>
+        </div>
+
         {/* Category Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 shrink-0 pl-1">
@@ -1244,10 +1414,16 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 <BookMarked className="w-10 h-10 text-slate-600 mx-auto" />
                 <div className="space-y-1">
                   <p className="text-sm font-bold text-slate-300 font-display">
-                    {deckSearch ? 'No decks match your search query.' : 'No custom study decks saved yet.'}
+                    {deckSearch 
+                      ? 'No decks match your search query.' 
+                      : selectedFolderId !== 'all' 
+                        ? 'No decks in this subject folder yet.' 
+                        : 'No custom study decks saved yet.'}
                   </p>
                   <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                    Drop a lecture PDF above or explore one of the pre-calibrated Curated Benchmarks to start your learning portfolio!
+                    {selectedFolderId !== 'all' 
+                      ? 'Use "Move to Subject" on any deck to organize it into this subject!' 
+                      : 'Drop a lecture PDF above or explore one of the pre-calibrated Curated Benchmarks to start your learning portfolio!'}
                   </p>
                 </div>
               </div>
@@ -1256,6 +1432,8 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 {filteredMyDecks.map((deck) => {
                   const totalCards = deck.concepts.reduce((acc, c) => acc + c.retrievalCards.length, 0);
                   const totalMins = deck.concepts.reduce((acc, c) => acc + (c.estimatedMinutes || 5), 0);
+                  const assignedFolder = folders.find(f => f.id === deck.folderId);
+                  const folderColorDef = assignedFolder ? (FOLDER_COLORS.find(c => c.id === assignedFolder.color) || FOLDER_COLORS[0]) : null;
 
                   return (
                     <div
@@ -1267,12 +1445,53 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                       className="p-5 rounded-3xl glass-panel-interactive flex flex-col justify-between group space-y-4 cursor-pointer"
                     >
                       <div className="space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
-                            {deck.category}
-                          </span>
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider truncate">
+                              {deck.category}
+                            </span>
 
-                          <div className="flex items-center gap-1">
+                            {/* Subject Folder Chip on Deck Card */}
+                            {assignedFolder && folderColorDef ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMoveToFolderSession(deck);
+                                }}
+                                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${folderColorDef.bg} ${folderColorDef.text} border ${folderColorDef.border} flex items-center gap-1 hover:scale-105 transition-transform cursor-pointer truncate max-w-[140px]`}
+                                title={`Subject: ${assignedFolder.name} — Click to move`}
+                              >
+                                <span>{assignedFolder.icon || '📁'}</span>
+                                <span className="truncate">{assignedFolder.name}</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMoveToFolderSession(deck);
+                                }}
+                                className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 border border-white/[0.06] flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Assign to Subject Folder"
+                              >
+                                <span>📁</span>
+                                <span>+ Subject</span>
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMoveToFolderSession(deck);
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-indigo-300 transition-colors"
+                              title="Organize into Subject Folder"
+                            >
+                              <FolderInput className="w-3.5 h-3.5" />
+                            </button>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1633,6 +1852,39 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
           title={effectiveProfile ? "Update Educational Calibration" : "Calibrate Your Grade & Curriculum"}
           description={effectiveProfile ? "Modify your grade, country, or age so Gemini adjusts studying complexity accordingly." : "Tell Gemini your country and grade so the study plan, mental models, and flashcards perfectly match your curriculum."}
           actionLabel={pendingGenerate ? "Save & Generate Study Plan ✨" : "Save Learning Profile"}
+        />
+      )}
+
+      {/* Subject Folder Creation & Editing Modal */}
+      {isFolderModalOpen && (
+        <SubjectFolderModal
+          isOpen={isFolderModalOpen}
+          initialFolder={editingFolder}
+          onClose={() => {
+            setIsFolderModalOpen(false);
+            setEditingFolder(null);
+          }}
+          onFolderSaved={(savedFolder) => {
+            setFolders(StorageService.getFolders());
+            setSelectedFolderId(savedFolder.id);
+          }}
+        />
+      )}
+
+      {/* Move Deck to Subject Folder Modal */}
+      {moveToFolderSession && (
+        <MoveToFolderModal
+          isOpen={!!moveToFolderSession}
+          session={moveToFolderSession}
+          onClose={() => setMoveToFolderSession(null)}
+          onMoved={(_updated) => {
+            setSavedSessions(StorageService.getSessions());
+            setMoveToFolderSession(null);
+          }}
+          onOpenNewFolderModal={() => {
+            setEditingFolder(null);
+            setIsFolderModalOpen(true);
+          }}
         />
       )}
 

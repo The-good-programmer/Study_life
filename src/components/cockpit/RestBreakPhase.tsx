@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Coffee, ArrowRight, Eye, Droplets, Activity, Play, Pause } from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
 import { StorageService } from '../../services/storageService';
-import { LottieMascot } from '../mascot/LottieMascot';
+import { lifeSimService } from '../../services/lifeSimService';
+import { CharacterCompanion } from '../character/CharacterCompanion';
 
 interface RestBreakPhaseProps {
   onComplete: () => void;
@@ -16,7 +17,8 @@ export const RestBreakPhase: React.FC<RestBreakPhaseProps> = ({ onComplete, onSk
   const [breathCount, setBreathCount] = useState(4);
 
   const handleFinish = useCallback(() => {
-    StorageService.addXP(30); // +30 XP for micro-rest consolidation
+    StorageService.addXP(30);
+    lifeSimService.awardStudyWage('Micro-Rest Memory Replay', 15);
     onComplete();
   }, [onComplete]);
 
@@ -76,8 +78,8 @@ export const RestBreakPhase: React.FC<RestBreakPhaseProps> = ({ onComplete, onSk
             </div>
           </div>
         </div>
-        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0 font-mono">
-          +30 XP
+        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 font-mono">
+          +15 🪙 Wage
         </span>
       </div>
 
@@ -153,9 +155,9 @@ export const RestBreakPhase: React.FC<RestBreakPhaseProps> = ({ onComplete, onSk
 
       </div>
 
-      {/* Lottie Rest Companion */}
+      {/* 3D Character Rest Companion */}
       <div className="flex items-center justify-center">
-        <LottieMascot 
+        <CharacterCompanion 
           variant="card" 
           size="sm" 
           speech="Micro-rest is where your brain replays today's study memories at 10x speed. Relax your gaze and breathe." 
