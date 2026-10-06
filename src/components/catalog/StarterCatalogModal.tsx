@@ -13,11 +13,13 @@ import {
   FileText, 
   ArrowRight,
   BookmarkCheck,
-  Check
+  Check,
+  GraduationCap
 } from 'lucide-react';
 import type { StarterDeckMetadata, StudySession } from '../../types';
-import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
+import { CURATED_STARTER_DECKS, isBoardExamDeck, rankStarterDecksForGrade } from '../../data/curatedStarterCatalog';
 import { StorageService } from '../../services/storageService';
+import { AuthService } from '../../services/authService';
 import { soundEngine } from '../../services/soundEngine';
 
 function createClonedSession(deck: StarterDeckMetadata): StudySession {
@@ -73,7 +75,9 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
     'Cognitive & Behavioral Science',
   ];
 
-  const filteredDecks = CURATED_STARTER_DECKS.filter(deck => {
+  const rankedDecks = rankStarterDecksForGrade(CURATED_STARTER_DECKS, AuthService.getCurrentUser()?.grade);
+
+  const filteredDecks = rankedDecks.filter(deck => {
     const matchesSearch = 
       deck.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       deck.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -246,6 +250,12 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
                         </span>
 
                         <div className="flex items-center gap-1.5">
+                          {isBoardExamDeck(deck) && (
+                            <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-300 border border-rose-500/30" title="Professional board-exam level (university / medical school)">
+                              <GraduationCap className="w-3 h-3 text-rose-400" />
+                              <span>Board exam</span>
+                            </span>
+                          )}
                           {deck.hasImageOcclusion && (
                             <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30" title="Includes anatomical / diagram image occlusion cards">
                               <Eye className="w-3 h-3 text-amber-400" />

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
 import { 
   Flame, 
   Zap, 
@@ -24,16 +24,19 @@ import type { StudySession, UserStats, SubjectFolder } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { characterService } from '../../services/characterService';
 import { soundEngine } from '../../services/soundEngine';
-import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
 import confetti from 'canvas-confetti';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
 import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
 import { haptics } from '../../services/hapticsService';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
-import { CharacterCustomizerModal } from '../character/CharacterCustomizerModal';
-import { SubjectFolderModal, FOLDER_COLORS } from '../studio/SubjectFolderModal';
+import { SubjectFolderModal } from '../studio/SubjectFolderModal';
+import { FOLDER_COLORS } from '../studio/folderOptions';
 import { MoveToFolderModal } from '../studio/MoveToFolderModal';
-import { lifeSimService } from '../../services/lifeSimService';
+
+// The customizer pulls in three.js; load it only when the user opens it.
+const CharacterCustomizerModal = lazy(() =>
+  import('../character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal }))
+);
 
 interface DailyMissionHomeProps {
   onStartSession: (session: StudySession) => void;
@@ -72,13 +75,13 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   const [hasSynapticFreeze, setHasSynapticFreeze] = useState(() => StorageService.hasSynapticFreeze());
   const [reviewedToday, setReviewedToday] = useState(() => StorageService.getReviewedTodayCount());
   const [savedSessions, setSavedSessions] = useState<StudySession[]>(() => StorageService.getSessions());
+  const [dueCards, setDueCards] = useState(() => StorageService.getDueCards());
   const [folders, setFolders] = useState<SubjectFolder[]>(() => StorageService.getFolders());
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<SubjectFolder | null>(null);
   const [movingSession, setMovingSession] = useState<StudySession | null>(null);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
-  const [dailyLedger, setDailyLedger] = useState(() => lifeSimService.getDailyLedger());
 
   useEffect(() => {
     const unsub = StorageService.addMutationListener(() => {
@@ -86,22 +89,17 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
       setReviewedToday(StorageService.getReviewedTodayCount());
       setHasSynapticFreeze(StorageService.hasSynapticFreeze());
       setSavedSessions(StorageService.getSessions());
+      setDueCards(StorageService.getDueCards());
       setFolders(StorageService.getFolders());
     });
-    const unsubLife = lifeSimService.subscribe(() => {
-      setDailyLedger(lifeSimService.getDailyLedger());
-    });
-    return () => {
-      unsub();
-      unsubLife();
-    };
+    return unsub;
   }, []);
 
   const weeklyStats = useMemo(() => {
     if (stats.xp < 0) return { current: 0, best: 0 };
     return StorageService.getWeeklyXP();
   }, [stats.xp]);
-  const dueCards = useMemo(() => StorageService.getDueCards(), []);
+  const hasDecks = savedSessions.length > 0;
 
   const displayedSessions = useMemo(() => {
     if (selectedFolderId === 'all') return savedSessions;
@@ -109,9 +107,9 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
     return savedSessions.filter(s => s.folderId === selectedFolderId);
   }, [savedSessions, selectedFolderId]);
 
-  // Primary active deck or fallback starter deck
+  // Primary active deck. No silent fallback to a starter deck: new users choose one themselves.
   const primarySession = useMemo(() => {
-    if (savedSessions.length === 0) return CURATED_STARTER_DECKS[0]?.session || null;
+    if (savedSessions.length === 0) return null;
     // Prioritize deck containing due cards
     if (dueCards.length > 0) {
       const match = savedSessions.find(s => 
@@ -170,7 +168,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
     <div className="w-full max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-fadeIn pb-16">
       
       {/* --- TOP DUOLINGO-GRADE HUD BAR --- */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {/* Streak Pill with Guardian & Freeze Shield */}
         <div 
           onClick={() => {
@@ -220,7 +218,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
         {/* Study Tokens Wallet */}
         <div 
           onClick={onOpenSanctuary}
-          className="p-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.08] backdrop-blur-xl flex items-center gap-3 shadow-sm cursor-pointer transition-all"
+          className="col-span-2 sm:col-span-1 p-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.08] backdrop-blur-xl flex items-center gap-3 shadow-sm cursor-pointer transition-all"
           title="Tokens earned through active recall • Click to visit Sanctuary & Cafeteria"
         >
           <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-xl shrink-0">
@@ -234,28 +232,6 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
           </div>
         </div>
 
-        {/* Daily Student Ledger / Habitat Shortcut */}
-        <div 
-          onClick={onOpenSanctuary}
-          className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 to-indigo-500/10 hover:from-amber-500/20 hover:to-indigo-500/20 border border-amber-500/30 backdrop-blur-xl flex items-center gap-3 shadow-sm cursor-pointer transition-all group"
-          title="Daily Living Ledger & Sanctuary"
-        >
-          <div className="relative w-10 h-10 rounded-xl overflow-hidden p-0.5 bg-gradient-to-tr from-amber-500 to-pink-500 shrink-0 group-hover:scale-105 transition-transform flex items-center justify-center">
-            <UserAvatarBadge size="xs" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-xs font-black text-amber-200 font-display truncate flex items-center gap-1">
-              <span>Daily Net</span>
-              <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-mono font-bold ${dailyLedger.netBalance >= 0 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'}`}>
-                {dailyLedger.netBalance >= 0 ? `+${dailyLedger.netBalance}` : dailyLedger.netBalance} 🪙
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 font-medium truncate flex items-center gap-0.5">
-              <span>Campus Life</span>
-              <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-            </p>
-          </div>
-        </div>
       </div>
 
       {/* --- HERO PRIMARY ACTION BANNER (Sub-3-Second Time-to-Value) --- */}
@@ -284,18 +260,23 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-black text-white font-display tracking-tight leading-tight">
-              {dueCards.length > 0 
+              {!hasDecks
+                ? 'Start your first deck'
+                : dueCards.length > 0
                 ? `You have ${dueCards.length} cards ready for today's review`
                 : 'All caught up for today! 🎉'}
             </h1>
 
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-normal">
-              {dueCards.length > 0 
+              {!hasDecks
+                ? 'Pick a ready-made starter deck for your level, or turn your own notes into flashcards in about a minute.'
+                : dueCards.length > 0
                 ? `Just 3 minutes on "${primarySession?.title || 'Active Deck'}" to lock these concepts into long-term memory.`
-                : 'Great job! Keep your momentum alive with Speed Match or explore a new topic.'}
+                : 'Nothing is due right now. You can practice ahead, or come back when your next reviews are scheduled.'}
             </p>
 
             {/* Daily Goal Bar */}
+            {hasDecks && (
             <div className="pt-2 space-y-1.5 max-w-sm">
               <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
                 <span className="flex items-center gap-1.5 text-slate-300">
@@ -311,29 +292,57 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                 />
               </div>
             </div>
+            )}
           </div>
 
           {/* Right Column: Tactile Dual-Speed Action Buttons */}
           <div className="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0 sm:w-auto lg:w-72">
-            {/* Primary Action Button (Tactile 3D Bevel) */}
-            <button
-              type="button"
-              onClick={handleLaunchQuickSprint}
-              className="btn-tactile btn-tactile-primary w-full py-4 px-6 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-3 cursor-pointer group shadow-lg shadow-indigo-500/25"
-            >
-              <Zap className="w-5 h-5 fill-white group-hover:scale-110 transition-transform" />
-              <span>Start 3-Min Daily Practice ({dueCards.length > 0 ? dueCards.length : 10} Cards)</span>
-            </button>
+            {!hasDecks ? (
+              <>
+                <button
+                  type="button"
+                  onClick={onOpenStarterCatalog}
+                  className="btn-tactile btn-tactile-primary w-full py-4 px-6 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-3 cursor-pointer group shadow-lg shadow-indigo-500/25"
+                >
+                  <BookOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                  <span>Pick a starter deck</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenDeckStudio}
+                  className="btn-tactile btn-tactile-slate w-full py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 text-purple-400" />
+                  <span>Import or paste notes</span>
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Primary Action Button (Tactile 3D Bevel) */}
+                <button
+                  type="button"
+                  onClick={handleLaunchQuickSprint}
+                  className="btn-tactile btn-tactile-primary w-full py-4 px-6 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-3 cursor-pointer group shadow-lg shadow-indigo-500/25"
+                >
+                  <Zap className="w-5 h-5 fill-white group-hover:scale-110 transition-transform" />
+                  <span>
+                    {dueCards.length > 0
+                      ? `Start 3-Min Daily Practice (${dueCards.length} ${dueCards.length === 1 ? 'Card' : 'Cards'})`
+                      : 'Practice ahead'}
+                  </span>
+                </button>
 
-            {/* Secondary Deep Master Action Button */}
-            <button
-              type="button"
-              onClick={handleLaunchDeepPilot}
-              className="btn-tactile btn-tactile-slate w-full py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Brain className="w-4 h-4 text-purple-400" />
-              <span>Deep Socratic Pilot (Full Guided)</span>
-            </button>
+                {/* Secondary Deep Master Action Button */}
+                <button
+                  type="button"
+                  onClick={handleLaunchDeepPilot}
+                  className="btn-tactile btn-tactile-slate w-full py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Brain className="w-4 h-4 text-purple-400" />
+                  <span>Deep Socratic Pilot (Full Guided)</span>
+                </button>
+              </>
+            )}
 
             {/* Practice Modes Quick Links */}
             <div className="flex items-center gap-2">
@@ -348,7 +357,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                 </button>
               )}
 
-              {onOpenExam && (
+              {onOpenExam && hasDecks && (
                 <button
                   type="button"
                   onClick={onOpenExam}
@@ -845,10 +854,14 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
       />
 
       {/* 3D Character Customizer Studio */}
-      <CharacterCustomizerModal
-        isOpen={isCustomizerOpen}
-        onClose={() => setIsCustomizerOpen(false)}
-      />
+      {isCustomizerOpen && (
+        <Suspense fallback={null}>
+          <CharacterCustomizerModal
+            isOpen={isCustomizerOpen}
+            onClose={() => setIsCustomizerOpen(false)}
+          />
+        </Suspense>
+      )}
 
     </div>
   );

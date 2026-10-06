@@ -7,7 +7,6 @@ import { GoogleAuthService } from './services/googleAuthService';
 import { usePwaInstall } from './hooks/usePwaInstall';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
-import { CURATED_STARTER_DECKS } from './data/curatedStarterCatalog';
 import { NotificationService } from './services/notificationService';
 import { WagePayoutBanner } from './components/lifesim/WagePayoutBanner';
 
@@ -42,8 +41,8 @@ export function App() {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('launch') === 'quick_sprint') {
-        const saved = StorageService.getSessions();
-        const primary = saved[0] || CURATED_STARTER_DECKS[0]?.session;
+        // Without a saved deck, fall through to the home screen's first-deck empty state.
+        const primary = StorageService.getSessions()[0];
         if (primary) {
           return {
             ...primary,
@@ -208,9 +207,11 @@ export function App() {
   const starredCardsCount = allCards.filter(c => c.isStarred).length;
 
   const handleQuickStudy = () => {
-    const firstSession = savedSessions[0] || CURATED_STARTER_DECKS[0]?.session;
-    if (firstSession) {
-      handleStartSession(firstSession);
+    // New users pick a deck themselves rather than being dropped into a demo deck.
+    if (savedSessions[0]) {
+      handleStartSession(savedSessions[0]);
+    } else {
+      setIsStarterCatalogOpen(true);
     }
   };
 

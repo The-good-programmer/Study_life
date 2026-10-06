@@ -19,7 +19,8 @@ import {
 import type { StudySession, SubjectFolder } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
-import { SubjectFolderModal, FOLDER_COLORS } from '../studio/SubjectFolderModal';
+import { SubjectFolderModal } from '../studio/SubjectFolderModal';
+import { FOLDER_COLORS } from '../studio/folderOptions';
 import { MoveToFolderModal } from '../studio/MoveToFolderModal';
 
 interface FoldersPageProps {
@@ -59,15 +60,16 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [isAddDecksDrawerOpen, setIsAddDecksDrawerOpen] = useState(false);
 
+  const [dueCards, setDueCards] = useState(() => StorageService.getDueCards());
+
   useEffect(() => {
     const unsub = StorageService.addMutationListener(() => {
       setFolders(StorageService.getFolders());
       setSavedSessions(StorageService.getSessions());
+      setDueCards(StorageService.getDueCards());
     });
     return unsub;
   }, []);
-
-  const dueCards = useMemo(() => StorageService.getDueCards(), [savedSessions]);
 
   // Derived metrics
   const organizedDecksCount = useMemo(() => {

@@ -3,7 +3,7 @@ import { X, Check, Plus, FolderInput, FolderMinus } from 'lucide-react';
 import type { StudySession } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
-import { FOLDER_COLORS } from './SubjectFolderModal';
+import { FOLDER_COLORS } from './folderOptions';
 
 export interface MoveToFolderModalProps {
   isOpen: boolean;

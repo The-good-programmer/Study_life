@@ -55,7 +55,8 @@ import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
 import { DepthEstimationService, SUPPORTED_LANGUAGES } from '../../services/depthEstimationService';
 import { EducationProfileModal } from './EducationProfileModal';
 import { EducationCatalog } from '../../services/educationCatalog';
-import { SubjectFolderModal, FOLDER_COLORS } from '../studio/SubjectFolderModal';
+import { SubjectFolderModal } from '../studio/SubjectFolderModal';
+import { FOLDER_COLORS } from '../studio/folderOptions';
 import { MoveToFolderModal } from '../studio/MoveToFolderModal';
 
 const StarterCatalogModal = React.lazy(() => import('../catalog/StarterCatalogModal').then(m => ({ default: m.StarterCatalogModal })));

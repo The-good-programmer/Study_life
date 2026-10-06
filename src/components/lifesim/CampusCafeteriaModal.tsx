@@ -35,12 +35,21 @@ export const CampusCafeteriaModal: React.FC<CampusCafeteriaModalProps> = ({
   const [ledger, setLedger] = useState(lifeSimService.getDailyLedger());
   const [activeBuffs, setActiveBuffs] = useState(lifeSimService.getActiveBuffs());
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  // Clock for "minutes left" on buffs; ticks while the modal is open.
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
 
   useEffect(() => {
     const update = () => {
       setWalletCoins(lifeSimService.getWalletBalance());
       setLedger(lifeSimService.getDailyLedger());
       setActiveBuffs(lifeSimService.getActiveBuffs());
+      setNow(Date.now());
     };
     const unsubscribe = lifeSimService.subscribe(update);
     update();
@@ -214,7 +223,7 @@ export const CampusCafeteriaModal: React.FC<CampusCafeteriaModalProps> = ({
                   className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-pink-500/20 border border-pink-500/40 text-pink-300 flex items-center gap-1 animate-pulse"
                 >
                   <span>{b.emoji}</span>
-                  <span>{b.name} ({Math.round((new Date(b.expiresAt).getTime() - Date.now()) / 60000)}m left)</span>
+                  <span>{b.name} ({Math.round((new Date(b.expiresAt).getTime() - now) / 60000)}m left)</span>
                 </span>
               ))}
             </div>

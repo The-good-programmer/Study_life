@@ -16,10 +16,7 @@ export const AudioWaveformVisualizer: React.FC<AudioWaveformVisualizerProps> = (
   const [heights, setHeights] = useState<number[]>(() => Array(barCount).fill(15));
 
   useEffect(() => {
-    if (!isActive) {
-      setHeights(Array(barCount).fill(12));
-      return;
-    }
+    if (!isActive) return;
 
     const interval = setInterval(() => {
       setHeights(
@@ -55,7 +52,7 @@ export const AudioWaveformVisualizer: React.FC<AudioWaveformVisualizerProps> = (
         {mode === 'candidate' ? 'MIC AUDIO' : 'EXAMINER VOICE'}
       </span>
       <div className="flex items-center gap-0.5 h-7">
-        {heights.map((h, idx) => (
+        {(isActive ? heights : Array<number>(barCount).fill(12)).map((h, idx) => (
           <div
             key={idx}
             className={`w-1 rounded-full transition-all duration-100 ease-out ${barColor}`}

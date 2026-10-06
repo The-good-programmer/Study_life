@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   Award, 
@@ -127,6 +127,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
     walletBalance: number;
   } | null>(null);
 
+  // Celebration effects (cosmetic).
   useEffect(() => {
     soundEngine.playCompletionChime();
     haptics.celebrate();
@@ -134,19 +135,6 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
       soundEngine.playCoinCascade();
       haptics.coin();
     }, 650);
-
-    StorageService.recordCompletedSession();
-    StorageService.recordStudyMinutes(minutes);
-
-    const rawCoins = Math.max(15, Math.round(totalCards * 5 + minutes * 3));
-    const wage = lifeSimService.awardStudyWage(
-      `Sprint: ${session.title ? session.title.slice(0, 24) : 'Active Recall'}`,
-      rawCoins
-    );
-    setWageEarned({
-      ...wage,
-      walletBalance: lifeSimService.getWalletBalance(),
-    });
 
     try {
       confetti({
@@ -159,7 +147,30 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
     }
 
     return () => clearTimeout(coinTimer);
-  }, [minutes, totalCards]);
+  }, []);
+
+  // Record the session and pay the study wage exactly once. The ref guard keeps
+  // React StrictMode's double-run from recording or paying twice.
+  const recordedRef = useRef(false);
+  useEffect(() => {
+    if (recordedRef.current) return;
+    recordedRef.current = true;
+
+    StorageService.recordCompletedSession();
+    StorageService.recordStudyMinutes(minutes);
+
+    const rawCoins = Math.max(15, Math.round(totalCards * 5 + minutes * 3));
+    const wage = lifeSimService.awardStudyWage(
+      `Sprint: ${session.title ? session.title.slice(0, 24) : 'Active Recall'}`,
+      rawCoins
+    );
+    // Displays the result of the one-time award above; it cannot be derived during render.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setWageEarned({
+      ...wage,
+      walletBalance: lifeSimService.getWalletBalance(),
+    });
+  }, [minutes, totalCards, session.title]);
 
   const handlePrint = () => {
     ExportService.printStudySheet(session);

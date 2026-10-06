@@ -146,10 +146,12 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
 
   const [activeSourceSnippet, setActiveSourceSnippet] = useState<string | undefined>(() => currentConcept.sourceAnchor?.snippet);
 
-  // Sync active snippet when concept advances
-  useEffect(() => {
+  // Reset the active snippet when the concept advances (adjusting state during render).
+  const [snippetConcept, setSnippetConcept] = useState(currentConcept);
+  if (snippetConcept !== currentConcept) {
+    setSnippetConcept(currentConcept);
     setActiveSourceSnippet(currentConcept.sourceAnchor?.snippet);
-  }, [currentConcept]);
+  }
 
   const handleInspectSource = (pageNumber?: number, snippet?: string) => {
     if (pageNumber) {

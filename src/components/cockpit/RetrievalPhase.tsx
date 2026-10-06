@@ -26,6 +26,7 @@ import confetti from 'canvas-confetti';
 import { StudyHUD } from './StudyHUD';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
 import { haptics } from '../../services/hapticsService';
+import { buildQuizOptions } from '../../utils/quizOptions';
 
 interface RetrievalPhaseProps {
   concept: ConceptCheckpoint;
@@ -155,56 +156,19 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
       ))
     : 'standard';
 
-  // Smart distractor generation: dynamically creates 4-choice interactive quiz options for standard cards
+  // Smart distractor generation: 4-choice quiz options for standard cards only
   const computedOptions = useMemo(() => {
     if (!currentCard) return [];
     if (currentCard.options && currentCard.options.length > 0) {
       return currentCard.options;
     }
-    // Gather candidate answers from other cards in this deck or concept
-    const otherAnswers = cards
-      .filter(c => c.id !== currentCard.id && c.answer && c.answer.trim().toLowerCase() !== currentCard.answer.trim().toLowerCase())
-      .map(c => c.answer.trim());
-    
-    // Also gather key terms if available
-    const keyTerms = (concept.keyTerms || [])
-      .map(t => t.term.trim())
-      .filter(t => t.toLowerCase() !== currentCard.answer.trim().toLowerCase());
-
-    const pool = Array.from(new Set([...otherAnswers, ...keyTerms]));
-    if (pool.length < 2) {
-      return [];
-    }
-
-    // Deterministic seeded Fisher-Yates shuffle based on card ID to ensure stable options across renders
-    let seed = 0;
-    for (let i = 0; i < currentCard.id.length; i++) {
-      seed = (seed * 31 + currentCard.id.charCodeAt(i)) >>> 0;
-    }
-    const pseudoRandom = () => {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return seed / 4294967296;
-    };
-
-    const shuffledPool = [...pool];
-    for (let i = shuffledPool.length - 1; i > 0; i--) {
-      const j = Math.floor(pseudoRandom() * (i + 1));
-      [shuffledPool[i], shuffledPool[j]] = [shuffledPool[j], shuffledPool[i]];
-    }
-    const selectedDistractors = shuffledPool.slice(0, 3);
-
-    const allOpts = [currentCard.answer, ...selectedDistractors];
-    for (let i = allOpts.length - 1; i > 0; i--) {
-      const j = Math.floor(pseudoRandom() * (i + 1));
-      [allOpts[i], allOpts[j]] = [allOpts[j], allOpts[i]];
-    }
-    return allOpts;
+    return buildQuizOptions(currentCard, cards, (concept.keyTerms || []).map(t => t.term));
   }, [currentCard, cards, concept.keyTerms]);
 
-  const hasInteractiveOptions = interactiveMode && (
-    (currentCard?.options && currentCard.options.length > 0) ||
-    computedOptions.length >= 3
-  );
+  // Generated options only make sense for plain Q/A cards. Image-occlusion and
+  // cloze cards have their own interaction, and adding the quiz block would
+  // print the question twice with distractors taken from unrelated cards.
+  const hasInteractiveOptions = interactiveMode && effectiveType === 'standard' && computedOptions.length >= 4;
 
   const activeOptions = useMemo(() => {
     if (currentCard?.options && currentCard.options.length > 0) {

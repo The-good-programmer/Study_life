@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import confetti from 'canvas-confetti';
 import { Sliders, ArrowRight, Sparkles } from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
 import { characterService } from '../../services/characterService';
 import { type CharacterCustomization } from '../../types/character';
 import { UserAvatarBadge } from './UserAvatarBadge';
-import { CharacterCustomizerModal } from './CharacterCustomizerModal';
+
+// The customizer pulls in three.js; load it only when the user opens it.
+const CharacterCustomizerModal = lazy(() =>
+  import('./CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal }))
+);
 
 export interface CharacterCompanionProps {
   variant?: 'avatar' | 'badge' | 'compact' | 'hero' | 'card' | 'breathing';
@@ -102,10 +106,14 @@ export const CharacterCompanion: React.FC<CharacterCompanionProps> = ({
           <UserAvatarBadge size={size} customization={character} />
         </div>
 
-        <CharacterCustomizerModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-        />
+        {isModalOpen && (
+          <Suspense fallback={null}>
+            <CharacterCustomizerModal
+              isOpen={isModalOpen}
+              onClose={() => setIsModalOpen(false)}
+            />
+          </Suspense>
+        )}
       </>
     );
   }
@@ -182,10 +190,14 @@ export const CharacterCompanion: React.FC<CharacterCompanionProps> = ({
           </div>
         </div>
 
-        <CharacterCustomizerModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-        />
+        {isModalOpen && (
+          <Suspense fallback={null}>
+            <CharacterCustomizerModal
+              isOpen={isModalOpen}
+              onClose={() => setIsModalOpen(false)}
+            />
+          </Suspense>
+        )}
       </>
     );
   }
@@ -227,10 +239,14 @@ export const CharacterCompanion: React.FC<CharacterCompanionProps> = ({
         )}
       </div>
 
-      <CharacterCustomizerModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+      {isModalOpen && (
+        <Suspense fallback={null}>
+          <CharacterCustomizerModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+          />
+        </Suspense>
+      )}
     </>
   );
 };

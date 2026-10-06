@@ -893,3 +893,23 @@ export const CURATED_STARTER_DECKS: StarterDeckMetadata[] = [
     session: DEMO_STUDY_SESSIONS[0]
   }
 ];
+
+const BOARD_EXAM_PATTERN = /\b(USMLE|MCAT|COMLEX)\b/i;
+const HIGHER_ED_PATTERN = /medic|med school|university|college|undergrad|graduate|pre-?med|residen|fellow/i;
+
+/** Professional board-exam decks (USMLE, MCAT, ...), shown with a badge in the catalog. */
+export function isBoardExamDeck(deck: Pick<StarterDeckMetadata, 'title' | 'tags'>): boolean {
+  return BOARD_EXAM_PATTERN.test(deck.title) || deck.tags.some(t => BOARD_EXAM_PATTERN.test(t));
+}
+
+/**
+ * Orders starter decks for the learner: unless their profile says they are in
+ * university or medical school, board-exam decks go last. Stable otherwise.
+ */
+export function rankStarterDecksForGrade<T extends Pick<StarterDeckMetadata, 'title' | 'tags'>>(
+  decks: T[],
+  grade?: string | null
+): T[] {
+  if (grade && HIGHER_ED_PATTERN.test(grade)) return [...decks];
+  return [...decks.filter(d => !isBoardExamDeck(d)), ...decks.filter(d => isBoardExamDeck(d))];
+}

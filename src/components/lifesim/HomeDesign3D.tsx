@@ -208,6 +208,8 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
   const [walkCurrentRoom, setWalkCurrentRoom] = useState<string>('Study Sanctuary');
 
   const modeRef = useRef<CameraMode>('dollhouse');
+  // Latest setMode, for listeners registered once in the mount effect.
+  const setModeRef = useRef<(mode: CameraMode) => void>(() => {});
   const selectionRingRef = useRef<THREE.Mesh | null>(null);
   const walkKeysRef = useRef<Record<string, boolean>>({});
   const walkAnglesRef = useRef<{ yaw: number; pitch: number }>({ yaw: Math.PI, pitch: 0 });
@@ -238,7 +240,8 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
   const currentRole = lifeSimService.getAcademicRole();
   const activeMultiplier = lifeSimService.getActiveMultiplier('coin_multiplier');
 
-  const totalCardsReviewed = useMemo(() => {
+  // Reviews can't happen while this screen is open, so read the total once on mount.
+  const [totalCardsReviewed] = useState(() => {
     try {
       const cards = StorageService.getAllCards();
       const count = cards.reduce((acc, c) => acc + (c.reps || 0), 0);
@@ -246,7 +249,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     } catch {
       return 0;
     }
-  }, [furnitureVersion]);
+  });
 
   const savedSessions = StorageService.getSessions();
   const dueCards = StorageService.getDueCards();
@@ -285,10 +288,17 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
   const previousTierRef = useRef<HousingTier>(lifeSimService.getHousing().id);
   const lastCompassDegRef = useRef(0);
 
-  useEffect(() => {
-    selectedRoomIdRef.current = selectedRoomId;
+  // Reload the room's furniture and score when the selected room changes
+  // (adjusting state during render, rather than in an effect).
+  const [roomDataFor, setRoomDataFor] = useState(selectedRoomId);
+  if (roomDataFor !== selectedRoomId) {
+    setRoomDataFor(selectedRoomId);
     setEquippedItems(lifeSimService.getEquippedFurniture(selectedRoomId));
     setEvaluation(lifeSimService.calculateRoomDesignScore(selectedRoomId));
+  }
+
+  useEffect(() => {
+    selectedRoomIdRef.current = selectedRoomId;
   }, [selectedRoomId]);
 
   useEffect(() => {
@@ -586,7 +596,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       walkKeysRef.current[e.code] = true;
       if (e.code === 'Escape' && modeRef.current === 'walk') {
-        setMode('dollhouse');
+        setModeRef.current('dollhouse');
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -730,7 +740,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
       libRef.current = null;
       labelsRef.current = [];
     };
-  }, []);
+  }, [showToast]); // showToast is stable, so this still runs once on mount
 
   // Rebuild furniture whenever equipment or custom rotations change
   useEffect(() => {
@@ -1030,6 +1040,10 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     }
     soundEngine.playTapPop();
   };
+
+  useEffect(() => {
+    setModeRef.current = setMode;
+  });
 
   const handleRotateSelectedFurniture = () => {
     if (!selectedFurniture) return;

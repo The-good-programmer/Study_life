@@ -38,10 +38,15 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
 
   const poseRef = useRef<CharacterPose>(pose);
-  poseRef.current = pose;
-
   const interactiveRef = useRef<boolean>(interactive);
-  interactiveRef.current = interactive;
+
+  // The scene is built once on mount from these values; later changes are
+  // applied by the dedicated sync effects below instead of rebuilding WebGL.
+  const mountPropsRef = useRef({ customization, cameraView, autoRotate, showPedestal });
+
+  useEffect(() => {
+    poseRef.current = pose;
+  }, [pose]);
 
   const targetCamPos = useRef(new THREE.Vector3(...CAMERA_PRESETS[cameraView].pos));
   const targetCamLook = useRef(new THREE.Vector3(...CAMERA_PRESETS[cameraView].target));
@@ -60,7 +65,8 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
     // 2. Camera
     const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 50);
     cameraRef.current = camera;
-    const initialPreset = CAMERA_PRESETS[cameraView] || CAMERA_PRESETS.full;
+    const mountProps = mountPropsRef.current;
+    const initialPreset = CAMERA_PRESETS[mountProps.cameraView] || CAMERA_PRESETS.full;
     camera.position.set(...initialPreset.pos);
     targetCamPos.current.set(...initialPreset.pos);
     targetCamLook.current.set(...initialPreset.target);
@@ -124,7 +130,7 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
     controls.dampingFactor = 0.08;
     controls.enablePan = false;
     controls.enabled = interactiveRef.current;
-    controls.autoRotate = autoRotate;
+    controls.autoRotate = mountProps.autoRotate;
     controls.autoRotateSpeed = 1.8;
     controls.minDistance = 0.8;
     controls.maxDistance = 5.0;
@@ -132,7 +138,7 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
     controls.maxPolarAngle = Math.PI / 1.8;
 
     // 6. Build Character Instance
-    const charInstance = buildCharacter3D(customization, { showPedestal, showShadow: true });
+    const charInstance = buildCharacter3D(mountProps.customization, { showPedestal: mountProps.showPedestal, showShadow: true });
     characterRef.current = charInstance;
     scene.add(charInstance.root);
 
@@ -226,6 +232,7 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
 
   // Synchronize controls enabled
   useEffect(() => {
+    interactiveRef.current = interactive;
     if (controlsRef.current) {
       controlsRef.current.enabled = interactive;
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Play, 
   Star, 
@@ -26,7 +26,8 @@ import { StorageService } from '../../services/storageService';
 import { ExportService } from '../../services/exportService';
 import { soundEngine } from '../../services/soundEngine';
 import { MoveToFolderModal } from './MoveToFolderModal';
-import { SubjectFolderModal, FOLDER_COLORS } from './SubjectFolderModal';
+import { SubjectFolderModal } from './SubjectFolderModal';
+import { FOLDER_COLORS } from './folderOptions';
 
 interface DeckStationModalProps {
   isOpen: boolean;
@@ -80,10 +81,13 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
 
-  useEffect(() => {
+  // Re-sync folder state when a different deck is opened (adjusting state during render).
+  const [folderStateFor, setFolderStateFor] = useState(session);
+  if (folderStateFor !== session) {
+    setFolderStateFor(session);
     setCurrentFolderId(session?.folderId);
     setFolders(StorageService.getFolders());
-  }, [session]);
+  }
   const [starredCardIds, setStarredCardIds] = useState<Set<string>>(() => {
     if (!session) return new Set();
     const starred = session.concepts.flatMap(c => c.retrievalCards).filter(rc => rc.isStarred).map(rc => rc.id);

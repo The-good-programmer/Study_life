@@ -17,16 +17,14 @@ export const UserAvatarBadge: React.FC<UserAvatarBadgeProps> = ({
   onClick,
   showBorder = true,
 }) => {
-  const [character, setCharacter] = useState<CharacterCustomization>(() => customization || characterService.getCharacter());
+  const [storedCharacter, setStoredCharacter] = useState<CharacterCustomization>(() => characterService.getCharacter());
 
   useEffect(() => {
-    if (customization) {
-      setCharacter(customization);
-      return;
-    }
-    const unsub = characterService.subscribe((c) => setCharacter(c));
-    return unsub;
+    if (customization) return;
+    return characterService.subscribe((c) => setStoredCharacter(c));
   }, [customization]);
+
+  const character = customization || storedCharacter;
 
   const sizeDimensions = {
     xs: { w: 32, h: 32, viewBox: '0 0 100 100' },

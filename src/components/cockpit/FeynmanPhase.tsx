@@ -62,14 +62,19 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
   const [showScienceModal, setShowScienceModal] = useState(false);
   const [showCrossBridges, setShowCrossBridges] = useState(false);
   const [pedState, setPedState] = useState(() => FSRSService.getConceptPedagogicalState(concept.retrievalCards || []));
-  const [crossBridges, setCrossBridges] = useState<CrossDeckBridge[]>([]);
+  const [crossBridges, setCrossBridges] = useState<CrossDeckBridge[]>(() =>
+    sessionId ? KnowledgeGraphService.findCrossDeckBridges(concept, sessionId, 4) : []
+  );
 
-  useEffect(() => {
+  // Recompute when the concept or deck changes (adjusting state during render).
+  const [derivedFor, setDerivedFor] = useState({ concept, sessionId });
+  if (derivedFor.concept !== concept || derivedFor.sessionId !== sessionId) {
+    setDerivedFor({ concept, sessionId });
     setPedState(FSRSService.getConceptPedagogicalState(concept.retrievalCards || []));
     if (sessionId) {
       setCrossBridges(KnowledgeGraphService.findCrossDeckBridges(concept, sessionId, 4));
     }
-  }, [concept, sessionId]);
+  }
 
   // Shared Speech Recognition & Synthesis State
   const [isListening, setIsListening] = useState(false);
