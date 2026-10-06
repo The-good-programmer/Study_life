@@ -66,7 +66,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     title: string;
     subtitle: string;
     icon: React.ComponentType<{ className?: string }>;
-    category: 'Decks' | 'Audio' | 'Navigation';
+    category: 'Decks' | 'Audio' | 'Navigation' | 'Extras';
     action: () => void;
   }
 
@@ -128,20 +128,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       }
     })),
     {
-      id: 'nav-3d-sanctuary',
-      title: 'Student Home & Room Designer (Design Home)',
-      subtitle: 'Design your room, stage furniture, brew espresso & manage real-life student simulation',
-      icon: Sparkles,
-      category: 'Navigation' as const,
-      action: () => {
-        if (onOpenSanctuary) onOpenSanctuary();
-        onClose();
-      }
-    },
-    {
       id: 'nav-starter-catalog',
       title: 'Browse High-Yield Starter Catalog',
-      subtitle: '6 cold-start verified benchmarks (USMLE Step 1, MCAT, AP Bio, CS, Spanish)',
+      subtitle: 'Ready-made decks: AP Biology, Spanish, CS, memory science, plus MCAT & USMLE',
       icon: Sparkles,
       category: 'Navigation' as const,
       action: () => {
@@ -257,6 +246,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       category: 'Navigation' as const,
       action: () => {
         onOpenSettings();
+        onClose();
+      }
+    },
+    {
+      id: 'nav-3d-sanctuary',
+      title: 'Home & Room Designer',
+      subtitle: 'Design your room and spend study tokens (optional extra)',
+      icon: Sparkles,
+      category: 'Extras' as const,
+      action: () => {
+        if (onOpenSanctuary) onOpenSanctuary();
         onClose();
       }
     }

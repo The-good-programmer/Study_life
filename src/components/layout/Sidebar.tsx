@@ -17,13 +17,17 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   BookOpen,
-  Folder
+  Folder,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import type { UserStats, UserAccount } from '../../types';
 import { soundEngine } from '../../services/soundEngine';
 import { StorageService } from '../../services/storageService';
 import { lifeSimService } from '../../services/lifeSimService';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
+
+const EXTRAS_OPEN_STORAGE_KEY = 'studify_sidebar_extras_open';
 
 interface SidebarProps {
   activeView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders';
@@ -112,6 +116,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [toggleCollapse]);
 
   const [foldersCount, setFoldersCount] = useState<number>(() => StorageService.getFolders().length);
+
+  // Non-study extras (home designer, 3D avatar) live in a collapsible group, closed by default.
+  const [isExtrasOpen, setIsExtrasOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(EXTRAS_OPEN_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const showExtras = isExtrasOpen || activeView === 'sanctuary';
+  const toggleExtras = () => {
+    const next = !isExtrasOpen;
+    setIsExtrasOpen(next);
+    try {
+      localStorage.setItem(EXTRAS_OPEN_STORAGE_KEY, next ? '1' : '0');
+    } catch {}
+  };
   const [walletCoins, setWalletCoins] = useState<number>(() => lifeSimService.getWalletBalance());
 
   useEffect(() => {
@@ -548,79 +569,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </button>
 
-          {/* Student Campus Life & Living Loft */}
-          <button
-            onClick={() => {
-              onNavigate('sanctuary');
-              if (onCloseMobile) onCloseMobile();
-            }}
-            title="Home & Room Designer (Design Home)"
-            aria-label="Home & Room Designer"
-            className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
-              isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
-            } ${
-              activeView === 'sanctuary'
-                ? 'bg-gradient-to-r from-amber-500/20 via-indigo-500/20 to-transparent text-white border border-amber-500/40 shadow-sm font-semibold'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium'
-            }`}
-          >
-            {activeView === 'sanctuary' && (
-              <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-amber-500 shadow-sm shadow-amber-500/50" />
-            )}
-            <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
-              <Sparkles className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
-                activeView === 'sanctuary' ? 'text-amber-400' : 'text-amber-400/80 group-hover:text-amber-300'
-              }`} />
-              {isExpanded && <span className="truncate">Home &amp; Design</span>}
-            </div>
-
-            {isExpanded && (
-              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 font-mono">
-                DESIGN
-              </span>
-            )}
-
-            {!isExpanded && (
-              <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                Home &amp; Design (Design Home)
-              </div>
-            )}
-          </button>
-
-          {/* 3D Character Studio */}
-          {onOpenCharacterCustomizer && (
-            <button
-              onClick={() => {
-                onOpenCharacterCustomizer();
-                if (onCloseMobile) onCloseMobile();
-              }}
-              title="Customize 3D Character (Hair, Wardrobe, Gender, Style)"
-              aria-label="Customize 3D Character"
-              className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
-                isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
-              } text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium`}
-            >
-              <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
-                <div className="w-5 h-5 rounded-lg overflow-hidden flex items-center justify-center shrink-0 p-0.5 bg-indigo-500/20 group-hover:scale-110 transition-transform">
-                  <UserAvatarBadge size="xs" />
-                </div>
-                {isExpanded && <span className="truncate">Edit 3D Avatar</span>}
-              </div>
-
-              {isExpanded && (
-                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0 font-mono">
-                  3D
-                </span>
-              )}
-
-              {!isExpanded && (
-                <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
-                  Edit 3D Avatar
-                </div>
-              )}
-            </button>
-          )}
-
           {/* Public Curated Decks */}
           <button
             onClick={() => {
@@ -650,6 +598,110 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             )}
           </button>
+        </div>
+
+        {/* Navigation Group 3: Extras (non-study, collapsed by default) */}
+        <div className="space-y-1 pt-2 border-t border-white/[0.05]">
+          <button
+            onClick={toggleExtras}
+            aria-expanded={showExtras}
+            aria-label="Extras"
+            title="Extras: home designer and 3D avatar"
+            className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center text-slate-500 hover:text-slate-300 hover:bg-white/[0.04] border border-transparent ${
+              isExpanded ? 'h-8 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
+            }`}
+          >
+            {isExpanded ? (
+              <>
+                <span className="text-[10px] font-bold uppercase tracking-wider">Extras</span>
+                {showExtras ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 shrink-0 text-slate-500 group-hover:text-slate-300" />
+                <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                  Extras
+                </div>
+              </>
+            )}
+          </button>
+
+          {showExtras && (
+            <>
+            {/* Student Campus Life & Living Loft */}
+            <button
+              onClick={() => {
+                onNavigate('sanctuary');
+                if (onCloseMobile) onCloseMobile();
+              }}
+              title="Home & Room Designer (Design Home)"
+              aria-label="Home & Room Designer"
+              className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+                isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
+              } ${
+                activeView === 'sanctuary'
+                  ? 'bg-gradient-to-r from-amber-500/20 via-indigo-500/20 to-transparent text-white border border-amber-500/40 shadow-sm font-semibold'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium'
+              }`}
+            >
+              {activeView === 'sanctuary' && (
+                <div className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-amber-500 shadow-sm shadow-amber-500/50" />
+              )}
+              <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+                <Sparkles className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
+                  activeView === 'sanctuary' ? 'text-amber-400' : 'text-amber-400/80 group-hover:text-amber-300'
+                }`} />
+                {isExpanded && <span className="truncate">Home &amp; Design</span>}
+              </div>
+
+              {isExpanded && (
+                <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0 font-mono">
+                  DESIGN
+                </span>
+              )}
+
+              {!isExpanded && (
+                <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                  Home &amp; Design (Design Home)
+                </div>
+              )}
+            </button>
+
+            {/* 3D Character Studio */}
+            {onOpenCharacterCustomizer && (
+              <button
+                onClick={() => {
+                  onOpenCharacterCustomizer();
+                  if (onCloseMobile) onCloseMobile();
+                }}
+                title="Customize 3D Character (Hair, Wardrobe, Gender, Style)"
+                aria-label="Customize 3D Character"
+                className={`w-full rounded-xl text-xs transition-all duration-150 cursor-pointer relative group flex items-center ${
+                  isExpanded ? 'h-10 px-3 justify-between' : 'h-10 justify-center px-0 mx-auto'
+                } text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent font-medium`}
+              >
+                <div className={`flex items-center gap-3 min-w-0 ${!isExpanded ? 'justify-center' : ''}`}>
+                  <div className="w-5 h-5 rounded-lg overflow-hidden flex items-center justify-center shrink-0 p-0.5 bg-indigo-500/20 group-hover:scale-110 transition-transform">
+                    <UserAvatarBadge size="xs" />
+                  </div>
+                  {isExpanded && <span className="truncate">Edit 3D Avatar</span>}
+                </div>
+
+                {isExpanded && (
+                  <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0 font-mono">
+                    3D
+                  </span>
+                )}
+
+                {!isExpanded && (
+                  <div className="absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141724] border border-white/10 text-white text-xs font-semibold whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                    Edit 3D Avatar
+                  </div>
+                )}
+              </button>
+            )}
+            </>
+          )}
         </div>
       </div>
 

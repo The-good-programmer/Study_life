@@ -24,7 +24,6 @@ import type { SoundType } from '../../services/soundEngine';
 import type { UserStats, UserAccount } from '../../types';
 import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
 import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
-import { DailyLedgerWidget } from '../lifesim/DailyLedgerWidget';
 import { lifeSimService } from '../../services/lifeSimService';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
@@ -190,16 +189,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="font-extrabold text-base text-white tracking-tight font-display">Studify</span>
           </div>
 
-          {/* Mobile 3D Sanctuary Quick Access */}
-          <button
-            onClick={() => onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.()}
-            className="md:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-cyan-500/20 border border-indigo-500/40 text-indigo-200 text-xs font-bold shadow-sm"
-            title="Visit 3D Campus Sanctuary"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-            <span>3D Campus</span>
-          </button>
-
           {/* Desktop Sidebar Expand Toggle (visible when sidebar is collapsed) */}
           {onToggleSidebarCollapse && isSidebarCollapsed && (
             <button
@@ -218,22 +207,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               {activeView === 'home' ? 'Home & Decks' : activeView === 'dashboard' ? 'FSRS Retention' : activeView === 'exam' ? 'Mock Exam' : activeView === 'sanctuary' ? 'Home & Design' : activeView === 'studio' ? 'Document Studio' : 'Interleaving'}
             </span>
             
-            <button
-              onClick={() => onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.()}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-sm group ${
-                activeView === 'sanctuary'
-                  ? 'bg-amber-500/25 border-amber-500/50 text-amber-100 shadow-amber-500/10'
-                  : 'bg-gradient-to-r from-amber-500/15 via-purple-500/15 to-indigo-500/15 hover:from-amber-500/30 hover:to-indigo-500/30 border-amber-500/40 text-amber-200 hover:text-white'
-              }`}
-              title="Visit Student Home & Room Designer (Design Home)"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-12 transition-transform" />
-              <span className="text-[12px] font-bold">Home &amp; Design</span>
-              <span className="text-[11px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-300 font-mono">
-                SIM
-              </span>
-            </button>
-
             <button
               onClick={() => setIsTourModalOpen(true)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-white transition-all cursor-pointer shadow-sm group"
@@ -333,12 +306,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Flame className="w-4 h-4 fill-amber-400 text-amber-500 animate-pulse group-hover:scale-110 transition-transform" />
             <span>{stats.currentStreak}d</span>
           </button>
-
-          {/* Compact Daily Student Ledger Widget */}
-          <DailyLedgerWidget 
-            compact={true} 
-            onOpenCafeteria={() => onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.()} 
-          />
 
           {/* Audio Engine with Real-Time Equalizer Bar Indicator */}
           <div className="relative">
