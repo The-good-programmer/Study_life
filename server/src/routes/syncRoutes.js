@@ -9,7 +9,11 @@ export function handleSyncRoutes(req, res, pathname, body) {
   // 1. SYNC PUSH
   if (pathname === '/api/sync/push' && req.method === 'POST') {
     const user = getAuthUser(req);
-    const userId = user ? user.id : (body?.userId || 'anonymous_user');
+    if (!user) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Unauthorized. Please provide valid Bearer token.' }));
+    }
+    const userId = user.id;
 
     const { sessions, stats, characterState, axolotlState } = body || {};
 
@@ -30,6 +34,7 @@ export function handleSyncRoutes(req, res, pathname, body) {
           subject = excluded.subject,
           data_json = excluded.data_json,
           updated_at = excluded.updated_at
+        WHERE study_sessions.user_id = excluded.user_id
       `);
 
       for (const session of sessions) {

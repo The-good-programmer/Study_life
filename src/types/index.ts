@@ -370,6 +370,10 @@ export interface GoogleProfilePayload {
   email: string;
   name: string;
   pictureUrl?: string;
+  /** Google ID token from One Tap; verified by the server. */
+  credential?: string;
+  /** OAuth access token from the sign-in popup; verified by the server. */
+  accessToken?: string;
 }
 
 export interface GoogleAuthDTO extends GoogleProfilePayload {

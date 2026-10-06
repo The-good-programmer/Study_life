@@ -2,10 +2,13 @@
  * Authentication Route Handlers
  */
 
+import crypto from 'node:crypto';
 import { db } from '../db.js';
-import { generateSalt, hashPassword, verifyPassword, createToken, getAuthUser } from '../auth.js';
+import { generateSalt, hashPassword, verifyPassword, createToken, getAuthUser, verifyGoogleIdToken, verifyGoogleAccessToken } from '../auth.js';
 
-export function handleAuthRoutes(req, res, pathname, body) {
+const INVALID_LOGIN = 'Invalid email or password.';
+
+export async function handleAuthRoutes(req, res, pathname, body) {
   // 1. REGISTER
   if (pathname === '/api/auth/register' && req.method === 'POST') {
     const { name, email, password, age, country, grade, avatar, institution } = body || {};
@@ -36,7 +39,7 @@ export function handleAuthRoutes(req, res, pathname, body) {
 
     const salt = generateSalt();
     const passHash = hashPassword(password, salt);
-    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const userId = `usr_${crypto.randomUUID()}`;
     const now = new Date().toISOString();
 
     const insertStmt = db.prepare(`
@@ -91,20 +94,11 @@ export function handleAuthRoutes(req, res, pathname, body) {
     const findStmt = db.prepare('SELECT * FROM users WHERE email = ?');
     const userRow = findStmt.get(cleanEmail);
 
-    if (!userRow) {
+    // Same response for unknown email, Google-only account and wrong password,
+    // so the endpoint does not reveal which emails are registered.
+    if (!userRow || !verifyPassword(password, userRow)) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: 'No account found with this email. Please register.' }));
-    }
-
-    if (!userRow.password_hash || !userRow.password_salt) {
-      res.writeHead(401, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: 'This account was registered with Google. Please use Google Sign-In.' }));
-    }
-
-    const valid = verifyPassword(password, userRow);
-    if (!valid) {
-      res.writeHead(401, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: 'Incorrect password. Please verify and try again.' }));
+      return res.end(JSON.stringify({ error: INVALID_LOGIN }));
     }
 
     const now = new Date().toISOString();
@@ -132,13 +126,31 @@ export function handleAuthRoutes(req, res, pathname, body) {
 
   // 3. GOOGLE OAUTH
   if (pathname === '/api/auth/google' && req.method === 'POST') {
-    const { googleId, email, name, pictureUrl, age, country, grade, avatar, institution } = body || {};
-    const cleanEmail = (email || '').trim().toLowerCase();
+    // Identity comes only from the Google-signed ID token, never from client-supplied fields.
+    const { credential, accessToken, age, country, grade, avatar, institution } = body || {};
 
-    if (!cleanEmail) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: 'Google authentication did not provide an email address.' }));
+    if (!(process.env.GOOGLE_CLIENT_ID || '').trim()) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Google sign-in is not configured on the server.' }));
     }
+
+    let identity = null;
+    try {
+      identity = credential
+        ? await verifyGoogleIdToken(credential)
+        : await verifyGoogleAccessToken(accessToken);
+    } catch (err) {
+      console.error('[Auth] Google ID token verification failed:', err);
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Could not verify Google sign-in right now. Please try again.' }));
+    }
+
+    if (!identity) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Invalid or expired Google credential.' }));
+    }
+
+    const { googleId, email: cleanEmail, name, pictureUrl } = identity;
 
     const findStmt = db.prepare('SELECT * FROM users WHERE email = ? OR (google_id IS NOT NULL AND google_id = ?)');
     let userRow = findStmt.get(cleanEmail, googleId || '');
@@ -156,7 +168,7 @@ export function handleAuthRoutes(req, res, pathname, body) {
 
       userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(userRow.id);
     } else {
-      const userId = `usr_g_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const userId = `usr_g_${crypto.randomUUID()}`;
       db.prepare(`
         INSERT INTO users (id, name, email, provider, google_id, picture_url, age, country, grade, avatar, institution, created_at, last_login_at)
         VALUES (?, ?, ?, 'google', ?, ?, ?, ?, ?, ?, ?, ?, ?)

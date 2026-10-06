@@ -50,6 +50,8 @@ declare global {
             }
           ) => void;
           revoke: (hint: string, done: () => void) => void;
+          cancel: () => void;
+          disableAutoSelect: () => void;
         };
         oauth2: {
           initTokenClient: (config: {
@@ -78,6 +80,9 @@ const CLIENT_ID_STORAGE_KEY = 'studify_google_client_id';
 export class GoogleAuthService {
   private static isScriptLoaded = false;
   private static loadPromise: Promise<boolean> | null = null;
+  // One Tap may only be prompted once per page load; React StrictMode and
+  // re-renders would otherwise start overlapping FedCM requests.
+  private static oneTapStarted = false;
 
   /**
    * Retrieves the Google OAuth Client ID from Vite environment or localStorage
@@ -214,6 +219,7 @@ export class GoogleAuthService {
               email: profile.email.toLowerCase(),
               name: profile.name || profile.email.split('@')[0],
               pictureUrl: profile.picture,
+              accessToken: tokenResponse.access_token,
             });
           } catch (fetchErr) {
             const msg = fetchErr instanceof Error ? fetchErr.message : 'Error fetching Google user details';
@@ -263,7 +269,8 @@ export class GoogleAuthService {
     onSuccess: (payload: GoogleProfilePayload) => void
   ): Promise<void> {
     const clientId = this.getClientId();
-    if (!clientId) return;
+    if (!clientId || this.oneTapStarted) return;
+    this.oneTapStarted = true;
 
     const loaded = await this.loadGoogleSDK();
     if (!loaded || !window.google?.accounts?.id) return;
@@ -280,6 +287,7 @@ export class GoogleAuthService {
             email: decoded.email.toLowerCase(),
             name: decoded.name || decoded.email.split('@')[0],
             pictureUrl: decoded.picture,
+            credential: response.credential,
           });
         },
         auto_select: true, // Seamlessly sign in users without clicking when eligible!
@@ -291,5 +299,23 @@ export class GoogleAuthService {
     } catch (e) {
       console.warn('[GoogleAuthService] One Tap auto-login initialization skipped:', e);
     }
+  }
+
+  /**
+   * Dismisses any open One Tap prompt (call after a successful sign-in).
+   */
+  public static cancelOneTap(): void {
+    try {
+      window.google?.accounts?.id?.cancel();
+    } catch {}
+  }
+
+  /**
+   * Stops One Tap from silently signing the user back in after they sign out.
+   */
+  public static disableAutoSelect(): void {
+    try {
+      window.google?.accounts?.id?.disableAutoSelect();
+    } catch {}
   }
 }

@@ -79,10 +79,27 @@ export class ApiConfig {
   }
 
   /**
-   * Synchronously returns known server availability (true if verified, null if unknown, false if offline)
+   * Synchronously returns whether the server is known to be up. Unknown counts as
+   * unavailable; a background check is started so the next call has an answer.
    */
   public static isServerReachableSync(): boolean {
-    return this.cachedIsReachable !== false;
+    if (this.cachedIsReachable === null) {
+      void this.isServerReachable();
+      return false;
+    }
+    return this.cachedIsReachable;
+  }
+
+  /**
+   * The shared server AI proxy only serves signed-in users, so it is usable
+   * when the server is reachable and we hold a login token.
+   */
+  public static async canUseServerAi(): Promise<boolean> {
+    return Boolean(this.getToken()) && (await this.isServerReachable());
+  }
+
+  public static canUseServerAiSync(): boolean {
+    return Boolean(this.getToken()) && this.isServerReachableSync();
   }
 
   /**

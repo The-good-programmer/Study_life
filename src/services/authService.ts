@@ -1,6 +1,7 @@
 import type { UserAccount, RegisterDTO, LoginDTO, AuthResponse, GoogleAuthDTO } from '../types';
 import { StorageService } from './storageService';
 import { ApiConfig } from './apiConfig';
+import { GoogleAuthService } from './googleAuthService';
 
 const ACCOUNTS_STORAGE_KEY = 'studify_accounts_v1';
 const ACTIVE_USER_STORAGE_KEY = 'studify_active_user_id';
@@ -144,17 +145,7 @@ export class AuthService {
           body: JSON.stringify(dto),
         });
         if (res.ok && res.data?.user && res.data?.token) {
-          ApiConfig.setToken(res.data.token);
-          const serverUser = res.data.user;
-          const accounts = this.getAllAccounts();
-          const existingIdx = accounts.findIndex(a => a.email === serverUser.email);
-          if (existingIdx >= 0) accounts[existingIdx] = serverUser;
-          else accounts.push(serverUser);
-          this.saveAccounts(accounts);
-          localStorage.setItem(ACTIVE_USER_STORAGE_KEY, serverUser.id);
-          StorageService.setActiveUserId(serverUser.id);
-          this.notifySubscribers(serverUser);
-          return { success: true, user: serverUser };
+          return { success: true, user: this.adoptServerSession(res.data.user, res.data.token) };
         } else if (res.error && res.status >= 400 && res.status < 500) {
           return { success: false, error: res.error };
         }
@@ -215,6 +206,22 @@ export class AuthService {
   }
 
   /**
+   * Stores a server-issued session token and makes the server's user the active local account.
+   */
+  private static adoptServerSession(serverUser: UserAccount, token: string): UserAccount {
+    ApiConfig.setToken(token);
+    const accounts = this.getAllAccounts();
+    const existingIdx = accounts.findIndex(a => a.email === serverUser.email);
+    if (existingIdx >= 0) accounts[existingIdx] = serverUser;
+    else accounts.push(serverUser);
+    this.saveAccounts(accounts);
+    localStorage.setItem(ACTIVE_USER_STORAGE_KEY, serverUser.id);
+    StorageService.setActiveUserId(serverUser.id);
+    this.notifySubscribers(serverUser);
+    return serverUser;
+  }
+
+  /**
    * Authenticates or registers a student using Google OAuth / Identity
    */
   public static async signInWithGoogle(dto: GoogleAuthDTO): Promise<AuthResponse> {
@@ -223,6 +230,36 @@ export class AuthService {
 
     if (!email) {
       return { success: false, error: 'Google authentication did not provide an email address.' };
+    }
+
+    // The server verifies the Google token itself and never trusts the profile fields we send.
+    if (dto.credential || dto.accessToken) {
+      try {
+        if (await ApiConfig.isServerReachable()) {
+          const res = await ApiConfig.request<{ user: UserAccount; token: string }>('/auth/google', {
+            method: 'POST',
+            body: JSON.stringify({
+              credential: dto.credential,
+              accessToken: dto.accessToken,
+              age: dto.age,
+              country: dto.country,
+              grade: dto.grade,
+              avatar: dto.avatar,
+              institution: dto.institution,
+            }),
+          });
+          if (res.ok && res.data?.user && res.data?.token) {
+            if (dto.migrateGuestData) {
+              StorageService.migrateGuestDataToUser(res.data.user.id);
+            }
+            return { success: true, user: this.adoptServerSession(res.data.user, res.data.token) };
+          } else if (res.error && res.status >= 400 && res.status < 500) {
+            return { success: false, error: res.error };
+          }
+        }
+      } catch (err) {
+        console.warn('[AuthService] Server Google sign-in failed, falling back to local profile:', err);
+      }
     }
 
     const accounts = this.getAllAccounts();
@@ -311,17 +348,7 @@ export class AuthService {
           body: JSON.stringify(dto),
         });
         if (res.ok && res.data?.user && res.data?.token) {
-          ApiConfig.setToken(res.data.token);
-          const serverUser = res.data.user;
-          const accounts = this.getAllAccounts();
-          const existingIdx = accounts.findIndex(a => a.email === serverUser.email);
-          if (existingIdx >= 0) accounts[existingIdx] = serverUser;
-          else accounts.push(serverUser);
-          this.saveAccounts(accounts);
-          localStorage.setItem(ACTIVE_USER_STORAGE_KEY, serverUser.id);
-          StorageService.setActiveUserId(serverUser.id);
-          this.notifySubscribers(serverUser);
-          return { success: true, user: serverUser };
+          return { success: true, user: this.adoptServerSession(res.data.user, res.data.token) };
         } else if (res.error && res.status >= 400 && res.status < 500) {
           return { success: false, error: res.error };
         }
@@ -410,6 +437,7 @@ export class AuthService {
    */
   public static logout(): void {
     ApiConfig.setToken(null);
+    GoogleAuthService.disableAutoSelect();
     localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
     StorageService.setActiveUserId(null);
     this.notifySubscribers(null);

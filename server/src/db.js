@@ -79,6 +79,23 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS deck_likes (
+    deck_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (deck_id, user_id),
+    FOREIGN KEY(deck_id) REFERENCES shared_decks(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS ai_usage (
+    user_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, day),
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON study_sessions(user_id);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   CREATE INDEX IF NOT EXISTS idx_decks_slug ON shared_decks(slug);

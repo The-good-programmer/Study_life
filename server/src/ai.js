@@ -4,6 +4,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
+import { db } from './db.js';
 
 const apiKey = process.env.GEMINI_API_KEY || '';
 let aiClient = null;
@@ -30,21 +31,49 @@ function supportsThinking(model) {
   return model.includes('2.5') || model.includes('3.');
 }
 
-// In-memory rate limiting map: ip -> timestamps[]
+// In-memory burst rate limiting: userId -> timestamps[]
 const rateLimits = new Map();
-const MAX_REQUESTS_PER_MINUTE = 40;
+const MAX_REQUESTS_PER_MINUTE = 20;
+const RATE_WINDOW_MS = 60000;
 
-export function checkRateLimit(ip) {
+export function checkRateLimit(key) {
   const now = Date.now();
-  const windowStart = now - 60000;
-  const history = (rateLimits.get(ip) || []).filter(t => t > windowStart);
+  const windowStart = now - RATE_WINDOW_MS;
+  const history = (rateLimits.get(key) || []).filter(t => t > windowStart);
 
   if (history.length >= MAX_REQUESTS_PER_MINUTE) {
+    rateLimits.set(key, history);
     return false;
   }
 
   history.push(now);
-  rateLimits.set(ip, history);
+  rateLimits.set(key, history);
+  return true;
+}
+
+// Drop idle keys so the map cannot grow without bound.
+setInterval(() => {
+  const windowStart = Date.now() - RATE_WINDOW_MS;
+  for (const [key, history] of rateLimits) {
+    if (!history.some(t => t > windowStart)) rateLimits.delete(key);
+  }
+}, RATE_WINDOW_MS).unref();
+
+/**
+ * Persistent per-user daily quota. Returns true and records one request when
+ * the user is under quota; returns false otherwise.
+ */
+export function consumeDailyQuota(userId) {
+  const limit = Number(process.env.AI_DAILY_QUOTA) || 200;
+  const day = new Date().toISOString().slice(0, 10);
+  const row = db.prepare('SELECT count FROM ai_usage WHERE user_id = ? AND day = ?').get(userId, day);
+  if (row && row.count >= limit) {
+    return false;
+  }
+  db.prepare(`
+    INSERT INTO ai_usage (user_id, day, count) VALUES (?, ?, 1)
+    ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1
+  `).run(userId, day);
   return true;
 }
 

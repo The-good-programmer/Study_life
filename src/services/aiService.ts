@@ -33,7 +33,7 @@ export class AIService {
    * Checks whether AI generation is available (via backend proxy or user-configured Gemini API key)
    */
   public static isAvailable(): boolean {
-    return Boolean(StorageService.getApiKey()) || ApiConfig.isServerReachableSync();
+    return Boolean(StorageService.getApiKey()) || ApiConfig.canUseServerAiSync();
   }
 
   private static getClient(customKey?: string): GoogleGenAI | null {
@@ -50,7 +50,7 @@ export class AIService {
 
   /**
    * Unified generation entry point:
-   * 1. Attempts backend server proxy (/api/ai/generate) if server is reachable.
+   * 1. Attempts backend server proxy (/api/ai/generate) if the server is reachable and the user is signed in.
    * 2. Otherwise falls back to client-side GoogleGenAI client (if user entered API key).
    * 3. Throws if neither is available so calling functions can execute their cognitive heuristics.
    */
@@ -62,7 +62,7 @@ export class AIService {
   ): Promise<string> {
     // 1. Try server proxy if server is reachable
     try {
-      const isServerUp = await ApiConfig.isServerReachable();
+      const isServerUp = await ApiConfig.canUseServerAi();
       if (isServerUp) {
         const res = await ApiConfig.request<{ text: string }>('/ai/generate', {
           method: 'POST',
@@ -542,7 +542,7 @@ Deliver your official oral Viva Voce verdict to the candidate in 3 concise sente
 
     // 1. Try server SSE stream if server is reachable
     try {
-      const isServerUp = await ApiConfig.isServerReachable();
+      const isServerUp = await ApiConfig.canUseServerAi();
       if (isServerUp) {
         let accumulated = '';
         const streamResult = await ApiConfig.streamRequest(

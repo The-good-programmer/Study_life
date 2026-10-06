@@ -2,6 +2,7 @@
  * Community Deck Marketplace & Public Sharing Routes
  */
 
+import crypto from 'node:crypto';
 import { db } from '../db.js';
 import { getAuthUser } from '../auth.js';
 
@@ -39,6 +40,10 @@ export function handleDeckRoutes(req, res, pathname, body, searchParams) {
   // 2. SHARE / PUBLISH A DECK
   if (pathname === '/api/decks/share' && req.method === 'POST') {
     const user = getAuthUser(req);
+    if (!user) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Sign in to publish decks to the community.' }));
+    }
     const { title, subject, description, session, cards } = body || {};
 
     if (!title || !session) {
@@ -50,15 +55,15 @@ export function handleDeckRoutes(req, res, pathname, body, searchParams) {
       ? cards.length
       : (session.concepts?.flatMap(c => c.retrievalCards || []) || []).length;
 
-    const slug = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${Math.random().toString(36).substring(2, 6)}`;
-    const deckId = `deck_pub_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const authorName = user ? user.name : 'Community Scholar';
-    const authorId = user ? user.id : null;
+    const slug = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${crypto.randomBytes(3).toString('hex')}`;
+    const deckId = `deck_pub_${crypto.randomUUID()}`;
+    const authorName = user.name;
+    const authorId = user.id;
     const now = new Date().toISOString();
 
     const insertStmt = db.prepare(`
       INSERT INTO shared_decks (id, slug, author_id, author_name, title, subject, description, card_count, likes, deck_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `);
 
     insertStmt.run(
@@ -84,7 +89,35 @@ export function handleDeckRoutes(req, res, pathname, body, searchParams) {
     }));
   }
 
-  // 3. GET A SPECIFIC DECK BY ID OR SLUG
+  // 3. LIKE A DECK (once per signed-in user)
+  const likeMatch = /^\/api\/decks\/([^/]+)\/like$/.exec(pathname);
+  if (likeMatch && req.method === 'POST') {
+    const user = getAuthUser(req);
+    if (!user) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Sign in to like decks.' }));
+    }
+
+    const identifier = decodeURIComponent(likeMatch[1]);
+    const row = db.prepare('SELECT id FROM shared_decks WHERE id = ? OR slug = ?').get(identifier, identifier);
+    if (!row) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: 'Community deck not found.' }));
+    }
+
+    const inserted = db.prepare(
+      'INSERT OR IGNORE INTO deck_likes (deck_id, user_id, created_at) VALUES (?, ?, ?)'
+    ).run(row.id, user.id, new Date().toISOString());
+    if (inserted.changes > 0) {
+      db.prepare('UPDATE shared_decks SET likes = likes + 1 WHERE id = ?').run(row.id);
+    }
+
+    const { likes } = db.prepare('SELECT likes FROM shared_decks WHERE id = ?').get(row.id);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ success: true, likes, liked: true }));
+  }
+
+  // 4. GET A SPECIFIC DECK BY ID OR SLUG
   if (pathname.startsWith('/api/decks/') && req.method === 'GET') {
     const identifier = pathname.replace('/api/decks/', '').trim();
     if (!identifier) {
@@ -105,9 +138,6 @@ export function handleDeckRoutes(req, res, pathname, body, searchParams) {
       session = JSON.parse(row.deck_json);
     } catch {}
 
-    // Increment like / view counter
-    db.prepare('UPDATE shared_decks SET likes = likes + 1 WHERE id = ?').run(row.id);
-
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       success: true,
@@ -119,7 +149,7 @@ export function handleDeckRoutes(req, res, pathname, body, searchParams) {
         subject: row.subject,
         description: row.description,
         cardCount: row.card_count,
-        likes: row.likes + 1,
+        likes: row.likes,
         createdAt: row.created_at,
         session,
       }

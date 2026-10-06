@@ -107,6 +107,7 @@ export function App() {
       GoogleAuthService.initOneTapAutoLogin(async (payload) => {
         const res = await AuthService.signInWithGoogle(payload);
         if (res.success && res.user) {
+          GoogleAuthService.cancelOneTap();
           setCurrentUser(res.user);
         }
       });
