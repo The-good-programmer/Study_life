@@ -21,6 +21,7 @@ export type RewardEvent =
   | { kind: 'leech-cure'; method: 'mnemonic' | 'split' }
   | { kind: 'viva-round' }
   | { kind: 'viva-verdict' }
+  | { kind: 'explain' }
   | { kind: 'priming' }
   | { kind: 'diagnostic' };
 
@@ -65,6 +66,10 @@ export const computePayout = (event: RewardEvent): Payout => {
       return { xp: 25, tokens: 0 };
     case 'viva-verdict':
       return { xp: 100, tokens: 0 };
+    case 'explain':
+      // A written explanation pays for the attempt; its grade comes from a model the
+      // learner can lean on, so the grade itself is not paid for.
+      return { xp: 30, tokens: 0 };
     case 'priming':
       return { xp: 20, tokens: 0 };
     case 'diagnostic':
@@ -84,6 +89,7 @@ export const DAILY_SOFT_CAPS: Record<RewardKind, { xp: number; tokens: number }>
   'leech-cure': { xp: 200, tokens: 100 },
   'viva-round': { xp: 150, tokens: Infinity },
   'viva-verdict': { xp: 200, tokens: Infinity },
+  explain: { xp: 120, tokens: Infinity },
   priming: { xp: 120, tokens: Infinity },
   diagnostic: { xp: 90, tokens: Infinity },
 };

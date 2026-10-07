@@ -73,6 +73,7 @@ describe('computePayout', () => {
       { kind: 'leech-cure', method: 'mnemonic' },
       { kind: 'viva-round' },
       { kind: 'viva-verdict' },
+      { kind: 'explain' },
       { kind: 'priming' },
       { kind: 'diagnostic' },
     ];

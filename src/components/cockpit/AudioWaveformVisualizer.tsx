@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { cn } from '../../utils/cn';
 
 interface AudioWaveformVisualizerProps {
   isActive: boolean;
@@ -7,6 +8,7 @@ interface AudioWaveformVisualizerProps {
   className?: string;
 }
 
+/** A small live level meter: green while the learner speaks, brand while the examiner reads aloud. */
 export const AudioWaveformVisualizer: React.FC<AudioWaveformVisualizerProps> = ({
   isActive,
   mode,
@@ -21,48 +23,34 @@ export const AudioWaveformVisualizer: React.FC<AudioWaveformVisualizerProps> = (
     const interval = setInterval(() => {
       setHeights(
         Array.from({ length: barCount }, (_, i) => {
-          // Create rhythmic, wavy fluctuation centered around the middle bars
+          // Taller bars in the middle, like a voice level meter.
           const centerDist = Math.abs(i - barCount / 2) / (barCount / 2);
-          const baseHeight = 20 + Math.random() * 65 * (1 - centerDist * 0.4);
-          return Math.round(baseHeight);
-        })
+          return Math.round(20 + Math.random() * 65 * (1 - centerDist * 0.4));
+        }),
       );
     }, 90);
 
     return () => clearInterval(interval);
   }, [isActive, barCount]);
 
-  const barColor =
-    mode === 'candidate'
-      ? 'bg-gradient-to-t from-emerald-500 to-teal-300 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
-      : 'bg-gradient-to-t from-violet-600 to-indigo-300 shadow-[0_0_8px_rgba(139,92,246,0.5)]';
+  const barColor = mode === 'candidate' ? 'bg-success' : 'bg-brand';
 
   return (
-    <div className={`flex items-center justify-center gap-1 h-10 px-3 py-1 rounded-full bg-slate-900/60 border border-slate-700/60 backdrop-blur-sm ${className}`}>
-      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 mr-2 flex items-center gap-1.5">
-        <span
-          className={`w-2 h-2 rounded-full ${
-            isActive
-              ? mode === 'candidate'
-                ? 'bg-emerald-400 animate-ping'
-                : 'bg-violet-400 animate-pulse'
-              : 'bg-slate-600'
-          }`}
-        />
-        {mode === 'candidate' ? 'MIC AUDIO' : 'EXAMINER VOICE'}
-      </span>
-      <div className="flex items-center gap-0.5 h-7">
+    <div
+      className={cn('inline-flex h-8 items-center gap-2 rounded-full border border-line bg-canvas px-3', className)}
+      role="status"
+      aria-label={mode === 'candidate' ? 'Listening' : 'Reading aloud'}
+    >
+      <span className="text-xs font-medium text-ink-subtle">{mode === 'candidate' ? 'Listening' : 'Speaking'}</span>
+      <span className="flex h-5 items-center gap-0.5" aria-hidden="true">
         {(isActive ? heights : Array<number>(barCount).fill(12)).map((h, idx) => (
-          <div
+          <span
             key={idx}
-            className={`w-1 rounded-full transition-all duration-100 ease-out ${barColor}`}
-            style={{
-              height: `${isActive ? h : 12}%`,
-              opacity: isActive ? 0.35 + (h / 100) * 0.65 : 0.3,
-            }}
+            className={cn('w-0.5 rounded-full transition-[height] duration-100 ease-out', barColor)}
+            style={{ height: `${isActive ? h : 12}%`, opacity: isActive ? 0.35 + (h / 100) * 0.65 : 0.3 }}
           />
         ))}
-      </div>
+      </span>
     </div>
   );
 };

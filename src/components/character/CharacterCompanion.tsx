@@ -214,27 +214,23 @@ export const CharacterCompanion: React.FC<CharacterCompanionProps> = ({
         </div>
 
         {showSpeechBubble && (
-          <div className="relative flex-1 bg-slate-900/90 border border-slate-700/60 rounded-2xl p-3 shadow-lg max-w-sm">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <span className="text-xs font-bold text-indigo-300 flex items-center gap-1">
-                <span>{character.name}</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-mono">
-                  Lv.{character.level}
-                </span>
+          <div className="relative min-w-0 flex-1 rounded-2xl border border-line bg-surface px-3.5 py-3">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-ink">
+                <span className="truncate">{character.name}</span>
+                <span className="shrink-0 tabular-nums text-ink-subtle">Level {character.level}</span>
               </span>
               <button
                 type="button"
                 onClick={handleOpenStudio}
-                className="text-[11px] text-slate-400 hover:text-indigo-300 flex items-center gap-1 transition-colors cursor-pointer"
-                title="Customize Character"
+                className="inline-flex shrink-0 items-center gap-1 text-xs text-ink-subtle transition-colors hover:text-ink cursor-pointer"
+                title="Change your avatar"
               >
-                <Sliders className="w-3 h-3" />
-                <span>Edit</span>
+                <Sliders className="h-3 w-3" aria-hidden="true" />
+                Edit
               </button>
             </div>
-            <p className="text-xs text-slate-300 leading-snug">
-              {currentSpeech}
-            </p>
+            <p className="text-[13px] leading-snug text-ink-muted">{currentSpeech}</p>
           </div>
         )}
       </div>

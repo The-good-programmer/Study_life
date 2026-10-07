@@ -12,6 +12,7 @@ export const REWARD_LABELS: Record<RewardKind, string> = {
   'leech-cure': 'Fixed hard cards',
   'viva-round': 'Oral exam rounds',
   'viva-verdict': 'Oral exam verdicts',
-  priming: 'Priming',
+  explain: 'Written explanations',
+  priming: 'Overviews',
   diagnostic: 'Warm-up checks',
 };

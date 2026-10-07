@@ -18,9 +18,12 @@ import {
   Check,
   Copy
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { ConceptCheckpoint } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
+import { cn } from '../../utils/cn';
+import { Button, IconButton } from '../ui/primitives';
 
 type Tool = 'pen' | 'arrow' | 'rect' | 'circle' | 'text' | 'eraser';
 
@@ -85,6 +88,13 @@ export const DualCodingWhiteboard: React.FC<DualCodingWhiteboardProps> = ({
   const [currentPoints, setCurrentPoints] = useState<Point[]>([]);
   const [startPos, setStartPos] = useState<Point | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(noticeTimer.current), []);
+  const showNotice = useCallback((text: string) => {
+    clearTimeout(noticeTimer.current);
+    setSavedNotice(text);
+    noticeTimer.current = setTimeout(() => setSavedNotice(null), 2800);
+  }, []);
 
   // Load existing saved diagram if present
   // Load existing saved diagram if present (from IndexedDB or localStorage)
@@ -419,11 +429,12 @@ export const DualCodingWhiteboard: React.FC<DualCodingWhiteboardProps> = ({
     }
   };
 
+  // Clearing is undoable, so it does not ask first.
   const handleClearAll = () => {
-    if (confirm('Clear the entire whiteboard?')) {
-      setElements([]);
-      pushToHistory([]);
-    }
+    if (elements.length === 0) return;
+    setElements([]);
+    pushToHistory([]);
+    showNotice('Cleared. Undo brings it back.');
   };
 
   // Insert AI / Concept Schematic Blueprint
@@ -507,8 +518,7 @@ export const DualCodingWhiteboard: React.FC<DualCodingWhiteboardProps> = ({
     setElements(merged);
     pushToHistory(merged);
     soundEngine.playSocraticChallengeChime();
-    setSavedNotice('Schematic Blueprint dropped onto canvas!');
-    setTimeout(() => setSavedNotice(null), 2500);
+    showNotice('Template added. Draw over it or move on.');
   };
 
   // Save Diagram to Concept
@@ -521,8 +531,7 @@ export const DualCodingWhiteboard: React.FC<DualCodingWhiteboardProps> = ({
       onSaveDiagram(dataUrl);
     }
     soundEngine.playCompletionChime();
-    setSavedNotice('Visual diagram saved to this concept!');
-    setTimeout(() => setSavedNotice(null), 3000);
+    showNotice('Sketch saved. It will show up when you review this concept.');
   };
 
   // Export Diagram as PNG File
@@ -542,262 +551,136 @@ export const DualCodingWhiteboard: React.FC<DualCodingWhiteboardProps> = ({
   const handleCopyClipboard = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    try {
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': blob })
-        ]);
-        setSavedNotice('Diagram image copied to clipboard!');
-        setTimeout(() => setSavedNotice(null), 2500);
-      });
-    } catch (err) {
-      console.warn('Clipboard write failed:', err);
-    }
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        showNotice('Sketch copied as an image.');
+      } catch (err) {
+        console.warn('Clipboard write failed:', err);
+        showNotice('Could not copy. Use Download instead.');
+      }
+    });
   };
+
+  const toolButton = (tool: Tool, Icon: LucideIcon, label: string) => (
+    <button
+      key={tool}
+      type="button"
+      onClick={() => setActiveTool(tool)}
+      aria-pressed={activeTool === tool}
+      aria-label={label}
+      title={label}
+      className={cn(
+        'inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors cursor-pointer',
+        activeTool === tool ? 'bg-surface-hover text-ink shadow-sm' : 'text-ink-subtle hover:text-ink',
+      )}
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+    </button>
+  );
 
   return (
     <div
-      className={`rounded-3xl glass-panel border transition-all duration-300 flex flex-col overflow-hidden relative ${
-        isExpanded
-          ? 'fixed inset-4 sm:inset-10 z-50 bg-[#090a10]/95 backdrop-blur-2xl shadow-2xl border-purple-500/40'
-          : 'border-white/[0.08] shadow-xl'
-      }`}
+      className={cn(
+        'relative flex flex-col overflow-hidden rounded-2xl border bg-surface-solid',
+        isExpanded ? 'fixed inset-3 z-50 border-line-strong shadow-2xl sm:inset-8' : 'border-line',
+      )}
     >
-      {/* Notice Pill */}
       {savedNotice && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-full bg-emerald-600 text-white font-bold text-xs shadow-xl animate-fadeIn flex items-center gap-1.5">
-          <Check className="w-3.5 h-3.5" />
-          <span>{savedNotice}</span>
+        <div
+          role="status"
+          className="absolute left-1/2 top-16 z-30 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-line-strong bg-surface-solid px-3.5 py-1.5 text-xs font-medium text-ink shadow-lg animate-fadeIn"
+        >
+          <Check className="h-3.5 w-3.5 text-success" aria-hidden="true" />
+          {savedNotice}
         </div>
       )}
 
-      {/* Whiteboard Header & Controls Bar */}
-      <div className="p-3 sm:p-4 border-b border-white/[0.08] bg-slate-950/70 backdrop-blur-md flex flex-wrap items-center justify-between gap-3">
-        
-        {/* Left: Title & Dual-Coding Badge */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
-            <Pen className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-xs sm:text-sm text-white font-display">
-                Feynman Dual-Coding Canvas
-              </span>
-              <span className="text-[11px] font-mono uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold">
-                Paivio Theory
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 hidden sm:block">
-              Pair spatial schemas with verbal memory for up to 200% deeper consolidation.
-            </p>
-          </div>
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5">
+        <div className="mr-auto flex min-w-0 items-center gap-2 pl-1">
+          <Pen className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden="true" />
+          <span className="truncate text-[13px] font-medium text-ink">Sketch</span>
+          <span className="hidden truncate text-xs text-ink-subtle md:inline">Boxes, arrows and labels help it stick.</span>
         </div>
 
-        {/* Center: Tools Selection Pills */}
-        <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-2xl border border-white/[0.08] shadow-inner">
-          <button
-            onClick={() => setActiveTool('pen')}
-            className={`p-2 rounded-xl text-xs font-bold transition-all ${
-              activeTool === 'pen' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Freehand Vector Brush"
-          >
-            <Pen className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={() => setActiveTool('arrow')}
-            className={`p-2 rounded-xl text-xs font-bold transition-all ${
-              activeTool === 'arrow' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Causal Vector Arrow (A -> B)"
-          >
-            <MoveRight className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={() => setActiveTool('rect')}
-            className={`p-2 rounded-xl text-xs font-bold transition-all ${
-              activeTool === 'rect' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Process / Compartment Box"
-          >
-            <Square className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={() => setActiveTool('circle')}
-            className={`p-2 rounded-xl text-xs font-bold transition-all ${
-              activeTool === 'circle' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Concept Hub / Node"
-          >
-            <Circle className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={() => setActiveTool('text')}
-            className={`p-2 rounded-xl text-xs font-bold transition-all ${
-              activeTool === 'text' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Text & Formula Annotation"
-          >
-            <Type className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={() => setActiveTool('eraser')}
-            className={`p-2 rounded-xl text-xs font-bold transition-all ${
-              activeTool === 'eraser' ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30' : 'text-slate-400 hover:text-white'
-            }`}
-            title="Stroke Eraser"
-          >
-            <Eraser className="w-3.5 h-3.5" />
-          </button>
+        <div className="flex items-center gap-0.5 rounded-xl border border-line bg-canvas p-0.5" role="group" aria-label="Drawing tools">
+          {toolButton('pen', Pen, 'Pen')}
+          {toolButton('arrow', MoveRight, 'Arrow')}
+          {toolButton('rect', Square, 'Box')}
+          {toolButton('circle', Circle, 'Circle')}
+          {toolButton('text', Type, 'Text')}
+          {toolButton('eraser', Eraser, 'Eraser')}
         </div>
 
-        {/* Color Palette & Stroke Width */}
-        <div className="flex items-center gap-2">
-          {/* Colors */}
-          <div className="flex items-center gap-1.5 bg-slate-900/90 p-1.5 rounded-2xl border border-white/[0.08]">
-            {COLOR_PALETTE.map(col => (
-              <button
-                key={col.hex}
-                onClick={() => setCurrentColor(col.hex)}
-                className={`w-4 h-4 rounded-full transition-transform ${
-                  currentColor === col.hex ? 'scale-125 ring-2 ring-white ring-offset-2 ring-offset-slate-900' : 'hover:scale-110'
-                }`}
-                style={{ backgroundColor: col.hex }}
-                title={col.label}
-              />
-            ))}
-          </div>
-
-          {/* Stroke Width Selector */}
-          <div className="hidden lg:flex items-center gap-1 bg-slate-900/90 p-1 rounded-2xl border border-white/[0.08] text-[11px] text-slate-400">
-            {STROKE_WIDTHS.map(sw => (
-              <button
-                key={sw.value}
-                onClick={() => setCurrentWidth(sw.value)}
-                className={`px-2 py-0.5 rounded-xl font-mono ${
-                  currentWidth === sw.value ? 'bg-indigo-600 text-white font-bold' : 'hover:text-white'
-                }`}
-              >
-                {sw.label}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-1.5 rounded-xl border border-line bg-canvas px-2 py-1.5" role="group" aria-label="Colour">
+          {COLOR_PALETTE.map(col => (
+            <button
+              key={col.hex}
+              type="button"
+              onClick={() => setCurrentColor(col.hex)}
+              aria-pressed={currentColor === col.hex}
+              aria-label={col.label}
+              title={col.label}
+              className={cn(
+                'h-4 w-4 rounded-full transition-transform cursor-pointer',
+                currentColor === col.hex ? 'scale-110 ring-2 ring-ink ring-offset-2 ring-offset-canvas' : 'hover:scale-110',
+              )}
+              style={{ backgroundColor: col.hex }}
+            />
+          ))}
         </div>
 
-        {/* Action Buttons: Blueprint, Undo/Redo, Save, Expand */}
-        <div className="flex items-center gap-1.5">
-          {/* Schematic Blueprint Dropper */}
-          <button
-            onClick={handleInsertBlueprint}
-            className="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
-            title="Drop pre-configured visual concept skeleton onto canvas"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Schematic Blueprint</span>
-          </button>
+        <div className="hidden items-center gap-0.5 rounded-xl border border-line bg-canvas p-0.5 lg:flex" role="group" aria-label="Line width">
+          {STROKE_WIDTHS.map(sw => (
+            <button
+              key={sw.value}
+              type="button"
+              onClick={() => setCurrentWidth(sw.value)}
+              aria-pressed={currentWidth === sw.value}
+              className={cn(
+                'h-8 rounded-lg px-2.5 text-xs font-medium transition-colors cursor-pointer',
+                currentWidth === sw.value ? 'bg-surface-hover text-ink shadow-sm' : 'text-ink-subtle hover:text-ink',
+              )}
+            >
+              {sw.label}
+            </button>
+          ))}
+        </div>
 
-          {/* Undo */}
-          <button
-            onClick={handleUndo}
-            disabled={historyIndex < 0}
-            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-slate-300 border border-white/[0.08] transition-all"
-            title="Undo"
-          >
-            <Undo2 className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Redo */}
-          <button
-            onClick={handleRedo}
-            disabled={historyIndex >= history.length - 1}
-            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-slate-300 border border-white/[0.08] transition-all"
-            title="Redo"
-          >
-            <Redo2 className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Clear */}
-          <button
-            onClick={handleClearAll}
-            className="p-1.5 rounded-xl bg-slate-900 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-white/[0.08] transition-all"
-            title="Clear Canvas"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Save to Concept */}
-          <button
-            onClick={handleSaveDiagram}
-            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/30"
-            title="Attach this visual drawing to the current concept checkpoint"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Save Sketch</span>
-          </button>
-
-          {/* Copy to Clipboard */}
-          <button
-            onClick={handleCopyClipboard}
-            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/[0.08] transition-all"
-            title="Copy Diagram to Clipboard"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Download PNG */}
-          <button
-            onClick={handleDownloadPNG}
-            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/[0.08] transition-all"
-            title="Export PNG Diagram"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Grid Toggle */}
-          <button
-            onClick={() => setGridPattern(prev => prev === 'dots' ? 'grid' : prev === 'grid' ? 'none' : 'dots')}
-            className={`p-1.5 rounded-xl border transition-all ${
-              gridPattern !== 'none' ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40' : 'bg-slate-900 text-slate-400 border-white/[0.08]'
-            }`}
-            title={`Toggle Background: ${gridPattern}`}
-          >
-            <Grid className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Fullscreen Expand / Contract */}
-          <button
+        <div className="flex items-center gap-0.5">
+          <IconButton icon={Undo2} label="Undo" onClick={handleUndo} disabled={historyIndex < 0} className="disabled:opacity-40" />
+          <IconButton icon={Redo2} label="Redo" onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="disabled:opacity-40" />
+          <IconButton icon={Trash2} label="Clear" onClick={handleClearAll} disabled={elements.length === 0} className="disabled:opacity-40" />
+          <IconButton icon={Copy} label="Copy as image" onClick={handleCopyClipboard} />
+          <IconButton icon={Download} label="Download PNG" onClick={handleDownloadPNG} />
+          <IconButton
+            icon={Grid}
+            label={gridPattern === 'dots' ? 'Background: dots' : gridPattern === 'grid' ? 'Background: grid' : 'Background: plain'}
+            onClick={() => setGridPattern(prev => (prev === 'dots' ? 'grid' : prev === 'grid' ? 'none' : 'dots'))}
+          />
+          <IconButton
+            icon={isExpanded ? Minimize2 : Maximize2}
+            label={isExpanded ? 'Exit full screen' : 'Full screen'}
             onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/[0.08] transition-all"
-            title={isExpanded ? 'Contract Whiteboard' : 'Expand Fullscreen'}
-          >
-            {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-          </button>
+          />
         </div>
-
       </div>
 
-      {/* Main Drawing Surface */}
-      <div 
-        ref={containerRef} 
-        className={`relative w-full overflow-hidden select-none cursor-crosshair ${
-          isExpanded ? 'flex-1 min-h-[500px]' : 'h-[360px] sm:h-[420px]'
-        }`}
+      {/* Drawing surface: a dark board in both themes, so the pen colours always read. */}
+      <div
+        ref={containerRef}
+        className={cn('relative w-full select-none overflow-hidden cursor-crosshair', isExpanded ? 'min-h-[400px] flex-1' : 'h-[360px] sm:h-[420px]')}
         style={{
-          backgroundColor: '#07090e',
-          backgroundImage: 
+          backgroundColor: '#0b0c11',
+          backgroundImage:
             gridPattern === 'dots'
-              ? 'radial-gradient(circle, rgba(255, 255, 255, 0.12) 1px, transparent 1px)'
+              ? 'radial-gradient(circle, rgba(255, 255, 255, 0.11) 1px, transparent 1px)'
               : gridPattern === 'grid'
-              ? 'linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px)'
-              : 'none',
-          backgroundSize: gridPattern === 'dots' ? '24px 24px' : gridPattern === 'grid' ? '30px 30px' : 'auto'
+                ? 'linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px)'
+                : 'none',
+          backgroundSize: gridPattern === 'dots' ? '24px 24px' : gridPattern === 'grid' ? '30px 30px' : 'auto',
         }}
       >
         <canvas
@@ -808,33 +691,32 @@ export const DualCodingWhiteboard: React.FC<DualCodingWhiteboardProps> = ({
           onTouchStart={handlePointerDown}
           onTouchMove={handlePointerMove}
           onTouchEnd={handlePointerUp}
-          className="w-full h-full block touch-none"
+          className="block h-full w-full touch-none"
+          aria-label={`Sketch area for ${concept.title}`}
         />
 
-        {/* Ambient watermark prompt */}
         {elements.length === 0 && (
-          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center text-center p-6 text-slate-600 space-y-2">
-            <Sparkles className="w-8 h-8 text-slate-700 animate-pulse" />
-            <div className="text-xs font-semibold text-slate-400 font-display">
-              Sketch your mental model or tap "Schematic Blueprint" to start
-            </div>
-            <p className="text-[11px] text-slate-600 max-w-xs leading-relaxed">
-              Use arrows to show flow, boxes for functional compartments, and labels to annotate mechanisms.
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+            <p className="text-[13px] font-medium text-slate-300">Draw how the idea works</p>
+            <p className="mt-1 max-w-xs text-xs leading-relaxed text-slate-500">
+              Use arrows for cause and effect, boxes for parts, and text for labels. Or start from a template.
             </p>
           </div>
         )}
       </div>
 
-      {/* Footer Info Ribbon */}
-      <div className="px-4 py-2 border-t border-white/[0.06] bg-slate-950/80 text-[11px] text-slate-500 font-mono flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span>Active: {activeTool.toUpperCase()}</span>
-          <span>•</span>
-          <span>{elements.length} elements</span>
-          <span>•</span>
-          <span>DPR: {typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1}x</span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-3 py-2.5">
+        <span className="pl-1 text-xs tabular-nums text-ink-subtle">
+          {elements.length} {elements.length === 1 ? 'shape' : 'shapes'}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" icon={Sparkles} onClick={handleInsertBlueprint}>
+            Start from a template
+          </Button>
+          <Button size="sm" variant="primary" icon={Save} onClick={handleSaveDiagram} disabled={elements.length === 0}>
+            Save sketch
+          </Button>
         </div>
-        <span className="hidden sm:inline">Saved diagrams appear during card retrieval & review</span>
       </div>
     </div>
   );

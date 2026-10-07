@@ -73,7 +73,7 @@ const BUTTON_SIZES: Record<ButtonSize, string> = {
   lg: 'h-12 px-5 text-[15px] gap-2.5 rounded-xl',
 };
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends React.ComponentPropsWithRef<'button'> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   icon?: LucideIcon;
