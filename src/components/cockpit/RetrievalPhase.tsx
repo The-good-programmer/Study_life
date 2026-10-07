@@ -778,9 +778,9 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                               ? 'border-danger bg-danger-soft'
                               : 'border-line opacity-50';
                         const badge = isAnswerRevealed && isThisCorrect
-                          ? 'bg-success text-brand-ink'
+                          ? 'bg-success text-success-ink'
                           : isAnswerRevealed && isSelected
-                            ? 'bg-danger text-brand-ink'
+                            ? 'bg-danger text-danger-ink'
                             : 'bg-surface-hover text-ink-muted';
                         return (
                           <button
@@ -835,7 +835,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                               }}
                               aria-label={isRevealed ? `Label: ${mask.label || currentCard.answer}` : `Reveal hidden label ${idx + 1}`}
                               className={`absolute flex items-center justify-center rounded-lg p-1 text-[11px] font-semibold shadow-lg transition-colors cursor-pointer ${
-                                isRevealed ? 'bg-success text-brand-ink' : 'animate-pulse bg-gold text-[#2a1d00] ring-2 ring-gold/40'
+                                isRevealed ? 'bg-success text-success-ink' : 'animate-pulse bg-gold text-[#2a1d00] ring-2 ring-gold/40'
                               }`}
                               style={box}
                             >

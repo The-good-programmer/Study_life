@@ -441,7 +441,7 @@ export class ExportService {
     const html = this.generatePrintableHTML(session);
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
     const slug = session.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    this.triggerDownload(blob, `axon-study-sheet-${slug}.html`);
+    this.download(blob, `studify-study-sheet-${slug}.html`);
   }
 
   /**
@@ -455,7 +455,7 @@ export class ExportService {
     lines.push(`title: "${session.title}"`);
     lines.push(`category: "${session.category}"`);
     lines.push(`created: ${new Date().toISOString()}`);
-    lines.push('tags: [axon, cognitive-science, active-recall, fsrs]');
+    lines.push('tags: [studify, cognitive-science, active-recall, fsrs]');
     lines.push('---\n');
 
     lines.push(`# ${session.title}\n`);
@@ -503,7 +503,7 @@ export class ExportService {
     const md = this.exportToMarkdown(session);
     const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
     const slug = session.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    this.triggerDownload(blob, `axon-${slug}.md`);
+    this.download(blob, `studify-${slug}.md`);
   }
 
   /**
@@ -519,7 +519,7 @@ export class ExportService {
           back += `<br><br><em>Cognitive Detail:</em> ${c.explanation.replace(/\t/g, ' ').replace(/\n/g, '<br>')}`;
         }
         const hint = (c.hint || '').replace(/\t/g, ' ').replace(/\n/g, '<br>');
-        const tags = `axon ${session.category.toLowerCase().replace(/\s+/g, '-')} ${concept.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+        const tags = `studify ${session.category.toLowerCase().replace(/\s+/g, '-')} ${concept.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
 
         lines.push(`${front}\t${back}\t${hint}\t${tags}`);
       });
@@ -534,7 +534,7 @@ export class ExportService {
     const tsv = this.exportToAnkiTSV(session);
     const blob = new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8' });
     const slug = session.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    this.triggerDownload(blob, `axon-anki-${slug}.tsv`);
+    this.download(blob, `studify-anki-${slug}.tsv`);
   }
 
   /**
@@ -551,10 +551,11 @@ export class ExportService {
     const json = this.exportToJSON(session);
     const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
     const slug = session.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    this.triggerDownload(blob, `axon-deck-${slug}.json`);
+    this.download(blob, `studify-deck-${slug}.json`);
   }
 
-  private static triggerDownload(blob: Blob, filename: string): void {
+  /** Saves a file to the learner's device. */
+  public static download(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -562,6 +563,7 @@ export class ExportService {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Revoking straight away can cancel the download in some browsers.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 }

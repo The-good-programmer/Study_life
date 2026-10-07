@@ -16,6 +16,19 @@ const STORAGE_KEYS = {
   EARNINGS: 'studify_earnings_v1',
 };
 
+/** Study data stored per profile (guest or account): what a reset or account deletion removes. */
+const PROFILE_DATA_KEYS = [
+  STORAGE_KEYS.SESSIONS,
+  STORAGE_KEYS.CARDS,
+  STORAGE_KEYS.STATS,
+  STORAGE_KEYS.ACTIVITY,
+  STORAGE_KEYS.EXAM_REPORTS,
+  STORAGE_KEYS.INTERLEAVING_REPORTS,
+  STORAGE_KEYS.EARNINGS,
+  STORAGE_KEYS.DIAGRAMS,
+  STORAGE_KEYS.FOLDERS,
+];
+
 const LEVEL_TITLES = [
   'Synapse Builder',
   'Deep Worker',
@@ -78,10 +91,35 @@ export class StorageService {
     }
   }
 
-  /** Removes spilled copies of a key, including their IndexedDB mirror. */
-  private static purgeOverflow(key: string): void {
+  /** Removes spilled copies of a key, including their IndexedDB mirror. Resolves once that is committed. */
+  private static purgeOverflow(key: string): Promise<void> {
     this.overflow.delete(key);
-    IndexedDbService.removeItem(this.OVERFLOW_PREFIX + key).catch(() => {});
+    return IndexedDbService.removeItem(this.OVERFLOW_PREFIX + key).then(
+      () => undefined,
+      () => undefined,
+    );
+  }
+
+  /** Removes one profile's study data from localStorage and the IndexedDB overflow. */
+  private static removeProfileData(suffix: string, bases: readonly string[] = PROFILE_DATA_KEYS): Promise<void> {
+    const removals = bases.map(base => {
+      const key = `${base}${suffix}`;
+      localStorage.removeItem(key);
+      return this.purgeOverflow(key);
+    });
+    return Promise.all(removals).then(() => undefined);
+  }
+
+  /**
+   * Deletes the active profile's study data: decks, cards, stats, history, reports and
+   * subjects. The earnings log stays with the wallet, so a reset cannot reopen today's
+   * pay caps. Preferences and other profiles are untouched. Reload the page afterwards
+   * so in-memory services start clean.
+   */
+  public static async clearStudyData(): Promise<void> {
+    const suffix = this.activeUserId ? `_${this.activeUserId}` : '';
+    await this.removeProfileData(suffix, PROFILE_DATA_KEYS.filter(base => base !== STORAGE_KEYS.EARNINGS));
+    this.notifyMutation();
   }
 
   /**
@@ -1018,21 +1056,7 @@ export class StorageService {
    */
   public static clearGuestData(): void {
     try {
-      localStorage.removeItem(STORAGE_KEYS.SESSIONS);
-      this.purgeOverflow(STORAGE_KEYS.SESSIONS);
-      localStorage.removeItem(STORAGE_KEYS.CARDS);
-      this.purgeOverflow(STORAGE_KEYS.CARDS);
-      localStorage.removeItem(STORAGE_KEYS.STATS);
-      this.purgeOverflow(STORAGE_KEYS.STATS);
-      localStorage.removeItem(STORAGE_KEYS.ACTIVITY);
-      this.purgeOverflow(STORAGE_KEYS.ACTIVITY);
-      localStorage.removeItem(STORAGE_KEYS.EXAM_REPORTS);
-      this.purgeOverflow(STORAGE_KEYS.EXAM_REPORTS);
-      localStorage.removeItem(STORAGE_KEYS.INTERLEAVING_REPORTS);
-      this.purgeOverflow(STORAGE_KEYS.INTERLEAVING_REPORTS);
-      localStorage.removeItem(STORAGE_KEYS.EARNINGS);
-      this.purgeOverflow(STORAGE_KEYS.EARNINGS);
-      localStorage.removeItem(STORAGE_KEYS.DIAGRAMS);
+      void this.removeProfileData('');
       localStorage.removeItem(STORAGE_KEYS.GUEST_PROFILE);
     } catch (e) {
       console.warn('[StorageService] Error clearing guest data:', e);
@@ -1054,6 +1078,8 @@ export class StorageService {
     const guestExamRaw = this.readRaw(STORAGE_KEYS.EXAM_REPORTS);
     const guestInterleaveRaw = this.readRaw(STORAGE_KEYS.INTERLEAVING_REPORTS);
     const guestDiagramsRaw = this.readRaw(STORAGE_KEYS.DIAGRAMS);
+    const guestFoldersRaw = this.readRaw(STORAGE_KEYS.FOLDERS);
+    const guestEarningsRaw = this.readRaw(STORAGE_KEYS.EARNINGS);
 
     let migratedDecks = 0;
     let migratedCards = 0;
@@ -1295,7 +1321,31 @@ export class StorageService {
       } catch {}
     }
 
-    // 8. Clear Guest Data to prevent ghost state or duplicate migrations
+    // 8. Merge subject folders, so migrated decks keep their subject
+    // 9. Merge the earnings log, so daily pay caps still count what was earned as a guest
+    for (const [base, raw] of [
+      [STORAGE_KEYS.FOLDERS, guestFoldersRaw],
+      [STORAGE_KEYS.EARNINGS, guestEarningsRaw],
+    ] as const) {
+      if (!raw) continue;
+      try {
+        const guestItems = JSON.parse(raw);
+        if (!Array.isArray(guestItems) || guestItems.length === 0) continue;
+        const userKey = `${base}_${userId}`;
+        let userItems: { id: string }[] = [];
+        try {
+          const parsed = JSON.parse(this.readRaw(userKey) || '[]');
+          if (Array.isArray(parsed)) userItems = parsed;
+        } catch {}
+        const merged = new Map(userItems.map(item => [item.id, item]));
+        guestItems.forEach((item: { id: string }) => {
+          if (item && !merged.has(item.id)) merged.set(item.id, item);
+        });
+        this.safeSetItem(userKey, JSON.stringify(Array.from(merged.values())));
+      } catch {}
+    }
+
+    // 10. Clear Guest Data to prevent ghost state or duplicate migrations
     if (clearGuest) {
       this.clearGuestData();
     }
@@ -1309,21 +1359,7 @@ export class StorageService {
    */
   public static purgeUserData(userId: string): void {
     try {
-      localStorage.removeItem(`${STORAGE_KEYS.SESSIONS}_${userId}`);
-      this.purgeOverflow(`${STORAGE_KEYS.SESSIONS}_${userId}`);
-      localStorage.removeItem(`${STORAGE_KEYS.CARDS}_${userId}`);
-      this.purgeOverflow(`${STORAGE_KEYS.CARDS}_${userId}`);
-      localStorage.removeItem(`${STORAGE_KEYS.STATS}_${userId}`);
-      this.purgeOverflow(`${STORAGE_KEYS.STATS}_${userId}`);
-      localStorage.removeItem(`${STORAGE_KEYS.ACTIVITY}_${userId}`);
-      this.purgeOverflow(`${STORAGE_KEYS.ACTIVITY}_${userId}`);
-      localStorage.removeItem(`${STORAGE_KEYS.EXAM_REPORTS}_${userId}`);
-      this.purgeOverflow(`${STORAGE_KEYS.EXAM_REPORTS}_${userId}`);
-      localStorage.removeItem(`${STORAGE_KEYS.INTERLEAVING_REPORTS}_${userId}`);
-      this.purgeOverflow(`${STORAGE_KEYS.INTERLEAVING_REPORTS}_${userId}`);
-      localStorage.removeItem(`${STORAGE_KEYS.EARNINGS}_${userId}`);
-      this.purgeOverflow(`${STORAGE_KEYS.EARNINGS}_${userId}`);
-      localStorage.removeItem(`${STORAGE_KEYS.DIAGRAMS}_${userId}`);
+      void this.removeProfileData(`_${userId}`);
     } catch (e) {
       console.warn('[StorageService] Error purging user data:', e);
     }

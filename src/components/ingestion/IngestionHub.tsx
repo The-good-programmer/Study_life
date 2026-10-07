@@ -289,14 +289,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
 
   const handleExportSingleDeck = (session: StudySession, e: React.MouseEvent) => {
     e.stopPropagation();
-    const json = JSON.stringify(session, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `axon-deck-${session.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    ExportService.downloadJSON(session);
   };
 
   // Filtered decks for My Decks tab

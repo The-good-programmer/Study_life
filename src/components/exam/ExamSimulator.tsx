@@ -550,7 +550,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                   <div
                     key={mask.id}
                     className={`absolute flex items-center justify-center rounded-lg p-1 text-[11px] font-semibold shadow-lg ${
-                      isRevealed ? 'bg-success text-brand-ink' : 'animate-pulse bg-gold text-[#2a1d00] ring-2 ring-gold/40'
+                      isRevealed ? 'bg-success text-success-ink' : 'animate-pulse bg-gold text-[#2a1d00] ring-2 ring-gold/40'
                     }`}
                     style={box}
                   >

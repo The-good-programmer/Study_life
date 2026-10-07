@@ -593,3 +593,63 @@ describe('StorageService localStorage overflow', () => {
     expect(StorageService.getAllCards().map(c => c.id)).toEqual(expect.arrayContaining(['a', 'b']));
   });
 });
+
+describe('StorageService profile data', () => {
+  const idb = new Map<string, string>();
+
+  beforeEach(() => {
+    localStorage.clear();
+    idb.clear();
+    vi.restoreAllMocks();
+    vi.spyOn(IndexedDbService, 'isSupported').mockReturnValue(true);
+    vi.spyOn(IndexedDbService, 'setItem').mockImplementation(async (k, v) => { idb.set(k, v); return true; });
+    vi.spyOn(IndexedDbService, 'getItem').mockImplementation(async (k) => idb.get(k) ?? null);
+    vi.spyOn(IndexedDbService, 'removeItem').mockImplementation(async (k) => { idb.delete(k); return true; });
+    StorageService.setActiveUserId(null);
+  });
+
+  const folder = (id: string, name: string) => ({ id, name, color: 'indigo', icon: '📚', description: '', createdAt: '2026-10-01T00:00:00.000Z' });
+  const earning = (id: string) => ({ id, at: '2026-10-07T09:00:00.000Z', day: '2026-10-07', kind: 'exam', rawXp: 10, rawTokens: 20, paidXp: 10, paidTokens: 20 });
+
+  it("carries guest subjects and today's earnings into the account on sign-in", () => {
+    const userId = 'usr_1';
+    localStorage.setItem('studify_folders_v1', JSON.stringify([folder('f-guest', 'Biology')]));
+    localStorage.setItem('studify_earnings_v1', JSON.stringify([earning('e-guest')]));
+    localStorage.setItem(`studify_folders_v1_${userId}`, JSON.stringify([folder('f-user', 'History')]));
+
+    StorageService.migrateGuestDataToUser(userId);
+
+    const folders = JSON.parse(localStorage.getItem(`studify_folders_v1_${userId}`) || '[]');
+    expect(folders.map((f: { id: string }) => f.id).sort()).toEqual(['f-guest', 'f-user']);
+    const earnings = JSON.parse(localStorage.getItem(`studify_earnings_v1_${userId}`) || '[]');
+    expect(earnings.map((e: { id: string }) => e.id)).toEqual(['e-guest']);
+    expect(localStorage.getItem('studify_folders_v1')).toBeNull();
+    expect(localStorage.getItem('studify_earnings_v1')).toBeNull();
+  });
+
+  it("resets only the active profile's study data, keeping preferences and other profiles", async () => {
+    StorageService.setActiveUserId('usr_a');
+    StorageService.saveSession({ id: 'deck-a', title: 'A', concepts: [] } as never);
+    StorageService.saveFolders([folder('f-a', 'Chemistry')]);
+    StorageService.setApiKey('key-123');
+    StorageService.saveEarnings([earning('e-a')]);
+    localStorage.setItem('studify_sessions_v1_usr_b', '[{"id":"deck-b"}]');
+    idb.set('overflow:studify_cards_v1_usr_a', '[]');
+
+    await StorageService.clearStudyData();
+
+    expect(StorageService.getSessions()).toEqual([]);
+    expect(StorageService.getFolders()).toEqual([]);
+    expect(idb.has('overflow:studify_cards_v1_usr_a')).toBe(false);
+    expect(StorageService.getApiKey()).toBe('key-123');
+    // Today's pay caps still count what was earned before the reset.
+    expect(StorageService.getEarnings().map(e => e.id)).toEqual(['e-a']);
+    expect(localStorage.getItem('studify_sessions_v1_usr_b')).toBe('[{"id":"deck-b"}]');
+  });
+
+  it("removes a deleted account's subjects too", () => {
+    localStorage.setItem('studify_folders_v1_usr_gone', JSON.stringify([folder('f-1', 'Physics')]));
+    StorageService.purgeUserData('usr_gone');
+    expect(localStorage.getItem('studify_folders_v1_usr_gone')).toBeNull();
+  });
+});

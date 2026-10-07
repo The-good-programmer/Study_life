@@ -56,9 +56,11 @@ export class IndexedDbService {
       return new Promise((resolve) => {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        const req = store.put(value, key);
-        req.onsuccess = () => resolve(true);
-        req.onerror = () => resolve(false);
+        store.put(value, key);
+        // Resolve once the write is committed, so a reload right after cannot lose it.
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+        tx.onabort = () => resolve(false);
       });
     } catch (e) {
       console.warn('[IndexedDbService] Failed to set item:', e);
@@ -90,9 +92,10 @@ export class IndexedDbService {
       return new Promise((resolve) => {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        const req = store.delete(key);
-        req.onsuccess = () => resolve(true);
-        req.onerror = () => resolve(false);
+        store.delete(key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+        tx.onabort = () => resolve(false);
       });
     } catch (e) {
       console.warn('[IndexedDbService] Failed to delete item:', e);
@@ -107,9 +110,10 @@ export class IndexedDbService {
       return new Promise((resolve) => {
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        const req = store.clear();
-        req.onsuccess = () => resolve(true);
-        req.onerror = () => resolve(false);
+        store.clear();
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+        tx.onabort = () => resolve(false);
       });
     } catch (e) {
       console.warn('[IndexedDbService] Failed to clear store:', e);

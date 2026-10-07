@@ -64,7 +64,7 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   secondary: 'bg-surface text-ink border border-line-strong hover:bg-surface-hover',
   ghost: 'text-ink-muted hover:text-ink hover:bg-surface-hover',
   gold: 'bg-gold text-[#2a1d00] hover:brightness-105 shadow-[inset_0_1px_0_rgb(255_255_255/0.35)]',
-  danger: 'bg-danger text-brand-ink hover:brightness-110 shadow-[inset_0_1px_0_rgb(255_255_255/0.2)]',
+  danger: 'bg-danger text-danger-ink hover:brightness-110 shadow-[inset_0_1px_0_rgb(255_255_255/0.2)]',
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {

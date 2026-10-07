@@ -1,27 +1,33 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  X, 
-  Key, 
-  Trash2, 
-  Check, 
-  ExternalLink, 
-  ShieldCheck, 
-  Download, 
-  Upload, 
-  Target,
-  Sparkles,
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Bell,
+  Check,
   Cloud,
-  BellRing,
-  RefreshCw,
   Copy,
-  Volume2
+  Database,
+  Download,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  Trash2,
+  Upload,
+  Volume2,
 } from 'lucide-react';
 import { StorageService } from '../../services/storageService';
+import { ExportService } from '../../services/exportService';
 import { CloudSyncService, type CloudSyncConfig } from '../../services/cloudSyncService';
 import { NotificationService, type NotificationSettings } from '../../services/notificationService';
 import { soundEngine } from '../../services/soundEngine';
 import { haptics } from '../../services/hapticsService';
-import { Dialog } from '../common/Dialog';
+import { cn } from '../../utils/cn';
+import { ConfirmDialog } from '../common/ConfirmDialog';
+import { Dialog, DialogHeader, DialogPanel } from '../common/Dialog';
+import { Badge, Button, IconButton } from '../ui/primitives';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -29,704 +35,767 @@ interface SettingsModalProps {
   onStatsReset: () => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onStatsReset }) => {
-  const [apiKey, setApiKey] = useState(StorageService.getApiKey());
-  const [dailyGoal, setDailyGoal] = useState(() => StorageService.getStats().dailyGoalMinutes || 25);
-  const [targetRetention, setTargetRetention] = useState(() => StorageService.getTargetRetention());
-  const [isSaved, setIsSaved] = useState(false);
-  const [backupMsg, setBackupMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+type SectionId = 'study' | 'ai' | 'reminders' | 'sound' | 'sync' | 'data';
 
-  // Cloud Sync state
-  const [syncConfig, setSyncConfig] = useState<CloudSyncConfig>(() => CloudSyncService.getConfig());
-  const [syncEndpoint, setSyncEndpoint] = useState(() => CloudSyncService.getConfig().endpointUrl || '');
-  const [syncToken, setSyncToken] = useState(() => CloudSyncService.getConfig().cloudToken || '');
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [copiedToken, setCopiedToken] = useState(false);
+const SECTIONS: { id: SectionId; label: string; icon: LucideIcon }[] = [
+  { id: 'study', label: 'Study', icon: Target },
+  { id: 'ai', label: 'AI', icon: Sparkles },
+  { id: 'reminders', label: 'Reminders', icon: Bell },
+  { id: 'sound', label: 'Sound', icon: Volume2 },
+  { id: 'sync', label: 'Sync', icon: Cloud },
+  { id: 'data', label: 'Your data', icon: Database },
+];
 
-  // Habit loop notification state
-  const [notifSettings, setNotifSettings] = useState<NotificationSettings>(() => NotificationService.getSettings());
-  const [notifPerm, setNotifPerm] = useState<NotificationPermission>(() => NotificationService.getPermission());
-  const [notifMsg, setNotifMsg] = useState<string | null>(null);
+const DAILY_GOALS = [
+  { value: 15, label: '15 min' },
+  { value: 25, label: '25 min' },
+  { value: 45, label: '45 min' },
+  { value: 60, label: '1 hour' },
+];
 
-  // Audio and Haptics state
-  const [sfxOn, setSfxOn] = useState(() => soundEngine.isSfxEnabled());
-  const [hapticsOn, setHapticsOn] = useState(() => haptics.isEnabled());
+const MEMORY_TARGETS = [
+  { value: 0.85, label: 'Relaxed', hint: '85% · fewer reviews' },
+  { value: 0.9, label: 'Balanced', hint: '90% · recommended' },
+  { value: 0.95, label: 'Exam mode', hint: '95% · more reviews' },
+];
 
-  const importInputRef = useRef<HTMLInputElement>(null);
+const REMINDER_HOURS = [
+  { value: 17, label: '5 PM' },
+  { value: 18, label: '6 PM' },
+  { value: 19, label: '7 PM' },
+  { value: 20, label: '8 PM' },
+  { value: 21, label: '9 PM' },
+];
 
-  // Subscribe to live cloud sync status changes
-  useEffect(() => {
-    return CloudSyncService.subscribe(config => {
-      setSyncConfig(config);
-      setSyncEndpoint(config.endpointUrl || '');
-      setSyncToken(config.cloudToken || '');
-    });
+const INPUT_CLASS =
+  'h-10 w-full min-w-0 rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none';
+
+type Notice = { tone: 'success' | 'error' | 'info'; text: string };
+
+/** A status line that clears itself, restarting the timer when a new one is shown. */
+const useNotice = () => {
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const show = useCallback((next: Notice, ms = 4000) => {
+    clearTimeout(timer.current);
+    setNotice(next);
+    timer.current = setTimeout(() => setNotice(null), ms);
   }, []);
+  return [notice, show] as const;
+};
+
+/** Local calendar date for file names, e.g. 2026-10-07. */
+const fileDate = () => {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+};
+
+export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onStatsReset }) => {
+  const [section, setSection] = useState<SectionId>('study');
+  const idPrefix = useId();
 
   if (!isOpen) return null;
 
-  const handleSaveKey = (e: React.FormEvent) => {
+  return (
+    <Dialog isOpen={isOpen} onClose={onClose} titleId="settings-modal-title" className="max-w-3xl">
+      <DialogPanel className="h-[min(680px,92dvh)]">
+        <DialogHeader titleId="settings-modal-title" title="Settings" onClose={onClose} closeLabel="Close settings" />
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          <div
+            role="tablist"
+            aria-label="Settings sections"
+            aria-orientation="vertical"
+            className="flex shrink-0 gap-1 overflow-x-auto border-b border-line px-3 py-2 no-scrollbar sm:w-48 sm:flex-col sm:overflow-visible sm:border-b-0 sm:border-r sm:py-3"
+          >
+            {SECTIONS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                id={`${idPrefix}-tab-${id}`}
+                aria-selected={section === id}
+                aria-controls={`${idPrefix}-panel`}
+                onClick={() => setSection(id)}
+                className={cn(
+                  'inline-flex h-9 shrink-0 items-center gap-2.5 rounded-lg px-3 text-[13px] font-medium transition-colors cursor-pointer',
+                  section === id ? 'bg-surface-hover text-ink' : 'text-ink-subtle hover:bg-surface-hover hover:text-ink',
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div
+            id={`${idPrefix}-panel`}
+            role="tabpanel"
+            aria-labelledby={`${idPrefix}-tab-${section}`}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7 sm:py-6"
+          >
+            {section === 'study' && <StudySection onStatsReset={onStatsReset} />}
+            {section === 'ai' && <AiSection />}
+            {section === 'reminders' && <RemindersSection />}
+            {section === 'sound' && <SoundSection />}
+            {section === 'sync' && <SyncSection onStatsReset={onStatsReset} />}
+            {section === 'data' && <DataSection />}
+          </div>
+        </div>
+      </DialogPanel>
+    </Dialog>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/* Building blocks                                                     */
+/* ------------------------------------------------------------------ */
+
+const SettingGroup: React.FC<{
+  title: string;
+  description?: React.ReactNode;
+  aside?: React.ReactNode;
+  children?: React.ReactNode;
+}> = ({ title, description, aside, children }) => (
+  <section className="border-t border-line py-6 first:border-t-0 first:pt-0 last:pb-0">
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold text-ink">{title}</h3>
+        {description && <p className="mt-1 text-[13px] leading-relaxed text-ink-subtle">{description}</p>}
+      </div>
+      {aside && <div className="shrink-0">{aside}</div>}
+    </div>
+    {children && <div className="mt-4">{children}</div>}
+  </section>
+);
+
+function OptionGrid<T extends string | number>({
+  label,
+  options,
+  value,
+  onChange,
+  className,
+}: {
+  label: string;
+  options: { value: T; label: string; hint?: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  className?: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className={cn('grid gap-2', className)}>
+      {options.map(option => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={String(option.value)}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              'rounded-xl border px-3 py-2.5 text-left transition-colors cursor-pointer',
+              selected ? 'border-brand bg-brand-soft' : 'border-line hover:border-line-strong hover:bg-surface-hover',
+            )}
+          >
+            <span className={cn('block text-sm font-medium', selected ? 'text-brand-text' : 'text-ink')}>{option.label}</span>
+            {option.hint && <span className="mt-0.5 block text-xs text-ink-subtle">{option.hint}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const Switch: React.FC<{ checked: boolean; onChange: (checked: boolean) => void; label: string; disabled?: boolean }> = ({
+  checked,
+  onChange,
+  label,
+  disabled,
+}) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    aria-label={label}
+    disabled={disabled}
+    onClick={() => onChange(!checked)}
+    className={cn(
+      'relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors cursor-pointer disabled:opacity-50',
+      checked ? 'bg-brand' : 'bg-line-strong',
+    )}
+  >
+    <span
+      className={cn(
+        'absolute h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform',
+        checked ? 'translate-x-[19px]' : 'translate-x-[3px]',
+      )}
+      aria-hidden="true"
+    />
+  </button>
+);
+
+const NoticeLine: React.FC<{ notice: Notice | null }> = ({ notice }) => (
+  <p
+    role="status"
+    className={cn(
+      'min-h-5 text-[13px]',
+      notice?.tone === 'success' && 'text-success',
+      notice?.tone === 'error' && 'text-danger',
+      notice?.tone === 'info' && 'text-ink-muted',
+    )}
+  >
+    {notice?.text}
+  </p>
+);
+
+/* ------------------------------------------------------------------ */
+/* Sections                                                            */
+/* ------------------------------------------------------------------ */
+
+const StudySection: React.FC<{ onStatsReset: () => void }> = ({ onStatsReset }) => {
+  const [dailyGoal, setDailyGoal] = useState(() => StorageService.getStats().dailyGoalMinutes || 25);
+  const [targetRetention, setTargetRetention] = useState(() => StorageService.getTargetRetention());
+  const memoryTarget = MEMORY_TARGETS.reduce((best, option) =>
+    Math.abs(option.value - targetRetention) < Math.abs(best.value - targetRetention) ? option : best,
+  ).value;
+
+  return (
+    <div>
+      <SettingGroup title="Daily goal" description="How long you want to study each day. It sets your goal ring and keeps your streak going.">
+        <OptionGrid
+          label="Daily goal"
+          options={DAILY_GOALS}
+          value={dailyGoal}
+          onChange={(minutes) => {
+            setDailyGoal(minutes);
+            StorageService.setDailyGoal(minutes);
+            onStatsReset();
+          }}
+          className="grid-cols-2 sm:grid-cols-4"
+        />
+      </SettingGroup>
+
+      <SettingGroup
+        title="Memory target"
+        description="How likely you want to be to remember a card when it comes back for review. A higher target means more reviews each day."
+      >
+        <OptionGrid
+          label="Memory target"
+          options={MEMORY_TARGETS}
+          value={memoryTarget}
+          onChange={(rate) => {
+            setTargetRetention(rate);
+            StorageService.setTargetRetention(rate);
+            onStatsReset();
+          }}
+          className="sm:grid-cols-3"
+        />
+      </SettingGroup>
+    </div>
+  );
+};
+
+const AiSection: React.FC = () => {
+  const [savedKey, setSavedKey] = useState(() => StorageService.getApiKey());
+  const [draft, setDraft] = useState(savedKey);
+  const [isVisible, setIsVisible] = useState(false);
+  const [notice, showNotice] = useNotice();
+  const inputId = useId();
+
+  const save = (e: React.FormEvent) => {
     e.preventDefault();
-    StorageService.setApiKey(apiKey);
-    StorageService.setDailyGoal(dailyGoal);
-    StorageService.setTargetRetention(targetRetention);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2500);
+    const key = draft.trim();
+    StorageService.setApiKey(key);
+    setSavedKey(key);
+    setDraft(key);
+    showNotice(key ? { tone: 'success', text: 'Key saved. AI features will use it from now on.' } : { tone: 'info', text: 'Key removed.' });
   };
 
-  const handleExportJSON = () => {
-    try {
-      const json = StorageService.exportAllDataAsJSON();
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `axon-backup-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setBackupMsg({ type: 'success', text: 'Backup downloaded successfully!' });
-      setTimeout(() => setBackupMsg(null), 3000);
-    } catch {
-      setBackupMsg({ type: 'error', text: 'Failed to export backup.' });
-    }
-  };
-
-  const handleExportAnki = () => {
-    try {
-      const csv = StorageService.exportCardsToAnkiCSV();
-      const blob = new Blob([csv], { type: 'text/tab-separated-values;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `axon-anki-export-${new Date().toISOString().split('T')[0]}.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setBackupMsg({ type: 'success', text: 'Anki TSV exported! Import directly into Anki.' });
-      setTimeout(() => setBackupMsg(null), 3000);
-    } catch {
-      setBackupMsg({ type: 'error', text: 'Failed to export to Anki format.' });
-    }
-  };
-
-  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      const res = StorageService.importDataFromJSON(content);
-      if (res.success) {
-        setBackupMsg({ type: 'success', text: res.message });
-        onStatsReset();
-        setTimeout(() => setBackupMsg(null), 3500);
-      } else {
-        setBackupMsg({ type: 'error', text: res.message });
-      }
-    };
-    reader.readAsText(file);
-    if (importInputRef.current) importInputRef.current.value = '';
-  };
-
-  const handleClearAll = () => {
-    if (window.confirm('Are you sure you want to reset all local study statistics, flashcards, and session history?')) {
-      localStorage.clear();
-      onStatsReset();
-      onClose();
-    }
-  };
-
-  const handleGenerateToken = () => {
-    const token = CloudSyncService.generateSyncToken();
-    const updated = CloudSyncService.saveConfig({ cloudToken: token, enabled: true });
-    setSyncConfig(updated);
-    setSyncToken(token);
-    soundEngine.playSuccess();
-  };
-
-  const handleCopyToken = () => {
-    if (syncToken) {
-      navigator.clipboard.writeText(syncToken);
-      setCopiedToken(true);
-      setTimeout(() => setCopiedToken(false), 2000);
-    }
-  };
-
-  const handleEndpointChange = (val: string) => {
-    setSyncEndpoint(val);
-    const updated = CloudSyncService.saveConfig({ endpointUrl: val.trim() });
-    setSyncConfig(updated);
-  };
-
-  const handleTokenChange = (val: string) => {
-    setSyncToken(val);
-    const updated = CloudSyncService.saveConfig({ cloudToken: val.trim() });
-    setSyncConfig(updated);
-  };
-
-  const handleToggleCloudSync = () => {
-    const next = !syncConfig.enabled;
-    let token = syncToken;
-    if (next && !token) {
-      token = CloudSyncService.generateSyncToken();
-      setSyncToken(token);
-    }
-    const updated = CloudSyncService.saveConfig({ enabled: next, cloudToken: token, endpointUrl: syncEndpoint });
-    setSyncConfig(updated);
-  };
-
-  const handleSyncNow = async () => {
-    setIsSyncing(true);
-    setSyncMsg(null);
-    try {
-      const res = await CloudSyncService.syncNow();
-      if (res.success) {
-        soundEngine.playSuccess();
-        setSyncMsg({ type: 'success', text: res.message });
-        onStatsReset();
-      } else {
-        setSyncMsg({ type: 'error', text: res.message });
-      }
-    } catch {
-      setSyncMsg({ type: 'error', text: 'Sync encountered an error.' });
-    } finally {
-      setIsSyncing(false);
-      setTimeout(() => setSyncMsg(null), 4000);
-    }
-  };
-
-  const handleTogglePushNotifications = async () => {
-    if (notifSettings.enabled) {
-      const updated = NotificationService.saveSettings({ enabled: false });
-      setNotifSettings(updated);
-      setNotifMsg('Daily habit reminders disabled.');
-      setTimeout(() => setNotifMsg(null), 3000);
-    } else {
-      const granted = await NotificationService.requestPermission();
-      setNotifPerm(NotificationService.getPermission());
-      if (granted) {
-        setNotifSettings(NotificationService.getSettings());
-        soundEngine.playSuccess();
-        setNotifMsg('Daily habit reminders enabled! Set your preferred time below.');
-      } else {
-        setNotifMsg('Notification permission denied by browser.');
-      }
-      setTimeout(() => setNotifMsg(null), 4000);
-    }
-  };
-
-  const handleSetReminderHour = (hour: number) => {
-    const updated = NotificationService.saveSettings({ reminderHour: hour });
-    setNotifSettings(updated);
-  };
-
-  const handleTestNotification = async () => {
-    const sent = await NotificationService.sendTestNotification();
-    if (sent) {
-      setNotifMsg('Test alert sent! Check your notifications.');
-    } else {
-      setNotifMsg('Could not send notification. Ensure permissions are granted.');
-    }
-    setTimeout(() => setNotifMsg(null), 3500);
+  const remove = () => {
+    StorageService.setApiKey('');
+    setSavedKey('');
+    setDraft('');
+    showNotice({ tone: 'info', text: 'Key removed. Studify will use its built-in generator.' });
   };
 
   return (
-    <Dialog
-      isOpen={isOpen}
-      onClose={onClose}
-      titleId="settings-modal-title"
-      className="max-w-lg"
-    >
-      <div className="w-full rounded-3xl bg-[#0d101e] border border-white/[0.12] shadow-2xl p-6 sm:p-7 space-y-6 relative max-h-[90vh] overflow-y-auto">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
-          <div className="flex items-center gap-2">
-            <span id="settings-modal-title" className="text-base font-bold text-white font-display">Studify Preferences</span>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close preferences"
-            className="p-1.5 rounded-xl hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Daily Study Target */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white flex items-center gap-2 font-display">
-              <Target className="w-4 h-4 text-emerald-400" />
-              <span>Daily Study Habit Target</span>
-            </span>
-            <span className="text-xs font-mono font-bold text-emerald-400">{dailyGoal} Minutes / Day</span>
-          </div>
-
-          <div className="grid grid-cols-4 gap-2">
-            {[15, 25, 45, 60].map(mins => (
-              <button
-                key={mins}
-                type="button"
-                onClick={() => {
-                  setDailyGoal(mins);
-                  StorageService.setDailyGoal(mins);
-                  onStatsReset();
-                }}
-                className={`py-2 rounded-xl text-xs font-semibold transition-all border ${
-                  dailyGoal === mins
-                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-600/30'
-                    : 'bg-slate-900/80 text-slate-300 border-white/[0.08] hover:border-white/[0.2]'
-                }`}
-              >
-                {mins} mins
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* FSRS Target Retention Rate */}
-        <div className="space-y-3 pt-2 border-t border-white/[0.08]">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white flex items-center gap-2 font-display">
-              <Sparkles className="w-4 h-4 text-indigo-400" />
-              <span>FSRS Target Retention Rate</span>
-            </span>
-            <span className="text-xs font-mono font-bold text-indigo-300">
-              {Math.round(targetRetention * 100)}% Retention
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
-            Calibrate the Free Spaced Repetition Scheduler interval multiplier. Lower retention reduces daily repetition workload; higher retention maximizes recall fidelity before high-stakes exams.
-          </p>
-
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { rate: 0.85, label: '85% Casual', desc: '~40% fewer reviews' },
-              { rate: 0.90, label: '90% Standard', desc: 'FSRS default' },
-              { rate: 0.95, label: '95% Mastery', desc: 'Exam ready' }
-            ].map(item => (
-              <button
-                key={item.rate}
-                type="button"
-                onClick={() => {
-                  setTargetRetention(item.rate);
-                  StorageService.setTargetRetention(item.rate);
-                  onStatsReset();
-                }}
-                className={`p-2.5 rounded-xl text-xs font-semibold transition-all border text-left ${
-                  Math.abs(targetRetention - item.rate) < 0.01
-                    ? 'bg-indigo-600 text-white border-indigo-500 shadow-md shadow-indigo-600/30'
-                    : 'bg-slate-900/80 text-slate-300 border-white/[0.08] hover:border-white/[0.2]'
-                }`}
-              >
-                <div className="font-bold">{item.label}</div>
-                <div className="text-[11px] opacity-75 font-mono mt-0.5">{item.desc}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Gemini API Key Section */}
-        <div className="space-y-3 pt-2 border-t border-white/[0.08]">
-          <div className="flex items-center gap-2 text-xs font-bold text-white font-display">
-            <Key className="w-4 h-4 text-indigo-400" />
-            <span>Google Gemini API Key (Optional)</span>
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed font-sans">
-            Studify includes intelligent local cognitive heuristics by default. For unlimited custom PDF parsing and high-precision Socratic evaluations, enter your free Gemini API key.
-          </p>
-
-          <form onSubmit={handleSaveKey} className="space-y-2">
-            <div className="flex gap-2">
+    <div>
+      <SettingGroup
+        title="Gemini API key"
+        description="Studify makes decks without a key. Add your own free Gemini key for unlimited decks from notes and PDFs, and AI feedback when you explain a concept."
+        aside={savedKey ? <Badge tone="success">Key added</Badge> : <Badge>Not set</Badge>}
+      >
+        <form onSubmit={save} className="space-y-2">
+          <label htmlFor={inputId} className="sr-only">
+            Gemini API key
+          </label>
+          <div className="flex gap-2">
+            <div className="relative min-w-0 flex-1">
               <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="AIzaSy..."
-                className="flex-1 px-4 py-2.5 rounded-xl bg-slate-950/80 border border-white/[0.1] text-white text-xs outline-none focus:border-indigo-500 font-mono"
+                id={inputId}
+                type={isVisible ? 'text' : 'password'}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Paste your key"
+                autoComplete="off"
+                spellCheck={false}
+                className={cn(INPUT_CLASS, 'pr-10 font-mono')}
               />
-              <button
-                type="submit"
-                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 transition-colors shrink-0 shadow-md shadow-indigo-600/25"
-              >
-                {isSaved ? <Check className="w-3.5 h-3.5" /> : null}
-                <span>{isSaved ? 'Saved!' : 'Save Key'}</span>
+              <IconButton
+                icon={isVisible ? EyeOff : Eye}
+                label={isVisible ? 'Hide key' : 'Show key'}
+                onClick={() => setIsVisible(v => !v)}
+                className="absolute right-0.5 top-1/2 h-8 w-8 -translate-y-1/2"
+              />
+            </div>
+            <Button type="submit" variant="primary" disabled={draft.trim() === savedKey}>
+              Save
+            </Button>
+          </div>
+          <NoticeLine notice={notice} />
+        </form>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-ink-subtle">
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5 text-success" aria-hidden="true" />
+            Stored only in this browser.
+          </span>
+          <span className="flex items-center gap-3">
+            {savedKey && (
+              <button type="button" onClick={remove} className="font-medium text-danger hover:underline cursor-pointer">
+                Remove key
               </button>
-            </div>
-          </form>
-
-          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-            <div className="flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Keys are stored strictly in your local browser sandbox.</span>
-            </div>
+            )}
             <a
               href="https://aistudio.google.com/app/apikey"
               target="_blank"
               rel="noreferrer"
-              className="text-indigo-400 hover:text-indigo-300 flex items-center gap-1 underline underline-offset-2 font-medium"
+              className="inline-flex items-center gap-1 font-medium text-brand-text hover:underline"
             >
-              <span>Get Free Key</span>
-              <ExternalLink className="w-3 h-3" />
+              Get a free key
+              <ExternalLink className="h-3 w-3" aria-hidden="true" />
             </a>
-          </div>
+          </span>
         </div>
+      </SettingGroup>
+    </div>
+  );
+};
 
-        {/* Cloud Sync & Cross-Device Persistence */}
-        <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/[0.08] space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white flex items-center gap-2 font-display">
-              <Cloud className="w-4 h-4 text-cyan-400" />
-              <span>Cloud Sync & Cross-Device Pairing</span>
-            </span>
-            <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-bold ${
-              syncConfig.status === 'synced'
-                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                : syncConfig.status === 'syncing'
-                ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 animate-pulse'
-                : syncConfig.status === 'queued'
-                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                : 'bg-slate-800 text-slate-400 border border-white/[0.08]'
-            }`}>
-              {syncConfig.status === 'synced' ? 'Synced ☁️' : syncConfig.status === 'syncing' ? 'Syncing...' : syncConfig.status === 'queued' ? 'Queued Offline ⏳' : 'Disabled'}
-            </span>
-          </div>
+const RemindersSection: React.FC = () => {
+  const [settings, setSettings] = useState<NotificationSettings>(() => NotificationService.getSettings());
+  const [permission, setPermission] = useState<NotificationPermission>(() => NotificationService.getPermission());
+  const [notice, showNotice] = useNotice();
+  const isSupported = NotificationService.isSupported();
+  const isOn = settings.enabled && permission === 'granted';
 
-          <p className="text-xs text-slate-400 leading-relaxed font-sans">
-            Synchronize your decks, FSRS review intervals, and streak progress across devices using your own remote endpoint or worker.
-          </p>
+  const toggle = async () => {
+    if (isOn) {
+      setSettings(NotificationService.saveSettings({ enabled: false }));
+      showNotice({ tone: 'info', text: 'Reminders are off.' });
+      return;
+    }
+    const granted = await NotificationService.requestPermission();
+    setPermission(NotificationService.getPermission());
+    if (granted) {
+      setSettings(NotificationService.getSettings());
+      soundEngine.playSuccess();
+      showNotice({ tone: 'success', text: 'Reminders are on.' });
+    } else {
+      showNotice({ tone: 'error', text: 'Your browser blocked notifications for Studify.' });
+    }
+  };
 
-          {/* Local-First Architecture Notice */}
-          <div className="p-3 rounded-xl bg-cyan-950/20 border border-cyan-800/30 text-[11px] text-cyan-200/90 leading-relaxed font-sans">
-            🔒 <strong className="text-cyan-100">Private by default:</strong> Your study progress is saved locally in this browser. To sync across your devices, specify a remote sync server endpoint URL below. If left blank, sync is disabled and you can use <em>Export Local Data</em> for instant offline backups.
-          </div>
+  const sendTest = async () => {
+    const sent = await NotificationService.sendTestNotification();
+    showNotice(
+      sent
+        ? { tone: 'success', text: 'Test reminder sent. Check your notifications.' }
+        : { tone: 'error', text: 'Could not send a reminder. Check that notifications are allowed.' },
+    );
+  };
 
-          {/* Sync Endpoint URL */}
-          <div className="space-y-1.5 pt-1">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] uppercase font-mono font-bold text-slate-400">Remote Sync Endpoint URL</label>
-              <span className="text-[11px] text-slate-500 font-sans">Cloudflare Worker / Custom API</span>
+  return (
+    <div>
+      <SettingGroup
+        title="Daily reminder"
+        description="A nudge on this device when you have cards due, before your streak resets."
+        aside={
+          isOn ? <Badge tone="success">On</Badge> : permission === 'denied' ? <Badge tone="danger">Blocked</Badge> : <Badge>Off</Badge>
+        }
+      >
+        {!isSupported ? (
+          <p className="text-[13px] text-ink-muted">This browser does not support notifications.</p>
+        ) : (
+          <div className="space-y-3">
+            {permission === 'denied' && (
+              <p className="rounded-xl bg-danger-soft px-3.5 py-2.5 text-[13px] text-ink-muted">
+                Notifications are blocked for this site. Allow them in your browser's site settings, then turn reminders on.
+              </p>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant={isOn ? 'secondary' : 'primary'} onClick={toggle}>
+                {isOn ? 'Turn off' : 'Turn on reminders'}
+              </Button>
+              {isOn && (
+                <Button variant="ghost" onClick={sendTest}>
+                  Send a test
+                </Button>
+              )}
             </div>
-            <input 
-              type="url"
-              value={syncEndpoint}
-              onChange={e => handleEndpointChange(e.target.value)}
-              placeholder="https://sync.example.com/api/lotti"
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-white/[0.1] text-cyan-300 font-mono text-xs outline-none focus:border-cyan-500/50 transition-colors"
+            <NoticeLine notice={notice} />
+          </div>
+        )}
+      </SettingGroup>
+
+      {isSupported && (
+        <SettingGroup title="Reminder time" description="Studify checks for due cards at this time each day.">
+          <OptionGrid
+            label="Reminder time"
+            options={REMINDER_HOURS}
+            value={settings.reminderHour}
+            onChange={(hour) => setSettings(NotificationService.saveSettings({ reminderHour: hour }))}
+            className="grid-cols-3 sm:grid-cols-5"
+          />
+        </SettingGroup>
+      )}
+    </div>
+  );
+};
+
+const SoundSection: React.FC = () => {
+  const [sfxOn, setSfxOn] = useState(() => soundEngine.isSfxEnabled());
+  const [hapticsOn, setHapticsOn] = useState(() => haptics.isEnabled());
+
+  return (
+    <div>
+      <SettingGroup
+        title="Sound effects"
+        description="Short chimes when you answer, finish a session or get paid."
+        aside={
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={() => soundEngine.playCorrectChime()} disabled={!sfxOn}>
+              Play
+            </Button>
+            <Switch
+              label="Sound effects"
+              checked={sfxOn}
+              onChange={(next) => {
+                soundEngine.setSfxEnabled(next);
+                setSfxOn(next);
+                if (next) soundEngine.playTapPop();
+              }}
             />
           </div>
-
-          {/* Sync Token Input & Generator */}
-          <div className="space-y-1.5 pt-1">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] uppercase font-mono font-bold text-slate-400">Device Pairing Token</label>
-              <span className="text-[11px] text-slate-500 font-sans">Shared secret between devices</span>
-            </div>
-            <div className="flex gap-2">
-              <input 
-                type="text"
-                value={syncToken}
-                onChange={e => handleTokenChange(e.target.value)}
-                placeholder="Enter or generate pairing token"
-                className="flex-1 px-3.5 py-2 rounded-xl bg-slate-900 border border-white/[0.1] text-cyan-300 font-mono text-xs outline-none focus:border-cyan-500/50 transition-colors"
-              />
-              {syncToken ? (
-                <button
-                  type="button"
-                  onClick={handleCopyToken}
-                  className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/[0.1] text-xs font-semibold text-slate-200 flex items-center gap-1 transition-colors cursor-pointer"
-                  title="Copy Pairing Token"
-                >
-                  {copiedToken ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
-                  <span>{copiedToken ? 'Copied' : 'Copy'}</span>
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={handleGenerateToken}
-                className="px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-colors cursor-pointer shadow-md shadow-cyan-600/20"
-              >
-                Generate
-              </button>
-            </div>
+        }
+      />
+      <SettingGroup
+        title="Vibration"
+        description="A light tap when you press buttons and answer cards, on phones that support it."
+        aside={
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={() => haptics.success()} disabled={!hapticsOn}>
+              Test
+            </Button>
+            <Switch
+              label="Vibration"
+              checked={hapticsOn}
+              onChange={(next) => {
+                haptics.setEnabled(next);
+                setHapticsOn(next);
+                if (next) haptics.pop();
+              }}
+            />
           </div>
+        }
+      />
+    </div>
+  );
+};
 
-          {/* Sync Actions Bar */}
-          <div className="flex items-center justify-between pt-2 border-t border-white/[0.06]">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={syncConfig.enabled}
-                onChange={handleToggleCloudSync}
-                className="w-4 h-4 rounded text-cyan-500 bg-slate-900 border-white/[0.2] focus:ring-0 cursor-pointer"
-              />
-              <span className="text-xs text-slate-300 font-medium">Auto-sync on review</span>
+const SYNC_STATUS: Record<CloudSyncConfig['status'], { label: string; tone: 'success' | 'brand' | 'gold' | 'danger' | 'neutral' }> = {
+  synced: { label: 'Synced', tone: 'success' },
+  syncing: { label: 'Syncing', tone: 'brand' },
+  queued: { label: 'Waiting to sync', tone: 'gold' },
+  error: { label: 'Sync failed', tone: 'danger' },
+  idle: { label: 'Not synced yet', tone: 'neutral' },
+};
+
+const SyncSection: React.FC<{ onStatsReset: () => void }> = ({ onStatsReset }) => {
+  const [config, setConfig] = useState<CloudSyncConfig>(() => CloudSyncService.getConfig());
+  const [endpoint, setEndpoint] = useState(() => CloudSyncService.getConfig().endpointUrl || '');
+  const [token, setToken] = useState(() => CloudSyncService.getConfig().cloudToken || '');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [notice, showNotice] = useNotice();
+  const fieldId = useId();
+
+  // Follow sync status changes made elsewhere (auto-sync after reviews).
+  useEffect(
+    () =>
+      CloudSyncService.subscribe(next => {
+        setConfig(next);
+        setEndpoint(next.endpointUrl || '');
+        setToken(next.cloudToken || '');
+      }),
+    [],
+  );
+
+  const canSync = config.enabled && !!config.endpointUrl && !!config.cloudToken;
+  const status = config.enabled ? SYNC_STATUS[config.status] ?? SYNC_STATUS.idle : null;
+
+  const handleEndpointChange = (value: string) => {
+    setEndpoint(value);
+    setConfig(CloudSyncService.saveConfig({ endpointUrl: value.trim() }));
+  };
+
+  const handleTokenChange = (value: string) => {
+    setToken(value);
+    setConfig(CloudSyncService.saveConfig({ cloudToken: value.trim() }));
+  };
+
+  const handleNewToken = () => {
+    const next = CloudSyncService.generateSyncToken();
+    setToken(next);
+    setConfig(CloudSyncService.saveConfig({ cloudToken: next }));
+    soundEngine.playSuccess();
+  };
+
+  const handleCopy = () => {
+    if (!token || !navigator.clipboard) return;
+    navigator.clipboard.writeText(token).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => showNotice({ tone: 'error', text: 'Could not copy. Select the code and copy it instead.' }),
+    );
+  };
+
+  const handleToggle = (enabled: boolean) => {
+    let nextToken = token;
+    if (enabled && !nextToken) {
+      nextToken = CloudSyncService.generateSyncToken();
+      setToken(nextToken);
+    }
+    setConfig(CloudSyncService.saveConfig({ enabled, cloudToken: nextToken, endpointUrl: endpoint.trim() }));
+  };
+
+  const handleSyncNow = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await CloudSyncService.syncNow();
+      if (res.success) {
+        soundEngine.playSuccess();
+        onStatsReset();
+      }
+      showNotice({ tone: res.success ? 'success' : 'error', text: res.message });
+    } catch {
+      showNotice({ tone: 'error', text: 'Sync failed. Check the server URL and try again.' });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  return (
+    <div>
+      <SettingGroup
+        title="Sync between devices"
+        description="Your study data is saved in this browser. To use Studify on more than one device, connect a sync server you run, such as a Cloudflare Worker."
+        aside={
+          <Switch label="Sync this device" checked={config.enabled} onChange={handleToggle} />
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label htmlFor={`${fieldId}-url`} className="text-[13px] font-medium text-ink">
+              Server URL
             </label>
-
-            <button
-              type="button"
-              disabled={isSyncing || !syncConfig.enabled || !syncConfig.endpointUrl || !syncConfig.cloudToken}
-              onClick={handleSyncNow}
-              title={!syncConfig.endpointUrl ? 'Endpoint URL required to sync' : undefined}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                isSyncing || !syncConfig.enabled || !syncConfig.endpointUrl || !syncConfig.cloudToken
-                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                  : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-md shadow-cyan-600/25'
-              }`}
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Syncing...' : 'Sync to Cloud Now'}</span>
-            </button>
+            <input
+              id={`${fieldId}-url`}
+              type="url"
+              value={endpoint}
+              onChange={(e) => handleEndpointChange(e.target.value)}
+              placeholder="https://sync.example.com/api"
+              spellCheck={false}
+              className={cn(INPUT_CLASS, 'mt-1.5 font-mono')}
+            />
           </div>
-
-          {syncMsg && (
-            <div className={`p-2.5 rounded-xl text-xs font-medium ${
-              syncMsg.type === 'success' 
-                ? 'bg-emerald-950/40 border border-emerald-800/60 text-emerald-300' 
-                : 'bg-rose-950/40 border border-rose-800/60 text-rose-300'
-            }`}>
-              {syncMsg.text}
-            </div>
-          )}
-        </div>
-
-        {/* Habit Loop & Web Push Streak Notifications */}
-        <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/[0.08] space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white flex items-center gap-2 font-display">
-              <BellRing className="w-4 h-4 text-amber-400" />
-              <span>Daily Habit Loop Notifications</span>
-            </span>
-            <span className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-bold ${
-              notifSettings.enabled && notifPerm === 'granted'
-                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                : notifPerm === 'denied'
-                ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                : 'bg-slate-800 text-slate-400 border border-white/[0.08]'
-            }`}>
-              {notifSettings.enabled && notifPerm === 'granted' ? 'Active 🔔' : notifPerm === 'denied' ? 'Blocked' : 'Off'}
-            </span>
-          </div>
-
-          <p className="text-xs text-slate-400 leading-relaxed font-sans">
-            Get a warm nudge before your streak resets. Your study coach checks if you have pending review cards and alerts your device.
-          </p>
-
-          <div className="space-y-1.5 pt-1">
-            <label className="text-[11px] uppercase font-mono font-bold text-slate-400">Preferred Daily Reminder Time</label>
-            <div className="grid grid-cols-5 gap-1.5">
-              {[
-                { hour: 17, label: '5 PM' },
-                { hour: 18, label: '6 PM' },
-                { hour: 19, label: '7 PM' },
-                { hour: 20, label: '8 PM' },
-                { hour: 21, label: '9 PM' },
-              ].map(slot => (
-                <button
-                  key={slot.hour}
-                  type="button"
-                  onClick={() => handleSetReminderHour(slot.hour)}
-                  className={`py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                    notifSettings.reminderHour === slot.hour
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
-                      : 'bg-slate-900 text-slate-400 border-white/[0.06] hover:border-white/[0.15]'
-                  }`}
-                >
-                  {slot.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between pt-2 border-t border-white/[0.06]">
-            <button
-              type="button"
-              onClick={handleTogglePushNotifications}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                notifSettings.enabled && notifPerm === 'granted'
-                  ? 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30'
-                  : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-500/25'
-              }`}
-            >
-              {notifSettings.enabled && notifPerm === 'granted' ? 'Disable Reminders' : 'Enable Daily Push'}
-            </button>
-
-            {notifSettings.enabled && (
-              <button
-                type="button"
-                onClick={handleTestNotification}
-                className="text-xs text-amber-300 hover:text-amber-200 underline font-semibold cursor-pointer"
-              >
-                Send Test Alert
-              </button>
-            )}
-          </div>
-
-          {notifMsg && (
-            <div className="p-2.5 rounded-xl text-xs font-medium bg-amber-950/40 border border-amber-800/60 text-amber-300">
-              {notifMsg}
-            </div>
-          )}
-        </div>
-
-        {/* Tactile Audio & Haptics Feedback */}
-        <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/[0.08] space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white flex items-center gap-2 font-display">
-              <Volume2 className="w-4 h-4 text-pink-400" />
-              <span>Audio Chimes & Tactile Micro-Haptics</span>
-            </span>
-            <span className="text-[11px] text-pink-300 font-mono">Sensory Polish</span>
-          </div>
-
-          <p className="text-xs text-slate-400 leading-relaxed font-sans">
-            Crisp marimba chords, tactile option clicks, dynamic combo escalation, and subtle mobile vibration pulses.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            {/* SFX Switch */}
-            <div className="p-3 rounded-xl bg-slate-900/80 border border-white/[0.06] flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-xs font-bold text-white block">Sound Effects</span>
-                <span className="text-[11px] text-slate-400">Marimba & chime feedback</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => soundEngine.playCorrectChime()}
-                  className="text-[11px] text-indigo-300 hover:text-white underline cursor-pointer"
-                >
-                  Test
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !sfxOn;
-                    soundEngine.setSfxEnabled(next);
-                    setSfxOn(next);
-                    if (next) soundEngine.playTapPop();
-                  }}
-                  className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${
-                    sfxOn ? 'bg-pink-500' : 'bg-slate-800'
-                  }`}
-                >
-                  <span className={`block w-4 h-4 rounded-full bg-white transition-transform ${
-                    sfxOn ? 'translate-x-5' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-            </div>
-
-            {/* Haptics Switch */}
-            <div className="p-3 rounded-xl bg-slate-900/80 border border-white/[0.06] flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-xs font-bold text-white block">Micro-Haptics</span>
-                <span className="text-[11px] text-slate-400">Tactile vibration on tap</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => haptics.success()}
-                  className="text-[11px] text-pink-300 hover:text-white underline cursor-pointer"
-                >
-                  Test
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !hapticsOn;
-                    haptics.setEnabled(next);
-                    setHapticsOn(next);
-                    if (next) haptics.pop();
-                  }}
-                  className={`w-10 h-6 rounded-full transition-colors relative cursor-pointer ${
-                    hapticsOn ? 'bg-pink-500' : 'bg-slate-800'
-                  }`}
-                >
-                  <span className={`block w-4 h-4 rounded-full bg-white transition-transform ${
-                    hapticsOn ? 'translate-x-5' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
+          <div>
+            <label htmlFor={`${fieldId}-token`} className="text-[13px] font-medium text-ink">
+              Pairing code
+            </label>
+            <p className="text-xs text-ink-subtle">Use the same code on each device you want to keep in sync.</p>
+            <div className="mt-1.5 flex gap-2">
+              <input
+                id={`${fieldId}-token`}
+                type="text"
+                value={token}
+                onChange={(e) => handleTokenChange(e.target.value)}
+                placeholder="Paste a code or make a new one"
+                spellCheck={false}
+                autoComplete="off"
+                className={cn(INPUT_CLASS, 'font-mono')}
+              />
+              {token && (
+                <Button icon={copied ? Check : Copy} onClick={handleCopy}>
+                  {copied ? 'Copied' : 'Copy'}
+                </Button>
+              )}
+              <Button onClick={handleNewToken}>New code</Button>
             </div>
           </div>
         </div>
+      </SettingGroup>
 
-        {/* Data Portability & Anki Export */}
-        <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/[0.08] space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white flex items-center gap-2 font-display">
-              <Download className="w-4 h-4 text-emerald-400" />
-              <span>Data Portability & Anki Sync</span>
-            </span>
-            <span className="text-[11px] text-slate-500 font-mono">Local-First</span>
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed font-sans">
-            Export your entire study history, streaks, and FSRS schedules, or export your flashcards directly to Anki.
-          </p>
+      <SettingGroup
+        title="Sync now"
+        description={
+          !config.enabled
+            ? 'Turn on sync above first.'
+            : !config.endpointUrl || !config.cloudToken
+              ? 'Add a server URL and a pairing code first.'
+              : config.lastSyncAt
+                ? `Last synced ${new Date(config.lastSyncAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}. Syncs after each review too.`
+                : 'Syncs after each review too.'
+        }
+        aside={status && <Badge tone={status.tone}>{status.label}</Badge>}
+      >
+        <div className="space-y-3">
+          <Button icon={RefreshCw} onClick={handleSyncNow} disabled={!canSync || isSyncing} className={cn(isSyncing && '[&>svg]:animate-spin')}>
+            {isSyncing ? 'Syncing…' : 'Sync now'}
+          </Button>
+          <NoticeLine notice={notice} />
+        </div>
+      </SettingGroup>
+    </div>
+  );
+};
 
+const DataSection: React.FC = () => {
+  const [notice, showNotice] = useNotice();
+  const [pendingRestore, setPendingRestore] = useState<{ name: string; content: string } | null>(null);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isWorking, setIsWorking] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleBackup = () => {
+    try {
+      const blob = new Blob([StorageService.exportAllDataAsJSON()], { type: 'application/json' });
+      ExportService.download(blob, `studify-backup-${fileDate()}.json`);
+      showNotice({ tone: 'success', text: 'Backup downloaded.' });
+    } catch {
+      showNotice({ tone: 'error', text: 'Could not make a backup.' });
+    }
+  };
+
+  const handleAnkiExport = () => {
+    try {
+      const blob = new Blob([StorageService.exportCardsToAnkiCSV()], { type: 'text/tab-separated-values;charset=utf-8' });
+      ExportService.download(blob, `studify-anki-${fileDate()}.txt`);
+      showNotice({ tone: 'success', text: 'Cards exported. In Anki, choose File › Import and pick this file.' });
+    } catch {
+      showNotice({ tone: 'error', text: 'Could not export your cards.' });
+    }
+  };
+
+  const handleFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setPendingRestore({ name: file.name, content: String(reader.result ?? '') });
+    reader.onerror = () => showNotice({ tone: 'error', text: 'Could not read that file.' });
+    reader.readAsText(file);
+  };
+
+  const handleRestore = () => {
+    if (!pendingRestore) return;
+    const result = StorageService.importDataFromJSON(pendingRestore.content);
+    setPendingRestore(null);
+    if (!result.success) {
+      showNotice({ tone: 'error', text: result.message }, 6000);
+      return;
+    }
+    // Reload so every screen and service starts from the restored data.
+    showNotice({ tone: 'success', text: `${result.message} Reloading…` }, 10000);
+    setTimeout(() => window.location.reload(), 1200);
+  };
+
+  const handleDelete = async () => {
+    setIsWorking(true);
+    await StorageService.clearStudyData();
+    window.location.reload();
+  };
+
+  return (
+    <div>
+      <SettingGroup
+        title="Backup"
+        description="Download your decks, cards, review history, subjects and stats as one file, or restore them from a backup."
+      >
+        <div className="flex flex-wrap gap-2">
+          <Button icon={Download} onClick={handleBackup}>
+            Download backup
+          </Button>
+          <Button icon={Upload} onClick={() => importInputRef.current?.click()}>
+            Restore from backup
+          </Button>
           <input
-            type="file"
             ref={importInputRef}
-            onChange={handleImportFile}
-            accept=".json"
+            type="file"
+            accept=".json,application/json"
+            onChange={handleFileChosen}
             className="hidden"
+            tabIndex={-1}
+            aria-hidden="true"
           />
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-            <button
-              onClick={handleExportJSON}
-              className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 border border-white/[0.08] transition-colors"
-            >
-              <Download className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Backup JSON</span>
-            </button>
-
-            <button
-              onClick={handleExportAnki}
-              className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 border border-white/[0.08] transition-colors"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-              <span>Export to Anki</span>
-            </button>
-
-            <button
-              onClick={() => importInputRef.current?.click()}
-              className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 border border-white/[0.08] transition-colors"
-            >
-              <Upload className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Restore JSON</span>
-            </button>
-          </div>
-
-          {backupMsg && (
-            <div className={`p-2.5 rounded-xl text-xs font-medium ${
-              backupMsg.type === 'success' 
-                ? 'bg-emerald-950/40 border border-emerald-800/60 text-emerald-300' 
-                : 'bg-rose-950/40 border border-rose-800/60 text-rose-300'
-            }`}>
-              {backupMsg.text}
-            </div>
-          )}
         </div>
+      </SettingGroup>
 
-        {/* Danger Zone */}
-        <div className="pt-2 border-t border-white/[0.08] flex items-center justify-between">
-          <div className="text-xs text-slate-400 font-sans">
-            Reset all local decks and habit statistics
-          </div>
-          <button
-            onClick={handleClearAll}
-            className="px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 text-xs font-bold flex items-center gap-1.5 transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Reset Data</span>
-          </button>
-        </div>
+      <SettingGroup title="Export to Anki" description="All your cards as a text file Anki can import, with answers and explanations.">
+        <Button icon={Download} onClick={handleAnkiExport}>
+          Export cards
+        </Button>
+      </SettingGroup>
 
-      </div>
-    </Dialog>
+      <NoticeLine notice={notice} />
+
+      <section className="mt-4 rounded-2xl border border-danger/30 p-4">
+        <h3 className="text-sm font-semibold text-ink">Delete study data</h3>
+        <p className="mt-1 text-[13px] leading-relaxed text-ink-subtle">
+          Removes this profile's decks, cards, review history, subjects and stats from this device. Your wallet, earnings, campus and avatar
+          are kept.
+        </p>
+        <Button variant="danger" size="sm" icon={Trash2} className="mt-3" onClick={() => setIsConfirmingDelete(true)}>
+          Delete study data
+        </Button>
+      </section>
+
+      <ConfirmDialog
+        isOpen={!!pendingRestore}
+        title="Restore this backup?"
+        confirmLabel="Restore"
+        onConfirm={handleRestore}
+        onCancel={() => setPendingRestore(null)}
+      >
+        Your current decks, subjects and stats will be replaced with the ones in{' '}
+        <span className="font-medium text-ink">{pendingRestore?.name}</span>. Studify reloads when it is done.
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        isOpen={isConfirmingDelete}
+        title="Delete all study data?"
+        confirmLabel={isWorking ? 'Deleting…' : 'Delete study data'}
+        tone="danger"
+        busy={isWorking}
+        onConfirm={handleDelete}
+        onCancel={() => setIsConfirmingDelete(false)}
+      >
+        This removes every deck, card, review and stat for this profile on this device. You cannot undo it. Download a backup first if you
+        might want them back.
+      </ConfirmDialog>
+    </div>
   );
 };
