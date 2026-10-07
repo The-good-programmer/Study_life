@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StorageService } from './storageService';
+import { IndexedDbService } from './indexedDbService';
+import type { RetrievalCard } from '../types';
 
 describe('StorageService', () => {
   beforeEach(() => {
@@ -534,3 +536,60 @@ describe('StorageService', () => {
   });
 });
 
+
+describe('StorageService localStorage overflow', () => {
+  const idb = new Map<string, string>();
+
+  beforeEach(() => {
+    localStorage.clear();
+    idb.clear();
+    vi.restoreAllMocks();
+    vi.spyOn(IndexedDbService, 'isSupported').mockReturnValue(true);
+    vi.spyOn(IndexedDbService, 'setItem').mockImplementation(async (k, v) => { idb.set(k, v); return true; });
+    vi.spyOn(IndexedDbService, 'getItem').mockImplementation(async (k) => idb.get(k) ?? null);
+    vi.spyOn(IndexedDbService, 'removeItem').mockImplementation(async (k) => { idb.delete(k); return true; });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    StorageService.setActiveUserId(null); // resets in-memory overflow between tests
+  });
+
+  const fillQuota = () => {
+    const real = localStorage.setItem.bind(localStorage);
+    return vi.spyOn(localStorage, 'setItem').mockImplementation((k: string, v: string) => {
+      if (k.startsWith('studify_cards_v1')) throw new DOMException('full', 'QuotaExceededError');
+      real(k, v);
+    });
+  };
+
+  const card = (id: string) => ({ id, front: 'q', back: 'a' }) as unknown as RetrievalCard;
+
+  it('keeps cards written after localStorage fills up, and serves the newest copy', () => {
+    StorageService.saveCards([card('old')]);
+    const spy = fillQuota();
+    StorageService.saveCards([card('old'), card('new')]);
+    expect(StorageService.getAllCards().map(c => c.id)).toEqual(expect.arrayContaining(['old', 'new']));
+    spy.mockRestore();
+  });
+
+  it('restores spilled cards from IndexedDB after a reload', async () => {
+    const spy = fillQuota();
+    StorageService.saveCards([card('spilled')]);
+    await Promise.resolve();
+    spy.mockRestore();
+
+    // Simulate a fresh page load: in-memory overflow is gone, IndexedDB survives.
+    StorageService.setActiveUserId(null);
+    expect(idb.size).toBe(1);
+    await StorageService.hydrateOverflow();
+    expect(StorageService.getAllCards().map(c => c.id)).toEqual(['spilled']);
+  });
+
+  it('drops the spilled copy once a write fits again', async () => {
+    const spy = fillQuota();
+    StorageService.saveCards([card('a')]);
+    spy.mockRestore();
+    StorageService.saveCards([card('b')]);
+    await Promise.resolve();
+    expect(idb.size).toBe(0);
+    expect(StorageService.getAllCards().map(c => c.id)).toEqual(expect.arrayContaining(['a', 'b']));
+  });
+});

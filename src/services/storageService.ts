@@ -39,6 +39,8 @@ export class StorageService {
 
   public static setActiveUserId(userId: string | null): void {
     this.activeUserId = userId;
+    this.overflow.clear();
+    void this.hydrateOverflow();
   }
 
   public static getActiveUserId(): string | null {
@@ -56,11 +58,60 @@ export class StorageService {
   }
 
   /**
-   * Resilient localStorage writer that protects against QuotaExceededError
+   * Values that did not fit in localStorage. They live in memory and are mirrored
+   * to IndexedDB (`overflow:<key>`), so reads must consult this map before localStorage.
+   */
+  private static overflow = new Map<string, string>();
+
+  private static readonly OVERFLOW_PREFIX = 'overflow:';
+
+  private static readRaw(key: string): string | null {
+    const spilled = this.overflow.get(key);
+    if (spilled !== undefined) return spilled;
+    return localStorage.getItem(key);
+  }
+
+  private static dropOverflow(key: string): void {
+    if (this.overflow.delete(key)) {
+      IndexedDbService.removeItem(this.OVERFLOW_PREFIX + key).catch(() => {});
+    }
+  }
+
+  /** Removes spilled copies of a key, including their IndexedDB mirror. */
+  private static purgeOverflow(key: string): void {
+    this.overflow.delete(key);
+    IndexedDbService.removeItem(this.OVERFLOW_PREFIX + key).catch(() => {});
+  }
+
+  /**
+   * Loads any spilled values for the active user from IndexedDB. Await this at startup
+   * and after switching users, before the UI reads study data.
+   */
+  public static async hydrateOverflow(): Promise<void> {
+    const bases = [
+      STORAGE_KEYS.SESSIONS,
+      STORAGE_KEYS.CARDS,
+      STORAGE_KEYS.EXAM_REPORTS,
+      STORAGE_KEYS.INTERLEAVING_REPORTS,
+      STORAGE_KEYS.ACTIVITY,
+      STORAGE_KEYS.FOLDERS,
+      STORAGE_KEYS.STATS,
+    ];
+    await Promise.all(bases.map(async (base) => {
+      const key = this.getKey(base);
+      const value = await IndexedDbService.getItem(this.OVERFLOW_PREFIX + key);
+      if (value !== null && !this.overflow.has(key)) this.overflow.set(key, value);
+    }));
+  }
+
+  /**
+   * Resilient writer that protects against QuotaExceededError. Data that cannot fit in
+   * localStorage is kept durably in IndexedDB and served back through readRaw.
    */
   private static safeSetItem(key: string, value: string): boolean {
     try {
       localStorage.setItem(key, value);
+      this.dropOverflow(key);
       return true;
     } catch (e) {
       console.warn(`[StorageService] localStorage.setItem failed for key "${key}":`, e);
@@ -68,15 +119,21 @@ export class StorageService {
         try {
           // Prune ephemeral diagram caches from localStorage (these are backed up in IndexedDB)
           localStorage.removeItem(this.getKey(STORAGE_KEYS.DIAGRAMS));
-          
+
           // Retry write without destroying any user decks
           localStorage.setItem(key, value);
+          this.dropOverflow(key);
           return true;
         } catch {
-          // If still constrained, store payload durably in IndexedDB to prevent data loss
-          IndexedDbService.setItem(key, value).catch(idbErr => {
-            console.error('[StorageService] IndexedDB quota fallback failed:', idbErr);
-          });
+          // Still constrained: keep the newest value in memory and persist it to IndexedDB.
+          // A stale localStorage copy may remain, but readRaw always prefers this value.
+          if (IndexedDbService.isSupported()) {
+            this.overflow.set(key, value);
+            IndexedDbService.setItem(this.OVERFLOW_PREFIX + key, value).then((ok) => {
+              if (!ok) console.error('[StorageService] IndexedDB overflow write failed for', key);
+            });
+            return true;
+          }
         }
       }
       return false;
@@ -110,7 +167,7 @@ export class StorageService {
   }
 
   public static getStats(): UserStats {
-    const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.STATS));
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.STATS));
     const today = new Date().toISOString().split('T')[0];
 
     const defaultStats: UserStats = {
@@ -253,7 +310,7 @@ export class StorageService {
   }
 
   public static getActivityHistory(): Record<string, number> {
-    const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.ACTIVITY));
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.ACTIVITY));
     if (!raw) return {};
     try {
       return JSON.parse(raw);
@@ -496,7 +553,7 @@ export class StorageService {
   }
 
   public static getSoundPreference(): string {
-    return localStorage.getItem(this.getKey(STORAGE_KEYS.SOUND_PREF)) || 'binaural-40hz';
+    return this.readRaw(this.getKey(STORAGE_KEYS.SOUND_PREF)) || 'binaural-40hz';
   }
 
   public static setSoundPreference(pref: string): void {
@@ -504,7 +561,7 @@ export class StorageService {
   }
 
   public static getAllCards(): RetrievalCard[] {
-    const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.CARDS));
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.CARDS));
     let cards: RetrievalCard[] = [];
     if (raw) {
       try {
@@ -561,7 +618,7 @@ export class StorageService {
    * Syncs cards from a study session into the global CARDS queue while preserving existing FSRS review progress.
    */
   private static syncSessionCardsToGlobalQueue(sessionCards: RetrievalCard[]): void {
-    const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.CARDS));
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.CARDS));
     let existingCards: RetrievalCard[] = [];
     if (raw) {
       try { existingCards = JSON.parse(raw); } catch { existingCards = []; }
@@ -669,7 +726,7 @@ export class StorageService {
     if (sessionToDelete) {
       const cardIdsToDelete = new Set(sessionToDelete.concepts?.flatMap(c => c.retrievalCards?.map(rc => rc.id) || []) || []);
       if (cardIdsToDelete.size > 0) {
-        const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.CARDS));
+        const raw = this.readRaw(this.getKey(STORAGE_KEYS.CARDS));
         if (raw) {
           try {
             const cards: RetrievalCard[] = JSON.parse(raw);
@@ -683,7 +740,7 @@ export class StorageService {
   }
 
   public static getSessions(): StudySession[] {
-    const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.SESSIONS));
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.SESSIONS));
     if (!raw) return [];
     try {
       return JSON.parse(raw);
@@ -693,7 +750,7 @@ export class StorageService {
   }
 
   public static getFolders(): SubjectFolder[] {
-    const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.FOLDERS));
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.FOLDERS));
     if (!raw) return [];
     try {
       const parsed = JSON.parse(raw);
@@ -803,7 +860,7 @@ export class StorageService {
       if (data.stats) this.saveStats(data.stats);
       if (data.cards && Array.isArray(data.cards)) this.saveCards(data.cards);
       if (data.sessions && Array.isArray(data.sessions)) {
-        localStorage.setItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(data.sessions));
+        this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(data.sessions));
       }
       if (data.folders && Array.isArray(data.folders)) {
         this.saveFolders(data.folders);
@@ -841,7 +898,7 @@ export class StorageService {
   }
 
   public static getExamReports(): ExamReport[] {
-    const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.EXAM_REPORTS));
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.EXAM_REPORTS));
     if (!raw) return [];
     try {
       return JSON.parse(raw);
@@ -857,7 +914,7 @@ export class StorageService {
   }
 
   public static getInterleavingReports(): InterleavingSessionReport[] {
-    const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.INTERLEAVING_REPORTS));
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.INTERLEAVING_REPORTS));
     if (!raw) return [];
     try {
       return JSON.parse(raw);
@@ -870,7 +927,7 @@ export class StorageService {
     // Save to IndexedDB asynchronously for unconstrained persistence
     IndexedDbService.setItem(`diagram_${conceptId}`, dataUrl).catch(() => {});
     try {
-      const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.DIAGRAMS));
+      const raw = this.readRaw(this.getKey(STORAGE_KEYS.DIAGRAMS));
       const map = raw ? JSON.parse(raw) : {};
       map[conceptId] = dataUrl;
       this.safeSetItem(this.getKey(STORAGE_KEYS.DIAGRAMS), JSON.stringify(map));
@@ -881,7 +938,7 @@ export class StorageService {
 
   public static getConceptDiagram(conceptId: string): string | null {
     try {
-      const raw = localStorage.getItem(this.getKey(STORAGE_KEYS.DIAGRAMS));
+      const raw = this.readRaw(this.getKey(STORAGE_KEYS.DIAGRAMS));
       if (!raw) return null;
       const map = JSON.parse(raw);
       return map[conceptId] || null;
@@ -901,9 +958,9 @@ export class StorageService {
    */
   public static hasGuestData(): boolean {
     try {
-      const sessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
-      const cards = localStorage.getItem(STORAGE_KEYS.CARDS);
-      const stats = localStorage.getItem(STORAGE_KEYS.STATS);
+      const sessions = this.readRaw(STORAGE_KEYS.SESSIONS);
+      const cards = this.readRaw(STORAGE_KEYS.CARDS);
+      const stats = this.readRaw(STORAGE_KEYS.STATS);
       const parsedSessions = sessions ? JSON.parse(sessions) : [];
       const parsedCards = cards ? JSON.parse(cards) : [];
       const parsedStats = stats ? JSON.parse(stats) : null;
@@ -922,9 +979,9 @@ export class StorageService {
    */
   public static getGuestDataSummary(): { deckCount: number; cardCount: number; xp: number } {
     try {
-      const sessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
-      const cards = localStorage.getItem(STORAGE_KEYS.CARDS);
-      const stats = localStorage.getItem(STORAGE_KEYS.STATS);
+      const sessions = this.readRaw(STORAGE_KEYS.SESSIONS);
+      const cards = this.readRaw(STORAGE_KEYS.CARDS);
+      const stats = this.readRaw(STORAGE_KEYS.STATS);
       const parsedSessions = sessions ? JSON.parse(sessions) : [];
       const parsedCards = cards ? JSON.parse(cards) : [];
       const parsedStats = stats ? JSON.parse(stats) : null;
@@ -944,11 +1001,17 @@ export class StorageService {
   public static clearGuestData(): void {
     try {
       localStorage.removeItem(STORAGE_KEYS.SESSIONS);
+      this.purgeOverflow(STORAGE_KEYS.SESSIONS);
       localStorage.removeItem(STORAGE_KEYS.CARDS);
+      this.purgeOverflow(STORAGE_KEYS.CARDS);
       localStorage.removeItem(STORAGE_KEYS.STATS);
+      this.purgeOverflow(STORAGE_KEYS.STATS);
       localStorage.removeItem(STORAGE_KEYS.ACTIVITY);
+      this.purgeOverflow(STORAGE_KEYS.ACTIVITY);
       localStorage.removeItem(STORAGE_KEYS.EXAM_REPORTS);
+      this.purgeOverflow(STORAGE_KEYS.EXAM_REPORTS);
       localStorage.removeItem(STORAGE_KEYS.INTERLEAVING_REPORTS);
+      this.purgeOverflow(STORAGE_KEYS.INTERLEAVING_REPORTS);
       localStorage.removeItem(STORAGE_KEYS.DIAGRAMS);
       localStorage.removeItem(STORAGE_KEYS.GUEST_PROFILE);
     } catch (e) {
@@ -964,13 +1027,13 @@ export class StorageService {
     userId: string,
     clearGuest: boolean = true
   ): { migratedDecks: number; migratedCards: number; migratedXP: number } {
-    const guestSessionsRaw = localStorage.getItem(STORAGE_KEYS.SESSIONS);
-    const guestCardsRaw = localStorage.getItem(STORAGE_KEYS.CARDS);
-    const guestStatsRaw = localStorage.getItem(STORAGE_KEYS.STATS);
-    const guestActivityRaw = localStorage.getItem(STORAGE_KEYS.ACTIVITY);
-    const guestExamRaw = localStorage.getItem(STORAGE_KEYS.EXAM_REPORTS);
-    const guestInterleaveRaw = localStorage.getItem(STORAGE_KEYS.INTERLEAVING_REPORTS);
-    const guestDiagramsRaw = localStorage.getItem(STORAGE_KEYS.DIAGRAMS);
+    const guestSessionsRaw = this.readRaw(STORAGE_KEYS.SESSIONS);
+    const guestCardsRaw = this.readRaw(STORAGE_KEYS.CARDS);
+    const guestStatsRaw = this.readRaw(STORAGE_KEYS.STATS);
+    const guestActivityRaw = this.readRaw(STORAGE_KEYS.ACTIVITY);
+    const guestExamRaw = this.readRaw(STORAGE_KEYS.EXAM_REPORTS);
+    const guestInterleaveRaw = this.readRaw(STORAGE_KEYS.INTERLEAVING_REPORTS);
+    const guestDiagramsRaw = this.readRaw(STORAGE_KEYS.DIAGRAMS);
 
     let migratedDecks = 0;
     let migratedCards = 0;
@@ -990,7 +1053,7 @@ export class StorageService {
     // 1. Merge Sessions
     if (guestSessions.length > 0) {
       const userSessionsKey = `${STORAGE_KEYS.SESSIONS}_${userId}`;
-      const userSessionsRaw = localStorage.getItem(userSessionsKey);
+      const userSessionsRaw = this.readRaw(userSessionsKey);
       let userSessions: StudySession[] = [];
       if (userSessionsRaw) {
         try {
@@ -1038,7 +1101,7 @@ export class StorageService {
 
     if (guestCards.length > 0 || guestSessions.length > 0) {
       const userCardsKey = `${STORAGE_KEYS.CARDS}_${userId}`;
-      const userCardsRaw = localStorage.getItem(userCardsKey);
+      const userCardsRaw = this.readRaw(userCardsKey);
       let userCards: RetrievalCard[] = [];
       if (userCardsRaw) {
         try {
@@ -1082,7 +1145,7 @@ export class StorageService {
         migratedXP = guestStats.xp || 0;
 
         const userStatsKey = `${STORAGE_KEYS.STATS}_${userId}`;
-        const userStatsRaw = localStorage.getItem(userStatsKey);
+        const userStatsRaw = this.readRaw(userStatsKey);
         let userStats: UserStats | null = null;
         if (userStatsRaw) {
           try {
@@ -1128,7 +1191,7 @@ export class StorageService {
         const guestActivity = JSON.parse(guestActivityRaw);
         if (Array.isArray(guestActivity) && guestActivity.length > 0) {
           const userActivityKey = `${STORAGE_KEYS.ACTIVITY}_${userId}`;
-          const userActivityRaw = localStorage.getItem(userActivityKey);
+          const userActivityRaw = this.readRaw(userActivityKey);
           let userActivity: any[] = [];
           if (userActivityRaw) {
             try {
@@ -1153,7 +1216,7 @@ export class StorageService {
         const guestExams = JSON.parse(guestExamRaw);
         if (Array.isArray(guestExams) && guestExams.length > 0) {
           const userExamKey = `${STORAGE_KEYS.EXAM_REPORTS}_${userId}`;
-          const userExamRaw = localStorage.getItem(userExamKey);
+          const userExamRaw = this.readRaw(userExamKey);
           let userExams: ExamReport[] = [];
           if (userExamRaw) {
             try {
@@ -1177,7 +1240,7 @@ export class StorageService {
         const guestInter = JSON.parse(guestInterleaveRaw);
         if (Array.isArray(guestInter) && guestInter.length > 0) {
           const userInterKey = `${STORAGE_KEYS.INTERLEAVING_REPORTS}_${userId}`;
-          const userInterRaw = localStorage.getItem(userInterKey);
+          const userInterRaw = this.readRaw(userInterKey);
           let userInter: InterleavingSessionReport[] = [];
           if (userInterRaw) {
             try {
@@ -1200,7 +1263,7 @@ export class StorageService {
       try {
         const guestDiagrams = JSON.parse(guestDiagramsRaw);
         const userDiagramsKey = `${STORAGE_KEYS.DIAGRAMS}_${userId}`;
-        const userDiagramsRaw = localStorage.getItem(userDiagramsKey);
+        const userDiagramsRaw = this.readRaw(userDiagramsKey);
         let userDiagrams = {};
         if (userDiagramsRaw) {
           try {
@@ -1227,11 +1290,17 @@ export class StorageService {
   public static purgeUserData(userId: string): void {
     try {
       localStorage.removeItem(`${STORAGE_KEYS.SESSIONS}_${userId}`);
+      this.purgeOverflow(`${STORAGE_KEYS.SESSIONS}_${userId}`);
       localStorage.removeItem(`${STORAGE_KEYS.CARDS}_${userId}`);
+      this.purgeOverflow(`${STORAGE_KEYS.CARDS}_${userId}`);
       localStorage.removeItem(`${STORAGE_KEYS.STATS}_${userId}`);
+      this.purgeOverflow(`${STORAGE_KEYS.STATS}_${userId}`);
       localStorage.removeItem(`${STORAGE_KEYS.ACTIVITY}_${userId}`);
+      this.purgeOverflow(`${STORAGE_KEYS.ACTIVITY}_${userId}`);
       localStorage.removeItem(`${STORAGE_KEYS.EXAM_REPORTS}_${userId}`);
+      this.purgeOverflow(`${STORAGE_KEYS.EXAM_REPORTS}_${userId}`);
       localStorage.removeItem(`${STORAGE_KEYS.INTERLEAVING_REPORTS}_${userId}`);
+      this.purgeOverflow(`${STORAGE_KEYS.INTERLEAVING_REPORTS}_${userId}`);
       localStorage.removeItem(`${STORAGE_KEYS.DIAGRAMS}_${userId}`);
     } catch (e) {
       console.warn('[StorageService] Error purging user data:', e);
