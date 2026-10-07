@@ -338,7 +338,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [stage, currentItem, isAnswerSubmitted, effectiveCardType, hasOptions, selectedConfidence, handleSubmitCurrentAnswer, advanceQuestion, results, isExitConfirmOpen]);
+  }, [stage, currentItem, isAnswerSubmitted, effectiveCardType, hasOptions, cardOptions, selectedConfidence, handleSubmitCurrentAnswer, advanceQuestion, results, isExitConfirmOpen]);
 
   // Launch Remediation Session
   const handleLaunchRemediation = () => {
