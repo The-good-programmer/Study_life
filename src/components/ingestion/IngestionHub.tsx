@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
+  X,
   Sparkles, 
   FileText, 
   ArrowRight, 
@@ -40,13 +41,11 @@ import {
   FolderPlus,
   FolderInput
 } from 'lucide-react';
-import type { StudySession, StarterDeckMetadata, RetrievalCard, DepthTier, StudentEducationProfile, UserAccount, SubjectFolder } from '../../types';
+import type { StudySession, StarterDeckMetadata, RetrievalCard, DepthTier, SubjectFolder } from '../../types';
 import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
-import { AIService } from '../../services/aiService';
 import { PDFService } from '../../services/pdfService';
 import type { ExtractedPDF } from '../../services/pdfService';
 import { StorageService } from '../../services/storageService';
-import { AuthService } from '../../services/authService';
 import { ExportService } from '../../services/exportService';
 import { soundEngine } from '../../services/soundEngine';
 import { lifeSimService } from '../../services/lifeSimService';
@@ -54,6 +53,7 @@ import { CharacterCompanion } from '../character/CharacterCompanion';
 import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
 import { DepthEstimationService, SUPPORTED_LANGUAGES } from '../../services/depthEstimationService';
 import { EducationProfileModal } from './EducationProfileModal';
+import { useDeckGeneration } from './useDeckGeneration';
 import { EducationCatalog } from '../../services/educationCatalog';
 import { SubjectFolderModal } from '../studio/SubjectFolderModal';
 import { FOLDER_COLORS } from '../studio/folderOptions';
@@ -128,30 +128,16 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   const [ingestMode, setIngestMode] = useState<'pdf' | 'topic' | 'notes' | 'occlusion'>('pdf');
   const [topicInput, setTopicInput] = useState('');
   const [notesInput, setNotesInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [isStarterCatalogModalOpen, setIsStarterCatalogModalOpen] = useState(false);
   const [justImportedId, setJustImportedId] = useState<string | null>(null);
   const [isTourModalOpen, setIsTourModalOpen] = useState(false);
 
-  // User & Educational Profile State
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => AuthService.getCurrentUser());
-  const [guestProfile, setGuestProfile] = useState<StudentEducationProfile | null>(() => StorageService.getGuestEducationProfile());
-  const [isEducationModalOpen, setIsEducationModalOpen] = useState(false);
-  const [pendingGenerate, setPendingGenerate] = useState<(() => void) | null>(null);
 
   // Multilingual State
   const [selectedLanguageCode, setSelectedLanguageCode] = useState<string>('auto');
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
 
-  // Sync auth state
-  useEffect(() => {
-    const unsub = AuthService.subscribe((user) => {
-      setCurrentUser(user);
-    });
-    return unsub;
-  }, []);
-
-  // LifeSim Token Wallet State
+  // LifeSim Token Wallet State  // LifeSim Token Wallet State
   const [walletCoins, setWalletCoins] = useState(() => lifeSimService.getWalletBalance());
   useEffect(() => {
     const unsub = lifeSimService.subscribe(() => {
@@ -159,29 +145,6 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
     });
     return unsub;
   }, []);
-
-  const effectiveProfile = useMemo((): StudentEducationProfile | null => {
-    if (currentUser) {
-      return {
-        age: currentUser.age,
-        country: currentUser.country,
-        grade: currentUser.grade,
-      };
-    }
-    return guestProfile;
-  }, [currentUser, guestProfile]);
-
-  const getEffectiveProfile = (): StudentEducationProfile | null => {
-    const user = AuthService.getCurrentUser();
-    if (user) {
-      return {
-        age: user.age,
-        country: user.country,
-        grade: user.grade,
-      };
-    }
-    return guestProfile || StorageService.getGuestEducationProfile();
-  };
 
   // Real-time language detection
   const detectedLanguage = useMemo(() => {
@@ -242,6 +205,12 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   }, []);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const generation = useDeckGeneration({
+    onSessionReady: onStartSession,
+    onSessionSaved: () => setSavedSessions(StorageService.getSessions()),
+  });
+  const { isLoading, effectiveProfile, profileModal } = generation;
 
   const stats = StorageService.getStats();
   const dueCards = StorageService.getDueCards();
@@ -307,168 +276,21 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
     }
   };
 
-  const handleSaveEducationProfile = (newProfile: StudentEducationProfile) => {
-    const user = AuthService.getCurrentUser();
-    if (user) {
-      AuthService.updateProfile(user.id, {
-        country: newProfile.country,
-        grade: newProfile.grade,
-        age: newProfile.age,
-      });
-    } else {
-      StorageService.saveGuestEducationProfile(newProfile);
-      setGuestProfile(newProfile);
-    }
-    setIsEducationModalOpen(false);
-
-    if (pendingGenerate) {
-      const fn = pendingGenerate;
-      setPendingGenerate(null);
-      setTimeout(() => {
-        fn();
-      }, 50);
-    }
+  const handleLaunchPDFSession = () => {
+    if (extractedPdf) generation.generate({ kind: 'pdf', pdf: extractedPdf });
   };
 
-  const executeLaunchPDFSession = async (profile: StudentEducationProfile) => {
-    if (!extractedPdf) return;
-    setIsLoading(true);
-    try {
-      const session = await AIService.generateStudySession(
-        extractedPdf.text,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        profile
-      );
-      session.title = extractedPdf.fileName;
-
-      // Ground session with primary source document
-      session.sourceDocument = {
-        name: extractedPdf.fileName,
-        totalPages: extractedPdf.numPages,
-        pages: extractedPdf.pages,
-        pdfDataUrl: extractedPdf.pdfDataUrl,
-      };
-
-      // Ground each concept and card with exact page anchors
-      session.concepts = session.concepts.map(concept => {
-        const keywords = [concept.title, ...concept.coreTakeaways, ...concept.keyTerms.map(k => k.term)];
-        const anchor = PDFService.findBestSourceAnchor(keywords, extractedPdf.pages, extractedPdf.fileName);
-
-        const groundedCards = concept.retrievalCards.map(card => {
-          const cardKeywords = [card.question, card.answer, ...(card.options || [])];
-          const cardAnchor = PDFService.findBestSourceAnchor(cardKeywords, extractedPdf.pages, extractedPdf.fileName);
-          return {
-            ...card,
-            sourceAnchor: cardAnchor,
-          };
-        });
-
-        return {
-          ...concept,
-          sourceAnchor: anchor,
-          retrievalCards: groundedCards,
-        };
-      });
-
-      StorageService.saveSession(session);
-      setSavedSessions(StorageService.getSessions());
-      onStartSession(session);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleGenerateTopic = (topicToUse?: string) => {
+    generation.generate({
+      kind: 'topic',
+      text: topicToUse || topicInput,
+      depthTier: effectiveTier,
+      languageCode: effectiveLanguage.code,
+    });
   };
 
-  const handleLaunchPDFSession = async () => {
-    if (!extractedPdf) return;
-    const profile = getEffectiveProfile();
-    if (!profile) {
-      setPendingGenerate(() => () => {
-        const p = getEffectiveProfile();
-        if (p) executeLaunchPDFSession(p);
-      });
-      setIsEducationModalOpen(true);
-      return;
-    }
-    await executeLaunchPDFSession(profile);
-  };
-
-  const executeGenerateTopic = async (text: string, profile: StudentEducationProfile) => {
-    setIsLoading(true);
-    try {
-      const session = await AIService.generateStudySession(
-        text,
-        false,
-        effectiveTier,
-        effectiveLanguage.code,
-        undefined,
-        profile
-      );
-      StorageService.saveSession(session);
-      setSavedSessions(StorageService.getSessions());
-      onStartSession(session);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGenerateTopic = async (topicToUse?: string) => {
-    const text = topicToUse || topicInput;
-    if (!text.trim()) return;
-
-    const profile = getEffectiveProfile();
-    if (!profile) {
-      setPendingGenerate(() => () => {
-        const p = getEffectiveProfile();
-        if (p) executeGenerateTopic(text, p);
-      });
-      setIsEducationModalOpen(true);
-      return;
-    }
-
-    await executeGenerateTopic(text, profile);
-  };
-
-  const executeDecomposeNotes = async (profile: StudentEducationProfile) => {
-    if (!notesInput.trim()) return;
-    setIsLoading(true);
-    try {
-      const session = await AIService.generateStudySession(
-        notesInput,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        profile
-      );
-      StorageService.saveSession(session);
-      setSavedSessions(StorageService.getSessions());
-      onStartSession(session);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDecomposeNotes = async () => {
-    if (!notesInput.trim()) return;
-    const profile = getEffectiveProfile();
-    if (!profile) {
-      setPendingGenerate(() => () => {
-        const p = getEffectiveProfile();
-        if (p) executeDecomposeNotes(p);
-      });
-      setIsEducationModalOpen(true);
-      return;
-    }
-    await executeDecomposeNotes(profile);
+  const handleDecomposeNotes = () => {
+    generation.generate({ kind: 'notes', text: notesInput });
   };
 
   const handleDeleteDeck = (id: string, e: React.MouseEvent) => {
@@ -588,6 +410,21 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
           </div>
         </div>
 
+        {generation.error && (
+          <div role="alert" className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span className="flex-1">{generation.error}</span>
+            <button
+              type="button"
+              onClick={generation.dismissError}
+              aria-label="Dismiss error"
+              className="text-rose-300/70 hover:text-rose-200 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Central Ingestion Input Card (Gizmo Style) */}
         <div className="p-5 sm:p-6 rounded-3xl glass-panel-elevated space-y-4 border border-indigo-500/20 shadow-2xl">
           <form 
@@ -696,7 +533,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                   {/* Profile Change / Set Button */}
                   <button
                     type="button"
-                    onClick={() => setIsEducationModalOpen(true)}
+                    onClick={profileModal.open}
                     className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-semibold text-white flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
@@ -1841,18 +1678,15 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
       )}
 
       {/* Educational Profile Calibration Modal */}
-      {isEducationModalOpen && (
+      {profileModal.isOpen && (
         <EducationProfileModal
-          isOpen={isEducationModalOpen}
+          isOpen={profileModal.isOpen}
           initialProfile={effectiveProfile}
-          onClose={() => {
-            setIsEducationModalOpen(false);
-            setPendingGenerate(null);
-          }}
-          onSave={handleSaveEducationProfile}
+          onClose={profileModal.close}
+          onSave={profileModal.save}
           title={effectiveProfile ? "Update Educational Calibration" : "Calibrate Your Grade & Curriculum"}
           description={effectiveProfile ? "Modify your grade, country, or age so Gemini adjusts studying complexity accordingly." : "Tell Gemini your country and grade so the study plan, mental models, and flashcards perfectly match your curriculum."}
-          actionLabel={pendingGenerate ? "Save & Generate Study Plan ✨" : "Save Learning Profile"}
+          actionLabel={profileModal.willGenerate ? "Save & Generate Study Plan ✨" : "Save Learning Profile"}
         />
       )}
 
