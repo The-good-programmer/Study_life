@@ -6,6 +6,10 @@ import { IconButton } from '../ui/primitives';
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Dialogs can open over each other (a folder picker over deck details); only the top one handles keys.
+const openDialogs: number[] = [];
+let nextDialogId = 0;
+
 interface DialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -19,7 +23,8 @@ interface DialogProps {
 /**
  * Accessible modal: Escape and backdrop click close it, Tab stays inside, and focus
  * returns to where it was. Put `data-autofocus` on the element that should get focus
- * first; otherwise the first focusable element does.
+ * first; otherwise the first focusable element does. A child that handles Escape itself
+ * (an open menu, say) calls preventDefault() and the dialog stays open.
  */
 export const Dialog: React.FC<DialogProps> = ({
   isOpen,
@@ -44,9 +49,14 @@ export const Dialog: React.FC<DialogProps> = ({
     if (!isOpen) return;
 
     previousActiveElement.current = document.activeElement as HTMLElement;
+    const id = ++nextDialogId;
+    openDialogs.push(id);
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (openDialogs[openDialogs.length - 1] !== id) return;
+
       if (e.key === 'Escape') {
+        if (e.defaultPrevented) return;
         e.stopPropagation();
         onCloseRef.current();
         return;
@@ -58,6 +68,13 @@ export const Dialog: React.FC<DialogProps> = ({
 
         const firstElement = focusableElements[0];
         const lastElement = focusableElements[focusableElements.length - 1];
+
+        // Focus can fall back to <body> (say, after a nested dialog closes); bring it back inside.
+        if (!dialogRef.current.contains(document.activeElement)) {
+          e.preventDefault();
+          (e.shiftKey ? lastElement : firstElement).focus();
+          return;
+        }
 
         if (e.shiftKey) {
           if (document.activeElement === firstElement) {
@@ -83,6 +100,7 @@ export const Dialog: React.FC<DialogProps> = ({
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       clearTimeout(timer);
+      openDialogs.splice(openDialogs.indexOf(id), 1);
       if (previousActiveElement.current && typeof previousActiveElement.current.focus === 'function') {
         previousActiveElement.current.focus();
       }

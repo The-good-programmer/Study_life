@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { RetrievalCard } from '../../types';
-import { groupNextReviews } from './sessionSchedule';
+import { describeNextReview, groupNextReviews } from './sessionSchedule';
 
 const NOW = new Date(2026, 2, 4, 15, 30); // 4 March, mid-afternoon
 
@@ -50,5 +50,23 @@ describe('groupNextReviews', () => {
   it('skips cards that are not scheduled or have a bad date', () => {
     const bad = { ...cardDue('x'), nextReviewDate: 'not a date' } as RetrievalCard;
     expect(groupNextReviews([cardDue('a'), bad], NOW)).toEqual([]);
+  });
+});
+
+describe('describeNextReview', () => {
+  it('says a card is due once its review time has passed', () => {
+    expect(describeNextReview(cardDue('a', at(-2)), NOW)).toBe('Due now');
+    expect(describeNextReview(cardDue('a', at(0, 9)), NOW)).toBe('Due now');
+  });
+
+  it('labels future reviews by calendar day', () => {
+    expect(describeNextReview(cardDue('a', at(0, 20)), NOW)).toBe('Later today');
+    expect(describeNextReview(cardDue('a', at(1, 0)), NOW)).toBe('Tomorrow');
+    expect(describeNextReview(cardDue('a', at(5)), NOW)).toBe('In 5 days');
+  });
+
+  it('returns null for cards that are not scheduled', () => {
+    expect(describeNextReview(cardDue('a'), NOW)).toBeNull();
+    expect(describeNextReview({ nextReviewDate: 'soon' }, NOW)).toBeNull();
   });
 });

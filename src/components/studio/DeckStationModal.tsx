@@ -1,34 +1,39 @@
 import React, { useState } from 'react';
-import { 
-  Play, 
-  Star, 
-  Sparkles, 
-  Layers, 
-  X, 
-  Clock, 
-  ShieldCheck, 
-  Zap, 
-  Headphones, 
-  FileText, 
-  Search, 
-  Printer, 
-  Download, 
-  Edit3, 
+import type { LucideIcon } from 'lucide-react';
+import {
   ArrowRight,
-  Eye,
   ChevronDown,
-  ChevronUp,
+  Clock,
+  Edit3,
+  FileJson,
+  FileText,
+  FolderInput,
+  Headphones,
+  Layers,
+  Play,
+  Printer,
+  Search,
   Share2,
-  FileJson
+  Star,
+  X,
+  Zap,
 } from 'lucide-react';
-import type { StudySession, RetrievalCard, SubjectFolder } from '../../types';
+import type { CardType, RetrievalCard, StudySession, SubjectFolder } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { ExportService } from '../../services/exportService';
 import { soundEngine } from '../../services/soundEngine';
+import { lifeSimService } from '../../services/lifeSimService';
+import { estimateReward } from '../../services/economy/rewardService';
+import { maskCloze } from '../../utils/cloze';
+import { cn } from '../../utils/cn';
+import { CARD_TYPE_LABELS, getEffectiveCardType } from '../cockpit/retrievalLogic';
+import { describeNextReview } from '../cockpit/sessionSchedule';
+import { Dialog, DialogPanel } from '../common/Dialog';
+import { ActionMenu } from '../ui/ActionMenu';
+import { Badge, Button, IconButton, Tokens } from '../ui/primitives';
 import { MoveToFolderModal } from './MoveToFolderModal';
 import { SubjectFolderModal } from './SubjectFolderModal';
 import { FOLDER_COLORS } from './folderOptions';
-import { fillCloze } from '../../utils/cloze';
 
 interface DeckStationModalProps {
   isOpen: boolean;
@@ -41,6 +46,59 @@ interface DeckStationModalProps {
   onEditInStudio: (session: StudySession) => void;
 }
 
+/** A card counts as mastered once it is expected to stay remembered for three weeks. */
+const MASTERED_STABILITY_DAYS = 21;
+
+type CardStatus = 'mastered' | 'learning' | 'new';
+
+const statusOf = (card: RetrievalCard): CardStatus =>
+  card.reps === 0 ? 'new' : card.stability >= MASTERED_STABILITY_DAYS ? 'mastered' : 'learning';
+
+const STATUS_STYLES: Record<CardStatus, { label: string; dot: string }> = {
+  mastered: { label: 'Mastered', dot: 'bg-success' },
+  learning: { label: 'Learning', dot: 'bg-brand' },
+  new: { label: 'New', dot: 'bg-ink-subtle' },
+};
+
+const GUIDED_STEPS = ['Warm-up', 'Overview', 'Explain', 'Recall', 'Rest'];
+
+/** FSRS stability, in words: roughly how long the card stays remembered. */
+const formatMemory = (days: number): string => {
+  if (days < 1) return 'less than a day';
+  const rounded = Math.round(days);
+  if (rounded < 60) return `about ${rounded} ${rounded === 1 ? 'day' : 'days'}`;
+  return `about ${Math.round(days / 30)} months`;
+};
+
+type CardFilter = 'all' | 'starred' | CardType;
+
+/**
+ * Reviews and stars are saved per card, so the deck's own copies can lag behind.
+ * Takes progress from the saved cards and content from the deck.
+ */
+const withSavedProgress = (session: StudySession): RetrievalCard[] => {
+  const saved = new Map(StorageService.getAllCards().map(card => [card.id, card]));
+  return session.concepts.flatMap(concept =>
+    concept.retrievalCards.map(card => {
+      const live = saved.get(card.id);
+      if (!live) return card;
+      return {
+        ...card,
+        stability: live.stability ?? card.stability,
+        difficulty: live.difficulty ?? card.difficulty,
+        reps: live.reps ?? card.reps,
+        lapses: live.lapses ?? card.lapses,
+        lastReviewDate: live.lastReviewDate ?? card.lastReviewDate,
+        nextReviewDate: live.nextReviewDate ?? card.nextReviewDate,
+        isStarred: live.isStarred ?? card.isStarred,
+      };
+    }),
+  );
+};
+
+const totalMinutesOf = (session: StudySession): number =>
+  session.concepts.reduce((sum, concept) => sum + (concept.estimatedMinutes || 5), 0);
+
 function createStarredSession(session: StudySession, starredOnlyCards: RetrievalCard[]): StudySession {
   return {
     ...session,
@@ -50,16 +108,16 @@ function createStarredSession(session: StudySession, starredOnlyCards: Retrieval
       {
         id: 'starred-concept',
         order: 1,
-        title: 'High-Priority Starred Drill',
+        title: 'Starred cards',
         estimatedMinutes: Math.max(5, starredOnlyCards.length * 2),
-        mentalModel: 'Focused active retrieval targeted specifically at bookmarked cards.',
-        coreTakeaways: ['High-yield targeted practice on prior struggles.'],
+        mentalModel: 'A focused pass over the cards you bookmarked.',
+        coreTakeaways: ['Practise the cards you found hardest.'],
         keyTerms: [],
-        feynmanPrompt: 'Explain how focused repetition on starred cards cures memory interference.',
-        sampleMasteryExplanation: 'Targeted retrieval on tagged items reduces error density.',
+        feynmanPrompt: 'Explain the idea behind the cards you starred, in your own words.',
+        sampleMasteryExplanation: 'Going back to the hardest cards closes the gaps fastest.',
         retrievalCards: starredOnlyCards,
-      }
-    ]
+      },
+    ],
   };
 }
 
@@ -73,581 +131,364 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
   onStartAudioBriefing,
   onEditInStudio,
 }) => {
-  const [activeTab, setActiveTab] = useState<'modes' | 'cards'>('modes');
+  // App remounts this modal per deck (key = deck id), so state is initialised from `session` once.
+  const [activeTab, setActiveTab] = useState<'study' | 'cards'>('study');
   const [cardSearch, setCardSearch] = useState('');
-  const [cardFilter, setCardFilter] = useState<'all' | 'starred' | 'image-occlusion' | 'cloze'>('all');
+  const [cardFilter, setCardFilter] = useState<CardFilter>('all');
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | undefined>(session?.folderId);
   const [folders, setFolders] = useState<SubjectFolder[]>(() => StorageService.getFolders());
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
-
-  // Re-sync folder state when a different deck is opened (adjusting state during render).
-  const [folderStateFor, setFolderStateFor] = useState(session);
-  if (folderStateFor !== session) {
-    setFolderStateFor(session);
-    setCurrentFolderId(session?.folderId);
-    setFolders(StorageService.getFolders());
-  }
-  const [starredCardIds, setStarredCardIds] = useState<Set<string>>(() => {
-    if (!session) return new Set();
-    const starred = session.concepts.flatMap(c => c.retrievalCards).filter(rc => rc.isStarred).map(rc => rc.id);
-    return new Set(starred);
+  const [cards, setCards] = useState<RetrievalCard[]>(() => (session ? withSavedProgress(session) : []));
+  const [now] = useState(() => new Date());
+  // What a full guided session pays today, after daily caps and the housing bonus.
+  const [guidedPay] = useState(() => {
+    if (!session) return 0;
+    const cardCount = session.concepts.reduce((sum, concept) => sum + concept.retrievalCards.length, 0);
+    const { tokens } = estimateReward({ kind: 'sprint', cards: cardCount, minutes: totalMinutesOf(session) });
+    return Math.round(tokens * lifeSimService.getActiveMultiplier());
   });
 
   if (!isOpen || !session) return null;
 
-  const allCards: RetrievalCard[] = session.concepts.flatMap(c => c.retrievalCards);
-  const starredCount = starredCardIds.size;
-  const masteredCount = allCards.filter(c => c.stability >= 21).length;
-  const learningCount = allCards.filter(c => c.stability < 21 && c.reps > 0).length;
-  const newCount = allCards.filter(c => c.reps === 0).length;
+  const totalMinutes = totalMinutesOf(session);
+  const counts = { mastered: 0, learning: 0, new: 0 };
+  cards.forEach(card => {
+    counts[statusOf(card)] += 1;
+  });
+  const dueCount = cards.filter(
+    card => card.reps > 0 && card.nextReviewDate && new Date(card.nextReviewDate) <= now,
+  ).length;
+  const masteredPercent = cards.length ? Math.round((counts.mastered / cards.length) * 100) : 0;
+  const starredCards = cards.filter(card => card.isStarred);
 
-  const handleToggleStar = (cardId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newStatus = StorageService.toggleCardStar(cardId);
-    setStarredCardIds(prev => {
-      const next = new Set(prev);
-      if (newStatus) next.add(cardId);
-      else next.delete(cardId);
-      return next;
-    });
+  const folder = folders.find(f => f.id === currentFolderId);
+  const folderColor = folder ? FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0] : null;
+
+  const typeCounts = new Map<CardType, number>();
+  cards.forEach(card => {
+    const type = getEffectiveCardType(card);
+    typeCounts.set(type, (typeCounts.get(type) ?? 0) + 1);
+  });
+
+  const cardNumbers = new Map(cards.map((card, index) => [card.id, index + 1]));
+  const query = cardSearch.trim().toLowerCase();
+  const filteredCards = cards.filter(card => {
+    if (cardFilter === 'starred' && !card.isStarred) return false;
+    if (cardFilter !== 'all' && cardFilter !== 'starred' && getEffectiveCardType(card) !== cardFilter) return false;
+    if (!query) return true;
+    return card.question.toLowerCase().includes(query) || card.answer.toLowerCase().includes(query);
+  });
+
+  const launch = (start: (s: StudySession) => void, target: StudySession = session) => {
+    onClose();
+    start(target);
+  };
+
+  const handleToggleStar = (cardId: string) => {
+    const isStarred = StorageService.toggleCardStar(cardId);
+    setCards(prev => prev.map(card => (card.id === cardId ? { ...card, isStarred } : card)));
     soundEngine.playSuccess();
   };
 
-  const filteredCards = allCards.filter(card => {
-    const matchesSearch = 
-      card.question.toLowerCase().includes(cardSearch.toLowerCase()) ||
-      card.answer.toLowerCase().includes(cardSearch.toLowerCase());
-
-    const isStarred = starredCardIds.has(card.id);
-    if (cardFilter === 'starred' && !isStarred) return false;
-    if (cardFilter === 'image-occlusion' && card.cardType !== 'image-occlusion') return false;
-    if (cardFilter === 'cloze' && card.cardType !== 'cloze') return false;
-
-    return matchesSearch;
-  });
-
   const handleLaunchStarredOnly = () => {
-    const starredOnlyCards = allCards.filter(c => starredCardIds.has(c.id));
-    if (starredOnlyCards.length === 0) return;
-
-    const starredSession = createStarredSession(session, starredOnlyCards);
-    onClose();
-    onStartPilot(starredSession);
+    if (starredCards.length === 0) return;
+    launch(onStartPilot, createStarredSession(session, starredCards));
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-fade-in text-slate-100">
-      <div 
-        className="w-full max-w-4xl max-h-[92vh] bg-slate-900 border border-white/[0.12] rounded-3xl shadow-2xl flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header Hero Banner */}
-        <div className="p-6 border-b border-white/[0.08] bg-slate-950/70 shrink-0 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
-                  {session.category || 'General Curriculum'}
-                </span>
-
-                {/* Subject Folder Badge */}
-                {(() => {
-                  const folder = folders.find(f => f.id === currentFolderId);
-                  if (folder) {
-                    const colDef = FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0];
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => setIsMoveModalOpen(true)}
-                        className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${colDef.bg} ${colDef.text} border ${colDef.border} flex items-center gap-1 hover:scale-105 transition-transform cursor-pointer`}
-                        title="Subject Folder — Click to change or reassign"
-                      >
-                        <span>{folder.icon || '📁'}</span>
-                        <span>{folder.name}</span>
-                      </button>
-                    );
-                  }
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => setIsMoveModalOpen(true)}
-                      className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-slate-400 hover:text-slate-200 border border-white/[0.08] flex items-center gap-1 transition-colors cursor-pointer"
-                      title="Organize deck into a Subject Folder"
-                    >
-                      <span>📁</span>
-                      <span>+ Subject Folder</span>
-                    </button>
-                  );
-                })()}
-
+    <Dialog isOpen={isOpen} onClose={onClose} titleId="deck-details-title" className="max-w-3xl">
+      <DialogPanel className="h-[min(820px,92dvh)]">
+        {/* Header */}
+        <div className="shrink-0 border-b border-line px-5 pt-5 sm:px-6">
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge>{session.category || 'General'}</Badge>
+                <button
+                  type="button"
+                  onClick={() => setIsMoveModalOpen(true)}
+                  className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-ink-subtle transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer"
+                  title={folder ? `Subject: ${folder.name}. Click to move.` : 'Add to a subject'}
+                >
+                  {folderColor ? (
+                    <span className={cn('h-2 w-2 shrink-0 rounded-full', folderColor.dot)} aria-hidden="true" />
+                  ) : (
+                    <FolderInput className="h-3 w-3" aria-hidden="true" />
+                  )}
+                  <span className="truncate">{folder ? folder.name : 'Add to subject'}</span>
+                </button>
                 {session.sourceDocument && (
-                  <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30">
-                    <FileText className="w-3 h-3 text-sky-400" />
-                    <span>PDF Grounded</span>
-                  </span>
-                )}
-                {starredCount > 0 && (
-                  <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                    <span>{starredCount} Starred</span>
-                  </span>
+                  <Badge>
+                    <FileText className="h-3 w-3" aria-hidden="true" />
+                    Source PDF
+                  </Badge>
                 )}
               </div>
-
-              <h2 className="text-xl font-bold text-white font-display">
+              <h2 id="deck-details-title" className="mt-2 text-xl font-semibold leading-snug text-ink">
                 {session.title}
               </h2>
-
-              <p className="text-xs text-slate-400 line-clamp-2 max-w-2xl leading-relaxed">
-                {session.description}
-              </p>
+              {session.description && (
+                <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-ink-subtle">{session.description}</p>
+              )}
             </div>
-
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Stats Bar (Anki & Quizlet Style) */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/[0.06] text-xs text-slate-400">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                <strong className="text-white">{session.concepts.length}</strong> Concepts
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                <strong className="text-white">{allCards.length}</strong> Cards
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                ~{session.concepts.reduce((a, b) => a + (b.estimatedMinutes || 10), 0)}m
-              </span>
-            </div>
-
-            {/* FSRS Mastery Status Pills */}
-            <div className="flex items-center gap-1.5 font-mono text-[11px]">
-              <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" title="Stability >= 21 days">
-                {masteredCount} Mastered
-              </span>
-              <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30" title="Actively being learned">
-                {learningCount} Learning
-              </span>
-              <span className="px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30" title="Unreviewed cards">
-                {newCount} New
-              </span>
+            <div className="-mr-2 -mt-1.5 flex shrink-0 items-center">
+              <ActionMenu
+                label="More actions for this deck"
+                items={[
+                  { label: 'Edit cards', icon: Edit3, onSelect: () => launch(onEditInStudio) },
+                  { label: 'Move to subject', icon: FolderInput, onSelect: () => setIsMoveModalOpen(true) },
+                  { label: 'Print study sheet', icon: Printer, onSelect: () => ExportService.printStudySheet(session) },
+                  { label: 'Export as Markdown', icon: FileText, onSelect: () => ExportService.downloadMarkdown(session) },
+                  { label: 'Export for Anki', icon: Share2, onSelect: () => ExportService.downloadAnkiTSV(session) },
+                  { label: 'Export as JSON', icon: FileJson, onSelect: () => ExportService.downloadJSON(session) },
+                ]}
+              />
+              <IconButton icon={X} label="Close" onClick={onClose} />
             </div>
           </div>
-        </div>
 
-        {/* Tab Switcher (Study Modes vs Card Syllabus) */}
-        <div className="px-6 py-2 border-b border-white/[0.06] bg-slate-950/40 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setActiveTab('modes')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === 'modes'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-              }`}
+          {/* Progress */}
+          <div className="mt-5">
+            <div className="flex items-center justify-between gap-3 text-xs text-ink-subtle">
+              <span className="tabular-nums">
+                {session.concepts.length} {session.concepts.length === 1 ? 'concept' : 'concepts'} · {cards.length}{' '}
+                {cards.length === 1 ? 'card' : 'cards'} · ~{totalMinutes} min
+              </span>
+              <span className="tabular-nums">{masteredPercent}% mastered</span>
+            </div>
+            <div
+              className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-surface-hover"
+              role="img"
+              aria-label={`${counts.mastered} mastered, ${counts.learning} learning, ${counts.new} new`}
             >
-              Study Launchpad
-            </button>
-            <button
-              onClick={() => setActiveTab('cards')}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                activeTab === 'cards'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-              }`}
-            >
-              Card Syllabus ({allCards.length})
-            </button>
+              <div className="bg-success transition-[width] duration-500" style={{ width: `${(counts.mastered / Math.max(1, cards.length)) * 100}%` }} />
+              <div className="bg-brand transition-[width] duration-500" style={{ width: `${(counts.learning / Math.max(1, cards.length)) * 100}%` }} />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
+              {(Object.keys(STATUS_STYLES) as CardStatus[]).map(status => (
+                <span key={status} className="inline-flex items-center gap-1.5 tabular-nums">
+                  <span className={cn('h-1.5 w-1.5 rounded-full', STATUS_STYLES[status].dot)} aria-hidden="true" />
+                  {counts[status]} {STATUS_STYLES[status].label.toLowerCase()}
+                </span>
+              ))}
+              {dueCount > 0 && (
+                <span className="inline-flex items-center gap-1.5 font-medium text-due tabular-nums">
+                  <Clock className="h-3 w-3" aria-hidden="true" />
+                  {dueCount} due now
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-1 text-xs">
-            <button
-              onClick={() => ExportService.printStudySheet(session)}
-              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors cursor-pointer"
-              title="Print High-Yield Study Sheet"
-            >
-              <Printer className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => ExportService.downloadMarkdown(session)}
-              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors cursor-pointer"
-              title="Export to Markdown (.md)"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => ExportService.downloadAnkiTSV(session)}
-              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
-              title="Export to Anki / Quizlet (.tsv)"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => ExportService.downloadJSON(session)}
-              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
-              title="Export Full Deck Backup (.json)"
-            >
-              <FileJson className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => {
-                onClose();
-                onEditInStudio(session);
-              }}
-              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-sky-300 transition-colors cursor-pointer"
-              title="Edit in Deck Studio"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-            </button>
+          {/* Tabs */}
+          <div role="tablist" aria-label="Deck" className="-mb-px mt-4 flex gap-5">
+            {([
+              { tab: 'study', label: 'Study' },
+              { tab: 'cards', label: 'Cards', count: cards.length },
+            ] as const).map(item => (
+              <button
+                key={item.tab}
+                type="button"
+                role="tab"
+                id={`deck-tab-${item.tab}`}
+                aria-selected={activeTab === item.tab}
+                aria-controls={`deck-panel-${item.tab}`}
+                onClick={() => setActiveTab(item.tab)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 border-b-2 pb-2.5 text-[13px] font-medium transition-colors cursor-pointer',
+                  activeTab === item.tab ? 'border-ink text-ink' : 'border-transparent text-ink-subtle hover:text-ink',
+                )}
+              >
+                {item.label}
+                {'count' in item && <span className="tabular-nums text-ink-subtle">{item.count}</span>}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Tab 1: Study Modes Launchpad */}
-        {activeTab === 'modes' && (
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              
-              {/* Mode 1: Frontier Study Pilot (4-Phase Cognitive Cycle) */}
-              <div 
-                onClick={() => {
-                  onClose();
-                  onStartPilot(session);
-                }}
-                className="p-5 rounded-2xl bg-gradient-to-br from-indigo-950/40 via-slate-950/60 to-purple-950/40 border border-indigo-500/30 hover:border-indigo-400 transition-all cursor-pointer group shadow-lg shadow-indigo-950/20 hover:scale-[1.01]"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30 group-hover:scale-105 transition-transform">
-                    <Play className="w-5 h-5 fill-white ml-0.5" />
+        {/* Study */}
+        {activeTab === 'study' && (
+          <div
+            id="deck-panel-study"
+            role="tabpanel"
+            aria-labelledby="deck-tab-study"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6"
+          >
+            <section className="relative overflow-hidden rounded-2xl border border-line-strong bg-surface p-5 sm:p-6">
+              <div
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(520px_220px_at_100%_0%,var(--brand-soft),transparent_70%)]"
+                aria-hidden="true"
+              />
+              <div className="relative">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[17px] font-semibold text-ink">Guided session</h3>
+                      <Badge tone="brand">Recommended</Badge>
+                    </div>
+                    <p className="mt-1 max-w-md text-[13px] leading-relaxed text-ink-muted">
+                      Learn each concept step by step, then lock it in with flashcards. The best way to study a new deck.
+                    </p>
                   </div>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase">
-                    Recommended
+                  {guidedPay > 0 && (
+                    <div className="sm:text-right">
+                      <p className="text-xs text-ink-subtle">Pays about</p>
+                      <Tokens amount={guidedPay} className="text-[15px] font-semibold text-ink" iconClassName="h-4 w-4" />
+                    </div>
+                  )}
+                </div>
+
+                <ol className="mt-4 flex flex-wrap items-center gap-x-1 gap-y-2" aria-label="Steps for each concept">
+                  {GUIDED_STEPS.map((step, index) => (
+                    <li key={step} className="flex items-center gap-1">
+                      <span className="inline-flex h-7 items-center gap-1.5 rounded-lg bg-surface-hover px-2.5 text-xs font-medium text-ink-muted">
+                        <span className="tabular-nums text-ink-subtle">{index + 1}</span>
+                        {step}
+                      </span>
+                      {index < GUIDED_STEPS.length - 1 && (
+                        <ArrowRight className="h-3 w-3 text-ink-subtle" aria-hidden="true" />
+                      )}
+                    </li>
+                  ))}
+                </ol>
+
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <Button variant="primary" size="lg" icon={Play} onClick={() => launch(onStartPilot)} data-autofocus>
+                    Start guided session
+                  </Button>
+                  <span className="inline-flex items-center gap-1.5 text-[13px] text-ink-subtle">
+                    <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                    About {totalMinutes} min
                   </span>
                 </div>
-
-                <h3 className="text-base font-bold text-white group-hover:text-indigo-200 transition-colors font-display">
-                  Full Cognitive Study Pilot
-                </h3>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  The complete 4-phase science-backed loop: Schema Priming, Socratic Oral Viva, Active Retrieval, and Rest Break.
-                </p>
-
-                <div className="pt-4 border-t border-white/[0.06] mt-4 flex items-center justify-between text-xs font-semibold text-indigo-400">
-                  <span>Start 4-Phase Cycle</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
               </div>
+            </section>
 
-              {/* Mode 2: Speed Match Challenge (Quizlet Style) */}
-              <div 
-                onClick={() => {
-                  onClose();
-                  onStartMatch(session);
-                }}
-                className="p-5 rounded-2xl bg-slate-950/60 border border-white/[0.08] hover:border-amber-500/40 hover:bg-slate-950/80 transition-all cursor-pointer group hover:scale-[1.01]"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-amber-600/30 group-hover:scale-105 transition-transform">
-                    <Zap className="w-5 h-5 fill-white" />
-                  </div>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">
-                    Gamified Speed
-                  </span>
-                </div>
-
-                <h3 className="text-base font-bold text-white group-hover:text-amber-200 transition-colors font-display">
-                  Speed Match Arena
-                </h3>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  Fast-paced 60-second association game: Match terms with definitions against the stopwatch for quick retrieval warm-up.
-                </p>
-
-                <div className="pt-4 border-t border-white/[0.06] mt-4 flex items-center justify-between text-xs font-semibold text-amber-400">
-                  <span>Enter Match Arena</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-
-              {/* Mode 3: Rapid Casual Flashcards (Anki Style) */}
-              <div 
-                onClick={() => {
-                  onClose();
-                  onStartFlashcardsOnly(session);
-                }}
-                className="p-5 rounded-2xl bg-slate-950/60 border border-white/[0.08] hover:border-purple-500/40 hover:bg-slate-950/80 transition-all cursor-pointer group hover:scale-[1.01]"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-600/30 group-hover:scale-105 transition-transform">
-                    <Layers className="w-5 h-5" />
-                  </div>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 uppercase">
-                    Anki Style
-                  </span>
-                </div>
-
-                <h3 className="text-base font-bold text-white group-hover:text-purple-200 transition-colors font-display">
-                  Casual Flashcard Runner
-                </h3>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  Straight-to-the-point card review: 3D Flip with Spacebar, 1-4 FSRS rating buttons, and Gamepad / Mobile swipe support.
-                </p>
-
-                <div className="pt-4 border-t border-white/[0.06] mt-4 flex items-center justify-between text-xs font-semibold text-purple-400">
-                  <span>Start Card Review</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-
-              {/* Mode 4: Audio Overview Briefing (NotebookLM Style) */}
-              <div 
-                onClick={() => {
-                  onClose();
-                  onStartAudioBriefing(session);
-                }}
-                className="p-5 rounded-2xl bg-slate-950/60 border border-white/[0.08] hover:border-sky-500/40 hover:bg-slate-950/80 transition-all cursor-pointer group hover:scale-[1.01]"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center shadow-lg shadow-sky-600/30 group-hover:scale-105 transition-transform">
-                    <Headphones className="w-5 h-5" />
-                  </div>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 uppercase">
-                    NotebookLM Style
-                  </span>
-                </div>
-
-                <h3 className="text-base font-bold text-white group-hover:text-sky-200 transition-colors font-display">
-                  Narrated Audio Overview
-                </h3>
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                  Listen to a spoken podcast-style overview of concepts, key takeaways, and mental models with chapter scrubbing.
-                </p>
-
-                <div className="pt-4 border-t border-white/[0.06] mt-4 flex items-center justify-between text-xs font-semibold text-sky-400">
-                  <span>Listen to Briefing</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-
+            <h3 className="mt-6 text-[13px] font-medium text-ink-subtle">Other ways to study</h3>
+            <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <StudyOption
+                icon={Layers}
+                title="Quick review"
+                text="Just the flashcards. Rate how well you remembered each one."
+                onClick={() => launch(onStartFlashcardsOnly)}
+                disabled={cards.length === 0}
+              />
+              <StudyOption
+                icon={Zap}
+                title="Speed match"
+                text="Match each term to its answer against the clock."
+                onClick={() => launch(onStartMatch)}
+                disabled={cards.length < 2}
+              />
+              <StudyOption
+                icon={Headphones}
+                title="Audio briefing"
+                text="Listen to a spoken overview of the deck."
+                onClick={() => launch(onStartAudioBriefing)}
+              />
             </div>
 
-            {/* High-Priority Starred Drill Banner */}
-            {starredCount > 0 && (
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-4">
+            {starredCards.length > 0 && (
+              <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-                    <Star className="w-5 h-5 fill-amber-400" />
-                  </div>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-soft text-gold">
+                    <Star className="h-4 w-4 fill-current" aria-hidden="true" />
+                  </span>
                   <div>
-                    <h4 className="text-xs font-bold text-white">Targeted Practice: {starredCount} Bookmarked Cards</h4>
-                    <p className="text-[11px] text-amber-200/80">Drill only the tricky cards you flagged during previous reviews.</p>
+                    <p className="text-sm font-medium text-ink">Practise your starred cards</p>
+                    <p className="text-xs text-ink-subtle">
+                      {starredCards.length} {starredCards.length === 1 ? 'card' : 'cards'} you bookmarked as tricky
+                    </p>
                   </div>
                 </div>
-
-                <button
-                  onClick={handleLaunchStarredOnly}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <span>Drill Starred Cards</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                <Button size="sm" trailingIcon={ArrowRight} onClick={handleLaunchStarredOnly}>
+                  Practise {starredCards.length}
+                </Button>
               </div>
             )}
           </div>
         )}
 
-        {/* Tab 2: Card Syllabus & Starred Inspection */}
+        {/* Cards */}
         {activeTab === 'cards' && (
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {/* Filter & Search Toolbar */}
-            <div className="flex flex-col sm:flex-row gap-3 items-center justify-between pb-3 border-b border-white/[0.06]">
-              <div className="relative w-full sm:w-72">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <div
+            id="deck-panel-cards"
+            role="tabpanel"
+            aria-labelledby="deck-tab-cards"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          >
+            <div className="sticky top-0 z-10 space-y-2.5 border-b border-line bg-surface-solid px-5 py-3 sm:px-6">
+              <label className="relative block">
+                <span className="sr-only">Search cards</span>
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-subtle" aria-hidden="true" />
                 <input
-                  type="text"
+                  type="search"
                   value={cardSearch}
                   onChange={(e) => setCardSearch(e.target.value)}
-                  placeholder="Search cards in this deck..."
-                  className="w-full pl-9 pr-3 py-1.5 bg-slate-950/80 border border-white/[0.08] rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  placeholder="Search questions and answers"
+                  className="h-9 w-full rounded-xl border border-line-strong bg-canvas pl-9 pr-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
                 />
-              </div>
-
-              <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto text-xs">
-                <button
-                  onClick={() => setCardFilter('all')}
-                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
-                    cardFilter === 'all'
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-slate-400 bg-white/[0.04] hover:text-white'
-                  }`}
-                >
-                  All ({allCards.length})
-                </button>
-                <button
-                  onClick={() => setCardFilter('starred')}
-                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1 ${
-                    cardFilter === 'starred'
-                      ? 'bg-amber-500 text-slate-950 font-bold'
-                      : 'text-slate-400 bg-white/[0.04] hover:text-white'
-                  }`}
-                >
-                  <Star className="w-3 h-3 fill-amber-400" />
-                  <span>Starred ({starredCount})</span>
-                </button>
-                <button
-                  onClick={() => setCardFilter('image-occlusion')}
-                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
-                    cardFilter === 'image-occlusion'
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-slate-400 bg-white/[0.04] hover:text-white'
-                  }`}
-                >
-                  Occlusion
-                </button>
-                <button
-                  onClick={() => setCardFilter('cloze')}
-                  className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
-                    cardFilter === 'cloze'
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-slate-400 bg-white/[0.04] hover:text-white'
-                  }`}
-                >
-                  Cloze
-                </button>
+              </label>
+              <div className="-mx-1 flex gap-1 overflow-x-auto px-1 no-scrollbar" role="group" aria-label="Show">
+                <FilterChip label="All" count={cards.length} active={cardFilter === 'all'} onClick={() => setCardFilter('all')} />
+                {starredCards.length > 0 && (
+                  <FilterChip
+                    label="Starred"
+                    count={starredCards.length}
+                    active={cardFilter === 'starred'}
+                    onClick={() => setCardFilter('starred')}
+                  />
+                )}
+                {typeCounts.size > 1 &&
+                  [...typeCounts.entries()].map(([type, count]) => (
+                    <FilterChip
+                      key={type}
+                      label={CARD_TYPE_LABELS[type]}
+                      count={count}
+                      active={cardFilter === type}
+                      onClick={() => setCardFilter(type)}
+                    />
+                  ))}
               </div>
             </div>
 
-            {/* Cards List */}
-            <div className="space-y-2.5">
-              {filteredCards.length === 0 ? (
-                <div className="text-center py-12 text-xs text-slate-500">
-                  No flashcards match your current filter.
-                </div>
-              ) : (
-                filteredCards.map((card, idx) => {
-                  const isStarred = starredCardIds.has(card.id);
-                  const isExpanded = expandedCardId === card.id;
-
-                  return (
-                    <div
-                      key={card.id}
-                      onClick={() => setExpandedCardId(isExpanded ? null : card.id)}
-                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer select-none space-y-2 ${
-                        isExpanded
-                          ? 'bg-slate-950/90 border-indigo-500/40'
-                          : 'bg-slate-950/50 border-white/[0.06] hover:bg-slate-950/80 hover:border-white/[0.12]'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-mono text-slate-500">
-                            #{idx + 1}
-                          </span>
-                          <span className="text-[11px] font-bold uppercase px-2 py-0.5 rounded bg-white/[0.06] text-slate-300">
-                            {card.cardType || 'standard'}
-                          </span>
-                          {card.cardType === 'image-occlusion' && (
-                            <span className="text-[11px] font-bold flex items-center gap-1 text-amber-400">
-                              <Eye className="w-3 h-3" />
-                              <span>{card.masks?.length} Masks</span>
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={(e) => handleToggleStar(card.id, e)}
-                            className="p-1 rounded-lg hover:bg-white/[0.1] text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
-                            title={isStarred ? 'Unstar card' : 'Star card for priority review'}
-                          >
-                            <Star className={`w-4 h-4 ${isStarred ? 'fill-amber-400 text-amber-400' : ''}`} />
-                          </button>
-
-                          {isExpanded ? (
-                            <ChevronUp className="w-4 h-4 text-slate-400" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-slate-400" />
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="text-xs font-semibold text-white">
-                        {fillCloze(card.question)}
-                      </div>
-
-                      {isExpanded && (
-                        <div className="pt-2 border-t border-white/[0.06] space-y-2 text-xs animate-fadeIn">
-                          <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-emerald-200">
-                            <span className="text-[11px] uppercase font-bold text-emerald-400 block mb-0.5">Answer</span>
-                            {card.answer}
-                          </div>
-
-                          {card.explanation && (
-                            <div className="text-[11px] text-slate-400 bg-white/[0.02] p-2.5 rounded-lg border border-white/[0.04]">
-                              <strong>Rationale:</strong> {card.explanation}
-                            </div>
-                          )}
-
-                          <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pt-1">
-                            <span>Stability: {card.stability.toFixed(1)}d</span>
-                            <span>Difficulty: {card.difficulty.toFixed(1)}/10</span>
-                            <span>Reps: {card.reps} ({card.lapses} lapses)</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            {cards.length === 0 ? (
+              <div className="px-6 py-14 text-center">
+                <p className="text-[15px] font-semibold text-ink">No cards yet</p>
+                <p className="mt-1 text-[13px] text-ink-subtle">Add some in the editor, or generate them from your notes.</p>
+                <Button size="sm" icon={Edit3} className="mt-4" onClick={() => launch(onEditInStudio)}>
+                  Edit cards
+                </Button>
+              </div>
+            ) : filteredCards.length === 0 ? (
+              <p className="px-6 py-14 text-center text-[13px] text-ink-subtle">No cards match. Try another word or filter.</p>
+            ) : (
+              <ul className="divide-y divide-line px-2 py-1 sm:px-3">
+                {filteredCards.map(card => (
+                  <CardRow
+                    key={card.id}
+                    card={card}
+                    number={cardNumbers.get(card.id) ?? 0}
+                    now={now}
+                    isExpanded={expandedCardId === card.id}
+                    onToggleExpand={() => setExpandedCardId(id => (id === card.id ? null : card.id))}
+                    onToggleStar={() => handleToggleStar(card.id)}
+                  />
+                ))}
+              </ul>
+            )}
           </div>
         )}
+      </DialogPanel>
 
-        {/* Modal Footer */}
-        <div className="p-4 px-6 border-t border-white/[0.08] bg-slate-950/80 flex items-center justify-between text-xs text-slate-400 shrink-0">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Empirical FSRS scheduling &amp; local-first privacy.</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-medium text-slate-300 hover:text-white transition-colors cursor-pointer"
-            >
-              Close
-            </button>
-            <button
-              onClick={() => {
-                onClose();
-                onStartPilot(session);
-              }}
-              className="px-5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <span>Study Now</span>
-              <Play className="w-3.5 h-3.5 fill-white" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Move to Folder Modal */}
       {isMoveModalOpen && (
         <MoveToFolderModal
           isOpen={isMoveModalOpen}
           session={{ ...session, folderId: currentFolderId }}
           onClose={() => setIsMoveModalOpen(false)}
-          onMoved={(updated) => {
-            setCurrentFolderId(updated.folderId);
-          }}
+          onMoved={(updated) => setCurrentFolderId(updated.folderId)}
           onOpenNewFolderModal={() => {
             setIsMoveModalOpen(false);
             setIsFolderModalOpen(true);
@@ -655,7 +496,6 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
         />
       )}
 
-      {/* Subject Folder Creation Modal */}
       {isFolderModalOpen && (
         <SubjectFolderModal
           isOpen={isFolderModalOpen}
@@ -667,6 +507,137 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
           }}
         />
       )}
-    </div>
+    </Dialog>
+  );
+};
+
+const StudyOption: React.FC<{
+  icon: LucideIcon;
+  title: string;
+  text: string;
+  onClick: () => void;
+  disabled?: boolean;
+}> = ({ icon: Icon, title, text, onClick, disabled }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    className="group flex flex-col items-start rounded-2xl border border-line bg-surface p-4 text-left transition-colors hover:border-line-strong hover:bg-surface-hover disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+  >
+    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-hover text-ink-muted transition-colors group-hover:text-ink">
+      <Icon className="h-4 w-4" aria-hidden="true" />
+    </span>
+    <span className="mt-3 text-sm font-medium text-ink">{title}</span>
+    <span className="mt-0.5 text-xs leading-relaxed text-ink-subtle">{text}</span>
+  </button>
+);
+
+const FilterChip: React.FC<{ label: string; count: number; active: boolean; onClick: () => void }> = ({
+  label,
+  count,
+  active,
+  onClick,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={active}
+    className={cn(
+      'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors cursor-pointer',
+      active ? 'bg-ink text-canvas' : 'text-ink-muted hover:bg-surface-hover hover:text-ink',
+    )}
+  >
+    {label}
+    <span className={cn('tabular-nums', active ? 'opacity-60' : 'text-ink-subtle')}>{count}</span>
+  </button>
+);
+
+const CardRow: React.FC<{
+  card: RetrievalCard;
+  number: number;
+  now: Date;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onToggleStar: () => void;
+}> = ({ card, number, now, isExpanded, onToggleExpand, onToggleStar }) => {
+  const status = statusOf(card);
+  const nextReview = describeNextReview(card, now);
+  const detailsId = `card-details-${card.id}`;
+
+  return (
+    <li className="py-1">
+      <div className="flex items-start gap-1">
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-expanded={isExpanded}
+          aria-controls={detailsId}
+          className="flex min-w-0 flex-1 items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-surface-hover cursor-pointer"
+        >
+          <span className="w-5 shrink-0 pt-px text-xs tabular-nums text-ink-subtle">{number}</span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2 text-xs text-ink-subtle">
+              <span className={cn('h-1.5 w-1.5 rounded-full', STATUS_STYLES[status].dot)} aria-hidden="true" />
+              {CARD_TYPE_LABELS[getEffectiveCardType(card)]}
+            </span>
+            <span className="mt-1 block text-sm leading-relaxed text-ink">{maskCloze(card.question)}</span>
+          </span>
+          <ChevronDown
+            className={cn('mt-1 h-4 w-4 shrink-0 text-ink-subtle transition-transform', isExpanded && 'rotate-180')}
+            aria-hidden="true"
+          />
+        </button>
+        <button
+          type="button"
+          onClick={onToggleStar}
+          aria-pressed={!!card.isStarred}
+          aria-label={card.isStarred ? 'Unstar card' : 'Star card'}
+          title={card.isStarred ? 'Unstar card' : 'Star this card to practise it separately'}
+          className={cn(
+            'mt-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors cursor-pointer',
+            card.isStarred ? 'text-gold hover:bg-gold-soft' : 'text-ink-subtle hover:bg-surface-hover hover:text-ink',
+          )}
+        >
+          <Star className={cn('h-4 w-4', card.isStarred && 'fill-current')} aria-hidden="true" />
+        </button>
+      </div>
+
+      {isExpanded && (
+        <div id={detailsId} className="mb-2 ml-11 mr-10 space-y-3 animate-fadeIn">
+          <div className="rounded-xl bg-success-soft px-3.5 py-2.5">
+            <p className="text-xs font-medium text-success">Answer</p>
+            <p className="mt-0.5 text-sm leading-relaxed text-ink">{card.answer}</p>
+          </div>
+          {card.explanation && <p className="text-[13px] leading-relaxed text-ink-muted">{card.explanation}</p>}
+          <dl className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+            <div className="flex gap-1.5">
+              <dt className="text-ink-subtle">Status</dt>
+              <dd className="text-ink-muted">{STATUS_STYLES[status].label}</dd>
+            </div>
+            {card.reps > 0 && (
+              <>
+                <div className="flex gap-1.5">
+                  <dt className="text-ink-subtle">Memory lasts</dt>
+                  <dd className="tabular-nums text-ink-muted">{formatMemory(card.stability)}</dd>
+                </div>
+                <div className="flex gap-1.5">
+                  <dt className="text-ink-subtle">Reviews</dt>
+                  <dd className="tabular-nums text-ink-muted">
+                    {card.reps}
+                    {card.lapses > 0 && ` (${card.lapses} forgotten)`}
+                  </dd>
+                </div>
+                {nextReview && (
+                  <div className="flex gap-1.5">
+                    <dt className="text-ink-subtle">Next review</dt>
+                    <dd className={cn(nextReview === 'Due now' ? 'font-medium text-due' : 'text-ink-muted')}>{nextReview}</dd>
+                  </div>
+                )}
+              </>
+            )}
+          </dl>
+        </div>
+      )}
+    </li>
   );
 };

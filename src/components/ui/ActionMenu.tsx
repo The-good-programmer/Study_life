@@ -27,14 +27,18 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ label, items, className 
     const onPointer = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setIsOpen(false);
     };
+    // Escape closes only the menu: preventDefault tells an enclosing Dialog to stay open.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setIsOpen(false);
+      }
     };
     document.addEventListener('mousedown', onPointer);
-    document.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('mousedown', onPointer);
-      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
     };
   }, [isOpen]);
 

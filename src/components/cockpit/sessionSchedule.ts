@@ -46,3 +46,12 @@ export const groupNextReviews = (cards: RetrievalCard[], now: Date = new Date())
 
   return [...byLabel.values()].sort((a, b) => a.days - b.days);
 };
+
+/** When one card comes back: "Due now", "Later today", "Tomorrow", ... or null if it is not scheduled. */
+export const describeNextReview = (card: Pick<RetrievalCard, 'nextReviewDate'>, now: Date = new Date()): string | null => {
+  if (!card.nextReviewDate) return null;
+  const due = new Date(card.nextReviewDate);
+  if (Number.isNaN(due.getTime())) return null;
+  if (due.getTime() <= now.getTime()) return 'Due now';
+  return labelFor(Math.max(0, Math.round((startOfDay(due) - startOfDay(now)) / DAY_MS)));
+};
