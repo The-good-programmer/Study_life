@@ -1,27 +1,72 @@
-import React, { useState } from 'react';
-import { 
-  Sparkles, 
-  Layers, 
-  Search, 
-  X, 
-  Play, 
-  Download, 
-  ShieldCheck, 
-  Clock, 
-  Award, 
-  Eye, 
-  FileText, 
-  ArrowRight,
-  BookmarkCheck,
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  ArrowLeft,
+  Atom,
+  Brain,
   Check,
-  GraduationCap
+  Clock,
+  Dna,
+  FileText,
+  GraduationCap,
+  Image as ImageIcon,
+  Languages,
+  Layers,
+  Play,
+  Plus,
+  Search,
+  Stethoscope,
+  X,
 } from 'lucide-react';
 import type { StarterDeckMetadata, StudySession } from '../../types';
 import { CURATED_STARTER_DECKS, isBoardExamDeck, rankStarterDecksForGrade } from '../../data/curatedStarterCatalog';
 import { StorageService } from '../../services/storageService';
 import { AuthService } from '../../services/authService';
 import { soundEngine } from '../../services/soundEngine';
-import { fillCloze } from '../../utils/cloze';
+import { lifeSimService } from '../../services/lifeSimService';
+import { estimateReward } from '../../services/economy/rewardService';
+import { maskCloze } from '../../utils/cloze';
+import { cn } from '../../utils/cn';
+import { CARD_TYPE_LABELS, getEffectiveCardType } from '../cockpit/retrievalLogic';
+import { Dialog, DialogFooter, DialogHeader, DialogPanel } from '../common/Dialog';
+import { Badge, Button, IconButton, Tokens } from '../ui/primitives';
+
+type Category = StarterDeckMetadata['category'];
+type Level = StarterDeckMetadata['difficulty'];
+type Tone = 'brand' | 'gold' | 'success' | 'danger' | 'due';
+
+const CATEGORIES: { value: Category; label: string; icon: LucideIcon; tone: Tone }[] = [
+  { value: 'Medical & Clinical', label: 'Medicine', icon: Stethoscope, tone: 'danger' },
+  { value: 'STEM & Engineering', label: 'STEM', icon: Atom, tone: 'brand' },
+  { value: 'Biochemistry & Life Sciences', label: 'Life sciences', icon: Dna, tone: 'success' },
+  { value: 'Languages & Polyglot', label: 'Languages', icon: Languages, tone: 'gold' },
+  { value: 'Cognitive & Behavioral Science', label: 'Mind & behavior', icon: Brain, tone: 'due' },
+];
+
+const categoryOf = (deck: StarterDeckMetadata) => CATEGORIES.find(c => c.value === deck.category) ?? CATEGORIES[1];
+
+const TONE_TILES: Record<Tone, string> = {
+  brand: 'bg-brand-soft text-brand-text',
+  gold: 'bg-gold-soft text-gold',
+  success: 'bg-success-soft text-success',
+  danger: 'bg-danger-soft text-danger',
+  due: 'bg-due-soft text-due',
+};
+
+const LEVEL_LABELS: Record<Level, string> = {
+  Foundational: 'Beginner',
+  Intermediate: 'Intermediate',
+  'High-Yield Board Review': 'Advanced',
+};
+
+const LEVEL_OPTIONS: { value: Level | 'all'; label: string }[] = [
+  { value: 'all', label: 'Any level' },
+  { value: 'Foundational', label: 'Beginner' },
+  { value: 'Intermediate', label: 'Intermediate' },
+  { value: 'High-Yield Board Review', label: 'Advanced' },
+];
+
+const SAMPLE_CARD_COUNT = 3;
 
 function createClonedSession(deck: StarterDeckMetadata): StudySession {
   return {
@@ -33,6 +78,23 @@ function createClonedSession(deck: StarterDeckMetadata): StudySession {
     currentPhase: 'priming',
   };
 }
+
+/** The saved copy of a starter deck, if the learner already added it. */
+const findSavedCopy = (deck: StarterDeckMetadata): StudySession | undefined =>
+  StorageService.getSessions().find(
+    s => s.id === deck.id || s.id.startsWith(`${deck.id}-`) || s.title === deck.session.title,
+  );
+
+const matchesQuery = (deck: StarterDeckMetadata, query: string): boolean => {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return (
+    deck.title.toLowerCase().includes(q) ||
+    deck.summary.toLowerCase().includes(q) ||
+    deck.tags.some(t => t.toLowerCase().includes(q)) ||
+    deck.session.concepts.some(c => c.title.toLowerCase().includes(q))
+  );
+};
 
 interface StarterCatalogModalProps {
   isOpen: boolean;
@@ -50,73 +112,87 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
   onOpenDeckStation,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('All');
+  const [selectedCategory, setSelectedCategory] = useState<Category | 'all'>('all');
+  const [selectedLevel, setSelectedLevel] = useState<Level | 'all'>('all');
   const [previewDeck, setPreviewDeck] = useState<StarterDeckMetadata | null>(null);
-  const [importedDeckIds, setImportedDeckIds] = useState<Set<string>>(() => {
-    const sessions = StorageService.getSessions();
-    const importedIds = new Set<string>();
-    CURATED_STARTER_DECKS.forEach(deck => {
-      if (sessions.some(s => s.id === deck.id || s.id.startsWith(`${deck.id}-`) || s.title === deck.session.title)) {
-        importedIds.add(deck.id);
-      }
-    });
-    return importedIds;
-  });
-  const [justImportedId, setJustImportedId] = useState<string | null>(null);
+  const [addedDeckIds, setAddedDeckIds] = useState<Set<string>>(
+    () => new Set(CURATED_STARTER_DECKS.filter(deck => findSavedCopy(deck)).map(deck => deck.id)),
+  );
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
+  const justAddedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (justAddedTimer.current) clearTimeout(justAddedTimer.current);
+  }, []);
+
+  // Coming back from a preview, return focus to the card it was opened from.
+  const lastPreviewedId = useRef<string | null>(null);
+  useEffect(() => {
+    if (previewDeck) {
+      lastPreviewedId.current = previewDeck.id;
+      return;
+    }
+    if (!lastPreviewedId.current) return;
+    document.querySelector<HTMLElement>(`[data-preview-trigger="${lastPreviewedId.current}"]`)?.focus();
+    lastPreviewedId.current = null;
+  }, [previewDeck]);
+
+  // Focusing the search box would pop up the keyboard on phones, so only do it with a mouse.
+  const [autofocusSearch] = useState(() => typeof window !== 'undefined' && window.matchMedia?.('(pointer: fine)').matches);
+
+  const rankedDecks = useMemo(
+    () => rankStarterDecksForGrade(CURATED_STARTER_DECKS, AuthService.getCurrentUser()?.grade),
+    [],
+  );
+
+  // What one full session of each deck pays today, after daily caps and the housing bonus.
+  const payByDeck = useMemo(() => {
+    const multiplier = lifeSimService.getActiveMultiplier();
+    return new Map(
+      CURATED_STARTER_DECKS.map(deck => [
+        deck.id,
+        Math.round(
+          estimateReward({ kind: 'sprint', cards: deck.cardCount, minutes: deck.estimatedMinutes }).tokens * multiplier,
+        ),
+      ]),
+    );
+  }, []);
+
+  const query = searchQuery.trim();
+  const filteredDecks = rankedDecks.filter(
+    deck =>
+      matchesQuery(deck, query) &&
+      (selectedCategory === 'all' || deck.category === selectedCategory) &&
+      (selectedLevel === 'all' || deck.difficulty === selectedLevel),
+  );
+  const visibleCategories = CATEGORIES.filter(c => rankedDecks.some(deck => deck.category === c.value));
+  const hasFilters = query !== '' || selectedCategory !== 'all' || selectedLevel !== 'all';
 
   if (!isOpen) return null;
 
-  const categories = [
-    'All',
-    'Medical & Clinical',
-    'STEM & Engineering',
-    'Biochemistry & Life Sciences',
-    'Languages & Polyglot',
-    'Cognitive & Behavioral Science',
-  ];
+  const resetFilters = () => {
+    setSearchQuery('');
+    setSelectedCategory('all');
+    setSelectedLevel('all');
+  };
 
-  const rankedDecks = rankStarterDecksForGrade(CURATED_STARTER_DECKS, AuthService.getCurrentUser()?.grade);
-
-  const filteredDecks = rankedDecks.filter(deck => {
-    const matchesSearch = 
-      deck.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      deck.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      deck.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      deck.session.concepts.some(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    const matchesCategory = selectedCategory === 'All' || deck.category === selectedCategory;
-    const matchesDifficulty = selectedDifficulty === 'All' || deck.difficulty === selectedDifficulty;
-
-    return matchesSearch && matchesCategory && matchesDifficulty;
-  });
-
-  const handleImportDeck = (deck: StarterDeckMetadata): StudySession => {
+  const handleAddDeck = (deck: StarterDeckMetadata): StudySession => {
     const clonedSession = createClonedSession(deck);
     StorageService.saveSession(clonedSession);
-
-    // Save all cards into FSRS queue
-    const allCards = clonedSession.concepts.flatMap(c => c.retrievalCards);
-    StorageService.saveCards(allCards);
+    StorageService.saveCards(clonedSession.concepts.flatMap(c => c.retrievalCards));
 
     soundEngine.playSuccess();
-    setImportedDeckIds(prev => new Set(prev).add(deck.id));
-    setJustImportedId(deck.id);
-    setTimeout(() => setJustImportedId(null), 3000);
+    setAddedDeckIds(prev => new Set(prev).add(deck.id));
+    setJustAddedId(deck.id);
+    if (justAddedTimer.current) clearTimeout(justAddedTimer.current);
+    justAddedTimer.current = setTimeout(() => setJustAddedId(null), 2500);
 
-    if (onDeckImported) {
-      onDeckImported();
-    }
-
+    onDeckImported?.();
     return clonedSession;
   };
 
-  const handleLaunchDirectly = (deck: StarterDeckMetadata) => {
-    // If not already imported, auto-import to ensure progress is tracked
-    const existing = StorageService.getSessions().find(s => 
-      s.id === deck.id || s.id.startsWith(`${deck.id}-`) || s.title === deck.session.title
-    );
-    const sessionToLaunch = existing || handleImportDeck(deck);
+  const handleStudy = (deck: StarterDeckMetadata) => {
+    // Studying adds the deck first, so its progress is saved like any other deck.
+    const sessionToLaunch = findSavedCopy(deck) ?? handleAddDeck(deck);
 
     soundEngine.playStart();
     onClose();
@@ -127,410 +203,408 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
     }
   };
 
+  // Escape or a backdrop click steps back from a preview before closing the catalog.
+  const handleDismiss = () => {
+    if (previewDeck) setPreviewDeck(null);
+    else onClose();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-fade-in">
-      <div 
-        className="w-full max-w-5xl max-h-[92vh] bg-slate-900 border border-white/[0.12] rounded-3xl shadow-2xl flex flex-col overflow-hidden text-slate-100"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Modal Header */}
-        <div className="p-6 border-b border-white/[0.08] flex items-start justify-between bg-slate-950/60 shrink-0">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30">
-                <Sparkles className="w-5 h-5" />
+    <Dialog isOpen={isOpen} onClose={handleDismiss} titleId="starter-catalog-title" className="max-w-5xl">
+      <DialogPanel className="h-[min(860px,92dvh)]">
+        {previewDeck ? (
+          <DeckPreview
+            deck={previewDeck}
+            pay={payByDeck.get(previewDeck.id) ?? 0}
+            isAdded={addedDeckIds.has(previewDeck.id)}
+            isJustAdded={justAddedId === previewDeck.id}
+            onBack={() => setPreviewDeck(null)}
+            onClose={onClose}
+            onAdd={() => handleAddDeck(previewDeck)}
+            onStudy={() => handleStudy(previewDeck)}
+          />
+        ) : (
+          <>
+            <DialogHeader
+              titleId="starter-catalog-title"
+              title="Starter decks"
+              description="Ready-made decks you can study right away. Add one to your library, or start it now."
+              onClose={onClose}
+              closeLabel="Close starter decks"
+            >
+              <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
+                <label className="relative min-w-0 flex-1">
+                  <span className="sr-only">Search starter decks</span>
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-subtle" aria-hidden="true" />
+                  <input
+                    type="search"
+                    data-autofocus={autofocusSearch || undefined}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by subject, exam or topic"
+                    className="h-10 w-full rounded-xl border border-line-strong bg-canvas pl-9 pr-9 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      aria-label="Clear search"
+                      className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-ink-subtle transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  )}
+                </label>
+                <label className="shrink-0">
+                  <span className="sr-only">Level</span>
+                  <select
+                    value={selectedLevel}
+                    onChange={(e) => setSelectedLevel(e.target.value as Level | 'all')}
+                    className="h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink transition-colors focus:border-brand focus:outline-none sm:w-40 cursor-pointer"
+                  >
+                    {LEVEL_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-white font-display flex items-center gap-2">
-                  <span>High-Yield Starter Catalog</span>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                    Verified Benchmarks
+
+              <div className="-mx-1 mt-3 flex gap-1.5 overflow-x-auto px-1 pb-0.5 no-scrollbar" role="group" aria-label="Subject">
+                <CategoryChip
+                  label="All"
+                  count={rankedDecks.length}
+                  active={selectedCategory === 'all'}
+                  onClick={() => setSelectedCategory('all')}
+                />
+                {visibleCategories.map(category => (
+                  <CategoryChip
+                    key={category.value}
+                    label={category.label}
+                    count={rankedDecks.filter(deck => deck.category === category.value).length}
+                    active={selectedCategory === category.value}
+                    onClick={() => setSelectedCategory(category.value)}
+                  />
+                ))}
+              </div>
+            </DialogHeader>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
+              <p className="sr-only" aria-live="polite">
+                {filteredDecks.length} {filteredDecks.length === 1 ? 'deck' : 'decks'} shown
+              </p>
+              {filteredDecks.length === 0 ? (
+                <div className="flex flex-col items-center px-4 py-16 text-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-hover text-ink-subtle">
+                    <Layers className="h-6 w-6" aria-hidden="true" />
                   </span>
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Instant cold-start decks with FSRS calibration, source document grounding, and visual image occlusion.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            aria-label="Close catalog"
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Filter & Search Bar */}
-        <div className="p-4 sm:px-6 border-b border-white/[0.06] bg-slate-950/30 space-y-3 shrink-0">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by topic, board exam (USMLE, MCAT, AP), or concept..."
-                className="w-full pl-10 pr-4 py-2 bg-slate-950/80 border border-white/[0.1] rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                  <p className="mt-4 text-[15px] font-semibold text-ink">No decks match</p>
+                  <p className="mt-1 text-[13px] text-ink-subtle">Try another word, or clear the filters.</p>
+                  {hasFilters && (
+                    <Button size="sm" className="mt-4" onClick={resetFilters}>
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {filteredDecks.map(deck => (
+                    <DeckCard
+                      key={deck.id}
+                      deck={deck}
+                      pay={payByDeck.get(deck.id) ?? 0}
+                      isAdded={addedDeckIds.has(deck.id)}
+                      isJustAdded={justAddedId === deck.id}
+                      onPreview={() => setPreviewDeck(deck)}
+                      onAdd={() => handleAddDeck(deck)}
+                      onStudy={() => handleStudy(deck)}
+                    />
+                  ))}
+                </div>
               )}
             </div>
+          </>
+        )}
+      </DialogPanel>
+    </Dialog>
+  );
+};
 
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[11px] text-slate-400 font-medium">Difficulty:</span>
-              <select
-                value={selectedDifficulty}
-                onChange={(e) => setSelectedDifficulty(e.target.value)}
-                className="bg-slate-950/80 border border-white/[0.1] text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
-              >
-                <option value="All">All Levels</option>
-                <option value="Foundational">Foundational</option>
-                <option value="Intermediate">Intermediate</option>
-                <option value="High-Yield Board Review">High-Yield Board Review</option>
-              </select>
-            </div>
-          </div>
+const CategoryChip: React.FC<{ label: string; count: number; active: boolean; onClick: () => void }> = ({
+  label,
+  count,
+  active,
+  onClick,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={active}
+    className={cn(
+      'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-colors cursor-pointer',
+      active ? 'bg-ink text-canvas' : 'text-ink-muted hover:bg-surface-hover hover:text-ink',
+    )}
+  >
+    {label}
+    <span className={cn('text-xs tabular-nums', active ? 'opacity-60' : 'text-ink-subtle')}>{count}</span>
+  </button>
+);
 
-          {/* Category Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all text-xs font-medium ${
-                  selectedCategory === cat
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'text-slate-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.08]'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Catalog Deck Grid */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-          {filteredDecks.length === 0 ? (
-            <div className="text-center py-16 space-y-3">
-              <Layers className="w-10 h-10 text-slate-600 mx-auto" />
-              <div className="text-sm font-semibold text-slate-300">No starter decks match your search criteria.</div>
-              <p className="text-xs text-slate-500">Try clearing filters or search terms.</p>
-              <button
-                onClick={() => { setSearchQuery(''); setSelectedCategory('All'); setSelectedDifficulty('All'); }}
-                className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-indigo-400 transition-colors"
-              >
-                Reset Filters
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredDecks.map((deck) => {
-                const isImported = importedDeckIds.has(deck.id);
-                const isJustImported = justImportedId === deck.id;
-
-                return (
-                  <div
-                    key={deck.id}
-                    className="p-5 rounded-2xl bg-slate-950/50 border border-white/[0.08] hover:border-indigo-500/40 hover:bg-slate-950/80 transition-all flex flex-col justify-between group space-y-4 relative overflow-hidden"
-                  >
-                    {/* Top Meta Header */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
-                          {deck.category}
-                        </span>
-
-                        <div className="flex items-center gap-1.5">
-                          {isBoardExamDeck(deck) && (
-                            <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-300 border border-rose-500/30" title="Professional board-exam level (university / medical school)">
-                              <GraduationCap className="w-3 h-3 text-rose-400" />
-                              <span>Board exam</span>
-                            </span>
-                          )}
-                          {deck.hasImageOcclusion && (
-                            <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30" title="Includes anatomical / diagram image occlusion cards">
-                              <Eye className="w-3 h-3 text-amber-400" />
-                              <span>Image Occlusion</span>
-                            </span>
-                          )}
-                          {deck.hasSourcePdf && (
-                            <span className="text-[11px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-300 border border-sky-500/30" title="Includes primary source PDF with page coordinates">
-                              <FileText className="w-3 h-3 text-sky-400" />
-                              <span>PDF Grounded</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <h3 className="text-base font-bold text-white group-hover:text-indigo-200 transition-colors font-display">
-                        {deck.title}
-                      </h3>
-
-                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                        {deck.summary}
-                      </p>
-
-                      {/* Tag badges */}
-                      <div className="flex flex-wrap gap-1 pt-1">
-                        {deck.tags.map((tag) => (
-                          <span key={tag} className="text-[11px] text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded-md">
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Stats & Verification Banner */}
-                    <div className="space-y-3 pt-3 border-t border-white/[0.06]">
-                      <div className="flex items-center justify-between text-[11px] text-slate-400">
-                        <div className="flex items-center gap-3">
-                          <span className="flex items-center gap-1">
-                            <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                            <span>{deck.conceptCount} Concepts</span>
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                            <span>{deck.cardCount} Cards</span>
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>~{deck.estimatedMinutes}m</span>
-                          </span>
-                        </div>
-
-                        <span className="text-[11px] text-slate-500 font-medium">
-                          {deck.difficulty}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 bg-white/[0.02] p-2 rounded-xl border border-white/[0.04]">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span className="truncate">Verified by <strong className="text-slate-200">{deck.verifiedBy}</strong></span>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          onClick={() => setPreviewDeck(deck)}
-                          className="flex-1 py-2 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-slate-300 hover:text-white transition-all flex items-center justify-center gap-1.5"
-                        >
-                          <span>Inspect Syllabus</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleImportDeck(deck)}
-                          className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                            isJustImported
-                              ? 'bg-emerald-600 text-white'
-                              : isImported
-                              ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-950'
-                              : 'bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30'
-                          }`}
-                          title={isImported ? 'Already in your local library' : 'Import deck to your library'}
-                        >
-                          {isJustImported ? (
-                            <>
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Added!</span>
-                            </>
-                          ) : isImported ? (
-                            <>
-                              <BookmarkCheck className="w-3.5 h-3.5" />
-                              <span>In Library</span>
-                            </>
-                          ) : (
-                            <>
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Import</span>
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          onClick={() => handleLaunchDirectly(deck)}
-                          className="py-2 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-bold shadow-md shadow-indigo-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-1.5 shrink-0"
-                          title="Start Active Recall Session Now"
-                        >
-                          <span>Study</span>
-                          <Play className="w-3.5 h-3.5 fill-white" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Modal Footer Banner */}
-        <div className="p-4 px-6 border-t border-white/[0.08] bg-slate-950/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 shrink-0">
-          <div className="flex items-center gap-2">
-            <Award className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>
-              All catalog decks include calibrated <strong>FSRS</strong> initial stability and <strong>Socratic oral viva</strong> prompts.
-            </span>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-xs font-medium text-slate-200 transition-colors"
-          >
-            Close Catalog
-          </button>
-        </div>
-      </div>
-
-      {/* Syllabus / Deck Inspector Slide-Over */}
-      {previewDeck && (
-        <div 
-          className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-slate-950/90 backdrop-blur-md animate-fade-in"
-          onClick={() => setPreviewDeck(null)}
-        >
-          <div 
-            className="w-full max-w-3xl max-h-[88vh] bg-slate-900 border border-white/[0.15] rounded-3xl shadow-2xl flex flex-col overflow-hidden text-slate-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Inspector Header */}
-            <div className="p-6 border-b border-white/[0.08] bg-slate-950/80 flex items-start justify-between">
-              <div>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
-                  {previewDeck.category}
-                </span>
-                <h3 className="text-lg font-bold text-white mt-1 font-display">
-                  {previewDeck.title}
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Target Audience: {previewDeck.targetAudience}
-                </p>
-              </div>
-
-              <button
-                onClick={() => setPreviewDeck(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08]"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Inspector Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Concept Curriculum ({previewDeck.session.concepts.length} Checkpoints)
-                </h4>
-                <div className="space-y-3">
-                  {previewDeck.session.concepts.map((concept, idx) => (
-                    <div 
-                      key={concept.id}
-                      className="p-4 rounded-xl bg-slate-950/60 border border-white/[0.06] space-y-2"
-                    >
-                      <div className="flex items-center justify-between text-xs font-bold text-white">
-                        <span className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 flex items-center justify-center text-[11px]">
-                            {idx + 1}
-                          </span>
-                          <span>{concept.title}</span>
-                        </span>
-                        <span className="text-[11px] text-slate-500 font-normal">
-                          {concept.retrievalCards.length} Cards • ~{concept.estimatedMinutes}m
-                        </span>
-                      </div>
-
-                      <div className="text-xs text-slate-300 bg-white/[0.02] p-2.5 rounded-lg border border-white/[0.04] italic">
-                        &quot;{concept.mentalModel}&quot;
-                      </div>
-
-                      <div className="space-y-1 pt-1">
-                        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Key Takeaways:</span>
-                        <ul className="text-xs text-slate-400 space-y-1 pl-4 list-disc">
-                          {concept.coreTakeaways.map((takeaway, tIdx) => (
-                            <li key={tIdx}>{takeaway}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {concept.sourceAnchor && (
-                        <div className="pt-2 flex items-center gap-1.5 text-[11px] text-sky-400">
-                          <FileText className="w-3 h-3" />
-                          <span>Grounded in {concept.sourceAnchor.sourceName} (Page {concept.sourceAnchor.pageNumber})</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Sample Cards Preview */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Sample Flashcards Preview
-                </h4>
-                <div className="space-y-2">
-                  {previewDeck.session.concepts.flatMap(c => c.retrievalCards).slice(0, 3).map((card) => (
-                    <div key={card.id} className="p-3 rounded-xl bg-slate-950/40 border border-white/[0.06] text-xs space-y-1">
-                      <div className="flex items-center justify-between text-[11px] text-slate-500">
-                        <span className="uppercase font-semibold text-indigo-400">{card.cardType || 'standard'} card</span>
-                        {card.cardType === 'image-occlusion' && (
-                          <span className="text-amber-400 flex items-center gap-1">
-                            <Eye className="w-3 h-3" /> {card.masks?.length} Masks
-                          </span>
-                        )}
-                      </div>
-                      <div className="font-medium text-white">{fillCloze(card.question)}</div>
-                      <div className="text-slate-400 text-[11px] line-clamp-1">Answer: {card.answer}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Inspector Footer */}
-            <div className="p-4 px-6 border-t border-white/[0.08] bg-slate-950/80 flex items-center justify-between">
-              <button
-                onClick={() => setPreviewDeck(null)}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white"
-              >
-                Back to Catalog
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    handleImportDeck(previewDeck);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-xs font-semibold text-slate-200 transition-colors flex items-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Import to Library</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    const deck = previewDeck;
-                    setPreviewDeck(null);
-                    handleLaunchDirectly(deck);
-                  }}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-1.5"
-                >
-                  <span>Launch Study Session</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+const DeckFeatures: React.FC<{ deck: StarterDeckMetadata }> = ({ deck }) => {
+  const isBoardExam = isBoardExamDeck(deck);
+  if (!isBoardExam && !deck.hasImageOcclusion && !deck.hasSourcePdf) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {isBoardExam && (
+        <Badge tone="due">
+          <GraduationCap className="h-3 w-3" aria-hidden="true" />
+          Board exam
+        </Badge>
+      )}
+      {deck.hasImageOcclusion && (
+        <Badge>
+          <ImageIcon className="h-3 w-3" aria-hidden="true" />
+          Diagrams
+        </Badge>
+      )}
+      {deck.hasSourcePdf && (
+        <Badge>
+          <FileText className="h-3 w-3" aria-hidden="true" />
+          Source PDF
+        </Badge>
       )}
     </div>
   );
 };
+
+const AddButton: React.FC<{ isAdded: boolean; isJustAdded: boolean; onAdd: () => void; size?: 'sm' | 'md' }> = ({
+  isAdded,
+  isJustAdded,
+  onAdd,
+  size = 'sm',
+}) =>
+  isAdded ? (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 font-medium text-success',
+        size === 'sm' ? 'h-8 px-2 text-xs' : 'h-10 px-2 text-sm',
+      )}
+      role="status"
+    >
+      <Check className={size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'} aria-hidden="true" />
+      {isJustAdded ? 'Added to library' : 'In your library'}
+    </span>
+  ) : (
+    <Button size={size} icon={Plus} onClick={onAdd}>
+      Add to library
+    </Button>
+  );
+
+interface DeckCardProps {
+  deck: StarterDeckMetadata;
+  pay: number;
+  isAdded: boolean;
+  isJustAdded: boolean;
+  onPreview: () => void;
+  onAdd: () => void;
+  onStudy: () => void;
+}
+
+const DeckCard: React.FC<DeckCardProps> = ({ deck, pay, isAdded, isJustAdded, onPreview, onAdd, onStudy }) => {
+  const category = categoryOf(deck);
+  const Icon = category.icon;
+  return (
+    <article className="flex flex-col rounded-2xl border border-line bg-surface p-4 transition-colors hover:border-line-strong sm:p-5">
+      <div className="flex items-start gap-3">
+        <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', TONE_TILES[category.tone])}>
+          <Icon className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-ink-subtle">
+            {category.label} · {LEVEL_LABELS[deck.difficulty]}
+          </p>
+          <h3 className="mt-0.5 text-[15px] font-semibold leading-snug text-ink">
+            <button
+              type="button"
+              onClick={onPreview}
+              className="text-left transition-colors hover:text-brand-text focus-visible:outline-none focus-visible:underline cursor-pointer"
+            >
+              {deck.title}
+            </button>
+          </h3>
+        </div>
+      </div>
+
+      <p className="mt-3 line-clamp-2 text-[13px] leading-relaxed text-ink-muted">{deck.summary}</p>
+
+      <div className="mt-3">
+        <DeckFeatures deck={deck} />
+      </div>
+
+      <div className="mt-auto pt-4">
+        <div className="flex items-center gap-x-3 border-t border-line pt-3 text-xs text-ink-subtle tabular-nums">
+          <span>{deck.conceptCount} concepts</span>
+          <span>{deck.cardCount} cards</span>
+          <span className="inline-flex items-center gap-1">
+            <Clock className="h-3.5 w-3.5" aria-hidden="true" />~{deck.estimatedMinutes} min
+          </span>
+          {pay > 0 && (
+            <span className="ml-auto text-ink-muted" title="About what one full session pays today">
+              <Tokens amount={pay} />
+            </span>
+          )}
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={onPreview} aria-label={`Preview ${deck.title}`} data-preview-trigger={deck.id}>
+            Preview
+          </Button>
+          <AddButton isAdded={isAdded} isJustAdded={isJustAdded} onAdd={onAdd} />
+          <Button size="sm" variant="primary" icon={Play} className="ml-auto" onClick={onStudy}>
+            Study
+          </Button>
+        </div>
+      </div>
+    </article>
+  );
+};
+
+interface DeckPreviewProps {
+  deck: StarterDeckMetadata;
+  pay: number;
+  isAdded: boolean;
+  isJustAdded: boolean;
+  onBack: () => void;
+  onClose: () => void;
+  onAdd: () => void;
+  onStudy: () => void;
+}
+
+const DeckPreview: React.FC<DeckPreviewProps> = ({ deck, pay, isAdded, isJustAdded, onBack, onClose, onAdd, onStudy }) => {
+  const category = categoryOf(deck);
+  const Icon = category.icon;
+  const sampleCards = deck.session.concepts.flatMap(c => c.retrievalCards).slice(0, SAMPLE_CARD_COUNT);
+
+  // The list view unmounts when the preview opens, so move focus into the preview.
+  const topBarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    topBarRef.current?.querySelector<HTMLElement>('button')?.focus();
+  }, []);
+
+  return (
+    <>
+      <div ref={topBarRef} className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-3 py-2 sm:px-4">
+        <Button size="sm" variant="ghost" icon={ArrowLeft} onClick={onBack}>
+          All starter decks
+        </Button>
+        <IconButton icon={X} label="Close starter decks" onClick={onClose} />
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div className="mx-auto max-w-3xl px-5 py-6 sm:px-8 sm:py-8">
+          <div className="flex items-start gap-4">
+            <span className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl', TONE_TILES[category.tone])}>
+              <Icon className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-ink-subtle">
+                {category.label} · {LEVEL_LABELS[deck.difficulty]}
+              </p>
+              <h2 id="starter-catalog-title" className="mt-1 text-xl font-semibold leading-snug text-ink sm:text-2xl">
+                {deck.title}
+              </h2>
+            </div>
+          </div>
+
+          <p className="mt-4 text-[15px] leading-relaxed text-ink-muted">{deck.summary}</p>
+          <p className="mt-2 text-[13px] text-ink-subtle">
+            <span className="font-medium text-ink-muted">Good for:</span> {deck.targetAudience}
+          </p>
+
+          <dl className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <PreviewStat label="Concepts" value={deck.conceptCount} />
+            <PreviewStat label="Cards" value={deck.cardCount} />
+            <PreviewStat label="Session" value={`~${deck.estimatedMinutes} min`} />
+            <PreviewStat label="Pays about" value={<Tokens amount={pay} iconClassName="h-4 w-4" />} />
+          </dl>
+
+          <div className="mt-4">
+            <DeckFeatures deck={deck} />
+          </div>
+
+          <section className="mt-8">
+            <h3 className="text-[15px] font-semibold text-ink">What you will learn</h3>
+            <ol className="mt-3 space-y-2.5">
+              {deck.session.concepts.map((concept, index) => (
+                <li key={concept.id} className="rounded-2xl border border-line bg-surface p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-hover text-xs font-semibold tabular-nums text-ink-muted">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                        <h4 className="text-sm font-semibold text-ink">{concept.title}</h4>
+                        <span className="text-xs tabular-nums text-ink-subtle">
+                          {concept.retrievalCards.length} {concept.retrievalCards.length === 1 ? 'card' : 'cards'} · ~{concept.estimatedMinutes} min
+                        </span>
+                      </div>
+                      {concept.mentalModel && (
+                        <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">{concept.mentalModel}</p>
+                      )}
+                      {concept.coreTakeaways.length > 0 && (
+                        <ul className="mt-2.5 space-y-1">
+                          {concept.coreTakeaways.map((takeaway, takeawayIndex) => (
+                            <li key={takeawayIndex} className="flex gap-2 text-[13px] leading-relaxed text-ink-subtle">
+                              <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-ink-subtle" aria-hidden="true" />
+                              <span>{takeaway}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {concept.sourceAnchor && (
+                        <p className="mt-2.5 inline-flex items-center gap-1.5 text-xs text-ink-subtle">
+                          <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                          From {concept.sourceAnchor.sourceName}, page {concept.sourceAnchor.pageNumber}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          {sampleCards.length > 0 && (
+            <section className="mt-8">
+              <h3 className="text-[15px] font-semibold text-ink">Sample cards</h3>
+              <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                {sampleCards.map(card => (
+                  <div key={card.id} className="flex flex-col rounded-2xl border border-line bg-canvas-raised p-4">
+                    <span className="text-xs font-medium text-ink-subtle">{CARD_TYPE_LABELS[getEffectiveCardType(card)]}</span>
+                    <p className="mt-1.5 text-sm font-medium leading-relaxed text-ink">{maskCloze(card.question)}</p>
+                    <p className="mt-3 border-t border-line pt-2.5 text-[13px] leading-relaxed text-ink-muted">
+                      <span className="text-ink-subtle">Answer: </span>
+                      {card.answer}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+
+      <DialogFooter className="justify-end">
+        <AddButton isAdded={isAdded} isJustAdded={isJustAdded} onAdd={onAdd} size="md" />
+        <Button variant="primary" icon={Play} onClick={onStudy}>
+          Study this deck
+        </Button>
+      </DialogFooter>
+    </>
+  );
+};
+
+const PreviewStat: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="rounded-xl border border-line bg-surface px-3 py-2.5">
+    <dt className="text-xs text-ink-subtle">{label}</dt>
+    <dd className="mt-0.5 text-[15px] font-semibold tabular-nums text-ink">{value}</dd>
+  </div>
+);

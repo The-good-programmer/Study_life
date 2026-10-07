@@ -89,6 +89,14 @@ export const isOptionCorrect = (option: string, answer: string): boolean => {
   );
 };
 
+/** Plain names for each card type, as learners see them. */
+export const CARD_TYPE_LABELS: Record<CardType, string> = {
+  standard: 'Flashcard',
+  cloze: 'Fill in the blank',
+  'multiple-choice': 'Multiple choice',
+  'image-occlusion': 'Label the diagram',
+};
+
 /** The interaction style for a card when it does not declare a type itself. */
 export const getEffectiveCardType = (card: RetrievalCard | undefined): CardType => {
   if (!card) return 'standard';

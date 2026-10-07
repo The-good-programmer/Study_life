@@ -795,6 +795,10 @@ export const SPANISH_POLYGLOT_SESSION: StudySession = {
   ]
 };
 
+// Counts come from the decks themselves so the catalog cannot drift from what is studied.
+const countCards = (session: StudySession): number =>
+  session.concepts.reduce((sum, concept) => sum + concept.retrievalCards.length, 0);
+
 export const CURATED_STARTER_DECKS: StarterDeckMetadata[] = [
   {
     id: 'usmle-cardio-pathophysiology',
@@ -802,8 +806,8 @@ export const CURATED_STARTER_DECKS: StarterDeckMetadata[] = [
     category: 'Medical & Clinical',
     difficulty: 'High-Yield Board Review',
     estimatedMinutes: 34,
-    cardCount: 6,
-    conceptCount: 3,
+    cardCount: countCards(USMLE_CARDIO_SESSION),
+    conceptCount: USMLE_CARDIO_SESSION.concepts.length,
     hasImageOcclusion: true,
     hasSourcePdf: true,
     tags: ['Cardiology', 'USMLE Step 1', 'Pharmacology', 'Hemodynamics', 'Image Occlusion'],
@@ -818,8 +822,8 @@ export const CURATED_STARTER_DECKS: StarterDeckMetadata[] = [
     category: 'STEM & Engineering',
     difficulty: 'Intermediate',
     estimatedMinutes: 28,
-    cardCount: 4,
-    conceptCount: 2,
+    cardCount: countCards(MCAT_BIOCHEM_SESSION),
+    conceptCount: MCAT_BIOCHEM_SESSION.concepts.length,
     hasImageOcclusion: false,
     hasSourcePdf: true,
     tags: ['Biochemistry', 'MCAT', 'Enzyme Kinetics', 'Thermodynamics', 'Lineweaver-Burk'],
@@ -834,8 +838,8 @@ export const CURATED_STARTER_DECKS: StarterDeckMetadata[] = [
     category: 'STEM & Engineering',
     difficulty: 'Intermediate',
     estimatedMinutes: 30,
-    cardCount: 3,
-    conceptCount: 2,
+    cardCount: countCards(CS_SYSTEMS_SESSION),
+    conceptCount: CS_SYSTEMS_SESSION.concepts.length,
     hasImageOcclusion: false,
     hasSourcePdf: true,
     tags: ['System Design', 'Distributed Systems', 'CAP Theorem', 'LSM-Trees', 'Consensus'],
@@ -850,8 +854,8 @@ export const CURATED_STARTER_DECKS: StarterDeckMetadata[] = [
     category: 'Biochemistry & Life Sciences',
     difficulty: 'Foundational',
     estimatedMinutes: 26,
-    cardCount: 3,
-    conceptCount: 2,
+    cardCount: countCards(AP_BIO_SESSION),
+    conceptCount: AP_BIO_SESSION.concepts.length,
     hasImageOcclusion: true,
     hasSourcePdf: true,
     tags: ['AP Biology', 'Mitochondria', 'Chemiosmosis', 'CRISPR-Cas9', 'DNA Replication'],
@@ -866,8 +870,8 @@ export const CURATED_STARTER_DECKS: StarterDeckMetadata[] = [
     category: 'Languages & Polyglot',
     difficulty: 'Foundational',
     estimatedMinutes: 24,
-    cardCount: 3,
-    conceptCount: 2,
+    cardCount: countCards(SPANISH_POLYGLOT_SESSION),
+    conceptCount: SPANISH_POLYGLOT_SESSION.concepts.length,
     hasImageOcclusion: false,
     hasSourcePdf: true,
     tags: ['Spanish', 'CEFR B1-B2', 'Subjunctive', 'Por vs Para', 'Language Acquisition'],
@@ -882,7 +886,7 @@ export const CURATED_STARTER_DECKS: StarterDeckMetadata[] = [
     category: 'Cognitive & Behavioral Science',
     difficulty: 'High-Yield Board Review',
     estimatedMinutes: 30,
-    cardCount: DEMO_STUDY_SESSIONS[0].concepts.reduce((a, b) => a + b.retrievalCards.length, 0),
+    cardCount: countCards(DEMO_STUDY_SESSIONS[0]),
     conceptCount: DEMO_STUDY_SESSIONS[0].concepts.length,
     hasImageOcclusion: false,
     hasSourcePdf: true,

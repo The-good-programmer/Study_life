@@ -28,6 +28,7 @@ import { haptics } from '../../services/hapticsService';
 import { buildQuizOptions } from '../../utils/quizOptions';
 import { Badge, Button, IconButton, Kbd, Toggle } from '../ui/primitives';
 import {
+  CARD_TYPE_LABELS,
   blendInterleavedCards,
   evaluateBlurting,
   getBlurtingTargets,
@@ -1201,13 +1202,6 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
       <ScienceExplainerModal isOpen={showScienceModal} onClose={() => setShowScienceModal(false)} initialTopic="retrieval" />
     </div>
   );
-};
-
-const CARD_TYPE_LABELS: Record<CardType, string> = {
-  standard: 'Flashcard',
-  cloze: 'Fill in the blank',
-  'multiple-choice': 'Multiple choice',
-  'image-occlusion': 'Label the diagram',
 };
 
 const RATING_BUTTONS: { rating: FSRSRating; label: string; key: string; className: string; labelClassName: string }[] = [
