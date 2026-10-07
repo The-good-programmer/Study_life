@@ -15,7 +15,6 @@ import {
   ShieldCheck,
   Layers,
   Flame,
-  GraduationCap,
   School,
   RefreshCw,
   Trash2,
@@ -23,8 +22,6 @@ import {
   Clock,
   ArrowRight,
   Globe,
-  ChevronDown,
-  Check,
   Info,
   Coins
 } from 'lucide-react';
@@ -33,7 +30,10 @@ import { AuthService } from '../../services/authService';
 import { GoogleAuthService } from '../../services/googleAuthService';
 import { StorageService } from '../../services/storageService';
 import { lifeSimService } from '../../services/lifeSimService';
-import { EDUCATION_COUNTRIES, EducationCatalog } from '../../services/educationCatalog';
+import { EducationCatalog } from '../../services/educationCatalog';
+import { EducationFields } from './EducationFields';
+import { createEducationDraft, educationFromUser, resolveGrade } from './educationDraft';
+import type { EducationDraft } from './educationDraft';
 import { Dialog } from '../common/Dialog';
 
 interface AuthModalProps {
@@ -87,12 +87,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [googleError, setGoogleError] = useState<string | null>(null);
 
   // Google Profile Setup Form State
-  const [googleCountry, setGoogleCountry] = useState('United States');
-  const [googleGrade, setGoogleGrade] = useState('9th Grade (High School Freshman)');
-  const [googleAge, setGoogleAge] = useState(15);
-  const [googleCustomGrade, setGoogleCustomGrade] = useState('');
-  const [googleIsCustomGrade, setGoogleIsCustomGrade] = useState(false);
-  const [isGoogleCountryDropdownOpen, setIsGoogleCountryDropdownOpen] = useState(false);
+  const [googleEdu, setGoogleEdu] = useState<EducationDraft>(() => createEducationDraft({ age: 15 }));
   const [googleMigrateGuestData, setGoogleMigrateGuestData] = useState(true);
 
   // Login form state
@@ -107,12 +102,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
-  const [regCountry, setRegCountry] = useState('United States');
-  const [regGrade, setRegGrade] = useState('9th Grade (High School Freshman)');
-  const [regAge, setRegAge] = useState(14);
-  const [regCustomGrade, setRegCustomGrade] = useState('');
-  const [regIsCustomGrade, setRegIsCustomGrade] = useState(false);
-  const [isRegCountryDropdownOpen, setIsRegCountryDropdownOpen] = useState(false);
+  const [regEdu, setRegEdu] = useState<EducationDraft>(() => createEducationDraft());
   const [regAvatar, setRegAvatar] = useState('🧠');
   const [regInstitution, setRegInstitution] = useState('');
   const [migrateGuestData, setMigrateGuestData] = useState(true);
@@ -121,12 +111,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Edit profile form state
   const [editName, setEditName] = useState(() => AuthService.getCurrentUser()?.name || '');
-  const [editCountry, setEditCountry] = useState(() => AuthService.getCurrentUser()?.country || 'United States');
-  const [editGrade, setEditGrade] = useState(() => AuthService.getCurrentUser()?.grade || '9th Grade (High School Freshman)');
-  const [editAge, setEditAge] = useState<number>(() => AuthService.getCurrentUser()?.age || 14);
-  const [editCustomGrade, setEditCustomGrade] = useState('');
-  const [editIsCustomGrade, setEditIsCustomGrade] = useState(false);
-  const [isEditCountryDropdownOpen, setIsEditCountryDropdownOpen] = useState(false);
+  const [editEdu, setEditEdu] = useState<EducationDraft>(() => educationFromUser(AuthService.getCurrentUser()));
   const [editAvatar, setEditAvatar] = useState(() => AuthService.getCurrentUser()?.avatar || '🧠');
   const [editInstitution, setEditInstitution] = useState(() => AuthService.getCurrentUser()?.institution || '');
   const [editSuccessMsg, setEditSuccessMsg] = useState<string | null>(null);
@@ -149,9 +134,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setTab(user ? 'profile' : (initialTab === 'register' ? 'register' : 'login'));
       if (user) {
         setEditName(user.name);
-        setEditCountry(user.country || 'United States');
-        setEditGrade(user.grade || '9th Grade (High School Freshman)');
-        setEditAge(user.age || 14);
+        setEditEdu(prev => ({ ...prev, ...educationFromUser(user, false) }));
         setEditAvatar(user.avatar);
         setEditInstitution(user.institution || '');
       }
@@ -165,9 +148,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setAllAccounts(AuthService.getAllAccounts());
       if (user) {
         setEditName(user.name);
-        setEditCountry(user.country || 'United States');
-        setEditGrade(user.grade || '9th Grade (High School Freshman)');
-        setEditAge(user.age || 14);
+        setEditEdu(prev => ({ ...prev, ...educationFromUser(user, false) }));
         setEditAvatar(user.avatar);
         setEditInstitution(user.institution || '');
       }
@@ -215,51 +196,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const regCountryConfig = EducationCatalog.getCountry(regCountry);
-  const regAvailableGrades = regCountryConfig.grades;
-
-  const editCountryConfig = EducationCatalog.getCountry(editCountry);
-  const editAvailableGrades = editCountryConfig.grades;
-
-  const handleRegCountrySelect = (cName: string) => {
-    setRegCountry(cName);
-    setIsRegCountryDropdownOpen(false);
-    const newCountry = EducationCatalog.getCountry(cName);
-    const defaultGrade = newCountry.grades[Math.min(6, newCountry.grades.length - 1)];
-    if (defaultGrade) {
-      setRegGrade(defaultGrade.label);
-      setRegAge(defaultGrade.typicalAge);
-      setRegIsCustomGrade(false);
-    }
-  };
-
-  const handleEditCountrySelect = (cName: string) => {
-    setEditCountry(cName);
-    setIsEditCountryDropdownOpen(false);
-    const newCountry = EducationCatalog.getCountry(cName);
-    const defaultGrade = newCountry.grades[Math.min(6, newCountry.grades.length - 1)];
-    if (defaultGrade) {
-      setEditGrade(defaultGrade.label);
-      setEditAge(defaultGrade.typicalAge);
-      setEditIsCustomGrade(false);
-    }
-  };
-
-  const googleCountryConfig = EducationCatalog.getCountry(googleCountry);
-  const googleAvailableGrades = googleCountryConfig.grades;
-
-  const handleGoogleCountrySelect = (cName: string) => {
-    setGoogleCountry(cName);
-    setIsGoogleCountryDropdownOpen(false);
-    const newCountry = EducationCatalog.getCountry(cName);
-    const defaultGrade = newCountry.grades[Math.min(6, newCountry.grades.length - 1)];
-    if (defaultGrade) {
-      setGoogleGrade(defaultGrade.label);
-      setGoogleAge(defaultGrade.typicalAge);
-      setGoogleIsCustomGrade(false);
-    }
-  };
-
   const handleGoogleSuccess = async (payload: GoogleProfilePayload) => {
     setIsGoogleLoading(true);
     setGoogleError(null);
@@ -277,9 +213,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setIsGoogleLoading(false);
         setIsGoogleClientIdModalOpen(false);
         setGoogleProfilePending(res.partialProfile);
-        setGoogleCountry('United States');
-        setGoogleGrade('9th Grade (High School Freshman)');
-        setGoogleAge(15);
+        setGoogleEdu(createEducationDraft({ age: 15 }));
         setTab('google-setup');
         return;
       }
@@ -336,14 +270,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setGoogleError(null);
 
     try {
-      const finalGrade = googleIsCustomGrade ? (googleCustomGrade.trim() || 'General Studies') : googleGrade;
+      const finalGrade = resolveGrade(googleEdu);
       const res = await AuthService.signInWithGoogle({
         googleId: googleProfilePending.googleId,
         email: googleProfilePending.email,
         name: googleProfilePending.name,
         pictureUrl: googleProfilePending.pictureUrl,
-        age: googleAge,
-        country: googleCountry,
+        age: googleEdu.age,
+        country: googleEdu.country,
         grade: finalGrade,
         avatar: '🌐',
         migrateGuestData: googleMigrateGuestData,
@@ -372,13 +306,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsRegistering(true);
 
     try {
-      const finalGrade = regIsCustomGrade ? (regCustomGrade.trim() || 'General Studies') : regGrade;
+      const finalGrade = resolveGrade(regEdu);
       const res = await AuthService.register({
         name: regName,
         email: regEmail,
         password: regPassword,
-        age: regAge,
-        country: regCountry,
+        age: regEdu.age,
+        country: regEdu.country,
         grade: finalGrade,
         avatar: regAvatar,
         institution: regInstitution,
@@ -432,11 +366,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    const finalEditGrade = editIsCustomGrade ? (editCustomGrade.trim() || 'General Studies') : editGrade;
+    const finalEditGrade = resolveGrade(editEdu);
     const updated = AuthService.updateProfile(currentUser.id, {
       name: editName,
-      age: editAge,
-      country: editCountry,
+      age: editEdu.age,
+      country: editEdu.country,
       grade: finalEditGrade,
       avatar: editAvatar,
       institution: editInstitution,
@@ -896,151 +830,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               {/* Educational Profile: Country, Grade, Age */}
-              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                    <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />
-                    Educational System & Grade
-                  </span>
-                  <span className="text-[11px] text-slate-400">Calibrates AI study depth</span>
-                </div>
-
-                {/* Country Dropdown */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <Globe className="w-3 h-3 text-indigo-400" />
-                      Country & System
-                    </span>
-                    <span className="text-[11px] text-slate-500">{regCountryConfig.systemName}</span>
-                  </label>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setIsRegCountryDropdownOpen(!isRegCountryDropdownOpen)}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/[0.1] text-xs text-white flex items-center justify-between cursor-pointer hover:bg-slate-850"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">{regCountryConfig.flag}</span>
-                        <span className="font-semibold">{regCountryConfig.name}</span>
-                      </div>
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
-
-                    {isRegCountryDropdownOpen && (
-                      <div className="absolute left-0 right-0 mt-1.5 p-1.5 rounded-xl bg-slate-900 border border-indigo-500/40 shadow-2xl z-50 max-h-48 overflow-y-auto space-y-0.5">
-                        {EDUCATION_COUNTRIES.map(c => (
-                          <button
-                            key={c.code}
-                            type="button"
-                            onClick={() => handleRegCountrySelect(c.name)}
-                            className={`w-full p-2 rounded-lg text-left flex items-center justify-between text-xs cursor-pointer ${
-                              regCountry === c.name
-                                ? 'bg-indigo-600 text-white font-semibold'
-                                : 'text-slate-300 hover:bg-white/[0.06]'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span>{c.flag}</span>
-                              <span className="truncate">{c.name}</span>
-                            </div>
-                            {regCountry === c.name && <Check className="w-3.5 h-3.5 text-white" />}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Grade in Country */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400">
-                    Grade in {regCountryConfig.name}
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
-                    {regAvailableGrades.map(g => {
-                      const isSelected = !regIsCustomGrade && regGrade === g.label;
-                      return (
-                        <button
-                          key={g.label}
-                          type="button"
-                          onClick={() => {
-                            setRegGrade(g.label);
-                            setRegAge(g.typicalAge);
-                            setRegIsCustomGrade(false);
-                          }}
-                          className={`text-left p-2 rounded-xl border text-xs transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/25 border-indigo-500/60 ring-1 ring-indigo-500/40 text-white'
-                              : 'bg-slate-900/60 border-white/[0.06] text-slate-300 hover:text-white hover:bg-white/[0.04]'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold truncate">{g.label}</span>
-                            <span className="text-[11px] font-mono text-slate-400 shrink-0">~{g.typicalAge}y</span>
-                          </div>
-                          <span className="text-[11px] text-slate-500 block truncate">{g.stage}</span>
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      type="button"
-                      onClick={() => setRegIsCustomGrade(true)}
-                      className={`text-left p-2 rounded-xl border text-xs transition-all cursor-pointer ${
-                        regIsCustomGrade
-                          ? 'bg-indigo-600/25 border-indigo-500/60 ring-1 ring-indigo-500/40 text-white'
-                          : 'bg-slate-900/60 border-white/[0.06] text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <div className="font-semibold">Other / Custom Grade</div>
-                      <span className="text-[11px] text-slate-500 block">Type custom level</span>
-                    </button>
-                  </div>
-
-                  {regIsCustomGrade && (
-                    <input
-                      type="text"
-                      placeholder="e.g. 4th Grade, Medical Resident, or AP Scholar"
-                      value={regCustomGrade}
-                      onChange={e => setRegCustomGrade(e.target.value)}
-                      className="w-full mt-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-indigo-500/40 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  )}
-                </div>
-
-                {/* Age Stepper */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
-                    <span>Student Age</span>
-                    <span className="text-indigo-300 font-mono font-bold">{regAge} years old</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRegAge(prev => Math.max(5, prev - 1))}
-                      className="w-8 h-8 rounded-lg bg-slate-900 border border-white/[0.1] hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="range"
-                      min={6}
-                      max={50}
-                      value={regAge}
-                      onChange={e => setRegAge(Number(e.target.value))}
-                      className="flex-1 accent-indigo-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setRegAge(prev => Math.min(99, prev + 1))}
-                      className="w-8 h-8 rounded-lg bg-slate-900 border border-white/[0.1] hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center cursor-pointer"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <EducationFields value={regEdu} onChange={setRegEdu} />
 
               {/* Institution (optional) */}
               <div className="space-y-1.5">
@@ -1154,151 +944,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               {/* Educational Level Selection */}
-              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                    <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />
-                    Target Grade & Educational System
-                  </span>
-                  <span className="text-[11px] text-slate-400">Calibrates AI study depth</span>
-                </div>
-
-                {/* Country Dropdown */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <Globe className="w-3 h-3 text-indigo-400" />
-                      Country & System
-                    </span>
-                    <span className="text-[11px] text-slate-500">{googleCountryConfig.systemName}</span>
-                  </label>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setIsGoogleCountryDropdownOpen(!isGoogleCountryDropdownOpen)}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/[0.1] text-xs text-white flex items-center justify-between cursor-pointer hover:bg-slate-850"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">{googleCountryConfig.flag}</span>
-                        <span className="font-semibold">{googleCountryConfig.name}</span>
-                      </div>
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
-
-                    {isGoogleCountryDropdownOpen && (
-                      <div className="absolute left-0 right-0 mt-1.5 p-1.5 rounded-xl bg-slate-900 border border-indigo-500/40 shadow-2xl z-50 max-h-48 overflow-y-auto space-y-0.5">
-                        {EDUCATION_COUNTRIES.map(c => (
-                          <button
-                            key={c.code}
-                            type="button"
-                            onClick={() => handleGoogleCountrySelect(c.name)}
-                            className={`w-full p-2 rounded-lg text-left flex items-center justify-between text-xs cursor-pointer ${
-                              googleCountry === c.name
-                                ? 'bg-indigo-600 text-white font-semibold'
-                                : 'text-slate-300 hover:bg-white/[0.06]'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span>{c.flag}</span>
-                              <span className="truncate">{c.name}</span>
-                            </div>
-                            {googleCountry === c.name && <Check className="w-3.5 h-3.5 text-white" />}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Grade in Country */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400">
-                    Grade in {googleCountryConfig.name}
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
-                    {googleAvailableGrades.map(g => {
-                      const isSelected = !googleIsCustomGrade && googleGrade === g.label;
-                      return (
-                        <button
-                          key={g.label}
-                          type="button"
-                          onClick={() => {
-                            setGoogleGrade(g.label);
-                            setGoogleAge(g.typicalAge);
-                            setGoogleIsCustomGrade(false);
-                          }}
-                          className={`text-left p-2 rounded-xl border text-xs transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/25 border-indigo-500/60 ring-1 ring-indigo-500/40 text-white'
-                              : 'bg-slate-900/60 border-white/[0.06] text-slate-300 hover:text-white hover:bg-white/[0.04]'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold truncate">{g.label}</span>
-                            <span className="text-[11px] font-mono text-slate-400 shrink-0">~{g.typicalAge}y</span>
-                          </div>
-                          <span className="text-[11px] text-slate-500 block truncate">{g.stage}</span>
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      type="button"
-                      onClick={() => setGoogleIsCustomGrade(true)}
-                      className={`text-left p-2 rounded-xl border text-xs transition-all cursor-pointer ${
-                        googleIsCustomGrade
-                          ? 'bg-indigo-600/25 border-indigo-500/60 ring-1 ring-indigo-500/40 text-white'
-                          : 'bg-slate-900/60 border-white/[0.06] text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <div className="font-semibold">Other / Custom Grade</div>
-                      <span className="text-[11px] text-slate-500 block">Type custom level</span>
-                    </button>
-                  </div>
-
-                  {googleIsCustomGrade && (
-                    <input
-                      type="text"
-                      placeholder="e.g. 4th Grade, University Sophomore, or AP Scholar"
-                      value={googleCustomGrade}
-                      onChange={e => setGoogleCustomGrade(e.target.value)}
-                      className="w-full mt-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-indigo-500/40 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  )}
-                </div>
-
-                {/* Age Stepper */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
-                    <span>Student Age</span>
-                    <span className="text-indigo-300 font-mono font-bold">{googleAge} years old</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setGoogleAge(prev => Math.max(5, prev - 1))}
-                      className="w-8 h-8 rounded-lg bg-slate-900 border border-white/[0.1] hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="range"
-                      min={6}
-                      max={50}
-                      value={googleAge}
-                      onChange={e => setGoogleAge(Number(e.target.value))}
-                      className="flex-1 accent-indigo-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setGoogleAge(prev => Math.min(99, prev + 1))}
-                      className="w-8 h-8 rounded-lg bg-slate-900 border border-white/[0.1] hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center cursor-pointer"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <EducationFields value={googleEdu} onChange={setGoogleEdu} title="Target Grade & Educational System"
+                customGradePlaceholder="e.g. 4th Grade, University Sophomore, or AP Scholar" />
 
               {/* Guest Data Migration Toggle */}
               {hasGuestData && (
@@ -1531,151 +1178,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               {/* Educational Profile: Country, Grade, Age */}
-              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                    <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />
-                    Target Grade & Educational System
-                  </span>
-                  <span className="text-[11px] text-slate-400">Calibrates AI study depth</span>
-                </div>
-
-                {/* Country Dropdown */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <Globe className="w-3 h-3 text-indigo-400" />
-                      Country & System
-                    </span>
-                    <span className="text-[11px] text-slate-500">{editCountryConfig.systemName}</span>
-                  </label>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setIsEditCountryDropdownOpen(!isEditCountryDropdownOpen)}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/[0.1] text-xs text-white flex items-center justify-between cursor-pointer hover:bg-slate-850"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">{editCountryConfig.flag}</span>
-                        <span className="font-semibold">{editCountryConfig.name}</span>
-                      </div>
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
-
-                    {isEditCountryDropdownOpen && (
-                      <div className="absolute left-0 right-0 mt-1.5 p-1.5 rounded-xl bg-slate-900 border border-indigo-500/40 shadow-2xl z-50 max-h-48 overflow-y-auto space-y-0.5">
-                        {EDUCATION_COUNTRIES.map(c => (
-                          <button
-                            key={c.code}
-                            type="button"
-                            onClick={() => handleEditCountrySelect(c.name)}
-                            className={`w-full p-2 rounded-lg text-left flex items-center justify-between text-xs cursor-pointer ${
-                              editCountry === c.name
-                                ? 'bg-indigo-600 text-white font-semibold'
-                                : 'text-slate-300 hover:bg-white/[0.06]'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span>{c.flag}</span>
-                              <span className="truncate">{c.name}</span>
-                            </div>
-                            {editCountry === c.name && <Check className="w-3.5 h-3.5 text-white" />}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Grade in Country */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-400">
-                    Grade in {editCountryConfig.name}
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
-                    {editAvailableGrades.map(g => {
-                      const isSelected = !editIsCustomGrade && editGrade === g.label;
-                      return (
-                        <button
-                          key={g.label}
-                          type="button"
-                          onClick={() => {
-                            setEditGrade(g.label);
-                            setEditAge(g.typicalAge);
-                            setEditIsCustomGrade(false);
-                          }}
-                          className={`text-left p-2 rounded-xl border text-xs transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/25 border-indigo-500/60 ring-1 ring-indigo-500/40 text-white'
-                              : 'bg-slate-900/60 border-white/[0.06] text-slate-300 hover:text-white hover:bg-white/[0.04]'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold truncate">{g.label}</span>
-                            <span className="text-[11px] font-mono text-slate-400 shrink-0">~{g.typicalAge}y</span>
-                          </div>
-                          <span className="text-[11px] text-slate-500 block truncate">{g.stage}</span>
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      type="button"
-                      onClick={() => setEditIsCustomGrade(true)}
-                      className={`text-left p-2 rounded-xl border text-xs transition-all cursor-pointer ${
-                        editIsCustomGrade
-                          ? 'bg-indigo-600/25 border-indigo-500/60 ring-1 ring-indigo-500/40 text-white'
-                          : 'bg-slate-900/60 border-white/[0.06] text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <div className="font-semibold">Other / Custom Grade</div>
-                      <span className="text-[11px] text-slate-500 block">Type custom level</span>
-                    </button>
-                  </div>
-
-                  {editIsCustomGrade && (
-                    <input
-                      type="text"
-                      placeholder="e.g. 4th Grade, Medical Resident, or AP Scholar"
-                      value={editCustomGrade}
-                      onChange={e => setEditCustomGrade(e.target.value)}
-                      className="w-full mt-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-indigo-500/40 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  )}
-                </div>
-
-                {/* Age Stepper */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
-                    <span>Student Age</span>
-                    <span className="text-indigo-300 font-mono font-bold">{editAge} years old</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditAge(prev => Math.max(5, prev - 1))}
-                      className="w-8 h-8 rounded-lg bg-slate-900 border border-white/[0.1] hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="range"
-                      min={6}
-                      max={50}
-                      value={editAge}
-                      onChange={e => setEditAge(Number(e.target.value))}
-                      className="flex-1 accent-indigo-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setEditAge(prev => Math.min(99, prev + 1))}
-                      className="w-8 h-8 rounded-lg bg-slate-900 border border-white/[0.1] hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center cursor-pointer"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <EducationFields value={editEdu} onChange={setEditEdu} title="Target Grade & Educational System" />
 
               {/* School / Institution */}
               <div className="space-y-1.5">
