@@ -28,8 +28,8 @@ import type {
   StudySession 
 } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { grantReward } from '../../services/economy/rewardService';
 import { soundEngine } from '../../services/soundEngine';
-import { lifeSimService } from '../../services/lifeSimService';
 import { DEMO_STUDY_SESSIONS } from '../../data/demoDecks';
 import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
 import { MathRenderer } from '../common/MathRenderer';
@@ -38,7 +38,6 @@ import { evaluateTextAnswer } from './examEvaluator';
 import {
   CALIBRATED_THRESHOLD,
   buildExamReport,
-  examRewards,
   scoreAnswer,
 } from './examScoring';
 import { getEffectiveCardType, isOptionCorrect } from '../cockpit/retrievalLogic';
@@ -211,11 +210,9 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
       });
 
       StorageService.saveExamReport(report);
-      const rewards = examRewards(report);
-      StorageService.addXP(rewards.xp);
-      lifeSimService.awardStudyWage(
-        `Mock Exam: ${report.deckTitle.slice(0, 20)} (${report.rawAccuracyPercent}%)`,
-        rewards.wage
+      grantReward(
+        { kind: 'exam', weightedScore: report.confidenceWeightedScore },
+        { label: `Mock Exam: ${report.deckTitle.slice(0, 20)} (${report.rawAccuracyPercent}%)` },
       );
       soundEngine.playCompletionChime();
 

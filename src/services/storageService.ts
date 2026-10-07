@@ -1,4 +1,4 @@
-import type { ExamReport, InterleavingSessionReport, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
+import type { EarningEntry, ExamReport, InterleavingSessionReport, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
 import { IndexedDbService } from './indexedDbService';
 
 const STORAGE_KEYS = {
@@ -13,6 +13,7 @@ const STORAGE_KEYS = {
   ACTIVITY: 'studify_activity_history_v1',
   GUEST_PROFILE: 'studify_guest_education_profile_v1',
   FOLDERS: 'studify_folders_v1',
+  EARNINGS: 'studify_earnings_v1',
 };
 
 const LEVEL_TITLES = [
@@ -96,6 +97,7 @@ export class StorageService {
       STORAGE_KEYS.ACTIVITY,
       STORAGE_KEYS.FOLDERS,
       STORAGE_KEYS.STATS,
+      STORAGE_KEYS.EARNINGS,
     ];
     await Promise.all(bases.map(async (base) => {
       const key = this.getKey(base);
@@ -307,6 +309,22 @@ export class StorageService {
     } catch {}
     this.addXP(safeAmount);
     return next;
+  }
+
+  /** Append-only log of every XP/token payout, kept for daily caps and future server validation. */
+  public static getEarnings(): EarningEntry[] {
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.EARNINGS));
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public static saveEarnings(entries: EarningEntry[]): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.EARNINGS), JSON.stringify(entries));
   }
 
   public static getActivityHistory(): Record<string, number> {
@@ -1012,6 +1030,8 @@ export class StorageService {
       this.purgeOverflow(STORAGE_KEYS.EXAM_REPORTS);
       localStorage.removeItem(STORAGE_KEYS.INTERLEAVING_REPORTS);
       this.purgeOverflow(STORAGE_KEYS.INTERLEAVING_REPORTS);
+      localStorage.removeItem(STORAGE_KEYS.EARNINGS);
+      this.purgeOverflow(STORAGE_KEYS.EARNINGS);
       localStorage.removeItem(STORAGE_KEYS.DIAGRAMS);
       localStorage.removeItem(STORAGE_KEYS.GUEST_PROFILE);
     } catch (e) {
@@ -1301,6 +1321,8 @@ export class StorageService {
       this.purgeOverflow(`${STORAGE_KEYS.EXAM_REPORTS}_${userId}`);
       localStorage.removeItem(`${STORAGE_KEYS.INTERLEAVING_REPORTS}_${userId}`);
       this.purgeOverflow(`${STORAGE_KEYS.INTERLEAVING_REPORTS}_${userId}`);
+      localStorage.removeItem(`${STORAGE_KEYS.EARNINGS}_${userId}`);
+      this.purgeOverflow(`${STORAGE_KEYS.EARNINGS}_${userId}`);
       localStorage.removeItem(`${STORAGE_KEYS.DIAGRAMS}_${userId}`);
     } catch (e) {
       console.warn('[StorageService] Error purging user data:', e);

@@ -12,9 +12,9 @@ import {
 import type { LeechAnalysis, MnemonicRewiringOption, RetrievalCard } from '../../types';
 import { FSRSService } from '../../services/fsrsService';
 import { StorageService } from '../../services/storageService';
+import { grantReward } from '../../services/economy/rewardService';
 import { AIService } from '../../services/aiService';
 import { soundEngine } from '../../services/soundEngine';
-import { lifeSimService } from '../../services/lifeSimService';
 import { MathRenderer } from '../common/MathRenderer';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
 
@@ -70,8 +70,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
     // Refresh cards
     const updatedCards = StorageService.getAllCards();
     setAllCards(updatedCards);
-    StorageService.addXP(40);
-    lifeSimService.awardStudyWage('Mnemonic Leech Cure', 25);
+    grantReward({ kind: 'leech-cure', method: 'mnemonic' }, { label: 'Mnemonic Leech Cure' });
     soundEngine.playCompletionChime();
 
     setCuredNotice(`Cured! Mnemonic anchor attached. Synaptic stability restored.`);
@@ -105,8 +104,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
     const updatedCards = StorageService.getAllCards();
     setAllCards(updatedCards);
 
-    StorageService.addXP(60);
-    lifeSimService.awardStudyWage('Atomic Leech Decomposition', 30);
+    grantReward({ kind: 'leech-cure', method: 'split' }, { label: 'Atomic Leech Decomposition' });
     soundEngine.playCompletionChime();
 
     setCuredNotice(`Decomposed into ${newCards.length} atomic cloze cards! Minimum Information Principle applied.`);

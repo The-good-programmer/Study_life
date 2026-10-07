@@ -18,6 +18,7 @@ import {
 import type { CardType, ConceptCheckpoint, FSRSRating, DiagnosticDistractor } from '../../types';
 import { FSRSService } from '../../services/fsrsService';
 import { StorageService } from '../../services/storageService';
+import { grantReward } from '../../services/economy/rewardService';
 import { soundEngine } from '../../services/soundEngine';
 import { AIService } from '../../services/aiService';
 import { MathRenderer } from '../common/MathRenderer';
@@ -33,7 +34,6 @@ import {
   getBlurtingTargets,
   getEffectiveCardType,
   isOptionCorrect,
-  xpForRating,
 } from './retrievalLogic';
 
 interface RetrievalPhaseProps {
@@ -152,7 +152,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     StorageService.saveCard(updatedCard);
 
     // Reward XP
-    StorageService.addWeeklyXP(xpForRating(rating));
+    grantReward({ kind: 'review', rating }, { weekly: true, label: 'Flashcard review' });
 
     setLastRating(rating);
 
@@ -477,10 +477,14 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 
   const handleEvaluateBlurting = useCallback(() => {
     setIsBlurtingRunning(false);
-    setBlurtingResult(evaluateBlurting(blurtingText, blurtingTargets));
+    const result = evaluateBlurting(blurtingText, blurtingTargets);
+    setBlurtingResult(result);
 
     soundEngine.playCompletionChime();
-    StorageService.addWeeklyXP(40);
+    grantReward(
+      { kind: 'blurt', recalled: result.recalled.length, total: blurtingTargets.length },
+      { weekly: true, label: 'Free-recall blurting' },
+    );
   }, [blurtingText, blurtingTargets]);
 
   const evaluateRef = useRef(handleEvaluateBlurting);

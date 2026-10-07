@@ -11,7 +11,7 @@ import {
 import type { StudySession, DiagnosticProbe, DiagnosticReport, RetrievalCard } from '../../types';
 import { MathRenderer } from '../common/MathRenderer';
 import { soundEngine } from '../../services/soundEngine';
-import { StorageService } from '../../services/storageService';
+import { grantReward } from '../../services/economy/rewardService';
 import { shuffle } from '../../utils/shuffle';
 
 interface DiagnosticPhaseProps {
@@ -123,7 +123,7 @@ export const DiagnosticPhase: React.FC<DiagnosticPhaseProps> = ({ session, onCom
     } else {
       setIsFinished(true);
       soundEngine.playSuccess();
-      StorageService.addXP(30);
+      grantReward({ kind: 'diagnostic' }, { label: 'Diagnostic probe' });
     }
   }, [currentIndex, probes.length]);
 

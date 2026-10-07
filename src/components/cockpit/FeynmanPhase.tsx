@@ -29,6 +29,7 @@ import { AIService } from '../../services/aiService';
 import { soundEngine } from '../../services/soundEngine';
 import { speechService } from '../../services/speechService';
 import { StorageService } from '../../services/storageService';
+import { grantReward } from '../../services/economy/rewardService';
 import { FSRSService } from '../../services/fsrsService';
 import { KnowledgeGraphService } from '../../services/knowledgeGraphService';
 import { AudioWaveformVisualizer } from './AudioWaveformVisualizer';
@@ -280,11 +281,11 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({
       if (response.verdict) {
         setVivaVerdict(response.verdict);
         soundEngine.playVerdictGavel();
-        StorageService.addXP(100);
+        grantReward({ kind: 'viva-verdict' }, { label: 'Viva verdict' });
       } else {
         setVivaRounds(prev => prev + 1);
         soundEngine.playSocraticChallengeChime();
-        StorageService.addXP(25);
+        grantReward({ kind: 'viva-round' }, { label: 'Viva round' });
       }
 
       if (autoSpeakExaminer) {

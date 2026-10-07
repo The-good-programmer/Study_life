@@ -1,4 +1,4 @@
-import type { CardType, ConceptCheckpoint, FSRSRating, RetrievalCard } from '../../types';
+import type { CardType, ConceptCheckpoint, RetrievalCard } from '../../types';
 
 /** Pure study-loop rules for the Active Retrieval phase, kept out of the component so they can be tested. */
 
@@ -98,9 +98,6 @@ export const getEffectiveCardType = (card: RetrievalCard | undefined): CardType 
   if (card.options && card.options.length > 0) return 'multiple-choice';
   return 'standard';
 };
-
-/** Weekly XP granted for grading one card. */
-export const xpForRating = (rating: FSRSRating): number => (rating === 'easy' ? 15 : 10);
 
 /** What the learner should be able to recall unaided: key terms, else takeaways, else card answers. */
 export const getBlurtingTargets = (concept: ConceptCheckpoint): string[] => {

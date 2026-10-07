@@ -6,7 +6,6 @@ import {
   getBlurtingTargets,
   getEffectiveCardType,
   isOptionCorrect,
-  xpForRating,
 } from './retrievalLogic';
 
 const card = (id: string, extra: Partial<RetrievalCard> = {}): RetrievalCard => ({
@@ -127,13 +126,6 @@ describe('getEffectiveCardType', () => {
     expect(getEffectiveCardType(card('a', { options: ['a', 'b'] }))).toBe('multiple-choice');
     expect(getEffectiveCardType(card('a'))).toBe('standard');
     expect(getEffectiveCardType(undefined)).toBe('standard');
-  });
-});
-
-describe('xpForRating', () => {
-  it('rewards easy slightly more than other grades', () => {
-    expect(xpForRating('easy')).toBe(15);
-    expect(['again', 'hard', 'good'].map(r => xpForRating(r as 'again'))).toEqual([10, 10, 10]);
   });
 });
 

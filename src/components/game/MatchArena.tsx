@@ -12,8 +12,7 @@ import {
 } from 'lucide-react';
 import type { StudySession, RetrievalCard } from '../../types';
 import { soundEngine } from '../../services/soundEngine';
-import { StorageService } from '../../services/storageService';
-import { lifeSimService } from '../../services/lifeSimService';
+import { grantReward } from '../../services/economy/rewardService';
 import { characterService } from '../../services/characterService';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
 import { shuffle } from '../../utils/shuffle';
@@ -135,8 +134,7 @@ export const MatchArena: React.FC<MatchArenaProps> = ({ session, onBack, onLaunc
         }
 
         // Award Study Wage & XP
-        StorageService.addXP(45);
-        lifeSimService.awardStudyWage('Match Arena Clear', 20);
+        grantReward({ kind: 'match-clear' }, { label: 'Match Arena Clear' });
 
         // Update high score
         const finalTime = elapsedMs;

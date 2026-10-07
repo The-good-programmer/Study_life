@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Lightbulb, CheckCircle2, BookOpen, ArrowRight, Eye, Layers, PenTool, GitFork, Zap, Brain } from 'lucide-react';
 import type { ConceptCheckpoint } from '../../types';
 import { MathRenderer } from '../common/MathRenderer';
-import { StorageService } from '../../services/storageService';
+import { grantReward } from '../../services/economy/rewardService';
 import { soundEngine } from '../../services/soundEngine';
 
 import { ConceptGraph } from './ConceptGraph';
@@ -31,7 +31,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
   const [showScienceModal, setShowScienceModal] = useState(false);
 
   const handleFinishPriming = useCallback(() => {
-    StorageService.addXP(20);
+    grantReward({ kind: 'priming' }, { label: 'Priming' });
     soundEngine.playSocraticChallengeChime();
     onComplete();
   }, [onComplete]);

@@ -4,7 +4,6 @@ import {
   CALIBRATED_THRESHOLD,
   buildExamReport,
   calibrationPercent,
-  examRewards,
   scoreAnswer,
 } from './examScoring';
 
@@ -113,16 +112,5 @@ describe('buildExamReport', () => {
     expect(report.rawAccuracyPercent).toBe(0);
     expect(report.maxPossibleScore).toBe(0);
     expect(report.calibrationPercent).toBe(0);
-  });
-});
-
-describe('examRewards', () => {
-  it('scales with the weighted score', () => {
-    expect(examRewards({ confidenceWeightedScore: 200 })).toEqual({ xp: 100, wage: 200 });
-  });
-
-  it('never pays less than the floor, even for a negative score', () => {
-    expect(examRewards({ confidenceWeightedScore: -40 })).toEqual({ xp: 10, wage: 30 });
-    expect(examRewards({ confidenceWeightedScore: 0 })).toEqual({ xp: 10, wage: 30 });
   });
 });

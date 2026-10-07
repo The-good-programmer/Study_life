@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Coffee, ArrowRight, Eye, Droplets, Activity, Play, Pause } from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
-import { StorageService } from '../../services/storageService';
-import { lifeSimService } from '../../services/lifeSimService';
+import { grantReward } from '../../services/economy/rewardService';
 import { CharacterCompanion } from '../character/CharacterCompanion';
 
 interface RestBreakPhaseProps {
@@ -17,8 +16,7 @@ export const RestBreakPhase: React.FC<RestBreakPhaseProps> = ({ onComplete, onSk
   const [breathCount, setBreathCount] = useState(4);
 
   const handleFinish = useCallback(() => {
-    StorageService.addXP(30);
-    lifeSimService.awardStudyWage('Micro-Rest Memory Replay', 15);
+    grantReward({ kind: 'rest' }, { label: 'Micro-Rest Memory Replay' });
     onComplete();
   }, [onComplete]);
 

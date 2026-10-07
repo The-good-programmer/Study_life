@@ -21,11 +21,11 @@ import type {
   InterleavingSessionReport 
 } from '../../types';
 import { StorageService } from '../../services/storageService';
+import { grantReward } from '../../services/economy/rewardService';
 import { DEMO_STUDY_SESSIONS } from '../../data/demoDecks';
 import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
 import { FSRSService } from '../../services/fsrsService';
 import { soundEngine } from '../../services/soundEngine';
-import { lifeSimService } from '../../services/lifeSimService';
 import { MathRenderer } from '../common/MathRenderer';
 import { shuffle } from '../../utils/shuffle';
 
@@ -262,9 +262,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
     // Audio and Study Wage
     if (isCorrect) {
       soundEngine.playCorrectChime();
-      const baseWage = isContextShift ? 25 : 15; // Context switch resilience bonus
-      StorageService.addXP(baseWage);
-      lifeSimService.awardStudyWage('Interleaving Shift Drill', baseWage);
+      grantReward({ kind: 'drill-correct', contextShift: isContextShift }, { label: 'Interleaving Shift Drill' });
       if (isContextShift) setContextShiftStreak(prev => prev + 1);
     } else {
       soundEngine.playIncorrectChime();
@@ -331,11 +329,9 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
       color: domain,
     }));
 
-    const totalXP = 60 + (correctCount * 10) + (shiftTrials.length * 5);
-    StorageService.addXP(totalXP);
-    lifeSimService.awardStudyWage(
-      `Interleaving Shift (${shiftTrials.length} context shifts)`,
-      Math.max(25, Math.round(totalXP / 2))
+    const sessionReward = grantReward(
+      { kind: 'interleave-session', correct: correctCount, shifts: shiftTrials.length },
+      { label: `Interleaving Shift (${shiftTrials.length} context shifts)` },
     );
 
     const report: InterleavingSessionReport = {
@@ -349,7 +345,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
       stableAccuracyPercent: stableAcc,
       agilityIndex,
       domainBreakdown,
-      xpEarned: totalXP,
+      xpEarned: sessionReward.xp,
     };
 
     StorageService.saveInterleavingReport(report);

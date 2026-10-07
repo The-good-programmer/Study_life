@@ -452,3 +452,19 @@ export interface CrossDeckBridge {
   sharedTerms: string[];
   retrievabilityScore: number;
 }
+
+/** One payout in the append-only earnings log. A server can replay this to validate the economy. */
+export interface EarningEntry {
+  id: string;
+  /** ISO timestamp. */
+  at: string;
+  /** Local calendar day (YYYY-MM-DD), used for daily caps. */
+  day: string;
+  kind: string;
+  /** What the rules said the event was worth, before daily caps. */
+  rawXp: number;
+  rawTokens: number;
+  /** What was actually paid after daily caps (tokens exclude any buff multiplier). */
+  paidXp: number;
+  paidTokens: number;
+}

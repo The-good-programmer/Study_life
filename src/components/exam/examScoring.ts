@@ -82,9 +82,3 @@ export const buildExamReport = ({ results, deckTitle, timeSpentSeconds, now }: B
     questionResults: results,
   };
 };
-
-/** XP and study-wage tokens granted for finishing an exam. */
-export const examRewards = (report: Pick<ExamReport, 'confidenceWeightedScore'>): { xp: number; wage: number } => ({
-  xp: Math.max(10, Math.round(report.confidenceWeightedScore / 2)),
-  wage: Math.max(30, Math.round(report.confidenceWeightedScore)),
-});

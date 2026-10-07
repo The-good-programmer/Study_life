@@ -26,6 +26,7 @@ import { CharacterCompanion } from '../character/CharacterCompanion';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
 import { SynapticFlexModal } from '../mascot/SynapticFlexModal';
 import { lifeSimService } from '../../services/lifeSimService';
+import { grantReward } from '../../services/economy/rewardService';
 import { haptics } from '../../services/hapticsService';
 
 interface SessionSummaryProps {
@@ -126,6 +127,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
     activity: string;
     walletBalance: number;
   } | null>(null);
+  const [wageCapped, setWageCapped] = useState(false);
 
   // Celebration effects (cosmetic).
   useEffect(() => {
@@ -159,17 +161,14 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
     StorageService.recordCompletedSession();
     StorageService.recordStudyMinutes(minutes);
 
-    const rawCoins = Math.max(15, Math.round(totalCards * 5 + minutes * 3));
-    const wage = lifeSimService.awardStudyWage(
-      `Sprint: ${session.title ? session.title.slice(0, 24) : 'Active Recall'}`,
-      rawCoins
+    const grant = grantReward(
+      { kind: 'sprint', cards: totalCards, minutes },
+      { label: `Sprint: ${session.title ? session.title.slice(0, 24) : 'Active Recall'}` },
     );
     // Displays the result of the one-time award above; it cannot be derived during render.
     // oxlint-disable-next-line react/set-state-in-effect
-    setWageEarned({
-      ...wage,
-      walletBalance: lifeSimService.getWalletBalance(),
-    });
+    setWageEarned(grant.wage ? { ...grant.wage, walletBalance: lifeSimService.getWalletBalance() } : null);
+    setWageCapped(grant.capped && !grant.wage);
   }, [minutes, totalCards, session.title]);
 
   const handlePrint = () => {
@@ -250,6 +249,12 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
           <div className="text-[11px] text-slate-400 font-medium">Streak Day</div>
         </div>
       </div>
+
+      {wageCapped && (
+        <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] text-left text-xs text-slate-400">
+          🪙 You've reached today's sprint earnings limit. Keep studying: your memory still benefits, and the limit resets tomorrow.
+        </div>
+      )}
 
       {/* Study Wage Paycheck Card */}
       {wageEarned && (
