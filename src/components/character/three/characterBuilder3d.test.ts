@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { buildCharacter3D } from './characterBuilder3d';
 import type { CharacterCustomization, CharacterPose } from '../../../types/character';
 
-describe('characterBuilder3d unit tests', () => {
+// Building SDF meshes is CPU-heavy; the first build also pays JIT warm-up, which can pass the 5s default under load.
+describe('characterBuilder3d unit tests', { timeout: 30_000 }, () => {
   beforeAll(() => {
     if (typeof document === 'undefined') {
       const dummyCtx = new Proxy(
