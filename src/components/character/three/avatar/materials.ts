@@ -148,7 +148,7 @@ export function createAvatarMaterials(initial: CharacterCustomization): AvatarMa
   const applyColors = (c: CharacterCustomization) => {
     m.skin.color.set(c.skinTone);
     m.skin.sheenColor.copy(lighten(c.skinTone, 0.55)).lerp(new THREE.Color('#ff9e8a'), 0.25);
-    m.lid.color.set(c.skinTone).multiplyScalar(0.86).lerp(new THREE.Color('#b0645a'), 0.08);
+    m.lid.color.set(c.skinTone).multiplyScalar(0.93).lerp(new THREE.Color('#b0645a'), 0.05);
     m.lid.sheenColor.copy(m.skin.sheenColor);
     m.hair.color.set(c.hairColor);
     m.hair.sheenColor.copy(lighten(c.hairColor, 0.25));

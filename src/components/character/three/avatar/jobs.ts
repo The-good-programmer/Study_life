@@ -35,7 +35,7 @@ export type GeometryJob =
   | ({ kind: 'top'; top: OutfitTop } & Shape)
   | ({ kind: 'bottom'; bottom: OutfitBottom; boots: boolean } & Shape)
   | ({ kind: 'shoe'; shoes: Shoes } & Shape)
-  | ({ kind: 'hair'; style: HairStyle; part: HairPart } & Shape)
+  | ({ kind: 'hair'; style: HairStyle; part: HairPart; under: Headwear } & Shape)
   | ({ kind: 'headwear'; headwear: Headwear; hair: HairStyle; part: HeadwearPart } & Shape)
   | ({ kind: 'facialHair'; style: FacialHair } & Shape);
 
@@ -176,7 +176,7 @@ export function runGeometryJob(job: GeometryJob): JobResult {
     }
 
     case 'hair':
-      return { payload: runMeshSpec(hairMeshSpec(job.style, job.part, d)) };
+      return { payload: runMeshSpec(hairMeshSpec(job.style, job.part, d, job.under)) };
 
     case 'headwear':
       return { payload: runMeshSpec(headwearMeshSpec(job.headwear, job.part, job.hair, d)) };

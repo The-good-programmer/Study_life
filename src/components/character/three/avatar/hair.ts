@@ -1,10 +1,13 @@
 import * as THREE from 'three';
-import type { HairStyle } from '../../../../types/character';
+import type { HairStyle, Headwear } from '../../../../types/character';
 import {
   type Sdf, v3, ellipsoid, roundCone, capsule, torusY, smin, smax,
 } from '../sdf/sdf';
 import type { AvatarDims } from './anatomy';
 import type { MeshSpec } from './meshSpec';
+import { hatInterior } from './hatShape';
+
+export { hairVolume } from './hatShape';
 
 const HAIR_CELL = 0.0044;
 const BOUNDS = { min: [-0.21, -0.2, -0.26] as [number, number, number], max: [0.21, 0.36, 0.2] as [number, number, number] };
@@ -13,24 +16,6 @@ const smoothstep = (a: number, b: number, x: number) => {
   const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
   return t * t * (3 - 2 * t);
 };
-
-/**
- * How far hair extends above and around the cranium for each style, so hats
- * can sit on top of the hair rather than inside it.
- */
-export function hairVolume(style: HairStyle): { lift: number; grow: number } {
-  switch (style) {
-    case 'curly-afro': return { lift: 0.05, grow: 0.06 };
-    case 'spiky': return { lift: 0.022, grow: 0.016 };
-    case 'side-part':
-    case 'short-fade': return { lift: 0.022, grow: 0.014 };
-    case 'bob-cut':
-    case 'long-wavy': return { lift: 0.02, grow: 0.022 };
-    case 'ponytail': return { lift: 0.012, grow: 0.012 };
-    case 'buzz':
-    default: return { lift: 0.004, grow: 0.004 };
-  }
-}
 
 /** Cranium grown by t (approximate offset of the head ellipsoid). */
 function skull(d: AvatarDims, t: number, dy = 0): Sdf {
@@ -225,8 +210,11 @@ export function hairParts(style: HairStyle): HairPart[] {
   return style === 'ponytail' ? ['main', 'ponytail-tail', 'ponytail-tie'] : ['main'];
 }
 
-/** What to mesh for one piece of a hairstyle (head-bone space). */
-export function hairMeshSpec(style: HairStyle, part: HairPart, d: AvatarDims): MeshSpec {
+/**
+ * What to mesh for one piece of a hairstyle (head-bone space). Under a hat
+ * that covers the hair, everything inside the hat's crown is cut away.
+ */
+export function hairMeshSpec(style: HairStyle, part: HairPart, d: AvatarDims, under: Headwear = 'none'): MeshSpec {
   if (part === 'ponytail-tail') {
     return { sdf: ponytailSdf(), min: [-0.05, -0.23, -0.1], max: [0.05, 0.04, 0.04], cellSize: 0.0038, ao: { distance: 0.02 } };
   }
@@ -235,7 +223,10 @@ export function hairMeshSpec(style: HairStyle, part: HairPart, d: AvatarDims): M
   }
   // Big volumes need fewer cells per centimetre to look smooth.
   const cell = style === 'curly-afro' || style === 'long-wavy' || style === 'bob-cut' ? HAIR_CELL * 1.3 : HAIR_CELL;
-  return { sdf: styleSdf(style, d), ...BOUNDS, cellSize: cell, ao: { distance: 0.025 } };
+  const hair = styleSdf(style, d);
+  const hat = hatInterior(under, style);
+  const sdf: Sdf = hat ? (x, y, z) => smax(hair(x, y, z), -hat(x, y, z), 0.004) : hair;
+  return { sdf, ...BOUNDS, cellSize: cell, ao: { distance: 0.025 } };
 }
 
 /** Assembles a hairstyle (child of the head) from its meshed parts. */

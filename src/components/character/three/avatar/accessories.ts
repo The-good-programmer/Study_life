@@ -3,7 +3,7 @@ import type { Eyewear, FacialHair, HairStyle, Headwear } from '../../../../types
 import { type Sdf, v3, ellipsoid, roundBox, sphere, smin, smax } from '../sdf/sdf';
 import type { AvatarDims } from './anatomy';
 import { headBaseSdf, headLayout } from './head';
-import { hairVolume } from './hair';
+import { hairVolume } from './hatShape';
 import { taperedTube } from './face';
 import type { AvatarMaterials } from './materials';
 import type { MeshSpec } from './meshSpec';

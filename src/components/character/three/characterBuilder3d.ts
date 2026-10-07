@@ -10,6 +10,7 @@ import {
   buildEyewear, headwearParts, assembleHeadwear, assembleFacialHair, type HeadwearPart,
 } from './avatar/accessories';
 import { AvatarAnimator } from './avatar/animator';
+import { coversHair } from './avatar/hatShape';
 import { createAvatarMaterials, type AvatarMaterials, lipColorFor } from './avatar/materials';
 import { shapeContext, eyeCentres, type GeometryJob } from './avatar/jobs';
 import { geometryService, type Resolved } from './avatar/geometryService';
@@ -280,7 +281,9 @@ function createBuild(
   const requestHair = () => {
     const style = custom.hairStyle;
     const pieces = hairParts(style);
-    request('hair', pieces.map((part) => ({ kind: 'hair', style, part, ...shape })), (results) => {
+    // Under a cap, beanie or mortarboard the hair is tucked in (re-meshed).
+    const under = coversHair(custom.headwear) ? custom.headwear : 'none';
+    request('hair', pieces.map((part) => ({ kind: 'hair', style, part, under, ...shape })), (results) => {
       const geos: Partial<Record<HairPart, THREE.BufferGeometry>> = {};
       pieces.forEach((p, i) => (geos[p] = results[i] as THREE.BufferGeometry));
       return [['head', assembleHair(style, geos, mats.hair)]];
@@ -341,7 +344,9 @@ function createBuild(
       if (bottomChanged) requestBottom();
       if (prev.shoes !== next.shoes) requestShoes();
       if (topChanged || bottomChanged) requestBodySkin();
-      if (prev.hairStyle !== next.hairStyle) requestHair();
+      const tuckChanged = coversHair(prev.headwear) !== coversHair(next.headwear) ||
+        (coversHair(next.headwear) && prev.headwear !== next.headwear);
+      if (prev.hairStyle !== next.hairStyle || tuckChanged) requestHair();
       if (prev.headwear !== next.headwear || prev.hairStyle !== next.hairStyle) requestHeadwear();
       if (prev.eyewear !== next.eyewear) requestEyewear();
       if (prev.facialHair !== next.facialHair) requestFacialHair();
