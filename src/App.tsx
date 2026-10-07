@@ -480,6 +480,9 @@ export function App() {
             onOpenExam={() => handleNavigate('exam')}
             onOpenInterleaving={() => handleNavigate('interleave')}
             onOpenSanctuary={() => handleNavigate('sanctuary')}
+            onOpenToday={() => handleNavigate('home')}
+            onOpenLibrary={() => handleNavigate('studio')}
+            onOpenSubjects={() => handleNavigate('folders')}
           />
         </Suspense>
       )}

@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, RotateCcw, Home } from 'lucide-react';
+import { Button } from '../ui/primitives';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -57,57 +58,40 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       }
 
       return (
-        <div className="min-h-screen bg-[#090a10] text-slate-100 flex items-center justify-center p-4 selection:bg-indigo-500 selection:text-white">
-          <div className="max-w-lg w-full rounded-2xl bg-[#0f121e]/90 border border-white/[0.08] shadow-2xl p-6 sm:p-8 backdrop-blur-xl space-y-6 text-center">
-            {/* Warning Icon */}
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10">
-              <AlertTriangle className="w-7 h-7" />
+        <div className="flex min-h-screen items-center justify-center bg-canvas p-4 text-ink">
+          <div className="w-full max-w-md rounded-3xl border border-line-strong bg-surface-solid p-6 text-center shadow-2xl sm:p-8" role="alert">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-soft text-gold">
+              <AlertTriangle className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <h2 className="mt-4 text-xl font-semibold text-ink">Something went wrong</h2>
+            <p className="mx-auto mt-2 max-w-sm text-[15px] leading-relaxed text-ink-muted">
+              This screen hit an error. Your decks and progress are saved on this device, so nothing is lost.
+            </p>
+
+            <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
+              <Button variant="primary" icon={RotateCcw} onClick={this.handleReset}>
+                Try again
+              </Button>
+              <Button icon={Home} onClick={this.handleGoHome}>
+                Go to Today
+              </Button>
             </div>
 
-            {/* Error Message */}
-            <div className="space-y-2">
-              <h2 className="text-xl font-bold tracking-tight text-white font-display">
-                Something went wrong
-              </h2>
-              <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
-                An unexpected interface issue occurred. Your study progress and saved decks in local storage are safe.
-              </p>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-              <button
-                onClick={this.handleReset}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold text-xs shadow-md shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Try Again</span>
-              </button>
-              <button
-                onClick={this.handleGoHome}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-slate-200 hover:text-white font-medium text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <Home className="w-3.5 h-3.5" />
-                <span>Return to Home</span>
-              </button>
-            </div>
-
-            {/* Collapsible Diagnostic Details */}
             {this.state.error && (
-              <div className="pt-2 text-left">
+              <div className="mt-5 text-left">
                 <button
+                  type="button"
                   onClick={this.toggleDetails}
-                  className="text-[11px] text-slate-500 hover:text-slate-300 font-mono transition-colors block mx-auto cursor-pointer"
+                  aria-expanded={this.state.showDetails}
+                  className="mx-auto block text-xs text-ink-subtle transition-colors hover:text-ink cursor-pointer"
                 >
-                  {this.state.showDetails ? '▲ Hide technical details' : '▼ View technical details'}
+                  {this.state.showDetails ? 'Hide technical details' : 'Show technical details'}
                 </button>
                 {this.state.showDetails && (
-                  <div className="mt-3 p-3 rounded-xl bg-black/60 border border-white/[0.06] text-[11px] font-mono text-pink-300 max-h-48 overflow-y-auto overflow-x-hidden space-y-1">
-                    <p className="font-semibold text-red-400">{this.state.error.toString()}</p>
+                  <div className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-line bg-canvas p-3 font-mono text-[11px] text-ink-muted">
+                    <p className="font-semibold text-danger">{this.state.error.toString()}</p>
                     {this.state.errorInfo && (
-                      <pre className="text-slate-400 text-[10px] whitespace-pre-wrap">
-                        {this.state.errorInfo.componentStack}
-                      </pre>
+                      <pre className="mt-1 whitespace-pre-wrap text-[10px] text-ink-subtle">{this.state.errorInfo.componentStack}</pre>
                     )}
                   </div>
                 )}

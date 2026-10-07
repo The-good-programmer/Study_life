@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Coins, Sparkles, TrendingUp, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { CoinIcon } from '../ui/primitives';
 
 interface WageDetail {
   activity: string;
@@ -9,72 +10,67 @@ interface WageDetail {
   totalAmount: number;
 }
 
+const VISIBLE_MS = 4500;
+
+/** A short toast when study pays tokens into the wallet. */
 export const WagePayoutBanner: React.FC = () => {
   const [wage, setWage] = useState<WageDetail | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     const handleWageEvent = (event: Event) => {
-      const custom = event as CustomEvent<WageDetail>;
-      if (custom.detail) {
-        setWage(custom.detail);
+      const detail = (event as CustomEvent<WageDetail>).detail;
+      if (!detail) return;
+      setWage(detail);
 
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      if (!reduceMotion) {
         try {
-          confetti({
-            particleCount: 20,
-            spread: 40,
-            origin: { y: 0.85, x: 0.5 },
-            colors: ['#34d399', '#10b981', '#fbbf24'],
-          });
-        } catch {}
-
-        // Auto-dismiss after 4.5 seconds
-        const timer = setTimeout(() => {
-          setWage(null);
-        }, 4500);
-
-        return () => clearTimeout(timer);
+          confetti({ particleCount: 18, spread: 40, origin: { y: 0.9, x: 0.5 }, colors: ['#f2bf4b', '#34d399', '#8b8ff7'] });
+        } catch {
+          // Confetti is decoration only.
+        }
       }
+
+      // A new payout restarts the timer instead of being hidden by the previous one.
+      clearTimeout(hideTimer.current);
+      hideTimer.current = setTimeout(() => setWage(null), VISIBLE_MS);
     };
 
     window.addEventListener('study-wage-earned', handleWageEvent);
-    return () => window.removeEventListener('study-wage-earned', handleWageEvent);
+    return () => {
+      window.removeEventListener('study-wage-earned', handleWageEvent);
+      clearTimeout(hideTimer.current);
+    };
   }, []);
 
-  if (!wage) return null;
-
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-bounce">
-      <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-900/95 border border-emerald-500/50 shadow-2xl backdrop-blur-xl text-white">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 flex items-center justify-center text-slate-950 shadow-md shadow-emerald-500/20">
-          <Coins className="w-5 h-5" />
-        </div>
-
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black uppercase tracking-wider text-emerald-300 flex items-center gap-1">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>Study Wage Deposited!</span>
-            </span>
-            {wage.buffBonus > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[11px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 flex items-center gap-0.5">
-                <Sparkles className="w-2.5 h-2.5" />
-                <span>+{wage.buffBonus} meal buff</span>
-              </span>
-            )}
-          </div>
-          <span className="text-xs text-slate-300 font-medium">
-            Earned <strong className="font-mono font-extrabold text-emerald-400">+{wage.totalAmount} AxonCoins</strong> for {wage.activity}
-          </span>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setWage(null)}
-          className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer ml-1"
+    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4 md:bottom-6" role="status" aria-live="polite">
+      {wage && (
+        <div
+          key={`${wage.activity}-${wage.totalAmount}`}
+          className="pointer-events-auto flex max-w-md items-center gap-3 rounded-2xl border border-line-strong bg-surface-solid py-2.5 pl-3 pr-2 shadow-[0_18px_40px_-16px_rgb(0_0_0/0.6)] animate-rise"
         >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-soft">
+            <CoinIcon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold tabular-nums text-ink">
+              +{wage.totalAmount.toLocaleString()} tokens
+              {wage.buffBonus > 0 && <span className="ml-1.5 text-xs font-medium text-success">incl. +{wage.buffBonus} meal bonus</span>}
+            </p>
+            <p className="truncate text-xs text-ink-subtle">Paid for {wage.activity}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setWage(null)}
+            aria-label="Dismiss"
+            className="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ink-subtle transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

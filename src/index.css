@@ -553,9 +553,13 @@
 }
 
 /* Accessibility: Focus visible outlines */
-:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
+/* In the base layer so a component with its own focus style (e.g. an input that
+   changes border colour) can opt out with outline-none. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
 }
 
 /* Accessibility: Prefers reduced motion */
