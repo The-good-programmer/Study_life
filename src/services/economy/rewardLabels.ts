@@ -7,7 +7,6 @@ export const REWARD_LABELS: Record<RewardKind, string> = {
   sprint: 'Study sessions',
   blurt: 'Free recall',
   rest: 'Rest breaks',
-  'drill-correct': 'Mix-deck answers',
   'interleave-session': 'Mix-deck sessions',
   'match-clear': 'Speed match',
   'leech-cure': 'Fixed hard cards',

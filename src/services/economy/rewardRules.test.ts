@@ -43,17 +43,16 @@ describe('computePayout', () => {
     expect(computePayout({ kind: 'sprint', cards: 0, minutes: 0 })).toEqual(NO_PAYOUT);
   });
 
-  it('pays context-shift drills more than plain ones', () => {
-    const plain = computePayout({ kind: 'drill-correct', contextShift: false });
-    const shift = computePayout({ kind: 'drill-correct', contextShift: true });
-    expect(shift.tokens).toBeGreaterThan(plain.tokens);
+  it('pays a mixed-deck session for cards completed and switches, not for self-graded answers', () => {
+    expect(computePayout({ kind: 'interleave-session', cards: 15, shifts: 10 })).toEqual({ xp: 50, tokens: 70 });
+    // More switches between subjects pay a little more for the same cards.
+    expect(computePayout({ kind: 'interleave-session', cards: 15, shifts: 14 }).tokens).toBeGreaterThan(
+      computePayout({ kind: 'interleave-session', cards: 15, shifts: 2 }).tokens,
+    );
   });
 
-  it('pays an interleaving session by correct answers, with no free floor for zero correct', () => {
-    const none = computePayout({ kind: 'interleave-session', correct: 0, shifts: 0 });
-    const good = computePayout({ kind: 'interleave-session', correct: 8, shifts: 6 });
-    expect(good.xp).toBeGreaterThan(none.xp);
-    expect(none.tokens).toBeLessThan(15);
+  it('pays nothing for an empty mixed-deck session', () => {
+    expect(computePayout({ kind: 'interleave-session', cards: 0, shifts: 0 })).toEqual(NO_PAYOUT);
   });
 
   it('values splitting a leech above a mnemonic cure', () => {
@@ -69,8 +68,7 @@ describe('computePayout', () => {
       { kind: 'sprint', cards: 5, minutes: 3 },
       { kind: 'blurt', recalled: 1, total: 2 },
       { kind: 'rest' },
-      { kind: 'drill-correct', contextShift: true },
-      { kind: 'interleave-session', correct: 3, shifts: 2 },
+      { kind: 'interleave-session', cards: 3, shifts: 2 },
       { kind: 'match-clear' },
       { kind: 'leech-cure', method: 'mnemonic' },
       { kind: 'viva-round' },

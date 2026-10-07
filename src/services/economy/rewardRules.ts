@@ -16,8 +16,7 @@ export type RewardEvent =
   | { kind: 'sprint'; cards: number; minutes: number }
   | { kind: 'blurt'; recalled: number; total: number }
   | { kind: 'rest' }
-  | { kind: 'drill-correct'; contextShift: boolean }
-  | { kind: 'interleave-session'; correct: number; shifts: number }
+  | { kind: 'interleave-session'; cards: number; shifts: number }
   | { kind: 'match-clear' }
   | { kind: 'leech-cure'; method: 'mnemonic' | 'split' }
   | { kind: 'viva-round' }
@@ -52,13 +51,11 @@ export const computePayout = (event: RewardEvent): Payout => {
     }
     case 'rest':
       return { xp: 30, tokens: 15 };
-    case 'drill-correct': {
-      const amount = event.contextShift ? 25 : 15;
-      return { xp: amount, tokens: amount };
-    }
     case 'interleave-session': {
-      const xp = 20 + event.correct * 10 + event.shifts * 5;
-      return { xp, tokens: Math.round(xp / 2) };
+      // Mixed decks are self-graded, so the bonus pays for cards worked through and
+      // subject switches made, never for how well the learner says they did.
+      if (event.cards <= 0) return NO_PAYOUT;
+      return { xp: 20 + event.cards * 2, tokens: event.cards * 4 + Math.max(0, event.shifts) };
     }
     case 'match-clear':
       return { xp: 45, tokens: 20 };
@@ -82,8 +79,7 @@ export const DAILY_SOFT_CAPS: Record<RewardKind, { xp: number; tokens: number }>
   sprint: { xp: Infinity, tokens: 400 },
   blurt: { xp: 160, tokens: Infinity },
   rest: { xp: 30, tokens: 15 },
-  'drill-correct': { xp: 200, tokens: 200 },
-  'interleave-session': { xp: 200, tokens: 100 },
+  'interleave-session': { xp: 200, tokens: 200 },
   'match-clear': { xp: 90, tokens: 40 },
   'leech-cure': { xp: 200, tokens: 100 },
   'viva-round': { xp: 150, tokens: Infinity },
