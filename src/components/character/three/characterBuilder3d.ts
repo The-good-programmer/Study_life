@@ -91,7 +91,12 @@ interface AvatarBuild {
  * geometry from the shared service and swaps in only when every piece has
  * arrived, so changes never flicker. `onReady` fires once all parts exist.
  */
-function createBuild(initial: CharacterCustomization, mats: AvatarMaterials, onReady: () => void): AvatarBuild {
+function createBuild(
+  initial: CharacterCustomization,
+  mats: AvatarMaterials,
+  onReady: () => void,
+  onChange: () => void
+): AvatarBuild {
   let custom = { ...initial };
   const shape = { gender: custom.gender, bodyType: custom.bodyType };
   const ctx = shapeContext(shape.gender, shape.bodyType);
@@ -142,6 +147,8 @@ function createBuild(initial: CharacterCustomization, mats: AvatarMaterials, onR
     if (awaiting.delete(name) && awaiting.size === 0 && !readyFired && !disposed) {
       readyFired = true;
       onReady();
+    } else if (readyFired) {
+      onChange(); // a part of a visible avatar changed
     }
   };
 
@@ -370,10 +377,16 @@ function createBuild(initial: CharacterCustomization, mats: AvatarMaterials, onR
  */
 export function buildCharacter3D(
   custom: CharacterCustomization,
-  options: { showPedestal?: boolean; showShadow?: boolean } = {}
+  options: {
+    showPedestal?: boolean;
+    showShadow?: boolean;
+    /** Called when visible geometry changes (parts arrive or are swapped). */
+    onChange?: () => void;
+  } = {}
 ): CharacterModelInstance {
   const root = new THREE.Group();
   root.name = 'Character3D_Root';
+  const notify = () => options.onChange?.();
   let current: CharacterCustomization = { ...custom };
   const mats = createAvatarMaterials(current);
   const animator = new AvatarAnimator();
@@ -400,6 +413,7 @@ export function buildCharacter3D(
     active = build;
     if (pending === build) pending = null;
     root.add(build.group);
+    notify();
   };
 
   /** Assembles an avatar off-screen and swaps it in when every part is ready. */
@@ -414,6 +428,8 @@ export function buildCharacter3D(
         return;
       }
       if (pending === build) swapIn(build);
+    }, () => {
+      if (active === build) notify();
     });
     if (readyBeforeReturn) swapIn(build);
     else pending = build;

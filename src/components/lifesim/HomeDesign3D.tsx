@@ -3,6 +3,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import confetti from 'canvas-confetti';
 import {
   Home,
@@ -268,6 +272,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
   // Three.js references
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const composerRef = useRef<EffectComposer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
@@ -388,7 +393,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.shadowMap.autoUpdate = false;
     renderer.shadowMap.needsUpdate = true;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -400,6 +405,21 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     labelRenderer.domElement.style.inset = '0';
     labelRenderer.domElement.style.pointerEvents = 'none';
     container.replaceChildren(renderer.domElement, labelRenderer.domElement);
+
+    // Post-processing: ground-truth ambient occlusion grounds furniture and
+    // darkens corners, then the output pass applies tone mapping.
+    const composer = new EffectComposer(renderer);
+    composerRef.current = composer;
+    composer.addPass(new RenderPass(scene, camera));
+    const gtao = new GTAOPass(scene, camera, width, height);
+    gtao.blendIntensity = 0.85;
+    gtao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 12, distanceFallOff: 1 });
+    gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+    // Skip the occlusion pass on phones and low-core devices to keep it smooth.
+    const lowPower =
+      window.matchMedia?.('(pointer: coarse)').matches || (navigator.hardwareConcurrency ?? 4) <= 4;
+    if (!lowPower) composer.addPass(gtao);
+    composer.addPass(new OutputPass());
 
     // Image-based lighting for realistic reflections on glass, metal and marble
     const pmrem = new THREE.PMREMGenerator(renderer);
@@ -427,7 +447,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     const sun = new THREE.DirectionalLight(0xfff4e5, 2.6);
     sunLightRef.current = sun;
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1536, 1536);
+    sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 120;
     sun.shadow.camera.left = -26;
@@ -449,7 +469,14 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     scene.add(house.root);
 
     // 3D User Character sitting / standing in study sanctuary
-    const char = buildCharacter3D(characterService.getCharacter(), { showPedestal: false, showShadow: true });
+    // The avatar arrives from background workers; refresh shadows when it does.
+    const char = buildCharacter3D(characterService.getCharacter(), {
+      showPedestal: false,
+      showShadow: true,
+      onChange: () => {
+        if (rendererRef.current) rendererRef.current.shadowMap.needsUpdate = true;
+      },
+    });
     char.root.position.set(-4.2, FLOOR_LEVEL, -3.2);
     char.root.rotation.y = Math.PI / 3.8;
     house.interior.add(char.root);
@@ -693,7 +720,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
         charInstanceRef.current.update(dt, modeRef.current === 'walk' ? 'idle' : 'study');
       }
 
-      renderer.render(scene, camera);
+      composer.render(dt);
       if (showLabelsRef.current && modeRef.current !== 'walk' && !showRoofRef.current) {
         labelRenderer.render(scene, camera);
       }
@@ -707,6 +734,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      composer.setSize(w, h);
       labelRenderer.setSize(w, h);
     });
     observer.observe(container);
@@ -734,6 +762,9 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
       pmrem.dispose();
       sky.day.dispose();
       sky.night.dispose();
+      gtao.dispose();
+      composer.dispose();
+      composerRef.current = null;
       renderer.dispose();
       container.replaceChildren();
       houseRef.current = null;
@@ -865,7 +896,13 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
       charInstanceRef.current.dispose();
       charInstanceRef.current = null;
     }
-    const char = buildCharacter3D(characterService.getCharacter(), { showPedestal: false, showShadow: true });
+    const char = buildCharacter3D(characterService.getCharacter(), {
+      showPedestal: false,
+      showShadow: true,
+      onChange: () => {
+        if (rendererRef.current) rendererRef.current.shadowMap.needsUpdate = true;
+      },
+    });
     char.root.position.set(-4.2, FLOOR_LEVEL, -3.2);
     char.root.rotation.y = Math.PI / 3.8;
     newHouse.interior.add(char.root);
@@ -1067,7 +1104,8 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     const scene = sceneRef.current;
     const camera = cameraRef.current;
     if (!renderer || !scene || !camera) return;
-    renderer.render(scene, camera);
+    if (composerRef.current) composerRef.current.render();
+    else renderer.render(scene, camera);
     const link = document.createElement('a');
     link.download = `studify-home-${cameraMode}.png`;
     link.href = renderer.domElement.toDataURL('image/png');
