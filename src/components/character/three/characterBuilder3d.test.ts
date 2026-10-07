@@ -98,6 +98,28 @@ describe('characterBuilder3d unit tests', () => {
     });
   });
 
+  it('builds every top and bottom as a visible, non-empty mesh', () => {
+    const tops = ['hoodie', 'varsity-jacket', 'button-down', 'sweater', 'lab-coat', 'casual-tee'] as const;
+    const bottoms = ['jeans', 'chinos', 'joggers', 'pleated-skirt', 'shorts'] as const;
+    const char = buildCharacter3D(sampleConfigs[0].custom, { showPedestal: false, showShadow: false });
+    for (let i = 0; i < tops.length; i++) {
+      char.updateCustomization({ ...sampleConfigs[0].custom, outfitTop: tops[i], outfitBottom: bottoms[i % bottoms.length] });
+      for (const name of ['Top', 'Bottom']) {
+        const mesh = char.root.getObjectByName(name) as THREE.Mesh | undefined;
+        expect(mesh, `${name} for ${tops[i]}`).toBeDefined();
+        expect(mesh!.visible).toBe(true);
+        expect(Array.isArray(mesh!.material)).toBe(false);
+        expect(mesh!.geometry.index!.count).toBeGreaterThan(3000);
+      }
+      // Two-colour tops carry a per-vertex colour zone.
+      if (tops[i] === 'varsity-jacket' || tops[i] === 'sweater') {
+        const top = char.root.getObjectByName('Top') as THREE.Mesh;
+        expect(top.geometry.getAttribute('zone')).toBeDefined();
+      }
+    }
+    char.dispose();
+  }, 60000);
+
   it('switches poses idle -> study -> wave -> cheer -> idle without NaNs', () => {
     const char = buildCharacter3D(sampleConfigs[0].custom, { showPedestal: false, showShadow: false });
     const poses: CharacterPose[] = ['idle', 'study', 'wave', 'cheer', 'idle'];
