@@ -1,6 +1,6 @@
 import type { DiagnosticProbe, StudySession } from '../../types';
 import { maskCloze } from '../../utils/cloze';
-import { buildQuizOptions } from '../../utils/quizOptions';
+import { buildQuizOptions, orderOptionsForCard } from '../../utils/quizOptions';
 import { shuffle } from '../../utils/shuffle';
 import { getEffectiveCardType } from './retrievalLogic';
 
@@ -31,7 +31,12 @@ export function buildWarmupProbes(
 
     const choiceCard = cards.find(card => card.options && card.options.length >= 2);
     if (choiceCard?.options) {
-      probes.push({ ...base, question: maskCloze(choiceCard.question), options: choiceCard.options, correctAnswer: choiceCard.answer });
+      probes.push({
+        ...base,
+        question: maskCloze(choiceCard.question),
+        options: orderOptionsForCard(choiceCard.options, choiceCard.id),
+        correctAnswer: choiceCard.answer,
+      });
       continue;
     }
 

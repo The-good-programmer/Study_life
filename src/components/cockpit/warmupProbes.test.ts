@@ -28,7 +28,7 @@ describe('buildWarmupProbes', () => {
     );
     expect(probes).toHaveLength(1);
     expect(probes[0].question).toBe('The powerhouse is the _____.');
-    expect(probes[0].options).toEqual(['mitochondrion', 'nucleus']);
+    expect([...probes[0].options].sort()).toEqual(['mitochondrion', 'nucleus']);
   });
 
   it('turns a plain card into a choice question with the answer exactly once', () => {

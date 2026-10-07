@@ -510,9 +510,11 @@ export function App() {
               setIsDeckStudioOpen(false);
               setEditingSession(null);
             }}
-            onSaveDeck={(newSession) => {
+            onSaveDeck={(savedDeck) => {
+              // Show the saved deck's details, where the learner picks how to study it.
+              setIsDeckStudioOpen(false);
               setEditingSession(null);
-              handleStartSession(newSession);
+              handleOpenDeckStation(savedDeck);
             }}
           />
         </Suspense>

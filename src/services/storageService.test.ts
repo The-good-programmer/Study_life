@@ -594,6 +594,34 @@ describe('StorageService localStorage overflow', () => {
   });
 });
 
+describe('StorageService deck edits', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    StorageService.setActiveUserId(null);
+  });
+
+  const card = (id: string) => ({ id, conceptId: 'k', question: `Q ${id}`, answer: `A ${id}`, stability: 1, difficulty: 5, reps: 0, lapses: 0 }) as RetrievalCard;
+  const deckWith = (id: string, ids: string[]) =>
+    ({ id, title: id, concepts: [{ id: 'k', title: 'K', retrievalCards: ids.map(card) }] }) as never;
+  const queueIds = () => StorageService.getAllCards().map(c => c.id).sort();
+
+  it('takes cards removed from a deck out of the review queue', () => {
+    StorageService.saveSession(deckWith('deck', ['a', 'b', 'c']));
+    expect(queueIds()).toEqual(['a', 'b', 'c']);
+    StorageService.saveSession(deckWith('deck', ['a', 'c']));
+    expect(queueIds()).toEqual(['a', 'c']);
+  });
+
+  it('keeps a card that another deck still uses', () => {
+    StorageService.saveSession(deckWith('one', ['a', 'shared']));
+    StorageService.saveSession(deckWith('two', ['shared']));
+    StorageService.saveSession(deckWith('one', ['a']));
+    expect(queueIds()).toEqual(['a', 'shared']);
+    StorageService.deleteSession('two');
+    expect(queueIds()).toEqual(['a']);
+  });
+});
+
 describe('StorageService profile data', () => {
   const idb = new Map<string, string>();
 

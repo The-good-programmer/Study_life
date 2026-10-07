@@ -1,19 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Upload, 
-  Trash2, 
-  Eye, 
-  Check, 
-  Layers, 
-  Tag,
-  Info
-} from 'lucide-react';
+import { Upload, Trash2, Eye, Check } from 'lucide-react';
 import type { OcclusionMask, RetrievalCard, StudySession } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
+import { cn } from '../../utils/cn';
+import { Button, IconButton } from '../ui/primitives';
 
 interface ImageOcclusionStudioProps {
-  onCardsGenerated: (cards: RetrievalCard[], deckTitle?: string) => void;
+  /** Called with the deck it just saved, so the caller can open that deck. */
+  onCardsGenerated: (cards: RetrievalCard[], deckTitle: string | undefined, deck: StudySession) => void;
   onClose?: () => void;
 }
 
@@ -254,7 +249,7 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
   }, []);
 
   // Compute percentage coordinates relative to container
-  const getRelativeCoords = (e: React.MouseEvent<HTMLDivElement>) => {
+  const getRelativeCoords = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!containerRef.current) return { x: 0, y: 0 };
     const rect = containerRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
@@ -263,7 +258,7 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
   };
 
   // Mouse drag handlers for mask drawing
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isPreviewActive) return;
     // If clicked directly on an existing mask, select it instead of drawing
     const target = e.target as HTMLElement;
@@ -273,18 +268,19 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
     }
 
     const coords = getRelativeCoords(e);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
     setIsDrawing(true);
     setDrawStart(coords);
     setDrawCurrent(coords);
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDrawing) return;
     const coords = getRelativeCoords(e);
     setDrawCurrent(coords);
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = () => {
     if (!isDrawing || !drawStart || !drawCurrent) {
       setIsDrawing(false);
       return;
@@ -303,7 +299,7 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
         y: Math.round(minY * 10) / 10,
         width: Math.round(width * 10) / 10,
         height: Math.round(height * 10) / 10,
-        label: `Label ${masks.length + 1}`,
+        label: '',
       };
 
       setMasks(prev => [...prev, newMask]);
@@ -345,14 +341,15 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
   const handleGenerateCards = () => {
     if (masks.length === 0) return;
 
+    const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const conceptId = `concept-io-${stamp}`;
     const cards: RetrievalCard[] = masks.map((mask, idx) => ({
-      id: `ioc-${Date.now()}-${idx + 1}`,
-      conceptId: `concept-io-${Date.now()}`,
+      id: `ioc-${stamp}-${idx + 1}`,
+      conceptId,
       cardType: 'image-occlusion',
-      question: `Identify the highlighted structure in ${deckTitle}:`,
-      answer: mask.label || `Structure #${idx + 1}`,
-      hint: mask.hint || 'Carefully examine the spatial connections on the diagram.',
-      explanation: `Occluded visual target: ${mask.label || 'Structure'} (${occlusionMode === 'hide-all-reveal-one' ? 'Hide All' : 'Hide One'} mode).`,
+      question: `Name the covered part of ${deckTitle || 'the diagram'}.`,
+      answer: mask.label?.trim() || `Part ${idx + 1}`,
+      hint: mask.hint?.trim() || undefined,
       imageUrl: imageSrc,
       occlusionMode,
       masks,
@@ -365,21 +362,21 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
 
     // Save as a permanent session
     const newSession: StudySession = {
-      id: `session-io-${Date.now()}`,
-      title: deckTitle || 'Image Occlusion Deck',
-      category: deckCategory || 'Visual Sciences',
-      description: `Interactive anatomical & technical occlusion cards with ${masks.length} masked checkpoints.`,
+      id: `session-io-${stamp}`,
+      title: deckTitle.trim() || 'Diagram cards',
+      category: deckCategory.trim() || 'Diagrams',
+      description: `${masks.length} ${masks.length === 1 ? 'label' : 'labels'} to name on a diagram.`,
       concepts: [
         {
-          id: `concept-io-${Date.now()}`,
+          id: conceptId,
           order: 1,
-          title: deckTitle || 'Diagram Architecture',
+          title: deckTitle.trim() || 'Diagram',
           estimatedMinutes: Math.max(5, masks.length * 2),
-          mentalModel: 'Spatial vector occlusion: recall functional structures in visual context.',
-          coreTakeaways: masks.map(m => m.label || 'Target Structure'),
-          keyTerms: masks.map(m => ({ term: m.label || 'Structure', definition: m.hint || 'Anatomical location' })),
-          feynmanPrompt: 'Explain the anatomical outflow and clinical significance of this system.',
-          sampleMasteryExplanation: 'The anatomical landmarks govern physiological flow through distinct pathways.',
+          mentalModel: '',
+          coreTakeaways: [],
+          keyTerms: masks.filter(m => m.label?.trim()).map(m => ({ term: m.label!.trim(), definition: m.hint?.trim() || '' })),
+          feynmanPrompt: `Explain what each labelled part of ${deckTitle || 'this diagram'} does, and how the parts connect.`,
+          sampleMasteryExplanation: '',
           retrievalCards: cards,
         }
       ],
@@ -391,286 +388,170 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
 
     StorageService.saveSession(newSession);
     soundEngine.playCompletionChime();
-    onCardsGenerated(cards, deckTitle);
+    onCardsGenerated(cards, deckTitle, newSession);
   };
 
+  const unnamedCount = masks.filter(m => !m.label?.trim()).length;
+
   return (
-    <div className="max-w-5xl mx-auto space-y-6 py-4 animate-fadeIn">
-      
-      {/* Studio Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight font-display">
-              Image Occlusion Card Architect
-            </h2>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono uppercase font-bold">
-              Visual Recall
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 font-sans">
-            Upload anatomical, histology, or engineering diagrams. Draw mask rectangles to test visual memory.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-white/[0.08] text-xs font-semibold transition-all"
-            >
-              Cancel
-            </button>
-          )}
-
-          <button
-            onClick={handleGenerateCards}
-            disabled={masks.length === 0}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 transition-all hover:scale-105 flex items-center gap-2 disabled:opacity-50"
-          >
-            <Check className="w-4 h-4" />
-            <span>Generate {masks.length} Occlusion Cards</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Top Controls & Sample Pickers */}
-      <div className="p-4 sm:p-5 rounded-2xl glass-panel space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileUpload} 
-              accept="image/*" 
-              className="hidden" 
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Upload Diagram</span>
-            </button>
-
-            <span className="text-xs text-slate-500 font-mono hidden sm:inline">
-              or press <kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-300">Ctrl+V</kbd> to paste
-            </span>
-          </div>
-
-          {/* Sample Loaders */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider font-display">
-              Load Sample:
-            </span>
-            {SAMPLE_DIAGRAMS.map(sample => (
-              <button
-                key={sample.id}
-                onClick={() => handleLoadSample(sample.id)}
-                className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-medium transition-all"
-              >
-                {sample.id === 'heart-anatomy' ? 'Heart Anatomy' : 'Synapse Dynamics'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Deck Title and Strategy Inputs */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-white/[0.06]">
-          <div>
-            <label className="text-[11px] font-bold text-slate-300 font-display block mb-1">
-              Deck / Diagram Title
-            </label>
+    <div className="space-y-5 animate-fadeIn">
+      {/* Source image and details */}
+      <section className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-[13px] font-medium text-ink">Deck name</span>
             <input
               type="text"
               value={deckTitle}
               onChange={(e) => setDeckTitle(e.target.value)}
-              placeholder="e.g. Cranial Nerves Anatomy"
-              className="w-full px-3 py-1.5 rounded-xl bg-slate-950/80 border border-white/[0.1] text-white text-xs outline-none focus:border-indigo-500 font-medium"
+              placeholder="e.g. Parts of the heart"
+              className="mt-1.5 h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
             />
-          </div>
-
-          <div>
-            <label className="text-[11px] font-bold text-slate-300 font-display block mb-1">
-              Subject Discipline
-            </label>
+          </label>
+          <label className="block">
+            <span className="text-[13px] font-medium text-ink">Category</span>
             <input
               type="text"
               value={deckCategory}
               onChange={(e) => setDeckCategory(e.target.value)}
-              placeholder="e.g. Human Anatomy"
-              className="w-full px-3 py-1.5 rounded-xl bg-slate-950/80 border border-white/[0.1] text-white text-xs outline-none focus:border-indigo-500 font-medium"
+              placeholder="e.g. Anatomy"
+              className="mt-1.5 h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
             />
-          </div>
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" tabIndex={-1} aria-hidden="true" />
+          <Button icon={Upload} onClick={() => fileInputRef.current?.click()}>
+            Upload an image
+          </Button>
+          <span className="hidden text-xs text-ink-subtle sm:inline">
+            or paste one with <kbd className="rounded border border-line bg-surface-hover px-1 font-mono text-[10.5px]">Ctrl+V</kbd>
+          </span>
+        </div>
+      </section>
 
-          <div>
-            <label className="text-[11px] font-bold text-slate-300 font-display block mb-1">
-              Occlusion Masking Mode
-            </label>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setOcclusionMode('hide-all-reveal-one')}
-                className={`py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all border text-center ${
-                  occlusionMode === 'hide-all-reveal-one'
-                    ? 'bg-purple-600 text-white border-purple-400 shadow'
-                    : 'bg-slate-900 text-slate-400 border-white/[0.08] hover:text-white'
-                }`}
-                title="All masks are hidden; only target mask is asked."
-              >
-                Hide All, Reveal 1
-              </button>
-              <button
-                type="button"
-                onClick={() => setOcclusionMode('hide-one-reveal-one')}
-                className={`py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all border text-center ${
-                  occlusionMode === 'hide-one-reveal-one'
-                    ? 'bg-purple-600 text-white border-purple-400 shadow'
-                    : 'bg-slate-900 text-slate-400 border-white/[0.08] hover:text-white'
-                }`}
-                title="Only target mask is hidden; surrounding labels stay visible."
-              >
-                Hide 1, Reveal 1
-              </button>
-            </div>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-1.5 text-[13px] text-ink-subtle">
+          Try a sample:
+          {SAMPLE_DIAGRAMS.map(sample => (
+            <button
+              key={sample.id}
+              type="button"
+              onClick={() => handleLoadSample(sample.id)}
+              className="inline-flex h-7 items-center rounded-lg border border-line px-2.5 text-xs font-medium text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer"
+            >
+              {sample.id === 'heart-anatomy' ? 'The heart' : 'A synapse'}
+            </button>
+          ))}
+        </div>
+        <div className="inline-flex rounded-xl border border-line bg-canvas p-1" role="radiogroup" aria-label="What to hide while studying">
+          {([
+            { value: 'hide-all-reveal-one', label: 'Hide all labels', title: 'Every label is covered; you name one at a time.' },
+            { value: 'hide-one-reveal-one', label: 'Hide one label', title: 'Only the label you are asked about is covered.' },
+          ] as const).map(option => (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={occlusionMode === option.value}
+              title={option.title}
+              onClick={() => setOcclusionMode(option.value)}
+              className={cn(
+                'h-8 rounded-lg px-3 text-[13px] font-medium transition-colors cursor-pointer',
+                occlusionMode === option.value ? 'bg-surface-hover text-ink shadow-sm' : 'text-ink-subtle hover:text-ink',
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Main Interactive Work Area: Image Canvas & Mask Editor */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* Left Column: Interactive Diagram Canvas */}
-        <div className="lg:col-span-8 space-y-3">
-          <div className="flex items-center justify-between text-xs px-1">
-            <span className="text-slate-400 font-bold uppercase tracking-wider font-display flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Canvas ({masks.length} Occlusion Masks)</span>
-            </span>
-
-            <div className="flex items-center gap-2">
-              <button
+      <div className="grid items-start gap-5 lg:grid-cols-[1fr_300px]">
+        {/* Canvas */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[13px] text-ink-subtle">
+              {isPreviewActive ? 'Preview: click the highlighted box to check your answer.' : 'Drag across the image to cover a label.'}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant={isPreviewActive ? 'secondary' : 'ghost'}
+                icon={Eye}
+                aria-pressed={isPreviewActive}
                 onClick={() => {
                   setIsPreviewActive(!isPreviewActive);
                   setPreviewRevealed(false);
                 }}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
-                  isPreviewActive 
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
-                    : 'bg-slate-900 text-slate-300 border-white/[0.08] hover:border-white/[0.2]'
-                }`}
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>{isPreviewActive ? 'Exit Preview' : 'Interactive Preview'}</span>
-              </button>
-
-              <button
-                onClick={() => setMasks([])}
                 disabled={masks.length === 0}
-                className="px-2.5 py-1 rounded-xl bg-slate-900 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 border border-white/[0.08] text-xs font-medium transition-all disabled:opacity-40"
               >
-                Clear All
-              </button>
+                {isPreviewActive ? 'Stop preview' : 'Preview'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setMasks([])} disabled={masks.length === 0}>
+                Clear all
+              </Button>
             </div>
           </div>
-
-          {/* Canvas Box */}
-          <div className="p-3 rounded-3xl glass-panel relative overflow-hidden select-none border border-white/[0.12] shadow-2xl">
-            <div 
+          <div className="overflow-hidden rounded-2xl border border-line bg-canvas p-2">
+            <div
               ref={containerRef}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              className={`relative w-full rounded-2xl overflow-hidden bg-slate-950 flex items-center justify-center ${
-                isPreviewActive ? 'cursor-default' : 'cursor-crosshair'
-              }`}
-              style={{ minHeight: '380px' }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              className={cn(
+                'relative flex min-h-[320px] w-full touch-none select-none items-center justify-center overflow-hidden rounded-xl bg-[#0b0c11]',
+                isPreviewActive ? 'cursor-default' : 'cursor-crosshair',
+              )}
             >
-              {/* The Underlying Anatomical Diagram */}
-              <img 
-                src={imageSrc} 
-                alt="Occlusion Base Diagram" 
-                className="w-full h-auto object-contain pointer-events-none max-h-[580px]"
-              />
+              <img src={imageSrc} alt={deckTitle || 'Diagram'} className="pointer-events-none h-auto max-h-[560px] w-full object-contain" />
 
-              {/* Render Existing Masks */}
               {masks.map((mask, idx) => {
                 const isSelected = mask.id === selectedMaskId;
-                
-                // Preview mode rendering
-                if (isPreviewActive) {
-                  const isTarget = isSelected;
-                  if (occlusionMode === 'hide-one-reveal-one' && !isTarget) {
-                    return null; // surrounding labels remain visible
-                  }
+                const box = { left: `${mask.x}%`, top: `${mask.y}%`, width: `${mask.width}%`, height: `${mask.height}%` };
 
-                  if (isTarget) {
+                if (isPreviewActive) {
+                  if (occlusionMode === 'hide-one-reveal-one' && !isSelected) return null;
+                  if (isSelected) {
                     return (
-                      <div
+                      <button
                         key={mask.id}
+                        type="button"
                         onClick={() => setPreviewRevealed(!previewRevealed)}
-                        className={`absolute rounded-lg flex items-center justify-center p-1 transition-all cursor-pointer shadow-xl ${
-                          previewRevealed
-                            ? 'bg-emerald-950/90 border-2 border-emerald-400 text-emerald-200 ring-2 ring-emerald-500/30'
-                            : 'bg-amber-950/90 border-2 border-amber-400 text-amber-200 animate-pulse ring-2 ring-amber-500/40'
-                        }`}
-                        style={{
-                          left: `${mask.x}%`,
-                          top: `${mask.y}%`,
-                          width: `${mask.width}%`,
-                          height: `${mask.height}%`,
-                        }}
+                        className={cn(
+                          'absolute flex items-center justify-center rounded-md border-2 p-1 text-[11px] font-semibold transition-colors cursor-pointer',
+                          previewRevealed ? 'border-success bg-success-soft text-ink backdrop-blur' : 'border-gold bg-gold-soft text-ink backdrop-blur',
+                        )}
+                        style={box}
                       >
-                        <span className="text-[11px] font-bold font-mono truncate px-1">
-                          {previewRevealed ? mask.label : `? [Card ${idx + 1}]`}
-                        </span>
-                      </div>
+                        <span className="truncate px-1">{previewRevealed ? mask.label : '?'}</span>
+                      </button>
                     );
                   }
-
-                  // Non-target mask in Hide-All mode: opaque block
-                  return (
-                    <div
-                      key={mask.id}
-                      className="absolute rounded-lg bg-slate-900/95 border border-white/20 shadow-md"
-                      style={{
-                        left: `${mask.x}%`,
-                        top: `${mask.y}%`,
-                        width: `${mask.width}%`,
-                        height: `${mask.height}%`,
-                      }}
-                    />
-                  );
+                  return <div key={mask.id} className="absolute rounded-md border border-line-strong bg-surface-solid" style={box} />;
                 }
 
-                // Normal Architect Mode: Editable Bounding Boxes
                 return (
                   <div
                     key={mask.id}
                     data-mask-id={mask.id}
-                    className={`absolute rounded-lg flex items-center justify-between p-1 transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-indigo-600/85 border-2 border-white text-white shadow-xl shadow-indigo-600/40 ring-4 ring-indigo-500/30 z-20'
-                        : 'bg-indigo-950/80 border border-indigo-400/60 text-indigo-200 hover:bg-indigo-900/90 hover:border-indigo-300 z-10'
-                    }`}
-                    style={{
-                      left: `${mask.x}%`,
-                      top: `${mask.y}%`,
-                      width: `${mask.width}%`,
-                      height: `${mask.height}%`,
-                    }}
+                    className={cn(
+                      'absolute flex items-center rounded-md p-1 transition-colors cursor-pointer',
+                      isSelected ? 'z-20 border-2 border-white bg-brand text-brand-ink shadow-lg' : 'z-10 border border-brand/70 bg-brand/80 text-brand-ink hover:bg-brand',
+                    )}
+                    style={box}
                   >
-                    <span className="text-[11px] font-bold font-mono px-1 truncate select-none pointer-events-none">
-                      #{idx + 1} {mask.label || 'Covered'}
+                    <span className="pointer-events-none select-none truncate px-1 text-[11px] font-semibold">
+                      {idx + 1}. {mask.label || 'Unnamed'}
                     </span>
                   </div>
                 );
               })}
 
-              {/* Active Drawing Preview Rectangle */}
               {isDrawing && drawStart && drawCurrent && (
                 <div
-                  className="absolute rounded-lg bg-indigo-500/30 border-2 border-dashed border-indigo-300 pointer-events-none z-30"
+                  className="pointer-events-none absolute z-30 rounded-md border-2 border-dashed border-white bg-brand/30"
                   style={{
                     left: `${Math.min(drawStart.x, drawCurrent.x)}%`,
                     top: `${Math.min(drawStart.y, drawCurrent.y)}%`,
@@ -680,127 +561,83 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
                 />
               )}
             </div>
-
-            <div className="p-2.5 text-center text-[11px] text-slate-400 font-mono flex items-center justify-center gap-2">
-              <Info className="w-3.5 h-3.5 text-indigo-400" />
-              <span>
-                {isPreviewActive 
-                  ? 'Interactive Preview: Click the amber mask to reveal answer!' 
-                  : 'Click & drag anywhere across the image to mask anatomical or technical labels.'}
-              </span>
-            </div>
           </div>
-        </div>
+        </section>
 
-        {/* Right Column: Selected Mask Property Inspector */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="text-xs font-bold text-white uppercase tracking-wider font-display px-1 flex items-center justify-between">
-            <span>Mask Inspector</span>
-            <span className="text-[11px] font-mono text-indigo-400 font-bold">
-              {masks.length} Created
-            </span>
+        {/* Labels */}
+        <aside className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-[15px] font-semibold text-ink">Hidden labels</h3>
+            <span className="text-xs tabular-nums text-ink-subtle">{masks.length}</span>
           </div>
 
           {activeMask ? (
-            <div className="p-5 rounded-3xl glass-panel space-y-4 border-indigo-500/30 shadow-xl shadow-indigo-500/5 animate-fadeIn">
-              <div className="flex items-center justify-between pb-2 border-b border-white/[0.08]">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold font-mono text-xs">
-                    {masks.findIndex(m => m.id === activeMask.id) + 1}
-                  </div>
-                  <span className="text-sm font-bold text-white font-display">Target Label</span>
-                </div>
-                <button
-                  onClick={() => handleDeleteMask(activeMask.id)}
-                  className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-300 transition-colors"
-                  title="Delete this mask"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+            <div className="space-y-3 rounded-2xl border border-line bg-surface p-4 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-medium text-ink">Label {masks.findIndex(m => m.id === activeMask.id) + 1}</span>
+                <IconButton icon={Trash2} label="Delete this label" onClick={() => handleDeleteMask(activeMask.id)} className="-mr-1.5 hover:text-danger" />
               </div>
-
-              <div className="space-y-3">
-                <div>
-                  <label className="text-[11px] font-bold text-slate-300 font-display block mb-1">
-                    Covered Text / Correct Answer
-                  </label>
-                  <input
-                    type="text"
-                    value={activeMask.label || ''}
-                    onChange={(e) => handleUpdateMask({ label: e.target.value })}
-                    placeholder="e.g. Superior Vena Cava"
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/80 border border-white/[0.1] text-white text-xs outline-none focus:border-indigo-500 font-medium"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-slate-300 font-display block mb-1">
-                    Retrieval Hint (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={activeMask.hint || ''}
-                    onChange={(e) => handleUpdateMask({ hint: e.target.value })}
-                    placeholder="e.g. Drains blood from upper body"
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/80 border border-white/[0.1] text-white text-xs outline-none focus:border-indigo-500 font-medium"
-                  />
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-white/[0.05] text-[11px] font-mono text-slate-400 space-y-1">
-                  <div>Coords: x: {activeMask.x}%, y: {activeMask.y}%</div>
-                  <div>Dimensions: {activeMask.width}% &times; {activeMask.height}%</div>
-                </div>
-              </div>
+              <label className="block">
+                <span className="text-xs text-ink-subtle">The covered word (the answer)</span>
+                <input
+                  type="text"
+                  value={activeMask.label || ''}
+                  onChange={(e) => handleUpdateMask({ label: e.target.value })}
+                  placeholder="e.g. Left ventricle"
+                  className="mt-1 h-9 w-full rounded-lg border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-ink-subtle">Hint (optional)</span>
+                <input
+                  type="text"
+                  value={activeMask.hint || ''}
+                  onChange={(e) => handleUpdateMask({ hint: e.target.value })}
+                  placeholder="e.g. Pumps blood to the body"
+                  className="mt-1 h-9 w-full rounded-lg border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
+                />
+              </label>
             </div>
           ) : (
-            <div className="p-8 text-center rounded-3xl glass-panel text-slate-500 text-xs space-y-2 border-dashed">
-              <Tag className="w-8 h-8 mx-auto text-slate-600" />
-              <p>No mask currently selected. Click an existing mask or drag a new box on the canvas.</p>
-            </div>
+            <p className="rounded-2xl border border-dashed border-line-strong px-4 py-6 text-center text-[13px] text-ink-subtle">
+              Drag across the image to cover a label, or select one below.
+            </p>
           )}
 
-          {/* Roster of All Masks */}
           {masks.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-display px-1">
-                Mask Roster ({masks.length})
-              </div>
-              <div className="space-y-1.5 max-h-[240px] overflow-y-auto pr-1">
-                {masks.map((m, idx) => (
-                  <div
-                    key={m.id}
+            <ul className="max-h-[260px] space-y-1 overflow-y-auto">
+              {masks.map((m, idx) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
                     onClick={() => setSelectedMaskId(m.id)}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between text-xs ${
-                      m.id === selectedMaskId
-                        ? 'bg-indigo-950/70 border-indigo-500/60 text-white shadow-md'
-                        : 'bg-slate-900/60 border-white/[0.06] text-slate-300 hover:bg-slate-850'
-                    }`}
+                    aria-pressed={m.id === selectedMaskId}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[13px] transition-colors cursor-pointer',
+                      m.id === selectedMaskId ? 'bg-brand-soft text-ink' : 'text-ink-muted hover:bg-surface-hover hover:text-ink',
+                    )}
                   >
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="w-5 h-5 rounded-md bg-white/[0.08] flex items-center justify-center font-mono font-bold text-[11px]">
-                        {idx + 1}
-                      </span>
-                      <span className="font-medium truncate">{m.label || 'Unlabeled Mask'}</span>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteMask(m.id);
-                      }}
-                      className="text-slate-500 hover:text-rose-400 p-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+                    <span className="w-5 shrink-0 text-xs tabular-nums text-ink-subtle">{idx + 1}</span>
+                    <span className={cn('truncate', !m.label && 'italic text-ink-subtle')}>{m.label || 'Unnamed'}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
-
-        </div>
-
+        </aside>
       </div>
 
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-4">
+        {unnamedCount > 0 && (
+          <p className="mr-auto text-[13px] text-danger" role="status">
+            Name {unnamedCount === 1 ? 'the unnamed label' : `the ${unnamedCount} unnamed labels`} first.
+          </p>
+        )}
+        {onClose && <Button onClick={onClose}>Cancel</Button>}
+        <Button variant="primary" icon={Check} onClick={handleGenerateCards} disabled={masks.length === 0 || unnamedCount > 0}>
+          {masks.length > 0 ? `Make ${masks.length} ${masks.length === 1 ? 'card' : 'cards'}` : 'Make cards'}
+        </Button>
+      </div>
     </div>
   );
 };

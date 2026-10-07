@@ -39,6 +39,7 @@ import {
 import { getEffectiveCardType, isOptionCorrect } from '../cockpit/retrievalLogic';
 import { Badge, Button, Card, CoinIcon, IconButton, Kbd, ProgressBar } from '../ui/primitives';
 import { shuffle } from '../../utils/shuffle';
+import { orderOptionsForCard } from '../../utils/quizOptions';
 import { fillCloze, maskCloze } from '../../utils/cloze';
 
 interface ExamSimulatorProps {
@@ -155,7 +156,12 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
   const effectiveCardType: CardType = getEffectiveCardType(currentItem?.card);
 
-  const hasOptions = !!(currentItem?.card?.options && currentItem.card.options.length > 0);
+  // The card's own choices, in a per-card order (cards often store the right answer first).
+  const cardOptions = useMemo(
+    () => (currentItem?.card?.options?.length ? orderOptionsForCard(currentItem.card.options, currentItem.card.id) : []),
+    [currentItem],
+  );
+  const hasOptions = cardOptions.length > 0;
 
   // Evaluate single question
   const evaluateAnswer = useCallback((userAns: string, conf: ConfidenceLevel): ExamQuestionResult => {
@@ -306,16 +312,16 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
       }
 
       // MCQ Choice Keys: A, B, C, D or 1, 2, 3, 4 (only before submit)
-      if (!isAnswerSubmitted && hasOptions && currentItem.card.options) {
+      if (!isAnswerSubmitted && hasOptions) {
         let pickIdx = -1;
         if (key === 'A' || key === '1') pickIdx = 0;
         else if (key === 'B' || key === '2') pickIdx = 1;
         else if (key === 'C' || key === '3') pickIdx = 2;
         else if (key === 'D' || key === '4') pickIdx = 3;
 
-        if (pickIdx >= 0 && pickIdx < currentItem.card.options.length) {
+        if (pickIdx >= 0 && pickIdx < cardOptions.length) {
           e.preventDefault();
-          setSelectedAnswer(currentItem.card.options[pickIdx]);
+          setSelectedAnswer(cardOptions[pickIdx]);
         }
       }
 
@@ -494,7 +500,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   // -------------------------------------------------------------
   if (stage === 'active' && currentItem) {
     const lastResult = results[results.length - 1];
-    const options = currentItem.card.options || [];
+    const options = cardOptions;
 
     return (
       <div className="mx-auto w-full max-w-2xl space-y-4 animate-fadeIn">

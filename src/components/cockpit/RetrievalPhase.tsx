@@ -25,7 +25,7 @@ import confetti from 'canvas-confetti';
 import { StudyHUD } from './StudyHUD';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
 import { haptics } from '../../services/hapticsService';
-import { buildQuizOptions } from '../../utils/quizOptions';
+import { buildQuizOptions, orderOptionsForCard } from '../../utils/quizOptions';
 import { Badge, Button, IconButton, Kbd, Toggle } from '../ui/primitives';
 import {
   CARD_TYPE_LABELS,
@@ -139,7 +139,8 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 
   const activeOptions = useMemo(() => {
     if (currentCard?.options && currentCard.options.length > 0) {
-      return currentCard.options;
+      // Cards often store the right answer first; show their choices in a per-card order.
+      return orderOptionsForCard(currentCard.options, currentCard.id);
     }
     return computedOptions;
   }, [currentCard, computedOptions]);

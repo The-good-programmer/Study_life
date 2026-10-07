@@ -717,6 +717,26 @@ export class StorageService {
     this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(Array.from(cardMap.values())));
   }
 
+  private static cardIdsOf(session: StudySession): string[] {
+    return session.concepts?.flatMap(c => c.retrievalCards?.map(rc => rc.id) || []) || [];
+  }
+
+  /** Drops cards from the review queue when no remaining deck contains them. */
+  private static removeCardsNoLongerInAnyDeck(cardIds: string[], remainingSessions: StudySession[]): void {
+    if (cardIds.length === 0) return;
+    const stillUsed = new Set(remainingSessions.flatMap(s => this.cardIdsOf(s)));
+    const toDelete = new Set(cardIds.filter(id => !stillUsed.has(id)));
+    if (toDelete.size === 0) return;
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.CARDS));
+    if (!raw) return;
+    try {
+      const cards: RetrievalCard[] = JSON.parse(raw);
+      this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(cards.filter(c => !toDelete.has(c.id))));
+    } catch {
+      // A corrupt queue is rebuilt from the decks on the next read.
+    }
+  }
+
   public static saveSession(session: StudySession) {
     // If the session has a heavy base64 PDF payload, offload it to IndexedDB
     if (session.sourceDocument?.pdfDataUrl && session.sourceDocument.pdfDataUrl.length > 20000) {
@@ -736,12 +756,15 @@ export class StorageService {
 
     const sessions = this.getSessions();
     const idx = sessions.findIndex(s => s.id === session.id);
+    // Cards taken out of a deck while editing it must leave the review queue too.
+    const removedCardIds = idx >= 0 ? this.cardIdsOf(sessions[idx]).filter(id => !this.cardIdsOf(session).includes(id)) : [];
     if (idx >= 0) {
       sessions[idx] = lightweightSession;
     } else {
       sessions.unshift(lightweightSession);
     }
     this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions.slice(0, 30)));
+    this.removeCardsNoLongerInAnyDeck(removedCardIds, sessions);
 
     // Automatically sync cards into the global FSRS cards queue
     const sessionCards = session.concepts?.flatMap(c => c.retrievalCards || []) || [];
@@ -778,19 +801,9 @@ export class StorageService {
     this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(updatedSessions));
     IndexedDbService.removeItem(`pdf_${id}`).catch(() => {});
 
-    // Remove cards belonging exclusively to this deleted session from CARDS
+    // Remove this deck's cards from the review queue, unless another deck still uses them.
     if (sessionToDelete) {
-      const cardIdsToDelete = new Set(sessionToDelete.concepts?.flatMap(c => c.retrievalCards?.map(rc => rc.id) || []) || []);
-      if (cardIdsToDelete.size > 0) {
-        const raw = this.readRaw(this.getKey(STORAGE_KEYS.CARDS));
-        if (raw) {
-          try {
-            const cards: RetrievalCard[] = JSON.parse(raw);
-            const filteredCards = cards.filter(c => !cardIdsToDelete.has(c.id));
-            this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(filteredCards));
-          } catch {}
-        }
-      }
+      this.removeCardsNoLongerInAnyDeck(this.cardIdsOf(sessionToDelete), updatedSessions);
     }
     this.notifyMutation();
   }

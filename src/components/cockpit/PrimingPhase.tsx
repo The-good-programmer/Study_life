@@ -107,9 +107,15 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
               </Button>
             </div>
           </div>
-          <p className="mt-3 text-[19px] font-medium leading-relaxed text-ink sm:text-[22px]">
-            <MathRenderer text={concept.mentalModel} />
-          </p>
+          {concept.mentalModel ? (
+            <p className="mt-3 text-[19px] font-medium leading-relaxed text-ink sm:text-[22px]">
+              <MathRenderer text={concept.mentalModel} />
+            </p>
+          ) : (
+            <p className="mt-3 text-[15px] leading-relaxed text-ink-muted">
+              This part has no overview yet. You can add one by editing the deck, or go on to the next step.
+            </p>
+          )}
         </div>
       </section>
 
@@ -173,7 +179,8 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
         </section>
       )}
 
-      {/* Map or sketch */}
+      {/* Map or sketch (only when there is something to connect) */}
+      {(concept.keyTerms.length > 0 || (concept.conceptNodes?.length ?? 0) > 0) && (
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-[15px] font-semibold text-ink">See how it fits together</h3>
@@ -198,6 +205,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
         </div>
         {visualMode === 'map' ? <ConceptGraph concept={concept} /> : <DualCodingWhiteboard concept={concept} />}
       </section>
+      )}
 
       {/* Next step */}
       <div className="flex flex-col-reverse gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">

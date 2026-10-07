@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildQuizOptions } from './quizOptions';
+import { buildQuizOptions, orderOptionsForCard } from './quizOptions';
 import { isBoardExamDeck, rankStarterDecksForGrade } from '../data/curatedStarterCatalog';
 
 const card = (id: string, conceptId: string, answer: string) => ({ id, conceptId, answer });
@@ -74,5 +74,21 @@ describe('starter deck ranking', () => {
   it('keeps the original order for university and medical students', () => {
     const ranked = rankStarterDecksForGrade(decks, 'Medical School Year 2').map(d => d.title);
     expect(ranked).toEqual(decks.map(d => d.title));
+  });
+});
+
+describe('orderOptionsForCard', () => {
+  const options = ['Right answer', 'Wrong one', 'Wrong two', 'Wrong three'];
+
+  it('keeps every option and is stable for the same card', () => {
+    const order = orderOptionsForCard(options, 'card-1');
+    expect([...order].sort()).toEqual([...options].sort());
+    expect(orderOptionsForCard(options, 'card-1')).toEqual(order);
+  });
+
+  it('does not always put the stored first option first', () => {
+    const firstPositions = Array.from({ length: 40 }, (_, i) => orderOptionsForCard(options, `card-${i}`).indexOf('Right answer'));
+    expect(new Set(firstPositions).size).toBeGreaterThan(1);
+    expect(firstPositions.filter(p => p === 0).length).toBeLessThan(40);
   });
 });
