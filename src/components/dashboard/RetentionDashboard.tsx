@@ -1,20 +1,16 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { 
-  ArrowLeft, 
-  Clock, 
-  Flame, 
-  Award, 
-  Layers, 
-  Play, 
-  Calendar, 
-  RotateCw, 
-  BarChart3, 
-  Bug, 
-  AlertTriangle,
+import {
+  ArrowLeft,
+  Flame,
+  Award,
+  Play,
+  Eye,
+  Bug,
   Shuffle,
   BrainCircuit,
-  Sparkles
+  ChevronRight,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { RetrievalCard, StudySession, UserStats } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { FSRSService } from '../../services/fsrsService';
@@ -22,8 +18,8 @@ import { soundEngine } from '../../services/soundEngine';
 import { MathRenderer } from '../common/MathRenderer';
 import { LeechHunterLab } from './LeechHunterLab';
 import { CurriculumKnowledgeMap } from './CurriculumKnowledgeMap';
-import { characterService } from '../../services/characterService';
-import { UserAvatarBadge } from '../character/UserAvatarBadge';
+import { grantReward } from '../../services/economy/rewardService';
+import { Badge, Button, Card, Kbd, ProgressBar } from '../ui/primitives';
 
 import { gamepadService, type GamepadAction } from '../../services/gamepadService';
 
@@ -38,7 +34,6 @@ interface RetentionDashboardProps {
 
 export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({ 
   stats, 
-  onBack, 
   onStartSession, 
   onOpenDeckStation,
   onOpenExam,
@@ -92,6 +87,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
     const currentCard = dueCards[activeReviewCardIndex];
     const { updatedCard } = FSRSService.schedule(currentCard, rating, targetRetention);
     StorageService.saveCard(updatedCard);
+    grantReward({ kind: 'review', rating }, { weekly: true, label: 'Flashcard review' });
 
     if (activeReviewCardIndex + 1 < dueCards.length) {
       setActiveReviewCardIndex(activeReviewCardIndex + 1);
@@ -196,121 +192,73 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
     });
   }, [stats.todayMinutes, todayTimestamp, activityHistory]);
 
-  // If reviewing due cards in active modal arena
+  // Reviewing due cards
   if (activeReviewCardIndex !== null && dueCards[activeReviewCardIndex]) {
     const card = dueCards[activeReviewCardIndex];
     const intervals = FSRSService.previewIntervals(card, targetRetention);
     const cardRetrievability = FSRSService.calculateRetrievability(card);
 
     return (
-      <div className="max-w-2xl mx-auto space-y-6 py-8 px-4 animate-fadeIn">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => setActiveReviewCardIndex(null)}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white font-medium transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Cancel Review</span>
-          </button>
-          <span className="text-xs text-emerald-400 font-bold px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/40 font-mono">
-            Due Card {activeReviewCardIndex + 1} of {dueCards.length}
+      <div className="mx-auto w-full max-w-2xl space-y-4 animate-fadeIn">
+        <div className="flex items-center justify-between gap-3">
+          <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => setActiveReviewCardIndex(null)} className="-ml-2">
+            Stop reviewing
+          </Button>
+          <span className="text-[13px] tabular-nums text-ink-subtle">
+            <span className="font-medium text-ink">{activeReviewCardIndex + 1}</span> / {dueCards.length}
           </span>
         </div>
+        <ProgressBar value={(activeReviewCardIndex / dueCards.length) * 100} label="Review progress" />
 
-        <div className="min-h-[340px] rounded-3xl glass-panel p-6 sm:p-8 flex flex-col justify-between">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between text-xs text-slate-400 uppercase tracking-wider font-bold font-display">
-              <div className="flex items-center gap-2">
-                <span>FSRS Scheduled Recall</span>
-                <span className="text-[11px] text-cyan-300 font-mono bg-cyan-950/60 border border-cyan-800/60 px-2 py-0.5 rounded-full">
-                  R: {cardRetrievability}%
-                </span>
-                <span className="text-[11px] text-indigo-300 font-mono bg-indigo-950/60 border border-indigo-800/60 px-2 py-0.5 rounded-full">
-                  S: {card.stability ? `${card.stability.toFixed(1)}d` : '1.0d'}
-                </span>
-              </div>
-              <span className="text-[11px] text-indigo-400 font-mono">Target: {Math.round(targetRetention * 100)}%</span>
-            </div>
-            <h3 className="text-lg sm:text-xl font-bold text-white leading-relaxed font-display">
-              <MathRenderer text={card.question} />
-            </h3>
-            {card.hint && !isAnswerRevealed && (
-              <p className="text-xs text-amber-300 bg-amber-950/30 p-3 rounded-2xl border border-amber-500/30">
-                💡 Hint: <MathRenderer text={card.hint} />
-              </p>
-            )}
+        <div className="flex min-h-[340px] flex-col rounded-3xl border border-line bg-surface-solid p-6 sm:p-8">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-subtle">
+            <span>Recall chance now <span className="font-medium tabular-nums text-ink">{cardRetrievability}%</span></span>
+            <span>Stable for about <span className="font-medium tabular-nums text-ink">{(card.stability || 1).toFixed(1)} days</span></span>
           </div>
+          <h3 className="mt-4 text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
+            <MathRenderer text={card.question} />
+          </h3>
+          {card.hint && !isAnswerRevealed && (
+            <p className="mt-4 rounded-2xl border border-gold/25 bg-gold-soft p-3.5 text-[14px] text-ink">
+              <span className="mr-1.5 text-xs font-semibold uppercase tracking-wide text-gold">Hint</span>
+              <MathRenderer text={card.hint} />
+            </p>
+          )}
 
           {isAnswerRevealed ? (
-            <div className="mt-6 pt-6 border-t border-white/[0.08] space-y-4 animate-fadeIn">
-              <div className="text-base font-semibold text-slate-100 font-sans">
-                <MathRenderer text={card.answer} />
+            <div className="mt-6 space-y-5 border-t border-line pt-6 animate-fadeIn">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-success">Answer</p>
+                <div className="mt-1.5 text-[17px] leading-relaxed text-ink">
+                  <MathRenderer text={card.answer} />
+                </div>
               </div>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
-                <button
-                  onClick={() => handleRateReviewCard('again')}
-                  className="p-3 rounded-2xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs font-bold hover:scale-[1.02] transition-transform text-left"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <span>Again</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-rose-900/50 border border-rose-700/50 text-[11px] font-mono">1</kbd>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {REVIEW_RATINGS.map(({ rating, label, key, className, labelClassName }) => (
+                  <button
+                    key={rating}
+                    type="button"
+                    onClick={() => handleRateReviewCard(rating)}
+                    className={`flex flex-col items-start gap-1 rounded-xl border border-line bg-surface p-3 text-left transition-colors cursor-pointer ${className}`}
+                  >
+                    <span className="flex w-full items-center justify-between">
+                      <span className={`text-[14px] font-semibold ${labelClassName}`}>{label}</span>
+                      <Kbd>{key}</Kbd>
                     </span>
-                    <RotateCw className="w-3 h-3 text-rose-400" />
-                  </div>
-                  <div className="text-xs text-rose-400 font-mono mt-0.5">{intervals.again}</div>
-                </button>
-                <button
-                  onClick={() => handleRateReviewCard('hard')}
-                  className="p-3 rounded-2xl bg-amber-950/40 border border-amber-800/60 text-amber-300 text-xs font-bold hover:scale-[1.02] transition-transform text-left"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <span>Hard</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-amber-900/50 border border-amber-700/50 text-[11px] font-mono">2</kbd>
-                    </span>
-                  </div>
-                  <div className="text-xs text-amber-400 font-mono mt-0.5">{intervals.hard}</div>
-                </button>
-                <button
-                  onClick={() => handleRateReviewCard('good')}
-                  className="p-3 rounded-2xl bg-blue-950/40 border border-blue-800/60 text-blue-300 text-xs font-bold hover:scale-[1.02] transition-transform text-left"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <span>Good</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-blue-900/50 border border-blue-700/50 text-[11px] font-mono">3</kbd>
-                    </span>
-                  </div>
-                  <div className="text-xs text-blue-400 font-mono mt-0.5">{intervals.good}</div>
-                </button>
-                <button
-                  onClick={() => handleRateReviewCard('easy')}
-                  className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300 text-xs font-bold hover:scale-[1.02] transition-transform text-left"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <span>Easy</span>
-                      <kbd className="px-1.5 py-0.5 rounded bg-emerald-900/50 border border-emerald-700/50 text-[11px] font-mono">4</kbd>
-                    </span>
-                  </div>
-                  <div className="text-xs text-emerald-400 font-mono mt-0.5">{intervals.easy}</div>
-                </button>
+                    <span className="text-[13px] tabular-nums text-ink-muted">Back in {intervals[rating]}</span>
+                  </button>
+                ))}
               </div>
             </div>
           ) : (
-            <div className="pt-6 flex justify-center">
-              <button
-                onClick={() => setIsAnswerRevealed(true)}
-                className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/25 transition-all hover:scale-105 flex items-center gap-2"
-              >
-                <span>Reveal Target Answer</span>
-                <kbd className="px-2 py-0.5 rounded bg-white/20 text-[11px] font-mono uppercase">Space</kbd>
-              </button>
+            <div className="mt-auto flex justify-center pt-8">
+              <Button variant="primary" size="lg" icon={Eye} onClick={() => setIsAnswerRevealed(true)} className="w-full sm:w-auto sm:px-8">
+                Show answer
+              </Button>
             </div>
           )}
         </div>
+        <p className="text-center text-xs text-ink-subtle">Space shows the answer, 1 to 4 rates it, Esc stops.</p>
       </div>
     );
   }
@@ -345,548 +293,374 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
     );
   }
 
+  const hasCards = allCards.length > 0;
+  const stageTotal = Math.max(1, allCards.length);
+  const stages = [
+    { label: 'New or shaky', detail: 'under a day', count: learningCards, bar: 'bg-danger' },
+    { label: 'Building', detail: '1 to 7 days', count: youngCards, bar: 'bg-gold' },
+    { label: 'Solid', detail: '1 to 4 weeks', count: matureCards, bar: 'bg-brand' },
+    { label: 'Long-term', detail: 'over a month', count: masteredCards, bar: 'bg-success' },
+  ];
+  const latestExam = examReports[0];
+  const latestMix = interleavingReports[0];
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8 py-8 px-2 sm:px-4 animate-fadeIn">
-      
-      {/* Top Header */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors font-semibold"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Ingestion Hub</span>
-        </button>
-        <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
-          FSRS Spaced Repetition Engine
-        </span>
-      </div>
+    <div className="mx-auto w-full max-w-6xl space-y-6 animate-fadeIn">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold tracking-tight text-ink sm:text-[30px]">Insights</h1>
+          <p className="mt-1 text-[15px] text-ink-muted">How well your memory is holding up, and what to do next.</p>
+        </div>
+        <div role="tablist" aria-label="Insights views" className="inline-flex rounded-xl border border-line bg-canvas p-1">
+          {([
+            { view: 'overview', label: 'Overview' },
+            { view: 'curriculum', label: 'Knowledge map' },
+            { view: 'leeches', label: `Hard cards${leeches.length ? ` (${leeches.length})` : ''}` },
+          ] as const).map(({ view, label }) => (
+            <button
+              key={view}
+              type="button"
+              role="tab"
+              aria-selected={activeView === view}
+              onClick={() => setActiveView(view)}
+              className={`inline-flex h-8 items-center rounded-lg px-3 text-[13px] font-medium transition-colors cursor-pointer ${
+                activeView === view ? 'bg-surface-hover text-ink shadow-sm' : 'text-ink-subtle hover:text-ink'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </header>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight font-display">
-            Retention & Memory Dynamics
+      {/* Review queue */}
+      <section className="relative flex flex-col gap-5 overflow-hidden rounded-3xl border border-line bg-surface p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand/15 blur-3xl" aria-hidden="true" />
+        <div className="relative min-w-0">
+          <p className="text-[13px] font-medium text-brand-text">Review queue</p>
+          <h2 className="mt-1.5 text-[24px] font-semibold tracking-tight text-ink">
+            {dueCards.length > 0 ? `${dueCards.length} ${dueCards.length === 1 ? 'card is' : 'cards are'} due` : 'Nothing is due'}
           </h2>
-          <p className="text-xs sm:text-sm text-slate-400 font-sans">
-            Quantified synaptic stability tracking powered by the Free Spaced Repetition Scheduler.
+          <p className="mt-1.5 max-w-lg text-[14px] leading-relaxed text-ink-muted">
+            {dueCards.length > 0
+              ? 'Reviewing cards when they come due is what keeps them in long-term memory. Every review earns the same XP.'
+              : hasCards
+                ? 'You are up to date. Cards come back here as they near the point of being forgotten.'
+                : 'Add a deck and start reviewing, and your schedule will build up here.'}
           </p>
         </div>
-
-        {/* View Switcher Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-slate-950/80 border border-white/[0.08] shrink-0">
-          <button
-            onClick={() => setActiveView('overview')}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>FSRS Stability</span>
-          </button>
-
-          <button
-            onClick={() => setActiveView('curriculum')}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-slate-400 hover:text-white"
-          >
-            <BrainCircuit className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Knowledge Tree</span>
-          </button>
-
-          <button
-            onClick={() => setActiveView('leeches')}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-slate-400 hover:text-white"
-          >
-            <Bug className="w-3.5 h-3.5 text-purple-400" />
-            <span>Leeches ({leeches.length})</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Metrics Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-5 rounded-3xl glass-panel space-y-1">
-          <Flame className="w-5 h-5 text-amber-400 mb-1" />
-          <div className="text-2xl font-black text-white font-mono">{stats.currentStreak} Days</div>
-          <div className="text-xs text-slate-400 font-medium">Daily Streak</div>
-        </div>
-
-        <div className="p-5 rounded-3xl glass-panel space-y-1">
-          <Clock className="w-5 h-5 text-indigo-400 mb-1" />
-          <div className="text-2xl font-black text-white font-mono">{stats.totalStudyMinutes}m</div>
-          <div className="text-xs text-slate-400 font-medium">Total Focus Time</div>
-        </div>
-
-        <div className="p-5 rounded-3xl glass-panel space-y-1">
-          <Award className="w-5 h-5 text-purple-400 mb-1" />
-          <div className="text-2xl font-black text-white font-mono">{stats.conceptsMastered}</div>
-          <div className="text-xs text-slate-400 font-medium">Concepts Mastered</div>
-        </div>
-
-        <div className="p-5 rounded-3xl glass-panel space-y-1">
-          <Layers className="w-5 h-5 text-emerald-400 mb-1" />
-          <div className="text-2xl font-black text-white font-mono">{dueCards.length}</div>
-          <div className="text-xs text-slate-400 font-medium">Cards Due Today</div>
-        </div>
-      </div>
-
-      {/* Daily Review Queue Action Banner with Character Coach */}
-      <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-slate-900/90 via-indigo-950/40 to-slate-900/90 border border-indigo-500/30 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-5">
-        <div className="flex items-center gap-3.5 text-center sm:text-left">
-          <div className="relative w-12 h-12 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 shrink-0 shadow-lg hidden sm:flex items-center justify-center">
-            <UserAvatarBadge size="sm" showBorder={false} />
-            {dueCards.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-slate-950 animate-ping" />
-            )}
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 justify-center sm:justify-start">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <h3 className="text-base font-bold text-white font-display">Daily Memory Reinforcement Queue</h3>
-            </div>
-            <p className="text-xs text-slate-300">
-              <span className="text-cyan-300 font-semibold font-display">{characterService.getCharacter().name || 'Study Coach'}:</span> {dueCards.length > 0
-                ? `"You have ${dueCards.length} flashcard(s) due today. Clearing them today doubles their biological stability!"`
-                : '"All memory traces consolidated! Your neocortex is in peak shape today."'}
-            </p>
-          </div>
-        </div>
-
         {dueCards.length > 0 && (
-          <button
-            onClick={handleStartDueReview}
-            className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/30 transition-all hover:scale-105 shrink-0 cursor-pointer"
-          >
-            <Play className="w-3.5 h-3.5 fill-white" />
-            <span>Review {dueCards.length} Due Cards Now</span>
-          </button>
+          <Button variant="primary" size="lg" icon={Play} onClick={handleStartDueReview} className="relative w-full shrink-0 sm:w-auto">
+            Review {dueCards.length} {dueCards.length === 1 ? 'card' : 'cards'}
+          </Button>
         )}
+      </section>
+
+      {/* At a glance */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <InsightStat label="Streak" value={stats.currentStreak.toLocaleString()} unit={stats.currentStreak === 1 ? 'day' : 'days'} />
+        <InsightStat label="Study time" value={formatMinutes(stats.totalStudyMinutes)} />
+        <InsightStat label="Cards" value={allCards.length.toLocaleString()} unit={`in ${sessions.length} ${sessions.length === 1 ? 'deck' : 'decks'}`} />
+        <InsightStat label="Recall right now" value={hasCards ? `${meanRetrievability}%` : '—'} unit={hasCards ? 'average' : 'no cards yet'} />
       </div>
 
-      {/* Mock Exam Arena Card */}
-      {onOpenExam && (
-        <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-amber-950/40 via-slate-900/90 to-purple-950/40 border border-amber-500/30 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-5">
-          <div className="space-y-1.5 text-center sm:text-left">
-            <div className="flex items-center gap-2 justify-center sm:justify-start">
-              <Award className="w-4 h-4 text-amber-400" />
-              <h3 className="text-base font-bold text-white font-display">
-                Mock Exam Arena & Diagnostic Matrix
-              </h3>
-              <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-mono uppercase font-bold">
-                Metacognitive
-              </span>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        {/* Memory health */}
+        <Card className="space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[15px] font-semibold text-ink">Memory health</h2>
+              <p className="mt-0.5 text-[13px] text-ink-subtle">How long each card is likely to stay with you.</p>
             </div>
-            <p className="text-xs text-slate-300 max-w-xl">
-              Simulate high-stakes exams with Confidence-Weighted scoring (Bushman/Bruno formula). Separate true mastery from dangerous blindspots.
-            </p>
-            {examReports.length > 0 && (
-              <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-400 font-mono">
-                <span>Latest Exam: <strong className="text-amber-300">{examReports[0].deckTitle}</strong></span>
-                <span>•</span>
-                <span>Accuracy: <strong className="text-emerald-400">{examReports[0].rawAccuracyPercent}%</strong></span>
-                <span>•</span>
-                <span>Calibration: <strong className="text-indigo-300">{examReports[0].calibrationPercent}%</strong></span>
-                <span>•</span>
-                <span>Blindspots: <strong className="text-rose-400">{examReports[0].blindspotCount}</strong></span>
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={onOpenExam}
-            className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center gap-2 shadow-xl shadow-amber-500/20 transition-all hover:scale-105 shrink-0"
-          >
-            <Award className="w-4 h-4 text-slate-950" />
-            <span>Launch Mock Exam</span>
-          </button>
-        </div>
-      )}
-
-      {/* Macro-Curriculum Knowledge Tree Card Banner */}
-      <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-indigo-950/40 via-slate-900/90 to-purple-950/40 border border-indigo-500/30 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-5">
-        <div className="space-y-1.5 text-center sm:text-left">
-          <div className="flex items-center gap-2 justify-center sm:justify-start">
-            <BrainCircuit className="w-4 h-4 text-indigo-400" />
-            <h3 className="text-base font-bold text-white font-display">
-              Macro-Curriculum Knowledge Tree
-            </h3>
-            <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-mono uppercase font-bold">
-              Knowledge Space Theory
-            </span>
-          </div>
-          <p className="text-xs text-slate-300 max-w-xl">
-            Inspect the cognitive prerequisite sequence across your entire academic library. Track synaptic consolidation node-by-node and identify your active Learning Frontier (ZPD).
-          </p>
-          <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-400 font-mono">
-            <span>Syllabi: <strong className="text-slate-200">{sessions.length}</strong></span>
-            <span>•</span>
-            <span>Mastery Metric: <strong className="text-emerald-400">Prerequisite Gating</strong></span>
-            <span>•</span>
-            <span>Framework: <strong className="text-indigo-300">Doignon &amp; Falmagne</strong></span>
-          </div>
-        </div>
-
-        <button
-          onClick={() => setActiveView('curriculum')}
-          className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs flex items-center gap-2 shadow-xl shadow-indigo-600/30 transition-all hover:scale-105 shrink-0"
-        >
-          <BrainCircuit className="w-4 h-4 text-white" />
-          <span>Explore Knowledge Tree</span>
-        </button>
-      </div>
-
-      {/* FSRS Leech Hunter & Mnemonic Rewiring Lab Card */}
-      <div className={`p-6 sm:p-7 rounded-3xl border shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-5 transition-all ${
-        leeches.length > 0
-          ? 'bg-gradient-to-r from-rose-950/40 via-slate-900/90 to-purple-950/40 border-rose-500/40 shadow-rose-950/20'
-          : 'bg-gradient-to-r from-purple-950/30 via-slate-900/90 to-slate-900/90 border-purple-500/20'
-      }`}>
-        <div className="space-y-1.5 text-center sm:text-left">
-          <div className="flex items-center gap-2 justify-center sm:justify-start">
-            <Bug className={`w-4 h-4 ${leeches.length > 0 ? 'text-rose-400' : 'text-purple-400'}`} />
-            <h3 className="text-base font-bold text-white font-display">
-              FSRS Leech Hunter & Mnemonic Rewiring Lab
-            </h3>
-            <span className={`px-2 py-0.5 rounded-md border text-[11px] font-mono uppercase font-bold ${
-              leeches.length > 0 
-                ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' 
-                : 'bg-purple-500/20 text-purple-300 border-purple-500/30'
-            }`}>
-              {leeches.length > 0 ? `${leeches.length} Leech Alert` : 'Zero Bottlenecks'}
-            </span>
-          </div>
-          <p className="text-xs text-slate-300 max-w-xl">
-            {leeches.length > 0
-              ? `Detected ${leeches.length} cards with recurring memory lapses. Perform algorithmic autopsies and rewire them with sensory mnemonics or atomic cloze splits.`
-              : 'Algorithmic diagnosis of chronic card failure (FSRS Leech Theory). Automatically identifies interference, cognitive overload, or missing retrieval anchors.'}
-          </p>
-          <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-400 font-mono">
-            <span>Threshold: <strong className="text-slate-200">≥3 Lapses / High Difficulty</strong></span>
-            <span>•</span>
-            <span>Remedies: <strong className="text-purple-300">Sensory Story, Phonetic Pegs, Atomic Cloze</strong></span>
-          </div>
-        </div>
-
-        <button
-          onClick={() => setActiveView('leeches')}
-          className={`px-6 py-3.5 rounded-2xl font-black text-xs flex items-center gap-2 shadow-xl transition-all hover:scale-105 shrink-0 ${
-            leeches.length > 0
-              ? 'bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white shadow-rose-600/30'
-              : 'bg-slate-900 hover:bg-slate-800 text-purple-300 border border-purple-500/30 shadow-purple-900/20'
-          }`}
-        >
-          {leeches.length > 0 ? (
-            <AlertTriangle className="w-4 h-4 text-white" />
-          ) : (
-            <Bug className="w-4 h-4 text-purple-400" />
-          )}
-          <span>{leeches.length > 0 ? `Cure ${leeches.length} Leeches Now` : 'Open Leech Hunter Lab'}</span>
-        </button>
-      </div>
-
-      {/* Cross-Deck Interleaving Arena Banner */}
-      {onOpenInterleaving && (
-        <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-purple-950/40 via-slate-900/90 to-sky-950/40 border border-purple-500/30 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-5">
-          <div className="space-y-1.5 text-center sm:text-left">
-            <div className="flex items-center gap-2 justify-center sm:justify-start">
-              <Shuffle className="w-4 h-4 text-purple-400" />
-              <h3 className="text-base font-bold text-white font-display">
-                Cross-Deck Interleaving Arena
-              </h3>
-              <span className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[11px] font-mono uppercase font-bold">
-                Inductive Transfer
-              </span>
+            <div role="radiogroup" aria-label="Target recall" className="inline-flex rounded-lg border border-line bg-canvas p-0.5">
+              {[
+                { rate: 0.85, label: '85%', title: 'Relaxed: fewer reviews' },
+                { rate: 0.9, label: '90%', title: 'Standard' },
+                { rate: 0.95, label: '95%', title: 'Exam mode: more reviews' },
+              ].map(item => {
+                const selected = Math.abs(targetRetention - item.rate) < 0.01;
+                return (
+                  <button
+                    key={item.rate}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    title={item.title}
+                    onClick={() => {
+                      setTargetRetention(item.rate);
+                      StorageService.setTargetRetention(item.rate);
+                    }}
+                    className={`h-7 rounded-md px-2.5 text-xs font-medium tabular-nums transition-colors cursor-pointer ${
+                      selected ? 'bg-surface-hover text-ink shadow-sm' : 'text-ink-subtle hover:text-ink'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
-            <p className="text-xs text-slate-300 max-w-xl">
-              Break blocked study habits. Intermix flashcards dynamically across unrelated academic disciplines to train cognitive discrimination (Kornell &amp; Bjork, 2008).
-            </p>
-            {interleavingReports.length > 0 && (
-              <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-400 font-mono">
-                <span>Latest Agility: <strong className="text-emerald-400">{interleavingReports[0].agilityIndex}/100</strong></span>
-                <span>•</span>
-                <span>Context Shifts: <strong className="text-purple-300">{interleavingReports[0].contextShiftsCount}</strong></span>
-                <span>•</span>
-                <span>Switch Accuracy: <strong className="text-amber-300">{interleavingReports[0].switchAccuracyPercent}%</strong></span>
-              </div>
-            )}
           </div>
 
-          <button
-            onClick={onOpenInterleaving}
-            className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-xs flex items-center gap-2 shadow-xl shadow-purple-600/25 transition-all hover:scale-105 shrink-0"
-          >
-            <Shuffle className="w-4 h-4 text-white" />
-            <span>Enter Interleaving Arena</span>
-          </button>
-        </div>
-      )}
-
-      {/* 35-Day Consistency Heatmap Matrix */}
-      <div className="p-6 rounded-3xl glass-panel space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-white uppercase tracking-wider font-display">
-            <Calendar className="w-4 h-4 text-indigo-400" />
-            <span>35-Day Cognitive Study Consistency Matrix</span>
-          </div>
-          <span className="text-[11px] text-slate-400 font-mono">Streak: {stats.currentStreak}d</span>
-        </div>
-
-        {/* Heatmap Grid */}
-        <div className="pt-2">
-          <div className="grid grid-cols-7 sm:grid-cols-7 gap-2">
-            {heatmapDays.map((d, idx) => {
-              const bgColors = [
-                'bg-slate-950/80 border-white/[0.05]',
-                'bg-indigo-950/60 border-indigo-800/40',
-                'bg-indigo-700/60 border-indigo-500/50',
-                'bg-indigo-500 border-indigo-400 shadow-md shadow-indigo-500/20'
-              ];
-              return (
-                <div
-                  key={idx}
-                  title={`${d.date}: ${d.hasStudy ? 'Active Study Session' : 'Rest day'}`}
-                  className={`h-9 rounded-xl border flex flex-col items-center justify-center cursor-help transition-all ${bgColors[d.intensity]}`}
-                >
-                  <span className="text-[11px] text-slate-300 font-mono">{d.date.split(' ')[1]}</span>
+          {hasCards ? (
+            <>
+              <div className="space-y-3">
+                <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-surface-hover" aria-hidden="true">
+                  {stages.map(stage =>
+                    stage.count > 0 ? (
+                      <div key={stage.label} className={stage.bar} style={{ width: `${(stage.count / stageTotal) * 100}%` }} />
+                    ) : null,
+                  )}
                 </div>
-              );
-            })}
-          </div>
-          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 font-mono">
-            <span>35 days ago</span>
-            <div className="flex items-center gap-1.5">
-              <span>Less</span>
-              <span className="w-2.5 h-2.5 rounded bg-slate-950 border border-white/[0.08]" />
-              <span className="w-2.5 h-2.5 rounded bg-indigo-950 border border-indigo-800" />
-              <span className="w-2.5 h-2.5 rounded bg-indigo-700" />
-              <span className="w-2.5 h-2.5 rounded bg-indigo-500" />
-              <span>More</span>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-4">
+                  {stages.map(stage => (
+                    <div key={stage.label}>
+                      <dt className="flex items-center gap-1.5 text-xs text-ink-subtle">
+                        <span className={`h-2 w-2 rounded-full ${stage.bar}`} aria-hidden="true" />
+                        {stage.label}
+                      </dt>
+                      <dd className="mt-0.5 text-[17px] font-semibold tabular-nums text-ink">
+                        {stage.count}
+                        <span className="ml-1 text-xs font-normal text-ink-subtle">{stage.detail}</span>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+
+              <div className="space-y-2 border-t border-line pt-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]">
+                  <span className="text-ink-muted">If you stopped reviewing today</span>
+                  <span className="text-ink-subtle">
+                    Next review at {Math.round(targetRetention * 100)}%: about{' '}
+                    <span className="font-medium tabular-nums text-ink">{FSRSService.calculateInterval(avgStability, targetRetention)} days</span>
+                  </span>
+                </div>
+                <ForgettingCurve points={decayPoints} targetRetention={targetRetention} />
+                <p className="text-xs text-ink-subtle">
+                  Average card stability is {avgStability} days. Each successful review makes it longer.
+                </p>
+              </div>
+            </>
+          ) : (
+            <p className="rounded-2xl border border-dashed border-line-strong px-4 py-8 text-center text-[13px] text-ink-subtle">
+              Your memory health appears once you have reviewed some cards.
+            </p>
+          )}
+        </Card>
+
+        {/* Activity */}
+        <Card className="space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[15px] font-semibold text-ink">Last five weeks</h2>
+              <p className="mt-0.5 text-[13px] text-ink-subtle">Days you studied, darker for longer sessions.</p>
             </div>
+            <Badge tone="gold">
+              <Flame className="h-3 w-3 fill-current" aria-hidden="true" />
+              {stats.currentStreak} {stats.currentStreak === 1 ? 'day' : 'days'}
+            </Badge>
+          </div>
+          <div className="grid grid-cols-7 gap-1.5">
+            {heatmapDays.map((d, idx) => (
+              <div
+                key={idx}
+                title={`${d.date}: ${d.hasStudy ? 'studied' : 'no study'}`}
+                className={`flex h-9 items-center justify-center rounded-lg text-[11px] tabular-nums ${HEAT_CELLS[d.intensity]}`}
+              >
+                {d.date.split(' ')[1]}
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between text-xs text-ink-subtle">
+            <span>5 weeks ago</span>
+            <span className="flex items-center gap-1.5">
+              Less
+              {HEAT_CELLS.map((cls, i) => (
+                <span key={i} className={`h-3 w-3 rounded ${cls}`} aria-hidden="true" />
+              ))}
+              More
+            </span>
             <span>Today</span>
           </div>
-        </div>
+        </Card>
       </div>
 
-      {/* Interactive FSRS Synaptic Forgetting Curve & Target Retention Hub */}
-      <div className="p-6 sm:p-7 rounded-3xl glass-panel space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-cyan-400" />
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider font-display">
-                FSRS Power-Law Synaptic Forgetting Curve R(t, S)
-              </h3>
-              <span className="px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[11px] font-mono font-bold uppercase">
-                Mathematical Model
-              </span>
-            </div>
-            <p className="text-xs text-slate-400">
-              Live probability of recall modeled over 30 days based on your average synaptic stability ({avgStability}d).
-            </p>
-          </div>
-
-          {/* Quick Target Retention Switcher */}
-          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-slate-950/80 border border-white/[0.08] shrink-0">
-            {[
-              { rate: 0.85, label: '85% Casual' },
-              { rate: 0.90, label: '90% Standard' },
-              { rate: 0.95, label: '95% Exam' },
-            ].map(item => (
-              <button
-                key={item.rate}
-                onClick={() => {
-                  setTargetRetention(item.rate);
-                  StorageService.setTargetRetention(item.rate);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  Math.abs(targetRetention - item.rate) < 0.01
-                    ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+      {/* Tools */}
+      <section aria-labelledby="insight-tools" className="space-y-3">
+        <h2 id="insight-tools" className="text-[15px] font-semibold text-ink">Go deeper</h2>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <ToolCard
+            icon={Bug}
+            title="Hard cards"
+            description="Cards you keep forgetting, with fixes such as mnemonics or splitting them up."
+            meta={leeches.length > 0 ? `${leeches.length} need attention` : 'None right now'}
+            tone={leeches.length > 0 ? 'danger' : 'neutral'}
+            onClick={() => setActiveView('leeches')}
+          />
+          <ToolCard
+            icon={BrainCircuit}
+            title="Knowledge map"
+            description="How your topics build on each other, and what to learn next."
+            meta={`${sessions.length} ${sessions.length === 1 ? 'deck' : 'decks'}`}
+            onClick={() => setActiveView('curriculum')}
+          />
+          {onOpenExam && (
+            <ToolCard
+              icon={Award}
+              title="Mock exam"
+              description="Timed questions scored on accuracy and on how well your confidence matched."
+              meta={latestExam ? `Last: ${latestExam.rawAccuracyPercent}% correct, ${latestExam.calibrationPercent}% calibrated` : 'Not taken yet'}
+              onClick={onOpenExam}
+            />
+          )}
+          {onOpenInterleaving && (
+            <ToolCard
+              icon={Shuffle}
+              title="Mix decks"
+              description="Practise switching between subjects, which helps you tell similar ideas apart."
+              meta={latestMix ? `Last: ${latestMix.switchAccuracyPercent}% on switches` : 'Not tried yet'}
+              onClick={onOpenInterleaving}
+            />
+          )}
         </div>
+      </section>
 
-        {/* Real-Time Synaptic Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-white/[0.06] space-y-0.5 text-center">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Mean Retrievability</span>
-            <div className="text-lg font-black text-cyan-300 font-mono">{meanRetrievability}%</div>
-            <span className="text-[11px] text-slate-500">Across {allCards.length} cards</span>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-white/[0.06] space-y-0.5 text-center">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Average Stability</span>
-            <div className="text-lg font-black text-indigo-300 font-mono">{avgStability} Days</div>
-            <span className="text-[11px] text-slate-500">Synaptic half-life (S)</span>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-white/[0.06] space-y-0.5 text-center">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Target Threshold</span>
-            <div className="text-lg font-black text-emerald-300 font-mono">{Math.round(targetRetention * 100)}%</div>
-            <span className="text-[11px] text-slate-500">R_target boundary</span>
-          </div>
-
-          <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-white/[0.06] space-y-0.5 text-center">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Next Spaced Interval</span>
-            <div className="text-lg font-black text-purple-300 font-mono">
-              {FSRSService.calculateInterval(avgStability, targetRetention)} Days
-            </div>
-            <span className="text-[11px] text-slate-500">At current target</span>
-          </div>
-        </div>
-
-        {/* Visual SVG Forgetting Curve Chart */}
-        <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] space-y-2">
-          <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-            <span>R(t) = (1 + 19/81 • t / {avgStability})^-0.5</span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-0.5 bg-cyan-400 inline-block" /> FSRS Curve
-              <span className="w-2.5 h-0.5 bg-emerald-400 border-b border-dashed inline-block ml-2" /> Target {Math.round(targetRetention * 100)}%
-            </span>
-          </div>
-
-          <div className="relative h-44 w-full pt-2">
-            <svg className="w-full h-full overflow-visible" viewBox="0 0 600 160" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="decayGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.0" />
-                </linearGradient>
-              </defs>
-
-              {/* Grid Lines */}
-              {[100, 90, 75, 50].map((level) => {
-                const y = 160 - ((level - 40) / 60) * 150;
-                return (
-                  <g key={level}>
-                    <line 
-                      x1="0" 
-                      y1={y} 
-                      x2="600" 
-                      y2={y} 
-                      stroke={level === Math.round(targetRetention * 100) ? "#10b981" : "rgba(255,255,255,0.08)"} 
-                      strokeDasharray={level === Math.round(targetRetention * 100) ? "4,4" : undefined} 
-                      strokeWidth={level === Math.round(targetRetention * 100) ? 1.5 : 1} 
-                    />
-                    <text x="8" y={y - 4} fill="rgba(148,163,184,0.6)" fontSize="9" fontFamily="monospace">{level}%</text>
-                  </g>
-                );
-              })}
-
-              {/* Day Markers */}
-              {[0, 7, 14, 21, 30].map(day => {
-                const x = (day / 30) * 580 + 10;
-                return (
-                  <g key={day}>
-                    <line x1={x} y1="0" x2={x} y2="160" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-                    <text x={x - 8} y="156" fill="rgba(148,163,184,0.5)" fontSize="9" fontFamily="monospace">Day {day}</text>
-                  </g>
-                );
-              })}
-
-              {/* Decay Area & Curve Line */}
-              {(() => {
-                const points = decayPoints.map(p => {
-                  const x = (p.day / 30) * 580 + 10;
-                  const y = 160 - ((Math.max(40, p.retrievability) - 40) / 60) * 150;
-                  return `${x},${y}`;
-                });
-                const pathD = `M ${points.join(' L ')}`;
-                const areaD = `M 10,160 L ${points.join(' L ')} L 590,160 Z`;
-
-                return (
-                  <>
-                    <path d={areaD} fill="url(#decayGradient)" />
-                    <path d={pathD} fill="none" stroke="#22d3ee" strokeWidth="2.5" strokeLinecap="round" />
-                  </>
-                );
-              })()}
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      {/* Memory Stability Pipeline Breakdown */}
-      <div className="p-6 rounded-3xl glass-panel space-y-4">
-        <div className="flex items-center gap-2 text-xs font-bold text-white uppercase tracking-wider font-display">
-          <BarChart3 className="w-4 h-4 text-purple-400" />
-          <span>Card Memory Stability Pipeline (FSRS Stages)</span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/[0.06] text-center">
-            <span className="text-[11px] font-bold text-rose-400 uppercase tracking-wider">Learning</span>
-            <div className="text-xl font-black text-white font-mono mt-1">{learningCards}</div>
-            <span className="text-[11px] text-slate-500">&lt; 1 day stability</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/[0.06] text-center">
-            <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">Young</span>
-            <div className="text-xl font-black text-white font-mono mt-1">{youngCards}</div>
-            <span className="text-[11px] text-slate-500">1 - 7 days stability</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/[0.06] text-center">
-            <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">Mature</span>
-            <div className="text-xl font-black text-white font-mono mt-1">{matureCards}</div>
-            <span className="text-[11px] text-slate-500">7 - 30 days stability</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/[0.06] text-center">
-            <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Mastered</span>
-            <div className="text-xl font-black text-white font-mono mt-1">{masteredCards}</div>
-            <span className="text-[11px] text-slate-500">&gt; 30 days stability</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Sessions Library */}
-      <div className="space-y-4">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300 font-display">Recent Study Sessions</h3>
+      {/* Decks */}
+      <section aria-labelledby="insight-decks" className="space-y-3">
+        <h2 id="insight-decks" className="text-[15px] font-semibold text-ink">Your decks</h2>
         {sessions.length === 0 ? (
-          <div className="p-8 text-center text-xs text-slate-500 glass-panel rounded-3xl">
-            No study sessions recorded yet. Launch your first Study Pilot to build your retention portfolio!
-          </div>
+          <p className="rounded-2xl border border-dashed border-line-strong px-4 py-8 text-center text-[13px] text-ink-subtle">
+            No decks yet.
+          </p>
         ) : (
-          <div className="space-y-2.5">
-            {sessions.map((sess) => (
-              <div
-                key={sess.id}
-                onClick={() => {
-                  if (onOpenDeckStation) {
-                    onOpenDeckStation(sess);
-                  } else {
-                    onStartSession(sess);
-                  }
-                }}
-                className="p-4 sm:p-5 rounded-2xl glass-panel-interactive flex items-center justify-between cursor-pointer group"
-              >
-                <div>
-                  <div className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors font-display">{sess.title}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
-                    {sess.concepts.length} concepts • {Math.max(1, Math.round(sess.elapsedSeconds / 60))} minutes focus time
-                  </div>
-                </div>
+          <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
+            {sessions.map(sess => (
+              <li key={sess.id}>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onOpenDeckStation) {
-                      onOpenDeckStation(sess);
-                    } else {
-                      onStartSession(sess);
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-indigo-600 text-xs text-indigo-300 hover:text-white font-bold transition-all border border-white/[0.08]"
+                  type="button"
+                  onClick={() => (onOpenDeckStation ? onOpenDeckStation(sess) : onStartSession(sess))}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-hover cursor-pointer"
                 >
-                  Deck Station
+                  <span className="min-w-0">
+                    <span className="block truncate text-[14px] font-medium text-ink">{sess.title}</span>
+                    <span className="block text-[13px] text-ink-subtle">
+                      {sess.concepts.length} concepts · {formatMinutes(Math.max(1, Math.round(sess.elapsedSeconds / 60)))} studied
+                    </span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden="true" />
                 </button>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
-
+      </section>
     </div>
+  );
+};
+
+const HEAT_CELLS = [
+  'bg-surface-hover text-ink-subtle',
+  'bg-brand/25 text-ink-muted',
+  'bg-brand/55 text-ink',
+  'bg-brand text-brand-ink',
+];
+
+const REVIEW_RATINGS: { rating: 'again' | 'hard' | 'good' | 'easy'; label: string; key: string; className: string; labelClassName: string }[] = [
+  { rating: 'again', label: 'Again', key: '1', className: 'hover:border-danger/50 hover:bg-danger-soft', labelClassName: 'text-danger' },
+  { rating: 'hard', label: 'Hard', key: '2', className: 'hover:border-gold/50 hover:bg-gold-soft', labelClassName: 'text-gold' },
+  { rating: 'good', label: 'Good', key: '3', className: 'hover:border-brand/50 hover:bg-brand-soft', labelClassName: 'text-brand-text' },
+  { rating: 'easy', label: 'Easy', key: '4', className: 'hover:border-success/50 hover:bg-success-soft', labelClassName: 'text-success' },
+];
+
+const formatMinutes = (minutes: number): string => {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+};
+
+const InsightStat: React.FC<{ label: string; value: string; unit?: string }> = ({ label, value, unit }) => (
+  <div className="rounded-2xl border border-line bg-surface p-4">
+    <p className="text-[13px] text-ink-subtle">{label}</p>
+    <p className="mt-2 flex min-w-0 items-baseline gap-1.5">
+      <span className="text-[24px] font-semibold leading-none tracking-tight tabular-nums text-ink">{value}</span>
+      {unit && <span className="truncate text-[13px] text-ink-subtle">{unit}</span>}
+    </p>
+  </div>
+);
+
+const ToolCard: React.FC<{
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  meta: string;
+  tone?: 'neutral' | 'danger';
+  onClick: () => void;
+}> = ({ icon: Icon, title, description, meta, tone = 'neutral', onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="group flex flex-col items-start gap-3 rounded-2xl border border-line bg-surface p-4 text-left transition-colors hover:border-line-strong hover:bg-surface-hover cursor-pointer"
+  >
+    <span
+      className={`flex h-9 w-9 items-center justify-center rounded-xl ${tone === 'danger' ? 'bg-danger-soft text-danger' : 'bg-brand-soft text-brand-text'}`}
+    >
+      <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+    </span>
+    <span>
+      <span className="block text-[15px] font-medium text-ink">{title}</span>
+      <span className="mt-1 block text-[13px] leading-relaxed text-ink-subtle">{description}</span>
+    </span>
+    <span className={`mt-auto flex w-full items-center justify-between text-[13px] font-medium ${tone === 'danger' ? 'text-danger' : 'text-ink-muted group-hover:text-ink'}`}>
+      {meta}
+      <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+    </span>
+  </button>
+);
+
+/** Recall probability over 30 days for an average card, with the target line. */
+const ForgettingCurve: React.FC<{ points: { day: number; retrievability: number }[]; targetRetention: number }> = ({
+  points,
+  targetRetention,
+}) => {
+  const width = 600;
+  const height = 150;
+  const minR = 40;
+  const toX = (day: number) => (day / 30) * (width - 20) + 10;
+  const toY = (r: number) => height - ((Math.max(minR, r) - minR) / (100 - minR)) * (height - 10);
+  const line = points.map(p => `${toX(p.day)},${toY(p.retrievability)}`).join(' L ');
+  const targetY = toY(targetRetention * 100);
+  return (
+    <svg viewBox={`0 0 ${width} ${height + 18}`} className="h-40 w-full overflow-visible" role="img" aria-label="Forgetting curve for an average card over 30 days">
+      <defs>
+        <linearGradient id="insight-curve-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="var(--brand)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[100, 75, 50].map(level => (
+        <g key={level}>
+          <line x1="0" x2={width} y1={toY(level)} y2={toY(level)} stroke="var(--line)" strokeWidth="1" />
+          <text x="4" y={toY(level) - 4} fill="var(--ink-subtle)" fontSize="10">
+            {level}%
+          </text>
+        </g>
+      ))}
+      <line x1="0" x2={width} y1={targetY} y2={targetY} stroke="var(--success)" strokeWidth="1.5" strokeDasharray="5 5" />
+      <text x={width - 4} y={targetY - 5} fill="var(--success)" fontSize="10" textAnchor="end">
+        Target {Math.round(targetRetention * 100)}%
+      </text>
+      {points.length > 1 && (
+        <>
+          <path d={`M ${toX(0)},${height} L ${line} L ${toX(30)},${height} Z`} fill="url(#insight-curve-fill)" />
+          <path d={`M ${line}`} fill="none" stroke="var(--brand)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      )}
+      {[0, 7, 14, 21, 30].map(day => (
+        <text key={day} x={toX(day)} y={height + 14} fill="var(--ink-subtle)" fontSize="10" textAnchor="middle">
+          {day === 0 ? 'Today' : `Day ${day}`}
+        </text>
+      ))}
+    </svg>
   );
 };
