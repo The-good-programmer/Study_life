@@ -45,6 +45,7 @@ interface SidebarProps {
   savedDecksCount: number;
   starredCardsCount: number;
   dueCardsCount: number;
+  /** @deprecated No longer shown. */
   curatedCount?: number;
   isOnline?: boolean;
   isOpenMobile?: boolean;
@@ -122,7 +123,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   savedDecksCount,
   starredCardsCount,
   dueCardsCount,
-  curatedCount = 10,
   isOnline = true,
   isOpenMobile = false,
   onCloseMobile,
@@ -319,7 +319,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="space-y-0.5">
           <NavItem icon={Award} label="Mock exam" collapsed={collapsed} active={activeView === 'exam'} onClick={go(() => onNavigate('exam'))} />
           <NavItem icon={Shuffle} label="Mix decks" collapsed={collapsed} active={activeView === 'interleave'} onClick={go(() => onNavigate('interleave'))} />
-          <NavItem icon={Compass} label="Explore decks" collapsed={collapsed} onClick={go(onOpenStarterCatalog)} trailing={<CountText value={curatedCount} />} />
+          <NavItem icon={Compass} label="Explore decks" collapsed={collapsed} onClick={go(onOpenStarterCatalog)} />
         </div>
 
         <GroupLabel collapsed={collapsed}>Life</GroupLabel>

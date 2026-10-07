@@ -29,18 +29,14 @@ import {
   Edit3,
   Eye,
   Star,
-  Brain,
-  Flame,
-  SlidersHorizontal,
   ChevronRight,
   Globe,
-  Compass,
   GraduationCap,
   ChevronDown,
-  Folder,
   FolderPlus,
   FolderInput
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { StudySession, StarterDeckMetadata, RetrievalCard, DepthTier, SubjectFolder } from '../../types';
 import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
 import { PDFService } from '../../services/pdfService';
@@ -48,12 +44,12 @@ import type { ExtractedPDF } from '../../services/pdfService';
 import { StorageService } from '../../services/storageService';
 import { ExportService } from '../../services/exportService';
 import { soundEngine } from '../../services/soundEngine';
-import { lifeSimService } from '../../services/lifeSimService';
-import { CharacterCompanion } from '../character/CharacterCompanion';
 import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
 import { DepthEstimationService, SUPPORTED_LANGUAGES } from '../../services/depthEstimationService';
 import { EducationProfileModal } from './EducationProfileModal';
 import { useDeckGeneration } from './useDeckGeneration';
+import { Badge, Button, IconButton, ProgressBar } from '../ui/primitives';
+import { ActionMenu } from '../ui/ActionMenu';
 import { EducationCatalog } from '../../services/educationCatalog';
 import { SubjectFolderModal } from '../studio/SubjectFolderModal';
 import { FOLDER_COLORS } from '../studio/folderOptions';
@@ -121,11 +117,10 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   onStartAudioBriefing,
   onOpenExam,
   onOpenInterleaving,
-  onOpenSanctuary,
   initialLibraryTab,
 }) => {
   // Ingestion studio mode: pdf | topic | notes | occlusion
-  const [ingestMode, setIngestMode] = useState<'pdf' | 'topic' | 'notes' | 'occlusion'>('pdf');
+  const [ingestMode, setIngestMode] = useState<'pdf' | 'topic' | 'notes' | 'occlusion'>('topic');
   const [topicInput, setTopicInput] = useState('');
   const [notesInput, setNotesInput] = useState('');
   const [isStarterCatalogModalOpen, setIsStarterCatalogModalOpen] = useState(false);
@@ -136,15 +131,6 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   // Multilingual State
   const [selectedLanguageCode, setSelectedLanguageCode] = useState<string>('auto');
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
-
-  // LifeSim Token Wallet State  // LifeSim Token Wallet State
-  const [walletCoins, setWalletCoins] = useState(() => lifeSimService.getWalletBalance());
-  useEffect(() => {
-    const unsub = lifeSimService.subscribe(() => {
-      setWalletCoins(lifeSimService.getWalletBalance());
-    });
-    return unsub;
-  }, []);
 
   // Real-time language detection
   const detectedLanguage = useMemo(() => {
@@ -212,7 +198,6 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   });
   const { isLoading, effectiveProfile, profileModal } = generation;
 
-  const stats = StorageService.getStats();
   const dueCards = StorageService.getDueCards();
   const allCards = StorageService.getAllCards();
   const starredCards = useMemo(() => allCards.filter(c => c.isStarred), [allCards]);
@@ -345,1303 +330,708 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8 py-2 sm:py-4 animate-fadeIn">
-      
-      {/* 3D Character Companion & Daily Neuro-Priming Hero */}
-      <CharacterCompanion 
-        variant="hero" 
-        size="lg" 
-        onExploreTour={() => setIsTourModalOpen(true)} 
-        onOpenSanctuary={onOpenSanctuary} 
-      />
-
-      {/* 1. Student Hero Greeting & Central Ingestion Dock */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-pink-500/15 text-pink-300 border border-pink-500/30 flex items-center gap-1.5">
-                <Brain className="w-3 h-3 text-pink-400" />
-                <span>Studify Study Autopilot</span>
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                <Flame className="w-3 h-3 fill-amber-400 text-amber-400" />
-                <span>{stats.currentStreak} Day Streak</span>
-              </span>
-              <button
-                onClick={onOpenSanctuary}
-                className="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 hover:bg-emerald-500/25 transition-all cursor-pointer font-mono"
-                title="Student Habitat & Cafeteria"
-              >
-                <span>🪙 {walletCoins} Tokens</span>
-              </button>
-            </div>
-
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight font-display">
-              What shall we <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-300 to-cyan-400">Master Today?</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400">
-              Type any subject, drop a lecture PDF, or paste notes. Studify turns it into delightful 3-minute micro-practice.
-            </p>
-          </div>
-
-          {/* Daily Due Cards Quick Action */}
-          <div className="flex items-center gap-3 p-2.5 sm:p-3 rounded-2xl bg-slate-950/80 border border-white/[0.08] shadow-inner shrink-0 self-start sm:self-auto">
-            <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
-              <Layers className="w-4 h-4" />
-            </div>
-            <div className="space-y-0.5 pr-2">
-              <div className="text-xs font-bold text-white font-display">
-                {dueCards.length > 0 ? `${dueCards.length} Cards Due` : 'Daily Review Clear'}
-              </div>
-              <div className="text-[11px] text-slate-400">
-                {dueCards.length > 0 ? 'FSRS spaced queue' : '100% memory stability'}
-              </div>
-            </div>
-            {dueCards.length > 0 && (
-              <button
-                onClick={onOpenDashboard}
-                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 flex items-center gap-1 transition-all hover:scale-105 cursor-pointer shrink-0"
-              >
-                <span>Review</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
-            )}
-          </div>
+    <div className="mx-auto w-full max-w-6xl space-y-8 animate-fadeIn">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold tracking-tight text-ink sm:text-[30px]">Library</h1>
+          <p className="mt-1 text-[15px] text-ink-muted">Turn any topic, notes or PDF into a deck, then study it your way.</p>
         </div>
-
-        {generation.error && (
-          <div role="alert" className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span className="flex-1">{generation.error}</span>
-            <button
-              type="button"
-              onClick={generation.dismissError}
-              aria-label="Dismiss error"
-              className="text-rose-300/70 hover:text-rose-200 cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
+        {dueCards.length > 0 && (
+          <Button variant="secondary" size="sm" icon={Layers} onClick={onOpenDashboard}>
+            {dueCards.length} due for review
+          </Button>
         )}
+      </header>
 
-        {/* Central Ingestion Input Card (Gizmo Style) */}
-        <div className="p-5 sm:p-6 rounded-3xl glass-panel-elevated space-y-4 border border-indigo-500/20 shadow-2xl">
-          <form 
-            onSubmit={(e) => { e.preventDefault(); handleGenerateTopic(); }}
-            className="relative flex items-center w-full"
+      {generation.error && (
+        <div role="alert" className="flex items-start gap-2.5 rounded-2xl border border-danger/30 bg-danger-soft p-3.5 text-[13px] text-danger">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="flex-1">{generation.error}</span>
+          <button
+            type="button"
+            onClick={generation.dismissError}
+            aria-label="Dismiss error"
+            className="rounded-md p-0.5 opacity-80 hover:opacity-100 cursor-pointer"
           >
-            <Search className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400 absolute left-4" />
-            <input
-              type="text"
-              value={topicInput}
-              onChange={(e) => setTopicInput(e.target.value)}
-              placeholder="I want to study... (e.g. Photosynthesis, Supply & Demand, Machine Learning)"
-              className="w-full pl-11 sm:pl-12 pr-28 sm:pr-32 py-3.5 sm:py-4 rounded-2xl bg-slate-950/90 border border-white/[0.12] focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-white text-xs sm:text-sm outline-none placeholder:text-slate-500 transition-all shadow-inner font-medium"
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !topicInput.trim()}
-              className="absolute right-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
-            >
-              {isLoading ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <>
-                  <span>Start</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Active Educational Profile & Language Calibration Dock */}
-          {topicInput.trim().length > 1 && (
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-indigo-950/30 border border-indigo-500/20 space-y-3 animate-fadeIn">
-              {/* Profile Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center text-lg shadow-md shadow-indigo-500/25 shrink-0">
-                    {effectiveProfile ? EducationCatalog.getCountry(effectiveProfile.country).flag : '🎓'}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-white font-display flex items-center gap-1.5">
-                        <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />
-                        {effectiveProfile ? effectiveProfile.grade : 'Adaptive Educational Profile'}
-                      </span>
-                      {effectiveProfile && (
-                        <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                          Age {effectiveProfile.age}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {effectiveProfile
-                        ? `Curriculum: ${effectiveProfile.country} (${EducationCatalog.getCountry(effectiveProfile.country).systemName})`
-                        : 'Calibrates vocabulary, formulas, and cognitive depth'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* Language Selector Dropdown Pill */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setIsLangDropdownOpen(!isLangDropdownOpen)}
-                      className="px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.12] text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                    >
-                      <Globe className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>{effectiveLanguage.flag} {effectiveLanguage.nativeName}</span>
-                      {selectedLanguageCode === 'auto' && (
-                        <span className="text-[11px] text-slate-400 font-mono">(Auto)</span>
-                      )}
-                      <ChevronDown className="w-3 h-3 text-slate-400" />
-                    </button>
-
-                    {isLangDropdownOpen && (
-                      <div className="absolute right-0 mt-1.5 w-52 p-1.5 rounded-2xl bg-slate-900 border border-indigo-500/30 shadow-2xl z-50 backdrop-blur-xl animate-fadeIn space-y-0.5 max-h-60 overflow-y-auto">
-                        <button
-                          type="button"
-                          onClick={() => { setSelectedLanguageCode('auto'); setIsLangDropdownOpen(false); }}
-                          className={`w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
-                            selectedLanguageCode === 'auto' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-                          }`}
-                        >
-                          <span>✨ Auto-Detect ({detectedLanguage.nativeName})</span>
-                          {selectedLanguageCode === 'auto' && <Check className="w-3 h-3" />}
-                        </button>
-                        <div className="h-px bg-white/[0.06] my-1" />
-                        {SUPPORTED_LANGUAGES.map(lang => (
-                          <button
-                            key={lang.code}
-                            type="button"
-                            onClick={() => { setSelectedLanguageCode(lang.code); setIsLangDropdownOpen(false); }}
-                            className={`w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-medium flex items-center justify-between transition-colors cursor-pointer ${
-                              selectedLanguageCode === lang.code ? 'bg-indigo-600 text-white font-bold' : 'text-slate-300 hover:bg-slate-800'
-                            }`}
-                          >
-                            <span>{lang.flag} {lang.nativeName} ({lang.name})</span>
-                            {selectedLanguageCode === lang.code && <Check className="w-3 h-3" />}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Profile Change / Set Button */}
-                  <button
-                    type="button"
-                    onClick={profileModal.open}
-                    className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-semibold text-white flex items-center gap-1.5 transition-all cursor-pointer"
-                  >
-                    <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>{effectiveProfile ? 'Change Profile' : 'Set Profile'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Dynamic Pedagogical Feedback Sub-bar */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/[0.06] text-[11px] text-slate-400">
-                <div className="flex items-center gap-1.5">
-                  <Compass className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  <span className="text-slate-300 font-medium">
-                    {effectiveProfile
-                      ? `Gemini will calibrate cognitive depth & mental models for ${effectiveProfile.country} ${effectiveProfile.grade} (Age ${effectiveProfile.age}).`
-                      : depthEstimate.reasoning}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 text-slate-400 font-mono text-[11px]">
-                  <span>Checkpoints: <strong className="text-white">{depthEstimate.recommendedCheckpoints}</strong></span>
-                  <span>Est. Focus: <strong className="text-indigo-300">~{depthEstimate.estimatedMinutes}m</strong></span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 4 Instant Action Pills (Gizmo Source Selectors) */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setIngestMode(ingestMode === 'pdf' ? 'topic' : 'pdf')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  ingestMode === 'pdf'
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/[0.08]'
-                }`}
-              >
-                <FileUp className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Upload PDF</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIngestMode(ingestMode === 'notes' ? 'topic' : 'notes')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  ingestMode === 'notes'
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/[0.08]'
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5 text-purple-400" />
-                <span>Paste Notes</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIngestMode(ingestMode === 'topic' ? 'pdf' : 'topic')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  ingestMode === 'topic'
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border border-white/[0.08]'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>Topic Ideas</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingSession(null);
-                  setDeckStudioTab('occlusion');
-                  setIsDeckStudioOpen(true);
-                }}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-slate-900/80 hover:bg-slate-800 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>Image Occlusion</span>
-              </button>
-            </div>
-
-            <button
-              onClick={() => {
-                setEditingSession(null);
-                setDeckStudioTab('create');
-                setIsDeckStudioOpen(true);
-              }}
-              className="text-xs text-slate-400 hover:text-white font-medium flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <Plus className="w-3 h-3" />
-              <span>Custom Deck Studio</span>
-            </button>
-          </div>
-
-          {/* Panel 1: PDF Dropzone */}
-          {ingestMode === 'pdf' && (
-            <div className="space-y-4 pt-3 border-t border-white/[0.06] animate-fadeIn">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                accept="application/pdf"
-                className="hidden"
-              />
-
-              {!extractedPdf ? (
-                <div
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setIsDragOver(true);
-                  }}
-                  onDragLeave={() => setIsDragOver(false)}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`p-8 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center cursor-pointer group ${
-                    isDragOver
-                      ? 'border-indigo-500 bg-indigo-500/10 scale-[1.01]'
-                      : 'border-white/[0.12] hover:border-indigo-500/50 bg-slate-950/40 hover:bg-slate-950/60'
-                  }`}
-                >
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 mb-2 group-hover:scale-110 transition-transform">
-                    <UploadCloud className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-sm font-bold text-white font-display mb-1">
-                    Drag and drop your lecture PDF or chapter here
-                  </h3>
-                  <p className="text-xs text-slate-400 max-w-md mb-2">
-                    Studify extracts structured knowledge anchors with PDF.js and links each flashcard to its source page.
-                  </p>
-                  <span className="px-3 py-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-xs font-semibold text-slate-200 transition-all">
-                    Browse Files (.pdf)
-                  </span>
-                </div>
-              ) : (
-                <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/80 border border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                      <CheckCircle2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-white font-display truncate max-w-sm sm:max-w-md">
-                        {extractedPdf.fileName}
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        {extractedPdf.numPages} pages extracted • Ground truth source attached
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <button
-                      onClick={() => {
-                        setExtractedPdf(null);
-                        if (fileInputRef.current) fileInputRef.current.value = '';
-                      }}
-                      className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-slate-300"
-                    >
-                      Change PDF
-                    </button>
-                    <button
-                      onClick={handleLaunchPDFSession}
-                      disabled={isLoading}
-                      className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {isLoading ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Synthesizing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>Synthesize Deck</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {isParsingPDF && pdfProgress && (
-                <div className="space-y-1.5 p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-xs">
-                  <div className="flex justify-between text-indigo-300 font-mono text-[11px]">
-                    <span>Extracting page {pdfProgress.page} of {pdfProgress.total}...</span>
-                    <span>{pdfProgress.percent}%</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-200" 
-                      style={{ width: `${pdfProgress.percent}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {pdfError && (
-                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{pdfError}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Panel 2: AI Topic Ideas */}
-          {ingestMode === 'topic' && (
-            <div className="space-y-3 pt-3 border-t border-white/[0.06] animate-fadeIn">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Instant Starters (Click to generate):
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {curatedTopicsByDomain.map((item, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      setTopicInput(item.topic);
-                      handleGenerateTopic(item.topic);
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-slate-950/80 hover:bg-slate-850 border border-white/[0.08] hover:border-indigo-500/40 text-xs text-slate-300 hover:text-white transition-all flex items-center gap-2 cursor-pointer"
-                  >
-                    <span className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-white/[0.06] text-indigo-300">
-                      {item.domain}
-                    </span>
-                    <span>{item.topic}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Panel 3: Lecture Notes */}
-          {ingestMode === 'notes' && (
-            <div className="space-y-4 pt-3 border-t border-white/[0.06] animate-fadeIn">
-              <div className="relative">
-                <textarea
-                  rows={5}
-                  value={notesInput}
-                  onChange={(e) => setNotesInput(e.target.value)}
-                  placeholder="Paste lecture notes, slide bullet points, textbook paragraphs, or syllabus outline here..."
-                  className="w-full p-4 rounded-2xl bg-slate-950/80 border border-white/[0.12] focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-white text-xs sm:text-sm outline-none resize-none placeholder:text-slate-500 transition-all leading-relaxed"
-                />
-                <div className="absolute bottom-3 right-3 text-[11px] font-mono text-slate-500 bg-slate-900/80 px-2 py-0.5 rounded border border-white/[0.08]">
-                  {notesInput.trim() ? notesInput.trim().split(/\s+/).length : 0} words
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  onClick={handleDecomposeNotes}
-                  disabled={isLoading || !notesInput.trim()}
-                  className={`w-full sm:w-auto px-7 py-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl transition-all cursor-pointer ${
-                    isLoading || !notesInput.trim()
-                      ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-indigo-600/30 hover:scale-[1.02]'
-                  }`}
-                >
-                  {isLoading ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Synthesizing Study Cycle...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Decompose Notes &amp; Launch Pilot</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 2. Jump back in (Quizlet Style Prominent Card) */}
-      {defaultQuickSession && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-bold text-white font-display flex items-center gap-2">
-              <Play className="w-4 h-4 text-indigo-400 fill-indigo-400" />
-              <span>Jump back in</span>
-            </h2>
-            <button
-              onClick={() => setActiveLibraryTab('my-decks')}
-              className="text-xs text-slate-400 hover:text-indigo-300 transition-colors font-medium cursor-pointer"
-            >
-              All decks ({savedSessions.length})
-            </button>
-          </div>
-
-          {/* Quizlet Hero Continue Card */}
-          <div className="p-5 sm:p-6 rounded-3xl glass-panel-elevated relative overflow-hidden border border-indigo-500/20 hover:border-indigo-500/40 transition-all group">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="space-y-2.5 max-w-xl">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    {defaultQuickSession.category}
-                  </span>
-                  <span className="text-xs text-slate-500">•</span>
-                  <span className="text-xs text-slate-400 font-medium">
-                    {defaultQuickSession.concepts.reduce((acc, c) => acc + c.retrievalCards.length, 0)} cards • ~{defaultQuickSession.concepts.reduce((acc, c) => acc + (c.estimatedMinutes || 5), 0)}m
-                  </span>
-                </div>
-
-                <h3 className="text-xl sm:text-2xl font-bold text-white font-display group-hover:text-indigo-200 transition-colors">
-                  {defaultQuickSession.title}
-                </h3>
-
-                {/* Progress bar */}
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-400">Memory retention &amp; mastery</span>
-                    <span className="font-bold text-emerald-400">Active</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-white/[0.06]">
-                    <div className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500 rounded-full w-3/4" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-3 shrink-0">
-                <button
-                  onClick={() => {
-                    if (onOpenDeckStation) onOpenDeckStation(defaultQuickSession);
-                    else onStartSession(defaultQuickSession);
-                  }}
-                  className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 flex items-center gap-2 transition-all hover:scale-105 cursor-pointer"
-                >
-                  <Play className="w-4 h-4 fill-white" />
-                  <span>Continue</span>
-                </button>
-
-                {onStartMatch && (
-                  <button
-                    onClick={() => onStartMatch(defaultQuickSession)}
-                    className="px-4 py-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 font-bold text-sm flex items-center gap-2 transition-all cursor-pointer"
-                  >
-                    <Zap className="w-4 h-4 fill-amber-400 text-amber-400" />
-                    <span>60s Match</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 
-      {/* 3. Study Modes (Quizlet Start Here / Games) */}
-      <div className="space-y-3">
-        <h2 className="text-base sm:text-lg font-bold text-white font-display">
-          Study Modes
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Speed Match Arena (Quizlet) */}
-          <div 
-            onClick={() => {
-              if (defaultQuickSession && onStartMatch) {
-                onStartMatch(defaultQuickSession);
-              }
-            }}
-            className="p-5 rounded-2xl glass-panel-interactive flex flex-col justify-between group cursor-pointer border-amber-500/20 hover:border-amber-500/50 hover:shadow-amber-500/10 space-y-3"
-          >
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-sm">
-                  <Zap className="w-5 h-5 fill-amber-400 text-amber-400" />
-                </div>
-                <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  60s Match
-                </span>
-              </div>
-              <h3 className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors font-display">
-                Speed Match Arena
-              </h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Quizlet-style fast associative pairing under millisecond stopwatch pressure with combo multipliers.
-              </p>
-            </div>
-
-            <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs text-amber-400 font-semibold group-hover:translate-x-0.5 transition-transform">
-              <span>Play Match Arena</span>
-              <ChevronRight className="w-4 h-4" />
-            </div>
+      {/* Create a deck */}
+      <section aria-labelledby="create-deck-title" className="space-y-5 rounded-3xl border border-line bg-surface p-5 shadow-[inset_0_1px_0_rgb(255_255_255/0.035)] sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 id="create-deck-title" className="text-[15px] font-semibold text-ink">Create a deck</h2>
+            <p className="mt-0.5 text-[13px] text-ink-subtle">The AI writes the cards and pitches them at your level.</p>
           </div>
-
-          {/* FSRS Spaced Repetition (Anki) */}
-          <div 
-            onClick={onOpenDashboard}
-            className="p-5 rounded-2xl glass-panel-interactive flex flex-col justify-between group cursor-pointer border-emerald-500/20 hover:border-emerald-500/50 hover:shadow-emerald-500/10 space-y-3"
-          >
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-sm">
-                  <Layers className="w-5 h-5" />
-                </div>
-                <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  FSRS Queue
-                </span>
-              </div>
-              <h3 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors font-display">
-                Daily Memory Review
-              </h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Mathematical memory scheduling with predictive stability chips (&lt;10m, +1.4d, +4.2d, +9.0d).
-              </p>
-            </div>
-
-            <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs text-emerald-400 font-semibold group-hover:translate-x-0.5 transition-transform">
-              <span>{dueCards.length} Cards Due</span>
-              <ChevronRight className="w-4 h-4" />
-            </div>
-          </div>
-
-          {/* Mock Exam Simulator (Metacognitive) */}
-          <div 
-            onClick={onOpenExam}
-            className="p-5 rounded-2xl glass-panel-interactive flex flex-col justify-between group cursor-pointer border-indigo-500/20 hover:border-indigo-500/50 hover:shadow-indigo-500/10 space-y-3"
-          >
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-sm">
-                  <Award className="w-5 h-5" />
-                </div>
-                <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  Diagnostic
-                </span>
-              </div>
-              <h3 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors font-display">
-                Mock Exam Arena
-              </h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Confidence-Weighted scoring (Bushman/Bruno formula). Uncover dangerous metacognitive blindspots.
-              </p>
-            </div>
-
-            <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs text-indigo-400 font-semibold group-hover:translate-x-0.5 transition-transform">
-              <span>Simulate Exam</span>
-              <ChevronRight className="w-4 h-4" />
-            </div>
-          </div>
-
-          {/* Cross-Deck Interleaving Arena (Dunlosky) */}
-          <div 
-            onClick={onOpenInterleaving}
-            className="p-5 rounded-2xl glass-panel-interactive flex flex-col justify-between group cursor-pointer border-purple-500/20 hover:border-purple-500/50 hover:shadow-purple-500/10 space-y-3"
-          >
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-sm">
-                  <Shuffle className="w-5 h-5 text-purple-400" />
-                </div>
-                <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  Dunlosky
-                </span>
-              </div>
-              <h3 className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors font-display">
-                Interleaving Arena
-              </h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Cross-deck category mixing. Forces working memory to distinguish problem categories without habituation.
-              </p>
-            </div>
-
-            <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs text-purple-400 font-semibold group-hover:translate-x-0.5 transition-transform">
-              <span>Mix Decks</span>
-              <ChevronRight className="w-4 h-4" />
-            </div>
+          <div role="tablist" aria-label="Source" className="inline-flex shrink-0 self-start rounded-xl border border-line bg-canvas p-1">
+            {SOURCE_TABS.map(({ mode, label, icon: Icon }) => (
+              <button
+                key={mode}
+                type="button"
+                role="tab"
+                aria-selected={ingestMode === mode}
+                onClick={() => setIngestMode(mode)}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-colors cursor-pointer ${
+                  ingestMode === mode ? 'bg-surface-hover text-ink shadow-sm' : 'text-ink-subtle hover:text-ink'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                {label}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
 
-      {/* 4. Decks & Benchmarks Workspace */}
-      <div className="space-y-5">
-        
-        {/* Workspace Sub-Header & Navigation Switcher */}
-        <div className="p-4 sm:p-5 rounded-3xl glass-panel flex flex-col md:flex-row md:items-center justify-between gap-4">
-          
-          {/* Segmented Tab Switcher */}
-          <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-2xl border border-white/[0.08] text-xs self-start md:self-auto overflow-x-auto no-scrollbar">
-            <button
-              onClick={() => setActiveLibraryTab('my-decks')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                activeLibraryTab === 'my-decks'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-white'
-              }`}
+        {/* Topic */}
+        {ingestMode === 'topic' && (
+          <div className="space-y-4 animate-fadeIn">
+            <form
+              onSubmit={(e) => { e.preventDefault(); handleGenerateTopic(); }}
+              className="relative flex items-center"
             >
-              <BookMarked className="w-3.5 h-3.5" />
-              <span>My Decks ({savedSessions.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveLibraryTab('starred')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                activeLibraryTab === 'starred'
-                  ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Star className="w-3.5 h-3.5 text-amber-400" />
-              <span>Starred Focus ({starredCards.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveLibraryTab('curated')}
-              className={`px-3.5 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
-                activeLibraryTab === 'curated'
-                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Curated Benchmarks (6)</span>
-            </button>
-          </div>
-
-          {/* Search & Studio Action Controls */}
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            {/* Search Input */}
-            <div className="relative flex-1 sm:w-56">
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="pointer-events-none absolute left-4 h-[18px] w-[18px] text-ink-subtle" aria-hidden="true" />
               <input
                 type="text"
-                value={deckSearch}
-                onChange={(e) => setDeckSearch(e.target.value)}
-                placeholder="Filter decks by title or tag..."
-                className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-950/80 border border-white/[0.1] text-white text-xs outline-none focus:border-indigo-500"
+                value={topicInput}
+                onChange={(e) => setTopicInput(e.target.value)}
+                placeholder="What do you want to learn?"
+                aria-label="Topic to study"
+                className="h-14 w-full rounded-2xl border border-line-strong bg-canvas pl-11 pr-32 text-[15px] text-ink outline-none transition-[border-color,box-shadow] placeholder:text-ink-subtle focus:border-brand focus:ring-4 focus:ring-brand/15"
               />
-            </div>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={isLoading || !topicInput.trim()}
+                icon={isLoading ? RefreshCw : undefined}
+                trailingIcon={isLoading ? undefined : ArrowRight}
+                className={`absolute right-2 ${isLoading ? '[&>svg:first-child]:animate-spin' : ''}`}
+              >
+                {isLoading ? 'Building' : 'Create'}
+              </Button>
+            </form>
 
-            {/* Deck Studio Launcher */}
-            <button
-              onClick={() => {
-                setEditingSession(null);
-                setDeckStudioTab('create');
-                setIsDeckStudioOpen(true);
-              }}
-              className="px-3 py-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-xs font-bold text-slate-200 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Deck</span>
-            </button>
+            {topicInput.trim().length > 1 && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line bg-canvas px-3.5 py-2.5 text-[13px] text-ink-muted animate-fadeIn">
+                <span className="flex min-w-0 items-center gap-2">
+                  <GraduationCap className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden="true" />
+                  {effectiveProfile ? (
+                    <span className="truncate">
+                      {EducationCatalog.getCountry(effectiveProfile.country).flag} {effectiveProfile.grade}, age {effectiveProfile.age}
+                    </span>
+                  ) : (
+                    <span className="truncate">No grade set yet</span>
+                  )}
+                  <button type="button" onClick={profileModal.open} className="font-medium text-brand-text hover:underline cursor-pointer">
+                    {effectiveProfile ? 'Change' : 'Set grade'}
+                  </button>
+                </span>
 
-            {/* Open Fullscreen Catalog Modal */}
-            <button
-              onClick={() => setIsStarterCatalogModalOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-            >
-              <Maximize2 className="w-3 h-3" />
-              <span>Inspect All</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Subject Folders Bar */}
-        <div className="p-3.5 sm:p-4 rounded-3xl glass-panel space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Folder className="w-4 h-4 text-indigo-400" />
-              <h3 className="text-xs font-bold text-white font-display uppercase tracking-wider">
-                Subject Folders
-              </h3>
-              <span className="text-[11px] font-mono text-slate-400">
-                ({folders.length})
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setEditingFolder(null);
-                setIsFolderModalOpen(true);
-              }}
-              className="px-2.5 py-1 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer hover:scale-105"
-            >
-              <FolderPlus className="w-3.5 h-3.5" />
-              <span>New Subject</span>
-            </button>
-          </div>
-
-          {/* Folder Filter Chips */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-            {/* All Decks chip */}
-            <button
-              type="button"
-              onClick={() => setSelectedFolderId('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                selectedFolderId === 'all'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-white/[0.06]'
-              }`}
-            >
-              <span>📚</span>
-              <span>All Decks</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 font-mono">
-                {savedSessions.length}
-              </span>
-            </button>
-
-            {/* Folders */}
-            {folders.map((folder) => {
-              const isSelected = selectedFolderId === folder.id;
-              const folderDeckCount = savedSessions.filter(s => s.folderId === folder.id).length;
-              const colDef = FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0];
-
-              return (
-                <div key={folder.id} className="relative group/folder flex items-center shrink-0">
+                <span className="relative">
                   <button
                     type="button"
-                    onClick={() => setSelectedFolderId(isSelected ? 'all' : folder.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border ${
-                      isSelected
-                        ? `${colDef.bg} ${colDef.text} ${colDef.border} shadow-md ${colDef.glow} ring-1 ring-white/20`
-                        : 'bg-slate-900/60 text-slate-300 hover:text-white hover:bg-slate-900 border-white/[0.06]'
-                    }`}
+                    onClick={() => setIsLangDropdownOpen(!isLangDropdownOpen)}
+                    aria-haspopup="listbox"
+                    aria-expanded={isLangDropdownOpen}
+                    className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 hover:bg-surface-hover hover:text-ink cursor-pointer"
                   >
-                    <span>{folder.icon || '📁'}</span>
-                    <span>{folder.name}</span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                      isSelected ? 'bg-black/30' : 'bg-white/[0.08] text-slate-400'
-                    }`}>
-                      {folderDeckCount}
-                    </span>
+                    <Globe className="h-4 w-4 text-ink-subtle" aria-hidden="true" />
+                    {effectiveLanguage.flag} {effectiveLanguage.nativeName}
+                    {selectedLanguageCode === 'auto' && <span className="text-ink-subtle">(auto)</span>}
+                    <ChevronDown className="h-3.5 w-3.5 text-ink-subtle" aria-hidden="true" />
                   </button>
+                  {isLangDropdownOpen && (
+                    <div role="listbox" className="absolute left-0 top-8 z-50 max-h-64 w-56 space-y-0.5 overflow-y-auto rounded-xl border border-line-strong bg-surface-solid p-1.5 shadow-2xl animate-fadeIn">
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={selectedLanguageCode === 'auto'}
+                        onClick={() => { setSelectedLanguageCode('auto'); setIsLangDropdownOpen(false); }}
+                        className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[13px] cursor-pointer ${
+                          selectedLanguageCode === 'auto' ? 'bg-brand-soft text-brand-text' : 'text-ink-muted hover:bg-surface-hover hover:text-ink'
+                        }`}
+                      >
+                        <span>Auto-detect ({detectedLanguage.nativeName})</span>
+                        {selectedLanguageCode === 'auto' && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+                      </button>
+                      <div className="my-1 h-px bg-line" />
+                      {SUPPORTED_LANGUAGES.map(lang => (
+                        <button
+                          key={lang.code}
+                          type="button"
+                          role="option"
+                          aria-selected={selectedLanguageCode === lang.code}
+                          onClick={() => { setSelectedLanguageCode(lang.code); setIsLangDropdownOpen(false); }}
+                          className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[13px] cursor-pointer ${
+                            selectedLanguageCode === lang.code ? 'bg-brand-soft text-brand-text' : 'text-ink-muted hover:bg-surface-hover hover:text-ink'
+                          }`}
+                        >
+                          <span>{lang.flag} {lang.nativeName}</span>
+                          {selectedLanguageCode === lang.code && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </span>
 
-                  {/* Quick Edit/Delete on Hover */}
-                  <div className="opacity-0 group-hover/folder:opacity-100 transition-opacity flex items-center gap-0.5 ml-1">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingFolder(folder);
-                        setIsFolderModalOpen(true);
-                      }}
-                      className="p-1 rounded-lg text-slate-400 hover:text-indigo-300 hover:bg-white/[0.08] transition-colors cursor-pointer"
-                      title="Edit Subject Name / Theme"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Delete subject folder "${folder.name}"? Decks will remain safe in Uncategorized.`)) {
-                          StorageService.deleteFolder(folder.id);
-                          if (selectedFolderId === folder.id) setSelectedFolderId('all');
-                          setFolders(StorageService.getFolders());
-                          setSavedSessions(StorageService.getSessions());
-                          soundEngine.playCompanionBubble();
-                        }
-                      }}
-                      className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-white/[0.08] transition-colors cursor-pointer"
-                      title="Delete Subject Folder"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                <span className="flex items-center gap-1.5">
+                  <Clock className="h-4 w-4 text-ink-subtle" aria-hidden="true" />
+                  {depthEstimate.recommendedCheckpoints} concepts · about {depthEstimate.estimatedMinutes} min
+                </span>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13px] text-ink-subtle">Try</span>
+              {curatedTopicsByDomain.map(item => (
+                <button
+                  key={item.topic}
+                  type="button"
+                  onClick={() => {
+                    setTopicInput(item.topic);
+                    handleGenerateTopic(item.topic);
+                  }}
+                  disabled={isLoading}
+                  className="inline-flex min-h-8 items-center rounded-full border border-line px-3 py-1 text-left text-[13px] text-ink-muted transition-colors hover:border-line-strong hover:bg-surface-hover hover:text-ink disabled:opacity-50 cursor-pointer"
+                >
+                  {item.topic}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Notes */}
+        {ingestMode === 'notes' && (
+          <div className="space-y-3 animate-fadeIn">
+            <div className="relative">
+              <textarea
+                rows={7}
+                value={notesInput}
+                onChange={(e) => setNotesInput(e.target.value)}
+                placeholder="Paste lecture notes, slide bullet points, a textbook passage or a syllabus outline."
+                aria-label="Your notes"
+                className="w-full resize-y rounded-2xl border border-line-strong bg-canvas p-4 text-[15px] leading-relaxed text-ink outline-none transition-[border-color,box-shadow] placeholder:text-ink-subtle focus:border-brand focus:ring-4 focus:ring-brand/15"
+              />
+              <span className="pointer-events-none absolute bottom-3 right-3 text-xs tabular-nums text-ink-subtle">
+                {notesInput.trim() ? notesInput.trim().split(/\s+/).length : 0} words
+              </span>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                variant="primary"
+                onClick={handleDecomposeNotes}
+                disabled={isLoading || !notesInput.trim()}
+                icon={isLoading ? RefreshCw : Sparkles}
+                className={`w-full sm:w-auto ${isLoading ? '[&>svg:first-child]:animate-spin' : ''}`}
+              >
+                {isLoading ? 'Building your deck' : 'Create deck from notes'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* PDF */}
+        {ingestMode === 'pdf' && (
+          <div className="space-y-3 animate-fadeIn">
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="application/pdf" className="hidden" />
+
+            {!extractedPdf ? (
+              <button
+                type="button"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(true);
+                }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors cursor-pointer ${
+                  isDragOver ? 'border-brand bg-brand-soft' : 'border-line-strong bg-canvas hover:border-brand/60'
+                }`}
+              >
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand-text">
+                  <UploadCloud className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <span className="mt-3 text-[15px] font-medium text-ink">Drop a lecture PDF here, or click to choose one</span>
+                <span className="mt-1 max-w-md text-[13px] text-ink-subtle">
+                  Each card links back to the page it came from, so you can check the source while you study.
+                </span>
+              </button>
+            ) : (
+              <div className="flex flex-col gap-4 rounded-2xl border border-success/30 bg-success-soft p-4 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <CheckCircle2 className="h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-medium text-ink">{extractedPdf.fileName}</p>
+                    <p className="text-[13px] text-ink-muted">{extractedPdf.numPages} pages read</p>
                   </div>
                 </div>
-              );
-            })}
-
-            {/* Unassigned Pill */}
-            {folders.length > 0 && (() => {
-              const uncatCount = savedSessions.filter(s => !s.folderId).length;
-              if (uncatCount === 0) return null;
-              return (
-                <button
-                  type="button"
-                  onClick={() => setSelectedFolderId(selectedFolderId === 'uncategorized' ? 'all' : 'uncategorized')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border shrink-0 ${
-                    selectedFolderId === 'uncategorized'
-                      ? 'bg-slate-700 text-white border-white/20 shadow-md'
-                      : 'bg-slate-900/60 text-slate-400 hover:text-slate-300 hover:bg-slate-900 border-white/[0.06]'
-                  }`}
-                >
-                  <span>📂</span>
-                  <span>Unassigned</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/[0.06] text-slate-400 font-mono">
-                    {uncatCount}
-                  </span>
-                </button>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 shrink-0 pl-1">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Category:</span>
-          </div>
-          {availableCategories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                selectedCategory === cat
-                  ? 'bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 shadow-sm'
-                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-white/[0.06]'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab 1: My Decks Grid */}
-        {activeLibraryTab === 'my-decks' && (
-          <div>
-            {filteredMyDecks.length === 0 ? (
-              <div className="p-12 text-center rounded-3xl glass-panel space-y-3">
-                <BookMarked className="w-10 h-10 text-slate-600 mx-auto" />
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-slate-300 font-display">
-                    {deckSearch 
-                      ? 'No decks match your search query.' 
-                      : selectedFolderId !== 'all' 
-                        ? 'No decks in this subject folder yet.' 
-                        : 'No custom study decks saved yet.'}
-                  </p>
-                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                    {selectedFolderId !== 'all' 
-                      ? 'Use "Move to Subject" on any deck to organize it into this subject!' 
-                      : 'Drop a lecture PDF above or explore one of the pre-calibrated Curated Benchmarks to start your learning portfolio!'}
-                  </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setExtractedPdf(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                  >
+                    Change PDF
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleLaunchPDFSession}
+                    disabled={isLoading}
+                    icon={isLoading ? RefreshCw : Sparkles}
+                    className={isLoading ? '[&>svg:first-child]:animate-spin' : ''}
+                  >
+                    {isLoading ? 'Building your deck' : 'Create deck'}
+                  </Button>
                 </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredMyDecks.map((deck) => {
-                  const totalCards = deck.concepts.reduce((acc, c) => acc + c.retrievalCards.length, 0);
-                  const totalMins = deck.concepts.reduce((acc, c) => acc + (c.estimatedMinutes || 5), 0);
-                  const assignedFolder = folders.find(f => f.id === deck.folderId);
-                  const folderColorDef = assignedFolder ? (FOLDER_COLORS.find(c => c.id === assignedFolder.color) || FOLDER_COLORS[0]) : null;
+            )}
 
+            {isParsingPDF && pdfProgress && (
+              <div className="space-y-1.5" aria-live="polite">
+                <div className="flex justify-between text-[13px] text-ink-muted">
+                  <span>Reading page {pdfProgress.page} of {pdfProgress.total}</span>
+                  <span className="tabular-nums">{pdfProgress.percent}%</span>
+                </div>
+                <ProgressBar value={pdfProgress.percent} label="PDF reading progress" />
+              </div>
+            )}
+
+            {pdfError && (
+              <p role="alert" className="flex items-center gap-2 text-[13px] text-danger">
+                <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {pdfError}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-1 border-t border-line pt-4 text-[13px]">
+          <span className="mr-1 text-ink-subtle">Or</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Eye}
+            onClick={() => {
+              setEditingSession(null);
+              setDeckStudioTab('occlusion');
+              setIsDeckStudioOpen(true);
+            }}
+          >
+            Image occlusion
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Plus}
+            onClick={() => {
+              setEditingSession(null);
+              setDeckStudioTab('create');
+              setIsDeckStudioOpen(true);
+            }}
+          >
+            Write cards yourself
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={FileUp}
+            onClick={() => {
+              setEditingSession(null);
+              setDeckStudioTab('import');
+              setIsDeckStudioOpen(true);
+            }}
+          >
+            Import Anki, Quizlet or CSV
+          </Button>
+        </div>
+      </section>
+
+      {/* Ways to study */}
+      <section aria-labelledby="study-modes-title" className="space-y-3">
+        <h2 id="study-modes-title" className="text-[15px] font-semibold text-ink">Ways to study</h2>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StudyModeCard
+            icon={Layers}
+            title="Review due cards"
+            description="Spaced repetition picks what you are about to forget."
+            meta={dueCards.length > 0 ? `${dueCards.length} due` : 'Nothing due'}
+            onClick={onOpenDashboard}
+          />
+          <StudyModeCard
+            icon={Zap}
+            title="Speed match"
+            description="Pair terms with definitions against the clock."
+            meta="60 seconds"
+            onClick={defaultQuickSession && onStartMatch ? () => onStartMatch(defaultQuickSession) : undefined}
+          />
+          <StudyModeCard
+            icon={Award}
+            title="Mock exam"
+            description="Timed questions scored on accuracy and confidence."
+            meta="Pays for correct answers"
+            onClick={onOpenExam}
+          />
+          <StudyModeCard
+            icon={Shuffle}
+            title="Mix decks"
+            description="Shuffle subjects together to learn to tell them apart."
+            meta="Interleaving"
+            onClick={onOpenInterleaving}
+          />
+        </div>
+      </section>
+
+      {/* Decks workspace */}
+      <section aria-label="Your decks" className="space-y-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div role="tablist" aria-label="Deck collections" className="no-scrollbar inline-flex max-w-full self-start overflow-x-auto rounded-xl border border-line bg-canvas p-1">
+            {([
+              { tab: 'my-decks', label: 'My decks', count: savedSessions.length },
+              { tab: 'starred', label: 'Starred', count: starredCards.length },
+              { tab: 'curated', label: 'Starter decks', count: CURATED_STARTER_DECKS.length },
+            ] as const).map(({ tab, label, count }) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeLibraryTab === tab}
+                onClick={() => setActiveLibraryTab(tab)}
+                className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-lg px-3 text-[13px] font-medium transition-colors cursor-pointer ${
+                  activeLibraryTab === tab ? 'bg-surface-hover text-ink shadow-sm' : 'text-ink-subtle hover:text-ink'
+                }`}
+              >
+                {label}
+                <span className="tabular-nums text-ink-subtle">{count}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1 md:w-60 md:flex-none">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-subtle" aria-hidden="true" />
+              <input
+                type="search"
+                value={deckSearch}
+                onChange={(e) => setDeckSearch(e.target.value)}
+                placeholder="Filter decks"
+                aria-label="Filter decks"
+                className="h-9 w-full rounded-lg border border-line bg-canvas pl-9 pr-3 text-[13px] text-ink outline-none transition-colors placeholder:text-ink-subtle focus:border-brand"
+              />
+            </div>
+            <Button variant="secondary" size="sm" icon={Maximize2} onClick={() => setIsStarterCatalogModalOpen(true)} className="h-9">
+              Catalog
+            </Button>
+          </div>
+        </div>
+
+        {activeLibraryTab !== 'starred' && (
+          <div className="space-y-2.5">
+            {activeLibraryTab === 'my-decks' && (
+              <div className="no-scrollbar -mx-1 flex items-center gap-1.5 overflow-x-auto px-1 py-0.5">
+                <span className="mr-1 shrink-0 text-[13px] text-ink-subtle">Subject</span>
+                <LibraryChip active={selectedFolderId === 'all'} onClick={() => setSelectedFolderId('all')} count={savedSessions.length}>
+                  All
+                </LibraryChip>
+                {folders.map(folder => {
+                  const isSelected = selectedFolderId === folder.id;
+                  const color = FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0];
                   return (
-                    <div
-                      key={deck.id}
-                      onClick={() => {
-                        if (onOpenDeckStation) onOpenDeckStation(deck);
-                        else onStartSession(deck);
-                      }}
-                      className="p-5 rounded-3xl glass-panel-interactive flex flex-col justify-between group space-y-4 cursor-pointer"
-                    >
-                      <div className="space-y-2.5">
-                        <div className="flex items-center justify-between gap-1.5">
-                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider truncate">
-                              {deck.category}
-                            </span>
-
-                            {/* Subject Folder Chip on Deck Card */}
-                            {assignedFolder && folderColorDef ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setMoveToFolderSession(deck);
-                                }}
-                                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${folderColorDef.bg} ${folderColorDef.text} border ${folderColorDef.border} flex items-center gap-1 hover:scale-105 transition-transform cursor-pointer truncate max-w-[140px]`}
-                                title={`Subject: ${assignedFolder.name} — Click to move`}
-                              >
-                                <span>{assignedFolder.icon || '📁'}</span>
-                                <span className="truncate">{assignedFolder.name}</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setMoveToFolderSession(deck);
-                                }}
-                                className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 border border-white/[0.06] flex items-center gap-1 transition-colors cursor-pointer"
-                                title="Assign to Subject Folder"
-                              >
-                                <span>📁</span>
-                                <span>+ Subject</span>
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMoveToFolderSession(deck);
-                              }}
-                              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-indigo-300 transition-colors"
-                              title="Organize into Subject Folder"
-                            >
-                              <FolderInput className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                ExportService.printStudySheet(deck);
-                              }}
-                              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-indigo-300 transition-colors"
-                              title="Print High-Yield Study Sheet"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                ExportService.downloadMarkdown(deck);
-                              }}
-                              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-purple-300 transition-colors"
-                              title="Export to Markdown"
-                            >
-                              <FileText className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingSession(deck);
-                                setDeckStudioTab('create');
-                                setIsDeckStudioOpen(true);
-                              }}
-                              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-sky-300 transition-colors"
-                              title="Edit in Deck Studio"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => handleExportSingleDeck(deck, e)}
-                              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-slate-400 hover:text-emerald-300 transition-colors"
-                              title="Export to JSON"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => handleDeleteDeck(deck.id, e)}
-                              className="p-1.5 rounded-lg hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 transition-colors"
-                              title="Delete deck from library"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-1 font-display">
-                          {deck.title}
-                        </h4>
-                        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                          {deck.description}
-                        </p>
-                      </div>
-
-                      <div className="pt-3 border-t border-white/[0.06] space-y-3">
-                        <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium">
-                          <span>{deck.concepts.length} Concepts • {totalCards} Cards</span>
-                          <span className="flex items-center gap-1 text-slate-500 font-mono text-[11px]">
-                            <Clock className="w-3 h-3" />
-                            <span>~{totalMins}m</span>
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 pt-1">
-                          {onStartMatch && totalCards >= 2 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onStartMatch(deck);
-                              }}
-                              className="p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-semibold flex items-center justify-center transition-all cursor-pointer"
-                              title="Speed Match Arena"
-                            >
-                              <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                            </button>
-                          )}
-
-                          {onStartAudioBriefing && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onStartAudioBriefing(deck);
-                              }}
-                              className="p-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-xs font-semibold flex items-center justify-center transition-all cursor-pointer"
-                              title="AI Audio Briefing Overview"
-                            >
-                              <Headphones className="w-3.5 h-3.5 text-purple-400" />
-                            </button>
-                          )}
-
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onOpenDeckStation) onOpenDeckStation(deck);
-                              else onStartSession(deck);
-                            }}
-                            className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-bold shadow-md shadow-indigo-600/30 flex items-center justify-center gap-1.5 transition-all group-hover:scale-[1.02] cursor-pointer"
-                          >
-                            <span>Study Modes</span>
-                            <Play className="w-3 h-3 fill-white" />
-                          </button>
-                        </div>
-                      </div>
+                    <div key={folder.id} className="group/folder flex shrink-0 items-center">
+                      <LibraryChip
+                        active={isSelected}
+                        onClick={() => setSelectedFolderId(isSelected ? 'all' : folder.id)}
+                        count={savedSessions.filter(s => s.folderId === folder.id).length}
+                        dotClassName={color.dot}
+                      >
+                        {folder.name}
+                      </LibraryChip>
+                      <span className="ml-0.5 hidden items-center group-hover/folder:flex">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingFolder(folder);
+                            setIsFolderModalOpen(true);
+                          }}
+                          aria-label={`Edit ${folder.name}`}
+                          className="rounded-md p-1 text-ink-subtle hover:bg-surface-hover hover:text-ink cursor-pointer"
+                        >
+                          <Edit3 className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Delete the subject "${folder.name}"? Its decks stay in your library, unassigned.`)) {
+                              StorageService.deleteFolder(folder.id);
+                              if (selectedFolderId === folder.id) setSelectedFolderId('all');
+                              setFolders(StorageService.getFolders());
+                              setSavedSessions(StorageService.getSessions());
+                              soundEngine.playCompanionBubble();
+                            }
+                          }}
+                          aria-label={`Delete ${folder.name}`}
+                          className="rounded-md p-1 text-ink-subtle hover:bg-danger-soft hover:text-danger cursor-pointer"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </span>
                     </div>
                   );
                 })}
+                {folders.length > 0 && savedSessions.some(s => !s.folderId) && (
+                  <LibraryChip
+                    active={selectedFolderId === 'uncategorized'}
+                    onClick={() => setSelectedFolderId(selectedFolderId === 'uncategorized' ? 'all' : 'uncategorized')}
+                    count={savedSessions.filter(s => !s.folderId).length}
+                  >
+                    Unassigned
+                  </LibraryChip>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingFolder(null);
+                    setIsFolderModalOpen(true);
+                  }}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-dashed border-line-strong px-3 text-[13px] text-ink-subtle transition-colors hover:border-brand hover:text-brand-text cursor-pointer"
+                >
+                  <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                  New subject
+                </button>
               </div>
             )}
+
+            <div className="no-scrollbar -mx-1 flex items-center gap-1.5 overflow-x-auto px-1 py-0.5">
+              <span className="mr-1 shrink-0 text-[13px] text-ink-subtle">Category</span>
+              {availableCategories.map(cat => (
+                <LibraryChip key={cat} active={selectedCategory === cat} onClick={() => setSelectedCategory(cat)}>
+                  {cat}
+                </LibraryChip>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Tab 2: Starred Cards Focus */}
-        {activeLibraryTab === 'starred' && (
-          <div className="space-y-4">
-            <div className="p-6 rounded-3xl glass-panel flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="space-y-1 text-center sm:text-left">
-                <div className="flex items-center gap-2 justify-center sm:justify-start">
-                  <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  <h3 className="text-sm font-bold text-white font-display">
-                    High-Priority Starred Drill ({starredCards.length} Cards)
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-400">
-                  Cards you bookmarked during retrieval sessions for focused delibrate practice.
-                </p>
-              </div>
+        {/* My decks */}
+        {activeLibraryTab === 'my-decks' && (
+          filteredMyDecks.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-line-strong px-6 py-12 text-center">
+              <BookMarked className="mx-auto h-8 w-8 text-ink-subtle" aria-hidden="true" />
+              <p className="mt-3 text-[15px] font-medium text-ink">
+                {deckSearch
+                  ? 'No decks match your filter'
+                  : selectedFolderId !== 'all'
+                    ? 'No decks in this subject yet'
+                    : 'No decks yet'}
+              </p>
+              <p className="mx-auto mt-1 max-w-sm text-[13px] text-ink-subtle">
+                {selectedFolderId !== 'all'
+                  ? 'Use "Move to subject" in a deck menu to file it here.'
+                  : 'Create one above, or add a starter deck from the catalog.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {filteredMyDecks.map(deck => {
+                const totalCards = deck.concepts.reduce((acc, c) => acc + c.retrievalCards.length, 0);
+                const totalMins = deck.concepts.reduce((acc, c) => acc + (c.estimatedMinutes || 5), 0);
+                const folder = folders.find(f => f.id === deck.folderId);
+                const color = folder ? FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0] : null;
+                return (
+                  <article
+                    key={deck.id}
+                    className="group flex flex-col rounded-2xl border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-surface-hover"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                        <Badge>{deck.category || 'General'}</Badge>
+                        <button
+                          type="button"
+                          onClick={() => setMoveToFolderSession(deck)}
+                          className="inline-flex max-w-[150px] items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-ink-subtle transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer"
+                          title={folder ? `Subject: ${folder.name}. Click to move.` : 'Add to a subject'}
+                        >
+                          {color ? <span className={`h-2 w-2 shrink-0 rounded-full ${color.dot}`} aria-hidden="true" /> : <FolderInput className="h-3 w-3" aria-hidden="true" />}
+                          <span className="truncate">{folder ? folder.name : 'Add to subject'}</span>
+                        </button>
+                      </div>
+                      <ActionMenu
+                        label={`More actions for ${deck.title}`}
+                        items={[
+                          {
+                            label: 'Edit cards',
+                            icon: Edit3,
+                            onSelect: () => {
+                              setEditingSession(deck);
+                              setDeckStudioTab('create');
+                              setIsDeckStudioOpen(true);
+                            },
+                          },
+                          { label: 'Move to subject', icon: FolderInput, onSelect: () => setMoveToFolderSession(deck) },
+                          { label: 'Print study sheet', icon: Printer, onSelect: () => ExportService.printStudySheet(deck) },
+                          { label: 'Export as Markdown', icon: FileText, onSelect: () => ExportService.downloadMarkdown(deck) },
+                          { label: 'Export as JSON', icon: Download, onSelect: (e) => handleExportSingleDeck(deck, e) },
+                          { label: 'Delete deck', icon: Trash2, tone: 'danger', onSelect: (e) => handleDeleteDeck(deck.id, e) },
+                        ]}
+                      />
+                    </div>
 
+                    <button
+                      type="button"
+                      onClick={() => (onOpenDeckStation ? onOpenDeckStation(deck) : onStartSession(deck))}
+                      className="mt-3 text-left cursor-pointer"
+                    >
+                      <h3 className="line-clamp-2 text-[15px] font-medium leading-snug text-ink group-hover:text-brand-text">{deck.title}</h3>
+                      {deck.description && <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-ink-subtle">{deck.description}</p>}
+                    </button>
+
+                    <div className="mt-auto flex items-center justify-between pt-4 text-[13px] text-ink-subtle">
+                      <span>
+                        {deck.concepts.length} concepts · {totalCards} cards
+                      </span>
+                      <span className="flex items-center gap-1 tabular-nums">
+                        <Clock className="h-3.5 w-3.5" aria-hidden="true" />~{totalMins} min
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-1">
+                      <Button variant="primary" size="sm" icon={Play} onClick={() => onStartSession(deck)} className="flex-1">
+                        Study
+                      </Button>
+                      {onStartMatch && totalCards >= 2 && (
+                        <IconButton icon={Zap} label="Speed match" onClick={() => onStartMatch(deck)} />
+                      )}
+                      {onStartAudioBriefing && (
+                        <IconButton icon={Headphones} label="Audio briefing" onClick={() => onStartAudioBriefing(deck)} />
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )
+        )}
+
+        {/* Starred */}
+        {activeLibraryTab === 'starred' && (
+          <div className="space-y-3">
+            <div className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink">
+                  <Star className="h-4 w-4 fill-gold text-gold" aria-hidden="true" />
+                  Starred cards
+                </h3>
+                <p className="mt-1 text-[13px] text-ink-subtle">Cards you bookmarked while reviewing. Press S during a review to star a card.</p>
+              </div>
               {starredCards.length > 0 && (
-                <button
-                  onClick={handleLaunchAllStarred}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-amber-600/30 flex items-center gap-2 transition-all hover:scale-105 cursor-pointer"
-                >
-                  <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>Drill All Starred Cards Now</span>
-                </button>
+                <Button variant="primary" icon={Play} onClick={handleLaunchAllStarred}>
+                  Drill {starredCards.length} starred {starredCards.length === 1 ? 'card' : 'cards'}
+                </Button>
               )}
             </div>
-
             {starredCards.length === 0 ? (
-              <div className="p-12 text-center rounded-3xl glass-panel space-y-2">
-                <Star className="w-8 h-8 text-slate-600 mx-auto" />
-                <p className="text-sm font-bold text-slate-300">No starred cards yet.</p>
-                <p className="text-xs text-slate-500">
-                  Press &apos;S&apos; or tap the star icon during any active recall session to bookmark struggling cards here!
-                </p>
+              <div className="rounded-2xl border border-dashed border-line-strong px-6 py-12 text-center text-[13px] text-ink-subtle">
+                No starred cards yet.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {starredCards.map((card) => (
-                  <div key={card.id} className="p-4 rounded-2xl bg-slate-950/60 border border-white/[0.08] space-y-2">
-                    <div className="flex items-center justify-between text-[11px] text-amber-400 font-semibold uppercase">
-                      <span>★ Bookmarked Item</span>
-                      <span className="font-mono text-slate-500">{card.cardType || 'standard'}</span>
-                    </div>
-                    <div className="text-xs font-semibold text-white leading-relaxed">{card.question}</div>
-                    <div className="text-xs text-slate-400 bg-white/[0.02] p-2 rounded-xl border border-white/[0.04]">
-                      Answer: {card.answer}
-                    </div>
-                  </div>
+              <ul className="grid gap-3 md:grid-cols-2">
+                {starredCards.map(card => (
+                  <li key={card.id} className="space-y-2 rounded-2xl border border-line bg-surface p-4">
+                    <p className="text-[15px] leading-relaxed text-ink">{card.question}</p>
+                    <p className="rounded-lg bg-surface-hover px-3 py-2 text-[13px] text-ink-muted">{card.answer}</p>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
           </div>
         )}
 
-        {/* Tab 3: Curated Benchmarks Grid */}
+        {/* Starter decks */}
         {activeLibraryTab === 'curated' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredCuratedDecks.map((deck) => {
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {filteredCuratedDecks.map(deck => {
               const isImported = savedSessions.some(s => s.title === deck.title);
               const isJustImported = justImportedId === deck.id;
-
               return (
-                <div
+                <article
                   key={deck.id}
-                  onClick={() => {
-                    if (onOpenDeckStation) onOpenDeckStation(deck.session);
-                    else onStartSession(deck.session);
-                  }}
-                  className="p-5 rounded-3xl glass-panel-interactive flex flex-col justify-between group space-y-4 cursor-pointer"
+                  className="group flex flex-col rounded-2xl border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-surface-hover"
                 >
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300 bg-indigo-500/15 px-2.5 py-0.5 rounded-full border border-indigo-500/30">
-                        {deck.category}
-                      </span>
-
-                      <div className="flex items-center gap-1">
-                        {deck.hasImageOcclusion && (
-                          <span className="text-[11px] font-semibold flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30" title="Image Occlusion Ready">
-                            <Eye className="w-2.5 h-2.5" />
-                            <span>Occlusion</span>
-                          </span>
-                        )}
-                        {deck.hasSourcePdf && (
-                          <span className="text-[11px] font-semibold flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30" title="PDF Grounded">
-                            <FileText className="w-2.5 h-2.5" />
-                            <span>Source</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <h4 className="text-sm font-bold text-white group-hover:text-indigo-200 transition-colors font-display line-clamp-2">
-                      {deck.title}
-                    </h4>
-
-                    <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
-                      {deck.summary}
-                    </p>
-
-                    <div className="flex items-center gap-1 text-[11px] text-slate-500 pt-1">
-                      <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
-                      <span className="truncate">{deck.verifiedBy}</span>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge>{deck.category}</Badge>
+                    {deck.hasImageOcclusion && (
+                      <Badge tone="brand">
+                        <Eye className="h-3 w-3" aria-hidden="true" />
+                        Occlusion
+                      </Badge>
+                    )}
+                    {deck.hasSourcePdf && (
+                      <Badge tone="brand">
+                        <FileText className="h-3 w-3" aria-hidden="true" />
+                        PDF source
+                      </Badge>
+                    )}
                   </div>
 
-                  <div className="pt-3 border-t border-white/[0.06] space-y-2.5">
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
-                      <span>{deck.conceptCount} Concepts • {deck.cardCount} Cards</span>
-                      <span className="flex items-center gap-1 text-slate-500 font-medium">
-                        <Clock className="w-3 h-3" />
-                        <span>~{deck.estimatedMinutes}m</span>
-                      </span>
-                    </div>
+                  <button
+                    type="button"
+                    onClick={() => (onOpenDeckStation ? onOpenDeckStation(deck.session) : onStartSession(deck.session))}
+                    className="mt-3 text-left cursor-pointer"
+                  >
+                    <h3 className="line-clamp-2 text-[15px] font-medium leading-snug text-ink group-hover:text-brand-text">{deck.title}</h3>
+                    <p className="mt-1 line-clamp-3 text-[13px] leading-relaxed text-ink-subtle">{deck.summary}</p>
+                  </button>
 
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const cloned = createClonedStarterSession(deck);
-                          StorageService.saveSession(cloned);
-                          StorageService.saveCards(cloned.concepts.flatMap(c => c.retrievalCards));
-                          soundEngine.playSuccess();
-                          setSavedSessions(StorageService.getSessions());
-                          setJustImportedId(deck.id);
-                          setTimeout(() => setJustImportedId(null), 3000);
-                        }}
-                        className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                          isJustImported
-                            ? 'bg-emerald-600 text-white'
-                            : isImported
-                            ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-950'
-                            : 'bg-white/[0.06] hover:bg-white/[0.1] text-slate-300'
-                        }`}
-                      >
-                        {isJustImported ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Imported</span>
-                          </>
-                        ) : isImported ? (
-                          <>
-                            <BookmarkCheck className="w-3.5 h-3.5" />
-                            <span>In Library</span>
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Import</span>
-                          </>
-                        )}
-                      </button>
+                  <p className="mt-3 flex items-center gap-1.5 text-xs text-ink-subtle">
+                    <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
+                    <span className="truncate">{deck.verifiedBy}</span>
+                  </p>
 
-                      {onStartMatch && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onStartMatch(deck.session);
-                          }}
-                          className="p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-semibold flex items-center justify-center transition-all cursor-pointer"
-                          title="Speed Match Arena"
-                        >
-                          <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                        </button>
-                      )}
-
-                      {onStartAudioBriefing && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onStartAudioBriefing(deck.session);
-                          }}
-                          className="p-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-xs font-semibold flex items-center justify-center transition-all cursor-pointer"
-                          title="AI Audio Briefing Overview"
-                        >
-                          <Headphones className="w-3.5 h-3.5 text-purple-400" />
-                        </button>
-                      )}
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onOpenDeckStation) onOpenDeckStation(deck.session);
-                          else onStartSession(deck.session);
-                        }}
-                        className="flex-1 py-2 px-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-bold shadow-md shadow-indigo-600/30 flex items-center justify-center gap-1.5 transition-all group-hover:scale-[1.02] cursor-pointer"
-                      >
-                        <span>Study</span>
-                        <Play className="w-3 h-3 fill-white" />
-                      </button>
-                    </div>
+                  <div className="mt-auto flex items-center justify-between pt-4 text-[13px] text-ink-subtle">
+                    <span>
+                      {deck.conceptCount} concepts · {deck.cardCount} cards
+                    </span>
+                    <span className="flex items-center gap-1 tabular-nums">
+                      <Clock className="h-3.5 w-3.5" aria-hidden="true" />~{deck.estimatedMinutes} min
+                    </span>
                   </div>
-                </div>
+
+                  <div className="mt-3 flex items-center gap-1">
+                    <Button
+                      variant={isImported || isJustImported ? 'ghost' : 'secondary'}
+                      size="sm"
+                      icon={isJustImported ? Check : isImported ? BookmarkCheck : Download}
+                      disabled={isImported && !isJustImported}
+                      onClick={() => {
+                        const cloned = createClonedStarterSession(deck);
+                        StorageService.saveSession(cloned);
+                        StorageService.saveCards(cloned.concepts.flatMap(c => c.retrievalCards));
+                        soundEngine.playSuccess();
+                        setSavedSessions(StorageService.getSessions());
+                        setJustImportedId(deck.id);
+                        setTimeout(() => setJustImportedId(null), 3000);
+                      }}
+                    >
+                      {isJustImported ? 'Added' : isImported ? 'In library' : 'Add'}
+                    </Button>
+                    <Button variant="primary" size="sm" icon={Play} onClick={() => onStartSession(deck.session)} className="flex-1">
+                      Study
+                    </Button>
+                    {onStartMatch && <IconButton icon={Zap} label="Speed match" onClick={() => onStartMatch(deck.session)} />}
+                    {onStartAudioBriefing && (
+                      <IconButton icon={Headphones} label="Audio briefing" onClick={() => onStartAudioBriefing(deck.session)} />
+                    )}
+                  </div>
+                </article>
               );
             })}
           </div>
         )}
-      </div>
+      </section>
 
       {/* Deck Studio Modal */}
       {isDeckStudioOpen && (
@@ -1733,5 +1123,61 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
     </div>
   );
 };
+
+const SOURCE_TABS: { mode: 'topic' | 'notes' | 'pdf'; label: string; icon: LucideIcon }[] = [
+  { mode: 'topic', label: 'Topic', icon: Sparkles },
+  { mode: 'notes', label: 'Notes', icon: FileText },
+  { mode: 'pdf', label: 'PDF', icon: FileUp },
+];
+
+interface StudyModeCardProps {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  meta: string;
+  onClick?: () => void;
+}
+
+const StudyModeCard: React.FC<StudyModeCardProps> = ({ icon: Icon, title, description, meta, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={!onClick}
+    className="group flex flex-col items-start gap-3 rounded-2xl border border-line bg-surface p-4 text-left transition-colors hover:border-line-strong hover:bg-surface-hover disabled:opacity-50 disabled:hover:bg-surface cursor-pointer"
+  >
+    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-soft text-brand-text">
+      <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+    </span>
+    <span>
+      <span className="block text-[15px] font-medium text-ink">{title}</span>
+      <span className="mt-1 block text-[13px] leading-relaxed text-ink-subtle">{description}</span>
+    </span>
+    <span className="mt-auto flex w-full items-center justify-between text-[13px] font-medium text-ink-muted group-hover:text-ink">
+      {meta}
+      <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+    </span>
+  </button>
+);
+
+const LibraryChip: React.FC<{
+  active: boolean;
+  onClick: () => void;
+  count?: number;
+  dotClassName?: string;
+  children: React.ReactNode;
+}> = ({ active, onClick, count, dotClassName, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={active}
+    className={`inline-flex h-8 shrink-0 items-center gap-2 rounded-full border px-3 text-[13px] transition-colors cursor-pointer ${
+      active ? 'border-transparent bg-ink text-canvas' : 'border-line text-ink-muted hover:border-line-strong hover:text-ink'
+    }`}
+  >
+    {dotClassName && <span className={`h-2 w-2 rounded-full ${dotClassName}`} aria-hidden="true" />}
+    <span className="max-w-[180px] truncate">{children}</span>
+    {count !== undefined && <span className={`tabular-nums ${active ? 'opacity-70' : 'text-ink-subtle'}`}>{count}</span>}
+  </button>
+);
 
 export default IngestionHub;
