@@ -1,23 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Flame, 
-  Layers, 
-  Volume2, 
-  VolumeX, 
-  Settings, 
-  Sparkles, 
-  CheckCircle2, 
-  Search, 
-  Award, 
-  Shuffle, 
-  WifiOff, 
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Flame,
+  Volume2,
+  VolumeX,
+  Search,
+  WifiOff,
   Download,
-  Compass,
   Menu,
-  User,
   PanelLeftOpen,
   Sun,
-  Moon
+  Moon,
+  CircleHelp,
+  Check,
 } from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
 import type { SoundType } from '../../services/soundEngine';
@@ -25,14 +19,17 @@ import type { UserStats, UserAccount } from '../../types';
 import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
 import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
 import { lifeSimService } from '../../services/lifeSimService';
-import { UserAvatarBadge } from '../character/UserAvatarBadge';
+import { BrandMark, CoinIcon, IconButton, Kbd } from '../ui/primitives';
+import { cn } from '../../utils/cn';
+
+type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders';
 
 interface NavbarProps {
   stats: UserStats;
   currentUser?: UserAccount | null;
   onOpenAuth?: (tab?: 'login' | 'register' | 'profile') => void;
-  activeView?: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders';
-  onNavigate?: (view: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders') => void;
+  activeView?: View;
+  onNavigate?: (view: View) => void;
   onOpenSettings: () => void;
   onOpenDashboard?: () => void;
   onOpenCommandPalette?: () => void;
@@ -50,20 +47,38 @@ interface NavbarProps {
   onOpenCharacterCustomizer?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ 
-  stats, 
+const VIEW_TITLES: Record<View, string> = {
+  home: 'Today',
+  studio: 'Library',
+  folders: 'Subjects',
+  dashboard: 'Insights',
+  exam: 'Mock exam',
+  interleave: 'Mix decks',
+  sanctuary: 'Campus',
+};
+
+const SOUND_PRESETS: { id: SoundType; label: string; desc: string }[] = [
+  { id: 'off', label: 'Off', desc: 'No background sound' },
+  { id: 'binaural-40hz', label: '40 Hz tone', desc: 'Steady background tone' },
+  { id: 'binaural-alpha-10hz', label: 'Alpha waves', desc: 'Calm, relaxed focus' },
+  { id: 'brown-noise', label: 'Brown noise', desc: 'Masks speech and background noise' },
+  { id: 'pink-noise', label: 'Pink noise', desc: 'Balanced, softer than white noise' },
+  { id: 'rain', label: 'Rain', desc: 'Gentle, steady rainfall' },
+  { id: 'ambient-drone', label: 'Ambient pad', desc: 'Warm, slow chord' },
+];
+
+const THEME_STORAGE_KEY = 'axon_theme';
+
+export const Navbar: React.FC<NavbarProps> = ({
+  stats,
   currentUser,
   onOpenAuth,
   activeView = 'home',
   onNavigate,
-  onOpenSettings, 
-  onOpenDashboard, 
-  onOpenCommandPalette, 
-  onOpenExam,
-  onOpenInterleaving,
+  onOpenDashboard,
+  onOpenCommandPalette,
   onOpenStarterCatalog,
   onOpenSanctuary,
-  onOpenCharacterCustomizer,
   onLogoClick,
   onToggleMobileSidebar,
   isOnline = true,
@@ -73,8 +88,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleSidebarCollapse,
 }) => {
   const [currentSound, setCurrentSound] = useState<SoundType>(soundEngine.getCurrentSound());
-  const [soundMenuOpen, setSoundMenuOpen] = useState(false);
   const [volume, setVolume] = useState(soundEngine.getVolume());
+  const [isSoundMenuOpen, setIsSoundMenuOpen] = useState(false);
+  const soundMenuRef = useRef<HTMLDivElement>(null);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
   const [isTourModalOpen, setIsTourModalOpen] = useState(() => {
     try {
@@ -85,291 +101,236 @@ export const Navbar: React.FC<NavbarProps> = ({
   });
   const [isPaperTheme, setIsPaperTheme] = useState(() => {
     try {
-      return localStorage.getItem('axon_theme') === 'paper';
+      return localStorage.getItem(THEME_STORAGE_KEY) === 'paper';
     } catch {
       return false;
     }
   });
+  const [walletCoins, setWalletCoins] = useState(() => lifeSimService.getWalletBalance());
 
   useEffect(() => {
-    try {
-      if (isPaperTheme) {
-        document.documentElement.setAttribute('data-theme', 'paper');
-      } else {
-        document.documentElement.removeAttribute('data-theme');
-      }
-    } catch {}
+    // Switch instantly: without this, every element with a color transition fades between themes.
+    const root = document.documentElement;
+    root.classList.add('theme-switching');
+    if (isPaperTheme) root.setAttribute('data-theme', 'paper');
+    else root.removeAttribute('data-theme');
+    const frame = requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')));
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isPaperTheme ? '#f6f6f3' : '#0a0a0f');
+    return () => {
+      cancelAnimationFrame(frame);
+      root.classList.remove('theme-switching');
+    };
   }, [isPaperTheme]);
 
-  const handleToggleTheme = () => {
+  useEffect(() => {
+    const unsubSound = soundEngine.subscribe((sound, vol) => {
+      setCurrentSound(sound);
+      setVolume(vol);
+    });
+    const unsubLife = lifeSimService.subscribe(() => setWalletCoins(lifeSimService.getWalletBalance()));
+    return () => {
+      unsubSound();
+      unsubLife();
+    };
+  }, []);
+
+  // Close the sound menu on outside click or Escape.
+  useEffect(() => {
+    if (!isSoundMenuOpen) return;
+    const onPointer = (e: MouseEvent) => {
+      if (soundMenuRef.current && !soundMenuRef.current.contains(e.target as Node)) setIsSoundMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsSoundMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [isSoundMenuOpen]);
+
+  const toggleTheme = () => {
     setIsPaperTheme(prev => {
       const next = !prev;
       try {
-        localStorage.setItem('axon_theme', next ? 'paper' : 'dark');
-        if (next) {
-          document.documentElement.setAttribute('data-theme', 'paper');
-        } else {
-          document.documentElement.removeAttribute('data-theme');
-        }
-      } catch {}
+        localStorage.setItem(THEME_STORAGE_KEY, next ? 'paper' : 'dark');
+      } catch {
+        // ignore
+      }
       return next;
     });
   };
 
-  // Listen to sound engine state changes
-  useEffect(() => {
-    const unsubscribe = soundEngine.subscribe((sound, vol) => {
-      setCurrentSound(sound);
-      setVolume(vol);
-    });
-    return unsubscribe;
-  }, []);
-
-  const handleSoundChange = (type: SoundType) => {
-    soundEngine.play(type);
-    setCurrentSound(type);
-  };
-
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value);
-    setVolume(val);
-    soundEngine.setVolume(val);
+    const value = parseFloat(e.target.value);
+    setVolume(value);
+    soundEngine.setVolume(value);
   };
 
-  // Daily goal calculation
   const dailyGoal = stats.dailyGoalMinutes || 25;
   const todayMinutes = stats.todayMinutes || 0;
   const goalPercent = Math.min(100, Math.round((todayMinutes / dailyGoal) * 100));
-  const goalCompleted = goalPercent >= 100;
-
-  // Student wallet balance
-  const [walletCoins, setWalletCoins] = useState(() => lifeSimService.getWalletBalance());
-  useEffect(() => {
-    const unsub = lifeSimService.subscribe(() => {
-      setWalletCoins(lifeSimService.getWalletBalance());
-    });
-    return unsub;
-  }, []);
-
-  const soundPresets: { id: SoundType; label: string; desc: string; icon: string }[] = [
-    { id: 'off', label: 'Mute Audio', desc: 'Silence focus synthesizers', icon: '🔇' },
-    { id: 'binaural-40hz', label: '40 Hz Tone', desc: 'Steady background tone', icon: '🎧' },
-    { id: 'binaural-alpha-10hz', label: '10Hz Alpha Waves', desc: 'Relaxed focus & anxiety reduction', icon: '🧘' },
-    { id: 'brown-noise', label: 'Brownian Deep Noise', desc: 'Acoustic masking of speech & background', icon: '🌊' },
-    { id: 'pink-noise', label: 'Spectral Pink Noise', desc: 'Balanced frequencies for memory stabilization', icon: '🌸' },
-    { id: 'rain', label: 'Gentle Steady Rain', desc: 'Calming natural broadband soundscape', icon: '🌧️' },
-    { id: 'ambient-drone', label: 'Solfeggio Meditative Drone', desc: 'Warm chord pad for deep immersion', icon: '🎵' },
-  ];
+  const goalDone = goalPercent >= 100;
+  const ringRadius = 7;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  const isSoundOn = currentSound !== 'off';
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#090a10]/85 backdrop-blur-xl transition-all">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-3">
-        
-        {/* Left: Mobile Drawer Trigger + Brand Identity */}
-        <div className="flex items-center gap-3 shrink-0">
+      <header className="sticky top-0 z-30 w-full border-b border-line bg-canvas/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-1.5 px-3 sm:gap-2 sm:px-6">
           {onToggleMobileSidebar && (
-            <button
-              onClick={onToggleMobileSidebar}
-              className="md:hidden p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-slate-300 hover:text-white transition-all cursor-pointer"
-              aria-label="Open Navigation"
-              title="Open Navigation"
-            >
-              <Menu className="w-4 h-4" />
-            </button>
-          )}
-
-          <div 
-            onClick={onLogoClick}
-            className="flex items-center gap-2.5 cursor-pointer group select-none md:hidden"
-          >
-            <div className="relative w-8 h-8 rounded-xl overflow-hidden p-0.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-all flex items-center justify-center">
-              <UserAvatarBadge size="xs" />
+            <div className="flex md:hidden">
+              <IconButton icon={Menu} label="Open navigation" onClick={onToggleMobileSidebar} />
             </div>
-            <span className="font-extrabold text-base text-white tracking-tight font-display">Studify</span>
-          </div>
-
-          {/* Desktop Sidebar Expand Toggle (visible when sidebar is collapsed) */}
+          )}
+          <button type="button" onClick={onLogoClick} className="mr-1 md:hidden cursor-pointer" aria-label="Studify home">
+            <BrandMark size={26} />
+          </button>
           {onToggleSidebarCollapse && isSidebarCollapsed && (
-            <button
-              onClick={onToggleSidebarCollapse}
-              className="hidden md:flex p-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-indigo-400 hover:text-indigo-300 transition-all cursor-pointer mr-1"
-              aria-label="Expand Sidebar"
-              title="Expand Sidebar [Ctrl+[]"
-            >
-              <PanelLeftOpen className="w-4 h-4" />
-            </button>
+            <div className="hidden md:flex">
+              <IconButton icon={PanelLeftOpen} label="Expand sidebar" onClick={onToggleSidebarCollapse} />
+            </div>
           )}
 
-          <div className="hidden md:flex items-center gap-2.5 text-xs font-semibold text-slate-400">
-            <span className="text-indigo-400">⚡</span>
-            <span className="text-slate-300 capitalize">
-              {activeView === 'home' ? 'Home & Decks' : activeView === 'dashboard' ? 'FSRS Retention' : activeView === 'exam' ? 'Mock Exam' : activeView === 'sanctuary' ? 'Home & Design' : activeView === 'studio' ? 'Document Studio' : 'Interleaving'}
+          <h1 className="hidden shrink-0 text-[15px] font-semibold tracking-tight text-ink sm:block">
+            {VIEW_TITLES[activeView]}
+          </h1>
+
+          <div className="flex-1" />
+
+          {onOpenCommandPalette && (
+            <>
+              <button
+                type="button"
+                onClick={onOpenCommandPalette}
+                className="hidden h-9 w-64 min-w-0 shrink items-center gap-2 rounded-lg border border-line bg-surface px-3 text-[13px] text-ink-subtle transition-colors hover:border-line-strong hover:text-ink-muted lg:flex cursor-pointer"
+              >
+                <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="flex-1 truncate text-left">Search decks and cards</span>
+                <Kbd>⌘K</Kbd>
+              </button>
+              <div className="flex lg:hidden">
+                <IconButton icon={Search} label="Search" onClick={onOpenCommandPalette} />
+              </div>
+            </>
+          )}
+
+          <div className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden="true" />
+
+          {/* Daily goal */}
+          <div
+            title={`Daily goal: ${todayMinutes} of ${dailyGoal} minutes`}
+            className="hidden h-9 items-center gap-2 rounded-lg px-2 text-[13px] sm:flex"
+          >
+            <svg width="18" height="18" className="-rotate-90" aria-hidden="true">
+              <circle cx="9" cy="9" r={ringRadius} fill="none" stroke="var(--surface-hover)" strokeWidth="2.5" />
+              <circle
+                cx="9"
+                cy="9"
+                r={ringRadius}
+                fill="none"
+                stroke={goalDone ? 'var(--success)' : 'var(--brand)'}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeDasharray={ringCircumference}
+                strokeDashoffset={ringCircumference * (1 - goalPercent / 100)}
+                className="transition-[stroke-dashoffset] duration-500"
+              />
+            </svg>
+            <span className="tabular-nums text-ink">
+              {todayMinutes}
+              <span className="text-ink-subtle">/{dailyGoal}m</span>
             </span>
-            
-            <button
-              onClick={() => setIsTourModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-400 hover:text-white transition-all cursor-pointer shadow-sm group"
-              title="Interactive tour: How Studify's 4-Phase Cognitive Architecture Works"
-            >
-              <span className="text-[11px] font-semibold">How it Works</span>
-            </button>
+            {goalDone && <Check className="h-3.5 w-3.5 text-success" aria-label="Goal complete" />}
           </div>
-        </div>
 
-        {/* Center: Quizlet-style Wide Search Bar */}
-        {onOpenCommandPalette && (
+          {/* Streak */}
           <button
-            onClick={onOpenCommandPalette}
-            className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-slate-900/90 hover:bg-slate-850 border border-white/[0.1] hover:border-indigo-500/50 text-slate-400 hover:text-slate-200 text-xs transition-all shadow-sm flex-1 max-w-xs sm:max-w-md lg:max-w-lg mx-2 justify-between group cursor-pointer"
-          >
-            <div className="flex items-center gap-2.5 truncate">
-              <Search className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400 transition-colors shrink-0" />
-              <span className="text-slate-400 group-hover:text-slate-200 truncate">Search flashcards, topics, decks...</span>
-            </div>
-            <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[11px] font-mono bg-white/[0.08] border border-white/[0.1] rounded text-slate-400 shrink-0">
-              ⌘K
-            </kbd>
-          </button>
-        )}
-
-        {/* Right: Live Metrics & Controls */}
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-          
-          {/* Student Token Wallet Badge */}
-          <button 
-            type="button"
-            onClick={() => onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.()}
-            title={`Student Wallet: 🪙 ${walletCoins} Tokens — Click to visit Campus Life & Cafeteria`}
-            className="hidden xl:flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-850 border border-amber-500/30 hover:border-amber-500/60 text-xs font-medium cursor-pointer transition-colors shadow-sm group"
-          >
-            <div className="w-5 h-5 rounded-md bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold text-xs">
-              🪙
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-mono font-black text-amber-300 text-xs">
-                {walletCoins}
-              </span>
-              <span className="text-[11px] text-slate-400 group-hover:text-amber-200 transition-colors">Tokens</span>
-            </div>
-          </button>
-
-          {/* Daily Goal Radial Ring */}
-          <div 
-            title={`Daily Target: ${todayMinutes}m of ${dailyGoal}m completed (${goalPercent}%)`}
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900/80 border border-white/[0.08] text-xs font-medium cursor-help hover:border-indigo-500/40 transition-colors"
-          >
-            <div className="relative w-5 h-5 flex items-center justify-center">
-              <svg className="w-5 h-5 transform -rotate-90">
-                <circle
-                  cx="10"
-                  cy="10"
-                  r={8}
-                  stroke="#1e293b"
-                  strokeWidth="2.2"
-                  fill="transparent"
-                />
-                <circle
-                  cx="10"
-                  cy="10"
-                  r={8}
-                  stroke={goalCompleted ? '#10b981' : '#6366f1'}
-                  strokeWidth="2.2"
-                  strokeDasharray={2 * Math.PI * 8}
-                  strokeDashoffset={2 * Math.PI * 8 - (goalPercent / 100) * (2 * Math.PI * 8)}
-                  strokeLinecap="round"
-                  fill="transparent"
-                  className="transition-all duration-500"
-                />
-              </svg>
-              {goalCompleted ? (
-                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400 absolute" />
-              ) : (
-                <span className="text-[8px] font-bold text-slate-300 absolute">
-                  {goalPercent}%
-                </span>
-              )}
-            </div>
-            <div className="hidden sm:block text-[11px]">
-              <span className="text-slate-200 font-semibold">{todayMinutes}m</span>
-              <span className="text-slate-500">/{dailyGoal}m</span>
-            </div>
-          </div>
-
-          {/* Daily Streak */}
-          <button 
             type="button"
             onClick={() => setIsStreakModalOpen(true)}
-            title="Streak Guardian — Click to check streak status & freeze"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-850 border border-white/[0.08] hover:border-amber-500/50 text-amber-400 text-xs font-semibold shadow-sm transition-all cursor-pointer group hover:scale-105"
+            title="Streak"
+            aria-label={`${stats.currentStreak} day streak`}
+            className="flex h-9 items-center gap-1.5 rounded-lg px-2 text-[13px] font-medium tabular-nums text-ink transition-colors hover:bg-surface-hover cursor-pointer"
           >
-            <Flame className="w-4 h-4 fill-amber-400 text-amber-500 animate-pulse group-hover:scale-110 transition-transform" />
-            <span>{stats.currentStreak}d</span>
+            <Flame className={cn('h-4 w-4', stats.currentStreak > 0 ? 'fill-gold text-gold' : 'text-ink-subtle')} aria-hidden="true" />
+            {stats.currentStreak}
           </button>
 
-          {/* Audio Engine with Real-Time Equalizer Bar Indicator */}
-          <div className="relative">
-            <button
-              onClick={() => setSoundMenuOpen(!soundMenuOpen)}
-              className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-2 transition-all cursor-pointer ${
-                currentSound !== 'off'
-                  ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300 shadow-md shadow-indigo-500/15'
-                  : 'bg-slate-900/80 border-white/[0.08] text-slate-400 hover:text-white'
-              }`}
-              title="Focus Soundscapes (noise, rain, tones)"
+          {/* Wallet */}
+          <button
+            type="button"
+            onClick={() => (onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.())}
+            title="Wallet: open Campus"
+            aria-label={`${walletCoins} tokens, open Campus`}
+            className="flex h-9 items-center gap-1.5 rounded-lg px-2 text-[13px] font-semibold tabular-nums text-gold transition-colors hover:bg-gold-soft cursor-pointer"
+          >
+            <CoinIcon className="h-4 w-4" />
+            {walletCoins.toLocaleString()}
+          </button>
+
+          <div className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden="true" />
+
+          {!isOnline && (
+            <span
+              title="You're offline. Decks and reviews still work."
+              className="hidden h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-gold sm:flex"
             >
-              {currentSound !== 'off' ? (
-                <div className="flex items-center gap-1.5">
-                  <div className="flex items-end gap-0.5 h-3.5 w-3.5">
-                    <span className="w-0.5 bg-indigo-400 rounded-full animate-eq-1" />
-                    <span className="w-0.5 bg-indigo-300 rounded-full animate-eq-2" />
-                    <span className="w-0.5 bg-indigo-400 rounded-full animate-eq-3" />
-                  </div>
-                  <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
-                </div>
-              ) : (
-                <VolumeX className="w-4 h-4" />
-              )}
-            </button>
+              <WifiOff className="h-4 w-4" aria-hidden="true" />
+              Offline
+            </span>
+          )}
 
-            {/* Audio Dropdown Popover */}
-            {soundMenuOpen && (
-              <div className="absolute right-0 mt-2 w-72 p-3.5 rounded-2xl bg-[#0e111d] border border-white/[0.12] shadow-2xl z-50 text-xs text-slate-200 animate-fadeIn">
-                <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/[0.08]">
-                  <span className="font-bold text-white flex items-center gap-1.5 font-display">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                    Neuro-Focus Soundscapes
-                  </span>
-                  <span className="text-[11px] text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 font-mono">
-                    Zero Latency
-                  </span>
-                </div>
+          {isInstallable && onPromptInstall && (
+            <div className="hidden sm:flex">
+              <IconButton icon={Download} label="Install app" onClick={onPromptInstall} />
+            </div>
+          )}
 
-                <div className="space-y-1 mb-3 max-h-56 overflow-y-auto pr-1">
-                  {soundPresets.map(sound => (
-                    <button
-                      key={sound.id}
-                      onClick={() => handleSoundChange(sound.id)}
-                      className={`w-full text-left px-2.5 py-2 rounded-xl flex items-start gap-2.5 transition-all cursor-pointer ${
-                        currentSound === sound.id
-                          ? 'bg-indigo-600 text-white font-medium shadow-md shadow-indigo-600/20'
-                          : 'hover:bg-white/[0.05] text-slate-300'
-                      }`}
-                    >
-                      <span className="text-sm mt-0.5">{sound.icon}</span>
-                      <div className="min-w-0">
-                        <div className="font-semibold text-xs leading-tight">{sound.label}</div>
-                        <div className={`text-[11px] leading-tight mt-0.5 ${currentSound === sound.id ? 'text-indigo-100' : 'text-slate-400'}`}>
-                          {sound.desc}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+          {/* Focus sound */}
+          <div className="relative hidden sm:block" ref={soundMenuRef}>
+            <IconButton
+              icon={isSoundOn ? Volume2 : VolumeX}
+              label="Focus sound"
+              active={isSoundOn}
+              aria-expanded={isSoundMenuOpen}
+              aria-haspopup="menu"
+              onClick={() => setIsSoundMenuOpen(open => !open)}
+            />
+            {isSoundMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-11 z-50 w-72 rounded-xl border border-line-strong bg-surface-solid p-1.5 shadow-2xl animate-fadeIn"
+              >
+                <div className="px-2.5 pb-1.5 pt-1 text-xs font-medium text-ink-subtle">Focus sound</div>
+                <div className="max-h-64 space-y-0.5 overflow-y-auto">
+                  {SOUND_PRESETS.map(sound => {
+                    const selected = currentSound === sound.id;
+                    return (
+                      <button
+                        key={sound.id}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={selected}
+                        onClick={() => soundEngine.play(sound.id)}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors cursor-pointer',
+                          selected ? 'bg-brand-soft' : 'hover:bg-surface-hover',
+                        )}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className={cn('block text-[13px] font-medium', selected ? 'text-brand-text' : 'text-ink')}>{sound.label}</span>
+                          <span className="block truncate text-xs text-ink-subtle">{sound.desc}</span>
+                        </span>
+                        {selected && <Check className="h-4 w-4 shrink-0 text-brand-text" aria-hidden="true" />}
+                      </button>
+                    );
+                  })}
                 </div>
-
-                {/* Volume Slider */}
-                <div className="pt-2 border-t border-white/[0.08] flex items-center gap-2 text-slate-400">
-                  <Volume2 className="w-3.5 h-3.5" />
+                <div className="mt-1.5 flex items-center gap-2.5 border-t border-line px-2.5 pb-1 pt-2.5">
+                  <Volume2 className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden="true" />
                   <input
                     type="range"
                     min="0"
@@ -377,193 +338,61 @@ export const Navbar: React.FC<NavbarProps> = ({
                     step="0.05"
                     value={volume}
                     onChange={handleVolumeChange}
-                    className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                    aria-label="Volume"
+                    className="h-1.5 w-full cursor-pointer accent-[var(--brand)]"
                   />
-                  <span className="font-mono text-[11px] w-7 text-right">{Math.round(volume * 100)}%</span>
+                  <span className="w-8 text-right text-xs tabular-nums text-ink-subtle">{Math.round(volume * 100)}%</span>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Offline Mode Indicator */}
-          {!isOnline && (
-            <div 
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold shadow-sm"
-              title="Studify is operating offline. All local decks and FSRS reviews work without internet."
-            >
-              <WifiOff className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Offline</span>
-            </div>
-          )}
+          <div className="hidden items-center sm:flex">
+            <IconButton
+              icon={isPaperTheme ? Moon : Sun}
+              label={isPaperTheme ? 'Switch to dark theme' : 'Switch to light theme'}
+              onClick={toggleTheme}
+            />
+            <IconButton icon={CircleHelp} label="How Studify works" onClick={() => setIsTourModalOpen(true)} />
+          </div>
 
-          {/* PWA Install Button */}
-          {isInstallable && onPromptInstall && (
-            <button
-              onClick={onPromptInstall}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-semibold text-xs shadow-md shadow-indigo-600/30 transition-all cursor-pointer hover:scale-[1.02]"
-              title="Install Studify Native App"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Install</span>
-            </button>
-          )}
-
-          {/* 3D Scholar Avatar Customizer Trigger */}
-          {onOpenCharacterCustomizer && (
-            <button
-              type="button"
-              onClick={onOpenCharacterCustomizer}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/15 hover:from-indigo-500/25 hover:via-purple-500/25 hover:to-pink-500/25 border border-indigo-500/30 hover:border-indigo-400/60 text-slate-200 hover:text-white transition-all shadow-sm cursor-pointer group"
-              title="Customize 3D Scholar Avatar (Hair, Sex, Wardrobe, Style)"
-            >
-              <div className="w-5 h-5 rounded-lg overflow-hidden flex items-center justify-center p-0.5 bg-indigo-500/20 group-hover:scale-110 transition-transform">
-                <UserAvatarBadge size="xs" />
-              </div>
-              <span className="text-xs font-bold bg-gradient-to-r from-indigo-200 via-purple-200 to-pink-200 bg-clip-text text-transparent hidden sm:inline">
-                Edit 3D Model
-              </span>
-            </button>
-          )}
-
-          {/* User Account / Profile Pill */}
-          <button
-            onClick={() => onOpenAuth ? onOpenAuth(currentUser ? 'profile' : 'login') : undefined}
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-850 border border-white/[0.08] hover:border-indigo-500/50 text-slate-300 hover:text-white transition-all shadow-sm cursor-pointer group"
-            title={currentUser ? `Logged in as ${currentUser.name} (${currentUser.email})` : 'Log In or Create Account'}
-          >
-            {currentUser ? (
-              <>
-                <span className="text-sm select-none">{currentUser.avatar}</span>
-                <span className="text-xs font-bold text-white max-w-[85px] sm:max-w-[120px] truncate hidden sm:inline">
-                  {currentUser.name}
-                </span>
-                <span className="text-[11px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hidden lg:inline truncate max-w-[120px]">
-                  {currentUser.grade || 'Student'}
-                </span>
-              </>
-            ) : (
-              <>
-                <div className="w-5 h-5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                  <User className="w-3 h-3" />
-                </div>
-                <span className="text-xs font-semibold text-slate-300 group-hover:text-white">
-                  Log In
-                </span>
-              </>
-            )}
-          </button>
-
-          {/* Daylight Paper Study Theme Toggle */}
+          {/* Account */}
           <button
             type="button"
-            onClick={handleToggleTheme}
-            className="p-2 rounded-xl bg-slate-900/80 border border-white/[0.08] hover:border-amber-400/40 text-slate-400 hover:text-amber-300 transition-all shadow-sm cursor-pointer"
-            aria-label={isPaperTheme ? "Switch to Dark Theme" : "Switch to Daylight Theme"}
-            title={isPaperTheme ? "Switch to Dark Obsidian Theme" : "Switch to Daylight / Paper Study Theme"}
+            onClick={() => onOpenAuth?.(currentUser ? 'profile' : 'login')}
+            aria-label={currentUser ? `Account: ${currentUser.name}` : 'Log in'}
+            title={currentUser ? `${currentUser.name} (${currentUser.email})` : 'Log in or create an account'}
+            className="ml-0.5 flex h-9 items-center gap-2 rounded-full pl-0.5 pr-0.5 transition-colors hover:bg-surface-hover sm:pr-3 cursor-pointer"
           >
-            {isPaperTheme ? <Moon className="w-4 h-4 text-indigo-400" /> : <Sun className="w-4 h-4 text-amber-400" />}
-          </button>
-
-          {/* Settings Modal Button */}
-          <button
-            onClick={onOpenSettings}
-            className="p-2 rounded-xl bg-slate-900/80 border border-white/[0.08] hover:border-white/[0.2] text-slate-400 hover:text-white transition-all shadow-sm cursor-pointer"
-            aria-label="Settings and Data Export"
-            title="Settings & Data Export"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-
-        </div>
-
-      </div>
-
-      {/* Mobile Sub-Navigation Pill Bar */}
-      <div className="lg:hidden border-t border-white/[0.06] bg-slate-950/80 px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs">
-        <button
-          onClick={() => onNavigate ? onNavigate('home') : (onLogoClick && onLogoClick())}
-          className={`px-3 py-1 rounded-xl font-semibold whitespace-nowrap flex items-center gap-1.5 ${
-            activeView === 'home'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Compass className="w-3 h-3" />
-          <span>Workspace</span>
-        </button>
-
-        <button
-          onClick={() => onNavigate ? onNavigate('dashboard') : (onOpenDashboard && onOpenDashboard())}
-          className={`px-3 py-1 rounded-xl font-semibold whitespace-nowrap flex items-center gap-1.5 ${
-            activeView === 'dashboard'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Layers className="w-3 h-3" />
-          <span>Retention</span>
-          {stats.cardsDueCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[11px] bg-emerald-500/20 text-emerald-300">
-              {stats.cardsDueCount}
+            <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-brand-soft text-sm font-semibold text-brand-text">
+              {currentUser ? currentUser.avatar || currentUser.name.charAt(0).toUpperCase() : 'G'}
             </span>
-          )}
-        </button>
-
-        {onOpenStarterCatalog && (
-          <button
-            onClick={onOpenStarterCatalog}
-            className="px-3 py-1 rounded-xl font-semibold whitespace-nowrap text-slate-400 hover:text-white flex items-center gap-1.5"
-          >
-            <Sparkles className="w-3 h-3 text-amber-400" />
-            <span>Catalog</span>
+            <span className="hidden max-w-[120px] truncate text-[13px] font-medium text-ink sm:inline">
+              {currentUser ? currentUser.name.split(' ')[0] : 'Log in'}
+            </span>
           </button>
-        )}
+        </div>
+      </header>
 
-        <button
-          onClick={() => onNavigate ? onNavigate('exam') : (onOpenExam && onOpenExam())}
-          className={`px-3 py-1 rounded-xl font-semibold whitespace-nowrap flex items-center gap-1.5 ${
-            activeView === 'exam'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Award className="w-3 h-3 text-amber-400" />
-          <span>Exam</span>
-        </button>
+      <StreakGuardianModal
+        isOpen={isStreakModalOpen}
+        onClose={() => setIsStreakModalOpen(false)}
+        stats={stats}
+        onLaunchStreakSaver={onOpenDashboard}
+      />
 
-        <button
-          onClick={() => onNavigate ? onNavigate('interleave') : (onOpenInterleaving && onOpenInterleaving())}
-          className={`px-3 py-1 rounded-xl font-semibold whitespace-nowrap flex items-center gap-1.5 ${
-            activeView === 'interleave'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Shuffle className="w-3 h-3 text-purple-400" />
-          <span>Interleave</span>
-        </button>
-      </div>
-    </header>
-
-    {/* Streak Guardian Modal */}
-    <StreakGuardianModal
-      isOpen={isStreakModalOpen}
-      onClose={() => setIsStreakModalOpen(false)}
-      stats={stats}
-      onLaunchStreakSaver={onOpenDashboard}
-    />
-
-    {/* How AXON Works 4-Phase Cognitive Architecture Tour */}
-    <CognitiveTourModal
-      isOpen={isTourModalOpen}
-      onClose={() => {
-        setIsTourModalOpen(false);
-        try {
-          localStorage.setItem('axon_tour_seen', 'true');
-        } catch {}
-      }}
-      onStartQuickSession={onOpenStarterCatalog}
-    />
-  </>
+      <CognitiveTourModal
+        isOpen={isTourModalOpen}
+        onClose={() => {
+          setIsTourModalOpen(false);
+          try {
+            localStorage.setItem('axon_tour_seen', 'true');
+          } catch {
+            // ignore
+          }
+        }}
+        onStartQuickSession={onOpenStarterCatalog}
+      />
+    </>
   );
 };

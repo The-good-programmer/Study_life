@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { StorageService } from '../storageService';
 import { lifeSimService } from '../lifeSimService';
-import { earnedToday, grantReward } from './rewardService';
+import { earnedToday, earningsForDay, estimateReward, grantReward } from './rewardService';
 
 const NOON = new Date(2026, 2, 4, 12, 0, 0);
 
@@ -97,5 +97,59 @@ describe('grantReward', () => {
     expect(StorageService.getEarnings()).toEqual([]);
     expect(grantReward({ kind: 'rest' }, { now: NOON }).capped).toBe(false);
     StorageService.setActiveUserId(null);
+  });
+});
+
+describe('estimateReward', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    StorageService.setActiveUserId(null);
+    vi.spyOn(lifeSimService, 'awardStudyWage').mockImplementation((activity, rawAmount) => ({
+      rawAmount,
+      buffBonus: 0,
+      totalAmount: rawAmount,
+      activity,
+    }));
+  });
+
+  it('matches what granting would pay, without paying anything', () => {
+    const estimate = estimateReward({ kind: 'match-clear' }, NOON);
+    expect(estimate).toEqual({ xp: 45, tokens: 20 });
+    expect(StorageService.getEarnings()).toEqual([]);
+    expect(grantReward({ kind: 'match-clear' }, { now: NOON })).toMatchObject(estimate);
+  });
+
+  it('reflects today\'s caps', () => {
+    grantReward({ kind: 'rest' }, { now: NOON });
+    expect(estimateReward({ kind: 'rest' }, NOON).tokens).toBe(3);
+  });
+});
+
+describe('earningsForDay', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    StorageService.setActiveUserId(null);
+    vi.spyOn(lifeSimService, 'awardStudyWage').mockImplementation((activity, rawAmount) => ({
+      rawAmount,
+      buffBonus: 0,
+      totalAmount: rawAmount,
+      activity,
+    }));
+  });
+
+  it('groups today\'s payouts by kind, biggest token earners first, and ignores other days', () => {
+    grantReward({ kind: 'review', rating: 'good' }, { now: NOON });
+    grantReward({ kind: 'review', rating: 'good' }, { now: NOON });
+    grantReward({ kind: 'match-clear' }, { now: NOON });
+    grantReward({ kind: 'match-clear' }, { now: new Date(2026, 2, 3, 12) });
+
+    const summary = earningsForDay(NOON);
+    expect(summary.map(s => s.kind)).toEqual(['match-clear', 'review']);
+    expect(summary[0]).toMatchObject({ paidTokens: 20, paidXp: 45 });
+    expect(summary[1]).toMatchObject({ paidXp: 20, paidTokens: 0 });
+  });
+
+  it('is empty when nothing was earned', () => {
+    expect(earningsForDay(NOON)).toEqual([]);
   });
 });

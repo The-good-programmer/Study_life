@@ -7,6 +7,7 @@ import { GoogleAuthService } from './services/googleAuthService';
 import { usePwaInstall } from './hooks/usePwaInstall';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
+import { MobileTabBar } from './components/layout/MobileTabBar';
 import { NotificationService } from './services/notificationService';
 import { WagePayoutBanner } from './components/lifesim/WagePayoutBanner';
 
@@ -30,9 +31,9 @@ const FoldersPage = lazy(() => import('./components/folders/FoldersPage').then(m
 const CharacterCustomizerModal = lazy(() => import('./components/character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal })));
 
 const LazyLoadingFallback = () => (
-  <div className="flex flex-col items-center justify-center min-h-[350px] w-full p-8 animate-fadeIn">
-    <div className="w-10 h-10 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin mb-3" />
-    <span className="text-xs font-mono text-slate-400">Loading module...</span>
+  <div className="flex min-h-[350px] w-full flex-col items-center justify-center p-8 animate-fadeIn" role="status">
+    <div className="h-8 w-8 rounded-full border-2 border-line-strong border-t-brand animate-spin" />
+    <span className="sr-only">Loading</span>
   </div>
 );
 
@@ -167,7 +168,7 @@ export function App() {
   if (matchSession) {
     return (
       <Suspense fallback={<LazyLoadingFallback />}>
-        <div className="min-h-screen bg-[#090a10] bg-ambient-mesh text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white p-4 sm:p-8">
+        <div className="min-h-screen bg-canvas bg-ambient-mesh text-ink flex flex-col font-sans p-4 sm:p-8">
           <MatchArena
             session={matchSession}
             onBack={() => {
@@ -221,7 +222,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#090a10] bg-ambient-mesh text-slate-100 flex font-sans selection:bg-indigo-500 selection:text-white relative">
+    <div className="relative flex min-h-screen bg-canvas bg-ambient-mesh font-sans text-ink">
       {/* Desktop Sidebar & Mobile Drawer */}
       <Sidebar
         activeView={view}
@@ -282,9 +283,9 @@ export function App() {
 
         {/* Offline Mode Banner */}
         {!isOnline && view !== 'sanctuary' && (
-          <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 text-center text-xs font-semibold text-amber-300 flex items-center justify-center gap-2">
-            <WifiOff className="w-4 h-4 text-amber-400" />
-            <span>Offline Mode Active • All local decks, image occlusions, and FSRS reviews work 100% offline.</span>
+          <div className="flex items-center justify-center gap-2 border-b border-line bg-gold-soft px-4 py-2 text-center text-xs font-medium text-gold">
+            <WifiOff className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>You're offline. Your decks, reviews and image occlusions all keep working.</span>
           </div>
         )}
 
@@ -292,7 +293,7 @@ export function App() {
         <main className={`flex-1 w-full ${
           view === 'sanctuary'
             ? 'h-full max-w-none p-0 overflow-hidden flex flex-col'
-            : 'max-w-7xl mx-auto p-3 sm:p-6 lg:p-8'
+            : 'max-w-7xl mx-auto px-4 pt-5 pb-24 sm:px-6 sm:pt-7 md:pb-10 lg:px-8'
         }`}>
           <Suspense fallback={<LazyLoadingFallback />}>
             {view === 'home' && (
@@ -311,6 +312,7 @@ export function App() {
                 onOpenSanctuary={() => handleNavigate('sanctuary')}
                 onOpenExam={() => handleNavigate('exam')}
                 onOpenFolders={() => handleNavigate('folders')}
+                onOpenLibrary={() => handleNavigate('studio')}
               />
             )}
             {view === 'studio' && (
@@ -389,42 +391,11 @@ export function App() {
           </Suspense>
         </main>
 
-        {/* Footer - hidden in sanctuary 3D mode */}
-        {view !== 'sanctuary' && (
-          <footer className="w-full border-t border-white/[0.08] bg-slate-950/80 backdrop-blur-md py-6 px-4 text-center text-xs text-slate-500">
-            <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-200 font-display text-sm tracking-tight">Studify</span>
-                <span className="text-slate-600">•</span>
-                <span className="text-slate-400">Micro-Mastery &amp; Spaced Recall with Custom 3D Avatar</span>
-              </div>
-            <div className="flex items-center gap-4 text-[12px] text-slate-400">
-              <button 
-                type="button" 
-                onClick={() => setIsSettingsOpen(true)}
-                className="hover:text-indigo-400 transition-colors cursor-pointer"
-              >
-                Settings
-              </button>
-              <button 
-                type="button" 
-                onClick={() => handleNavigate('sanctuary')}
-                className="hover:text-indigo-400 transition-colors cursor-pointer"
-              >
-                Campus Life
-              </button>
-              <button 
-                type="button" 
-                onClick={() => setIsStarterCatalogOpen(true)}
-                className="hover:text-indigo-400 transition-colors cursor-pointer"
-              >
-                Explore Decks
-              </button>
-            </div>
-          </div>
-        </footer>
-      )}
       </div>
+
+      {view !== 'sanctuary' && (
+        <MobileTabBar activeView={view} onNavigate={handleNavigate} dueCardsCount={dueCards.length} />
+      )}
 
       {/* Floating NotebookLM-style Audio Briefing Bar */}
       {audioSession && (

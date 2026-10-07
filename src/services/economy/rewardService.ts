@@ -6,7 +6,7 @@ import {
   applyDiminishing,
   computePayout,
 } from './rewardRules';
-import type { RewardEvent } from './rewardRules';
+import type { Payout, RewardEvent, RewardKind } from './rewardRules';
 
 /** Earnings older than this are dropped; caps only need today, the rest is a short audit trail. */
 const RETENTION_DAYS = 14;
@@ -94,4 +94,48 @@ export const earnedToday = (kind: RewardEvent['kind'], now: Date = new Date()) =
       }),
       { rawXp: 0, rawTokens: 0, paidXp: 0, paidTokens: 0 },
     );
+};
+
+/**
+ * What an event would pay right now, after today's caps, without paying it.
+ * Used to show honest "earns about N" estimates (before any wage multiplier).
+ */
+export const estimateReward = (event: RewardEvent, now: Date = new Date()): Payout => {
+  const raw = computePayout(event);
+  const caps = DAILY_SOFT_CAPS[event.kind];
+  const today = earnedToday(event.kind, now);
+  return {
+    xp: applyDiminishing(raw.xp, today.rawXp, caps.xp),
+    tokens: applyDiminishing(raw.tokens, today.rawTokens, caps.tokens),
+  };
+};
+
+export interface EarningsByKind {
+  kind: RewardKind;
+  rawXp: number;
+  rawTokens: number;
+  paidXp: number;
+  paidTokens: number;
+}
+
+/** Today's payouts grouped by activity, biggest token earners first. */
+export const earningsForDay = (now: Date = new Date()): EarningsByKind[] => {
+  const today = localDay(now);
+  const byKind = new Map<string, EarningsByKind>();
+  for (const entry of StorageService.getEarnings()) {
+    if (entry.day !== today) continue;
+    const current = byKind.get(entry.kind) ?? {
+      kind: entry.kind as RewardKind,
+      rawXp: 0,
+      rawTokens: 0,
+      paidXp: 0,
+      paidTokens: 0,
+    };
+    current.rawXp += entry.rawXp;
+    current.rawTokens += entry.rawTokens;
+    current.paidXp += entry.paidXp;
+    current.paidTokens += entry.paidTokens;
+    byKind.set(entry.kind, current);
+  }
+  return [...byKind.values()].sort((a, b) => b.paidTokens - a.paidTokens || b.paidXp - a.paidXp);
 };

@@ -1,42 +1,61 @@
-import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
-import { 
-  Flame, 
-  Zap, 
-  Brain, 
-  Play, 
-  Sparkles, 
-  ArrowRight, 
-  Plus, 
-  Layers, 
-  Trophy, 
-  BookOpen, 
-  Headphones, 
-  ChevronRight,
-  Target,
-  Award,
-  Folder,
+import React, { useState, useMemo, useEffect, useCallback, Suspense, lazy } from 'react';
+import {
+  Play,
+  Plus,
+  Headphones,
+  Compass,
   FolderPlus,
   FolderInput,
-  Edit3,
-  Sliders
+  Pencil,
+  Brain,
+  Zap,
+  Award,
+  Flame,
+  Layers,
+  TrendingUp,
+  GraduationCap,
+  Clock,
+  ArrowRight,
+  Building2,
+  Upload,
+  Snowflake,
+  Check,
+  Sparkles,
 } from 'lucide-react';
-import type { StudySession, UserStats, SubjectFolder } from '../../types';
+import type { LucideIcon } from 'lucide-react';
+import type { StudySession, UserStats, SubjectFolder, UserAccount } from '../../types';
+import type { DailyLedger } from '../../types/lifeSim';
 import { StorageService } from '../../services/storageService';
+import { AuthService } from '../../services/authService';
 import { characterService } from '../../services/characterService';
+import { lifeSimService, ACADEMIC_ROLES } from '../../services/lifeSimService';
 import { soundEngine } from '../../services/soundEngine';
-import confetti from 'canvas-confetti';
+import { haptics } from '../../services/hapticsService';
+import { estimateReward, earningsForDay } from '../../services/economy/rewardService';
+import type { EarningsByKind } from '../../services/economy/rewardService';
+import { REWARD_LABELS } from '../../services/economy/rewardLabels';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
 import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
-import { haptics } from '../../services/hapticsService';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
 import { SubjectFolderModal } from '../studio/SubjectFolderModal';
 import { FOLDER_COLORS } from '../studio/folderOptions';
 import { MoveToFolderModal } from '../studio/MoveToFolderModal';
+import { Badge, Button, Card, CoinIcon, IconButton, ProgressBar, ProgressRing, SectionHeader, Tokens } from '../ui/primitives';
+import { cn } from '../../utils/cn';
 
 // The customizer pulls in three.js; load it only when the user opens it.
 const CharacterCustomizerModal = lazy(() =>
-  import('../character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal }))
+  import('../character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal })),
 );
+
+/** Reviews per day that count as hitting the daily goal. */
+const DAILY_REVIEW_GOAL = 15;
+/** Rough time per flashcard, for session length estimates. */
+const SECONDS_PER_CARD = 20;
+/** Decks shown on Today before linking to the full library. */
+const DECKS_ON_HOME = 5;
+/** XP per level (matches StorageService). */
+const XP_PER_LEVEL = 150;
 
 interface DailyMissionHomeProps {
   onStartSession: (session: StudySession) => void;
@@ -49,7 +68,22 @@ interface DailyMissionHomeProps {
   onOpenSanctuary: () => void;
   onOpenExam?: () => void;
   onOpenFolders?: () => void;
+  onOpenLibrary?: () => void;
 }
+
+const greetingFor = (date: Date): string => {
+  const hour = date.getHours();
+  if (hour < 5) return 'Up late';
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+};
+
+/** Lifetime flashcard reviews, which decide the academic role. */
+const countReviews = (): number => StorageService.getAllCards().reduce((sum, card) => sum + (card.reps || 0), 0);
+
+const cardCount = (session: StudySession): number =>
+  session.concepts.reduce((sum, concept) => sum + (concept.retrievalCards?.length || 0), 0);
 
 export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   onStartSession,
@@ -62,763 +96,632 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   onOpenSanctuary,
   onOpenExam,
   onOpenFolders,
+  onOpenLibrary,
 }) => {
   const [stats, setStats] = useState<UserStats>(() => StorageService.getStats());
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => AuthService.getCurrentUser());
   const [character, setCharacter] = useState(() => characterService.getCharacter());
-  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
-  const [showScienceModal, setShowScienceModal] = useState(false);
-  const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
-
-  useEffect(() => {
-    return characterService.subscribe((c) => setCharacter(c));
-  }, []);
-  const [hasSynapticFreeze, setHasSynapticFreeze] = useState(() => StorageService.hasSynapticFreeze());
+  const [hasFreeze, setHasFreeze] = useState(() => StorageService.hasSynapticFreeze());
   const [reviewedToday, setReviewedToday] = useState(() => StorageService.getReviewedTodayCount());
   const [savedSessions, setSavedSessions] = useState<StudySession[]>(() => StorageService.getSessions());
   const [dueCards, setDueCards] = useState(() => StorageService.getDueCards());
   const [folders, setFolders] = useState<SubjectFolder[]>(() => StorageService.getFolders());
+  const [ledger, setLedger] = useState<DailyLedger>(() => lifeSimService.getDailyLedger());
+  const [wallet, setWallet] = useState(() => lifeSimService.getWalletBalance());
+  const [earnings, setEarnings] = useState<EarningsByKind[]>(() => earningsForDay());
+  const [rentError, setRentError] = useState<string | null>(null);
+  const [weekly, setWeekly] = useState(() => StorageService.getWeeklyXP());
+  const [totalReviews, setTotalReviews] = useState(() => countReviews());
+  const [now] = useState(() => new Date());
+
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
+  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
+  const [showScienceModal, setShowScienceModal] = useState(false);
+  const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<SubjectFolder | null>(null);
   const [movingSession, setMovingSession] = useState<StudySession | null>(null);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
 
-  useEffect(() => {
-    const unsub = StorageService.addMutationListener(() => {
-      setStats(StorageService.getStats());
-      setReviewedToday(StorageService.getReviewedTodayCount());
-      setHasSynapticFreeze(StorageService.hasSynapticFreeze());
-      setSavedSessions(StorageService.getSessions());
-      setDueCards(StorageService.getDueCards());
-      setFolders(StorageService.getFolders());
-    });
-    return unsub;
+  const refreshStudy = useCallback(() => {
+    setStats(StorageService.getStats());
+    setReviewedToday(StorageService.getReviewedTodayCount());
+    setHasFreeze(StorageService.hasSynapticFreeze());
+    setSavedSessions(StorageService.getSessions());
+    setDueCards(StorageService.getDueCards());
+    setFolders(StorageService.getFolders());
+    setEarnings(earningsForDay());
+    setWeekly(StorageService.getWeeklyXP());
+    setTotalReviews(countReviews());
   }, []);
 
-  const weeklyStats = useMemo(() => {
-    if (stats.xp < 0) return { current: 0, best: 0 };
-    return StorageService.getWeeklyXP();
-  }, [stats.xp]);
+  const refreshLife = useCallback(() => {
+    setLedger(lifeSimService.getDailyLedger());
+    setWallet(lifeSimService.getWalletBalance());
+    setEarnings(earningsForDay());
+  }, []);
+
+  useEffect(() => {
+    const unsubStorage = StorageService.addMutationListener(refreshStudy);
+    const unsubLife = lifeSimService.subscribe(refreshLife);
+    const unsubCharacter = characterService.subscribe(setCharacter);
+    const unsubAuth = AuthService.subscribe(setCurrentUser);
+    return () => {
+      unsubStorage();
+      unsubLife();
+      unsubCharacter();
+      unsubAuth();
+    };
+  }, [refreshStudy, refreshLife]);
+
+  const firstName = currentUser?.name.split(' ')[0];
+  const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(now);
   const hasDecks = savedSessions.length > 0;
+
+  const dueIds = useMemo(() => new Set(dueCards.map(card => card.id)), [dueCards]);
+  const dueInSession = useCallback(
+    (session: StudySession) =>
+      session.concepts.reduce((sum, concept) => sum + (concept.retrievalCards || []).filter(card => dueIds.has(card.id)).length, 0),
+    [dueIds],
+  );
+
+  // The deck to study first: the one with the most due cards, else the most recent.
+  const primarySession = useMemo(() => {
+    if (savedSessions.length === 0) return null;
+    let best = savedSessions[0];
+    let bestDue = dueInSession(best);
+    for (const session of savedSessions) {
+      const due = dueInSession(session);
+      if (due > bestDue) {
+        best = session;
+        bestDue = due;
+      }
+    }
+    return best;
+  }, [savedSessions, dueInSession]);
+
+  const primaryCards = primarySession ? cardCount(primarySession) : 0;
+  const estimatedMinutes = Math.max(1, Math.round((primaryCards * SECONDS_PER_CARD) / 60));
+  const multiplier = lifeSimService.getActiveMultiplier();
+  const estimatedTokens = primarySession
+    ? Math.round(estimateReward({ kind: 'sprint', cards: primaryCards, minutes: estimatedMinutes }).tokens * multiplier)
+    : 0;
+
+  const goalPercent = Math.min(100, Math.round((reviewedToday / DAILY_REVIEW_GOAL) * 100));
+  const goalDone = reviewedToday >= DAILY_REVIEW_GOAL;
 
   const displayedSessions = useMemo(() => {
     if (selectedFolderId === 'all') return savedSessions;
     if (selectedFolderId === 'uncategorized') return savedSessions.filter(s => !s.folderId);
     return savedSessions.filter(s => s.folderId === selectedFolderId);
   }, [savedSessions, selectedFolderId]);
+  const totalCards = useMemo(() => savedSessions.reduce((sum, s) => sum + cardCount(s), 0), [savedSessions]);
 
-  // Primary active deck. No silent fallback to a starter deck: new users choose one themselves.
-  const primarySession = useMemo(() => {
-    if (savedSessions.length === 0) return null;
-    // Prioritize deck containing due cards
-    if (dueCards.length > 0) {
-      const match = savedSessions.find(s => 
-        s.concepts.some(cp => (cp.retrievalCards || []).some(rc => dueCards.some(dc => dc.id === rc.id)))
-      );
-      if (match) return match;
-    }
-    return savedSessions[0];
-  }, [savedSessions, dueCards]);
+  const housing = lifeSimService.getHousing();
+  const rentPaid = Boolean(ledger.rentPaidToday);
+  const canPayRent = wallet >= housing.rentPerDay;
 
-  // Daily target goal calculation (e.g. 15 cards/day)
-  const dailyGoal = 15;
-  const progressPercent = Math.min(100, Math.round((reviewedToday / dailyGoal) * 100));
+  const roleIndex = ACADEMIC_ROLES.reduce((found, role, index) => (totalReviews >= role.minCardsReviewed ? index : found), 0);
+  const role = ACADEMIC_ROLES[roleIndex];
+  const nextRole = ACADEMIC_ROLES[roleIndex + 1];
 
-  // Quick launch for Quick Sprint (Flashcard drill directly)
-  const handleLaunchQuickSprint = () => {
+  const startQuickReview = () => {
     if (!primarySession) {
       onOpenStarterCatalog();
       return;
     }
     soundEngine.playCorrectChime();
-    onStartSession({
-      ...primarySession,
-      currentPhase: 'retrieval',
-      casualFlashcardMode: true,
-    });
+    onStartSession({ ...primarySession, currentPhase: 'retrieval', casualFlashcardMode: true });
   };
 
-  // Launch Deep Master Pilot (Full 5-Phase pipeline)
-  const handleLaunchDeepPilot = () => {
+  const startGuidedSession = () => {
     if (!primarySession) {
       onOpenStarterCatalog();
       return;
     }
     soundEngine.playContextShiftSound();
-    onStartSession({
-      ...primarySession,
-      currentPhase: 'priming',
-      casualFlashcardMode: false,
-    });
+    onStartSession({ ...primarySession, currentPhase: 'priming', casualFlashcardMode: false });
   };
 
-  const handleMascotNudge = () => {
-    try {
-      soundEngine.playSuccess();
-      confetti({
-        particleCount: 25,
-        spread: 60,
-        origin: { y: 0.8 },
-        colors: ['#6366f1', '#a855f7', '#38bdf8']
-      });
-    } catch {}
+  const payRent = () => {
+    const result = lifeSimService.payDailyRent();
+    if (result.success) {
+      setRentError(null);
+      haptics.success();
+    } else {
+      setRentError(result.error || 'Could not pay rent.');
+    }
+    refreshLife();
   };
+
+  const openFolderEditor = (folder: SubjectFolder | null) => {
+    setEditingFolder(folder);
+    setIsFolderModalOpen(true);
+  };
+
+  const sessionTitle = !hasDecks
+    ? 'Build your first deck'
+    : dueCards.length > 0
+      ? `${dueCards.length} ${dueCards.length === 1 ? 'card is' : 'cards are'} due`
+      : "You're all caught up";
+
+  const sessionBody = !hasDecks
+    ? 'Pick a starter deck for your level, or turn your notes or a PDF into flashcards in about a minute. Every review you do pays.'
+    : dueCards.length > 0
+      ? `Review them now while they are on the edge of forgetting. That is when recall does the most for long-term memory.`
+      : 'Nothing is due right now. Practise ahead, try a mock exam, or come back when your next reviews are scheduled.';
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-fadeIn pb-16">
-      
-      {/* --- TOP DUOLINGO-GRADE HUD BAR --- */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {/* Streak Pill with Guardian & Freeze Shield */}
-        <div 
-          onClick={() => {
-            soundEngine.playTapPop();
-            haptics.light();
-            setIsStreakModalOpen(true);
-          }}
-          className="p-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-amber-500/40 backdrop-blur-xl flex items-center gap-3 shadow-sm cursor-pointer transition-all group"
-          title="Click to view Streak Guardian & Synaptic Freeze shield"
-        >
-          <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-            <Flame className="w-6 h-6 text-amber-400 fill-amber-400 animate-pulse" />
-          </div>
-          <div>
-            <div className="text-base sm:text-lg font-black text-white font-display leading-tight flex items-center gap-1.5">
-              <span>{stats.currentStreak}</span>
-              <span className="text-xs text-amber-300 font-bold uppercase tracking-wider">Days</span>
-              {hasSynapticFreeze && (
-                <span className="px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-300 text-[11px] font-mono border border-cyan-500/30" title="Protected by Synaptic Freeze">
-                  ❄️
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-400 font-medium">
-              {hasSynapticFreeze ? 'Shield Active ❄️' : 'Daily Streak'}
-            </p>
-          </div>
+    <div className="mx-auto w-full max-w-6xl space-y-6 animate-fadeIn">
+      {/* Greeting */}
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] text-ink-subtle">{dateLabel}</p>
+          <h1 className="mt-1 text-[26px] font-semibold tracking-tight text-ink sm:text-[30px]">
+            {greetingFor(now)}
+            {firstName ? `, ${firstName}` : ''}
+          </h1>
         </div>
+        <Button variant="ghost" size="sm" icon={Sparkles} onClick={() => setShowScienceModal(true)}>
+          Why this works
+        </Button>
+      </header>
 
-        {/* Due Cards Pill */}
-        <div 
-          onClick={handleLaunchQuickSprint}
-          className="p-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.08] hover:border-indigo-500/40 backdrop-blur-xl flex items-center gap-3 shadow-sm cursor-pointer transition-all"
-        >
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
-            <Zap className="w-5 h-5 text-indigo-400" />
-          </div>
-          <div>
-            <div className="text-base sm:text-lg font-black text-white font-display leading-tight flex items-center gap-1">
-              <span>{dueCards.length}</span>
-              <span className="text-xs text-indigo-300 font-bold uppercase tracking-wider">Due</span>
-            </div>
-            <p className="text-xs text-slate-400 font-medium">Spaced Recall</p>
-          </div>
-        </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_336px]">
+        {/* Main column */}
+        <div className="min-w-0 space-y-6">
+          {/* Today's session */}
+          <section
+            aria-labelledby="today-session-title"
+            className="relative overflow-hidden rounded-3xl border border-line bg-surface p-6 shadow-[inset_0_1px_0_rgb(255_255_255/0.04)] sm:p-7 animate-rise"
+          >
+            <div className="pointer-events-none absolute -right-28 -top-28 h-80 w-80 rounded-full bg-brand/20 blur-3xl" aria-hidden="true" />
+            <div className="relative flex flex-col gap-7 sm:flex-row sm:items-center">
+              <div className="min-w-0 flex-1 space-y-5">
+                <div className="flex items-center gap-2 text-[13px] font-medium text-brand-text">
+                  <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
+                  Today's session
+                </div>
+                <div>
+                  <h2 id="today-session-title" className="text-[26px] font-semibold leading-tight tracking-tight text-ink sm:text-[30px]">
+                    {sessionTitle}
+                  </h2>
+                  <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-ink-muted">{sessionBody}</p>
+                </div>
 
-        {/* Study Tokens Wallet */}
-        <div 
-          onClick={onOpenSanctuary}
-          className="col-span-2 sm:col-span-1 p-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.08] backdrop-blur-xl flex items-center gap-3 shadow-sm cursor-pointer transition-all"
-          title="Tokens earned through active recall • Click to visit Sanctuary & Cafeteria"
-        >
-          <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-xl shrink-0">
-            🪙
-          </div>
-          <div>
-            <div className="text-base sm:text-lg font-black text-amber-300 font-display leading-tight font-mono">
-              {character.coins ?? 45}
-            </div>
-            <p className="text-xs text-slate-400 font-medium">Study Tokens</p>
-          </div>
-        </div>
-
-      </div>
-
-      {/* --- HERO PRIMARY ACTION BANNER (Sub-3-Second Time-to-Value) --- */}
-      <div className="relative rounded-3xl overflow-hidden border border-indigo-500/30 bg-gradient-to-br from-[#12162d] via-[#0d1020] to-[#090a12] p-6 sm:p-8 shadow-2xl">
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          
-          {/* Left Column: Mission status & context */}
-          <div className="space-y-3 max-w-xl">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-xs font-bold uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
-                <span>Today's High-Yield Mission</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  soundEngine.playTapPop();
-                  setShowScienceModal(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.12] text-indigo-200 hover:text-white text-xs font-semibold transition-all cursor-pointer shadow-sm hover:scale-105"
-                title="Discover the empirical cognitive neuroscience behind Studify"
-              >
-                <Brain className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Why this works (The Science)</span>
-              </button>
-            </div>
-
-            <h1 className="text-2xl sm:text-3xl font-black text-white font-display tracking-tight leading-tight">
-              {!hasDecks
-                ? 'Start your first deck'
-                : dueCards.length > 0
-                ? `You have ${dueCards.length} cards ready for today's review`
-                : 'All caught up for today! 🎉'}
-            </h1>
-
-            <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-normal">
-              {!hasDecks
-                ? 'Pick a ready-made starter deck for your level, or turn your own notes into flashcards in about a minute.'
-                : dueCards.length > 0
-                ? `Just 3 minutes on "${primarySession?.title || 'Active Deck'}" to lock these concepts into long-term memory.`
-                : 'Nothing is due right now. You can practice ahead, or come back when your next reviews are scheduled.'}
-            </p>
-
-            {/* Daily Goal Bar */}
-            {hasDecks && (
-            <div className="pt-2 space-y-1.5 max-w-sm">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
-                <span className="flex items-center gap-1.5 text-slate-300">
-                  <Target className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Daily Goal</span>
-                </span>
-                <span className="font-mono text-indigo-300">{reviewedToday}/{dailyGoal} cards ({progressPercent}%)</span>
-              </div>
-              <div className="w-full h-2.5 rounded-full bg-slate-900 border border-white/[0.08] overflow-hidden p-0.5">
-                <div 
-                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-indigo-500 to-pink-500 transition-all duration-500 animate-shimmer"
-                  style={{ width: `${Math.max(5, progressPercent)}%` }}
-                />
-              </div>
-            </div>
-            )}
-          </div>
-
-          {/* Right Column: Tactile Dual-Speed Action Buttons */}
-          <div className="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0 sm:w-auto lg:w-72">
-            {!hasDecks ? (
-              <>
-                <button
-                  type="button"
-                  onClick={onOpenStarterCatalog}
-                  className="btn-tactile btn-tactile-primary w-full py-4 px-6 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-3 cursor-pointer group shadow-lg shadow-indigo-500/25"
-                >
-                  <BookOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                  <span>Pick a starter deck</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onOpenDeckStudio}
-                  className="btn-tactile btn-tactile-slate w-full py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4 text-purple-400" />
-                  <span>Import or paste notes</span>
-                </button>
-              </>
-            ) : (
-              <>
-                {/* Primary Action Button (Tactile 3D Bevel) */}
-                <button
-                  type="button"
-                  onClick={handleLaunchQuickSprint}
-                  className="btn-tactile btn-tactile-primary w-full py-4 px-6 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-3 cursor-pointer group shadow-lg shadow-indigo-500/25"
-                >
-                  <Zap className="w-5 h-5 fill-white group-hover:scale-110 transition-transform" />
-                  <span>
-                    {dueCards.length > 0
-                      ? `Start 3-Min Daily Practice (${dueCards.length} ${dueCards.length === 1 ? 'Card' : 'Cards'})`
-                      : 'Practice ahead'}
-                  </span>
-                </button>
-
-                {/* Secondary Deep Master Action Button */}
-                <button
-                  type="button"
-                  onClick={handleLaunchDeepPilot}
-                  className="btn-tactile btn-tactile-slate w-full py-3 px-5 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Brain className="w-4 h-4 text-purple-400" />
-                  <span>Deep Socratic Pilot (Full Guided)</span>
-                </button>
-              </>
-            )}
-
-            {/* Practice Modes Quick Links */}
-            <div className="flex items-center gap-2">
-              {primarySession && (
-                <button
-                  type="button"
-                  onClick={() => onStartMatch(primarySession)}
-                  className="flex-1 py-2 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-amber-300 hover:text-amber-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>Speed Match</span>
-                </button>
-              )}
-
-              {onOpenExam && hasDecks && (
-                <button
-                  type="button"
-                  onClick={onOpenExam}
-                  className="flex-1 py-2 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-purple-300 hover:text-purple-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Award className="w-3.5 h-3.5" />
-                  <span>Mock Exam</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Ambient background glow */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-      </div>
-
-      {/* --- TWO-COLUMN BODY: LEARNING PATH & DAILY QUESTS --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-        
-        {/* Left 2 Cols: Learning Path & Deck Syllabus Queue */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Layers className="w-5 h-5 text-indigo-400" />
-              <h2 className="text-lg font-bold text-white font-display">Your Study Decks</h2>
-            </div>
-            <button
-              type="button"
-              onClick={onOpenDeckStudio}
-              className="py-1.5 px-3 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Create or Import</span>
-            </button>
-          </div>
-
-          {/* Subject Folders Header & Filter Chips */}
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Folder className="w-4 h-4 text-indigo-400" />
-                <h3 className="text-xs font-bold text-white font-display uppercase tracking-wider">
-                  Subject Folders
-                </h3>
-                <span className="text-[11px] font-mono text-slate-400">
-                  ({folders.length})
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {onOpenFolders && (
-                  <button
-                    type="button"
-                    onClick={onOpenFolders}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-bold transition-colors cursor-pointer flex items-center gap-0.5 hover:underline"
-                    title="Open dedicated Subject Folders page"
-                  >
-                    <span>View All</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingFolder(null);
-                    setIsFolderModalOpen(true);
-                  }}
-                  className="px-2.5 py-1 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer hover:scale-105"
-                >
-                  <FolderPlus className="w-3.5 h-3.5" />
-                  <span>+ New Subject</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-              <button
-                type="button"
-                onClick={() => setSelectedFolderId('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                  selectedFolderId === 'all'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-white/[0.04] text-slate-400 hover:text-white border border-white/[0.06]'
-                }`}
-              >
-                <span>📚</span>
-                <span>All Decks</span>
-                <span className="text-[10px] font-mono opacity-80">({savedSessions.length})</span>
-              </button>
-
-              {folders.map(f => {
-                const isSel = selectedFolderId === f.id;
-                const count = savedSessions.filter(s => s.folderId === f.id).length;
-                const colDef = FOLDER_COLORS.find(c => c.id === f.color) || FOLDER_COLORS[0];
-                return (
-                  <div key={f.id} className="relative group/folder flex items-center shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedFolderId(isSel ? 'all' : f.id)}
-                      className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border ${
-                        isSel
-                          ? `${colDef.bg} ${colDef.text} ${colDef.border} shadow-sm ring-1 ring-white/20`
-                          : 'bg-white/[0.03] text-slate-400 hover:text-slate-200 border-white/[0.06]'
-                      }`}
-                    >
-                      <span>{f.icon || '📁'}</span>
-                      <span>{f.name}</span>
-                      <span className="text-[10px] opacity-75 font-mono">({count})</span>
-                    </button>
-                    {/* Quick Edit */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingFolder(f);
-                        setIsFolderModalOpen(true);
-                      }}
-                      className="hidden group-hover/folder:flex p-1 ml-1 rounded-lg text-slate-400 hover:text-indigo-300 hover:bg-white/[0.08]"
-                      title="Edit Subject"
-                    >
-                      <Edit3 className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                );
-              })}
-
-              {folders.length === 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingFolder(null);
-                    setIsFolderModalOpen(true);
-                  }}
-                  className="px-3 py-1.5 rounded-xl text-xs font-medium text-indigo-300 hover:text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 border border-dashed border-indigo-500/30 flex items-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <FolderPlus className="w-3.5 h-3.5" />
-                  <span>Create your first subject folder (e.g. Biology, Math, History)</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {savedSessions.length === 0 ? (
-            <div className="p-8 rounded-3xl bg-white/[0.02] border border-dashed border-white/[0.1] text-center space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
-                <BookOpen className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white">No active study decks yet</h3>
-                <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
-                  Choose from our verified scientific starter catalog or generate a deck from your lecture notes or PDF.
-                </p>
-              </div>
-              <div className="flex items-center justify-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={onOpenStarterCatalog}
-                  className="btn-tactile btn-tactile-primary py-2.5 px-5 rounded-xl font-bold text-xs"
-                >
-                  Explore Public Decks
-                </button>
-                <button
-                  type="button"
-                  onClick={onOpenDeckStudio}
-                  className="py-2.5 px-4 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-white font-semibold text-xs transition-colors"
-                >
-                  Upload PDF
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {displayedSessions.slice(0, 6).map((session) => {
-                const totalCards = session.concepts.reduce((acc, c) => acc + (c.retrievalCards?.length || 0), 0);
-                const deckDueCount = session.concepts.flatMap(c => c.retrievalCards || []).filter(rc => dueCards.some(dc => dc.id === rc.id)).length;
-                const isPrimary = session.id === primarySession?.id;
-                const assignedFolder = folders.find(f => f.id === session.folderId);
-                const folderColorDef = assignedFolder ? (FOLDER_COLORS.find(c => c.id === assignedFolder.color) || FOLDER_COLORS[0]) : null;
-
-                return (
-                  <div
-                    key={session.id}
-                    className={`p-4 sm:p-5 rounded-2xl border transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                      isPrimary 
-                        ? 'bg-indigo-950/30 border-indigo-500/40 shadow-lg shadow-indigo-950/30' 
-                        : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.08]'
-                    }`}
-                  >
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
-                        <h3 className="text-sm sm:text-base font-bold text-white font-display truncate">
-                          {session.title}
-                        </h3>
-                        {assignedFolder && folderColorDef ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setMovingSession(session);
-                              setIsMoveModalOpen(true);
-                            }}
-                            className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${folderColorDef.bg} ${folderColorDef.text} border ${folderColorDef.border} flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity`}
-                            title="Click to move or reassign subject folder"
-                          >
-                            <span>{assignedFolder.icon || '📁'}</span>
-                            <span>{assignedFolder.name}</span>
-                          </button>
+                {primarySession && (
+                  <dl className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-ink-muted">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <dt className="sr-only">Deck</dt>
+                      <Layers className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden="true" />
+                      <dd className="max-w-[220px] truncate">{primarySession.title}</dd>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <dt className="sr-only">Time</dt>
+                      <Clock className="h-4 w-4 text-ink-subtle" aria-hidden="true" />
+                      <dd>About {estimatedMinutes} min</dd>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <dt className="sr-only">Pay</dt>
+                      <CoinIcon className="h-4 w-4" />
+                      <dd>
+                        {estimatedTokens > 0 ? (
+                          <>
+                            Earns about <span className="font-semibold tabular-nums text-gold">{estimatedTokens}</span>
+                          </>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setMovingSession(session);
-                              setIsMoveModalOpen(true);
-                            }}
-                            className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 border border-white/[0.08] flex items-center gap-1 cursor-pointer transition-colors"
-                            title="Assign this deck to a subject folder"
-                          >
-                            <FolderInput className="w-3 h-3 text-slate-500" />
-                            <span>+ Subject</span>
-                          </button>
+                          "Today's session pay is used up"
                         )}
-                        {deckDueCount > 0 && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/30 font-mono">
-                            {deckDueCount} due
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-400 font-medium">
-                        {session.concepts.length} Concept Units • {totalCards} Flashcards • {session.category || 'General'}
-                      </p>
+                      </dd>
                     </div>
+                  </dl>
+                )}
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => onStartSession(session)}
-                        className="btn-tactile btn-tactile-primary py-2 px-4 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-white" />
-                        <span>Study</span>
-                      </button>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {hasDecks ? (
+                    <>
+                      <Button variant="primary" size="lg" icon={Play} onClick={startQuickReview} className="w-full sm:w-auto">
+                        {dueCards.length > 0 ? 'Start review' : 'Practise ahead'}
+                      </Button>
+                      <Button variant="secondary" size="lg" icon={Brain} onClick={startGuidedSession} className="w-full sm:w-auto">
+                        Guided session
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="primary" size="lg" icon={Compass} onClick={onOpenStarterCatalog} className="w-full sm:w-auto">
+                        Pick a starter deck
+                      </Button>
+                      <Button variant="secondary" size="lg" icon={Upload} onClick={onOpenDeckStudio} className="w-full sm:w-auto">
+                        Import notes or PDF
+                      </Button>
+                    </>
+                  )}
+                </div>
 
-                      <button
-                        type="button"
-                        onClick={() => onOpenDeckStation(session)}
-                        className="py-2 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white font-semibold text-xs transition-colors cursor-pointer"
-                      >
-                        Details
-                      </button>
-
-                      {onStartAudioBriefing && (
-                        <button
-                          type="button"
-                          onClick={() => onStartAudioBriefing(session)}
-                          className="p-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-indigo-200 transition-colors cursor-pointer"
-                          title="Audio Briefing"
-                        >
-                          <Headphones className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
+                {primarySession && (
+                  <div className="flex flex-wrap items-center gap-1 text-[13px]">
+                    <span className="mr-1 text-ink-subtle">Or try</span>
+                    <Button variant="ghost" size="sm" icon={Zap} onClick={() => onStartMatch(primarySession)}>
+                      Speed match
+                    </Button>
+                    {onOpenExam && (
+                      <Button variant="ghost" size="sm" icon={Award} onClick={onOpenExam}>
+                        Mock exam
+                      </Button>
+                    )}
                   </div>
-                );
-              })}
+                )}
+              </div>
 
-              {savedSessions.length > 4 && (
-                <div className="text-center pt-2">
-                  <button
-                    type="button"
-                    onClick={onOpenDashboard}
-                    className="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center justify-center gap-1 mx-auto"
-                  >
-                    <span>View all {savedSessions.length} decks in library</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+              {hasDecks && (
+                <div className="space-y-1.5 sm:hidden">
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="text-ink-subtle">Daily goal</span>
+                    <span className="tabular-nums text-ink-muted">
+                      {Math.min(reviewedToday, DAILY_REVIEW_GOAL)} of {DAILY_REVIEW_GOAL} reviews
+                    </span>
+                  </div>
+                  <ProgressBar value={goalPercent} tone={goalDone ? 'success' : 'brand'} label="Daily goal" />
+                </div>
+              )}
+
+              {hasDecks && (
+                <div className="hidden shrink-0 items-center gap-4 sm:flex sm:flex-col sm:gap-3">
+                  <ProgressRing value={goalPercent} size={136} stroke={10} tone={goalDone ? 'success' : 'brand'}>
+                    {goalDone ? (
+                      <Check className="h-8 w-8 text-success" aria-hidden="true" />
+                    ) : (
+                      <span className="text-[30px] font-semibold leading-none tabular-nums text-ink">{reviewedToday}</span>
+                    )}
+                    <span className="mt-1.5 text-xs text-ink-subtle">
+                      {goalDone ? 'Goal met' : `of ${DAILY_REVIEW_GOAL} reviews`}
+                    </span>
+                  </ProgressRing>
+                  <span className="text-xs font-medium text-ink-subtle">Daily goal</span>
                 </div>
               )}
             </div>
-          )}
+          </section>
+
+          {/* At a glance */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile
+              icon={Flame}
+              label="Streak"
+              value={stats.currentStreak}
+              unit={stats.currentStreak === 1 ? 'day' : 'days'}
+              tone="gold"
+              note={hasFreeze ? 'Freeze active' : undefined}
+              noteIcon={hasFreeze ? Snowflake : undefined}
+              onClick={() => setIsStreakModalOpen(true)}
+            />
+            <StatTile icon={Layers} label="Due now" value={dueCards.length} unit="cards" onClick={startQuickReview} />
+            <StatTile
+              icon={TrendingUp}
+              label="This week"
+              value={weekly.current}
+              unit="XP"
+              note={weekly.best > 0 ? `Best ${weekly.best}` : undefined}
+              onClick={onOpenDashboard}
+            />
+            <StatTile
+              icon={GraduationCap}
+              label="Level"
+              value={stats.level}
+              unit={stats.levelTitle}
+              progress={((stats.xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100}
+              onClick={onOpenDashboard}
+            />
+          </div>
+
+          {/* Decks */}
+          <section aria-labelledby="decks-title" className="space-y-3">
+            <SectionHeader
+              title="Your decks"
+              description={hasDecks ? `${savedSessions.length} ${savedSessions.length === 1 ? 'deck' : 'decks'} · ${totalCards} cards` : undefined}
+              action={
+                <div className="flex items-center gap-1.5">
+                  <Button variant="ghost" size="sm" icon={Compass} onClick={onOpenStarterCatalog}>
+                    Explore
+                  </Button>
+                  <Button variant="secondary" size="sm" icon={Plus} onClick={onOpenDeckStudio}>
+                    New deck
+                  </Button>
+                </div>
+              }
+            />
+            <h2 id="decks-title" className="sr-only">
+              Your decks
+            </h2>
+
+            {hasDecks && (
+              <div className="no-scrollbar -mx-1 flex items-center gap-1.5 overflow-x-auto px-1 py-0.5">
+                <FilterChip active={selectedFolderId === 'all'} onClick={() => setSelectedFolderId('all')} count={savedSessions.length}>
+                  All
+                </FilterChip>
+                {folders.map(folder => {
+                  const color = FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0];
+                  const active = selectedFolderId === folder.id;
+                  return (
+                    <div key={folder.id} className="group/chip relative flex shrink-0 items-center">
+                      <FilterChip
+                        active={active}
+                        onClick={() => setSelectedFolderId(active ? 'all' : folder.id)}
+                        count={savedSessions.filter(s => s.folderId === folder.id).length}
+                        dotClassName={color.dot}
+                      >
+                        {folder.name}
+                      </FilterChip>
+                      <button
+                        type="button"
+                        onClick={() => openFolderEditor(folder)}
+                        aria-label={`Edit ${folder.name}`}
+                        className="ml-0.5 hidden rounded-md p-1 text-ink-subtle hover:bg-surface-hover hover:text-ink group-hover/chip:inline-flex cursor-pointer"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => openFolderEditor(null)}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-dashed border-line-strong px-3 text-[13px] text-ink-subtle transition-colors hover:border-brand hover:text-brand-text cursor-pointer"
+                >
+                  <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                  New subject
+                </button>
+                {onOpenFolders && folders.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={onOpenFolders} className="shrink-0">
+                    Manage
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {!hasDecks ? (
+              <Card className="flex flex-col items-center px-6 py-10 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand-text">
+                  <Layers className="h-6 w-6" aria-hidden="true" />
+                </div>
+                <h3 className="mt-4 text-[15px] font-semibold text-ink">No decks yet</h3>
+                <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-ink-muted">
+                  Start from a verified starter deck, or let the AI turn your lecture notes or a PDF into a deck.
+                </p>
+                <div className="mt-5 flex flex-wrap justify-center gap-2">
+                  <Button variant="primary" icon={Compass} onClick={onOpenStarterCatalog}>
+                    Explore starter decks
+                  </Button>
+                  <Button variant="secondary" icon={Upload} onClick={onOpenDeckStudio}>
+                    Import notes or PDF
+                  </Button>
+                </div>
+              </Card>
+            ) : displayedSessions.length === 0 ? (
+              <Card className="py-8 text-center text-[13px] text-ink-muted">No decks in this subject yet.</Card>
+            ) : (
+              <ul className="space-y-2">
+                {displayedSessions.slice(0, DECKS_ON_HOME).map(session => {
+                  const folder = folders.find(f => f.id === session.folderId);
+                  const color = folder ? FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0] : null;
+                  const due = dueInSession(session);
+                  return (
+                    <li
+                      key={session.id}
+                      className="group flex flex-col gap-3 rounded-2xl border border-line bg-surface p-3.5 pl-4 transition-colors hover:border-line-strong hover:bg-surface-hover sm:flex-row sm:items-center"
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                        <div
+                          className={cn(
+                            'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold',
+                            color ? `${color.bg} ${color.text}` : 'bg-brand-soft text-brand-text',
+                          )}
+                          aria-hidden="true"
+                        >
+                          {folder?.icon || session.title.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <h3 className="truncate text-[15px] font-medium text-ink">{session.title}</h3>
+                            {due > 0 && <Badge tone="due">{due} due</Badge>}
+                          </div>
+                          <p className="mt-0.5 truncate text-[13px] text-ink-subtle">
+                            {session.concepts.length} {session.concepts.length === 1 ? 'concept' : 'concepts'} · {cardCount(session)} cards
+                            {folder ? ` · ${folder.name}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button variant="primary" size="sm" icon={Play} onClick={() => onStartSession(session)}>
+                          Study
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => onOpenDeckStation(session)}>
+                          Details
+                        </Button>
+                        {onStartAudioBriefing && (
+                          <IconButton icon={Headphones} label="Audio briefing" onClick={() => onStartAudioBriefing(session)} />
+                        )}
+                        <IconButton
+                          icon={FolderInput}
+                          label={folder ? 'Change subject' : 'Add to a subject'}
+                          onClick={() => {
+                            setMovingSession(session);
+                            setIsMoveModalOpen(true);
+                          }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {displayedSessions.length > DECKS_ON_HOME && onOpenLibrary && (
+              <button
+                type="button"
+                onClick={onOpenLibrary}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-medium text-brand-text transition-colors hover:bg-surface cursor-pointer"
+              >
+                See all {displayedSessions.length} decks in the library
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
+          </section>
         </div>
 
-        {/* Right Col: Duolingo Daily Quests & 3D Character Companion */}
-        <div className="space-y-6">
-          
-          {/* 3D Student Character Motivation Card */}
-          <div className="p-5 rounded-3xl bg-gradient-to-b from-indigo-500/10 via-purple-500/10 to-transparent border border-indigo-500/30 relative overflow-hidden">
-            <div className="flex items-start gap-3.5">
-              <div 
-                onClick={handleMascotNudge}
-                className="relative w-14 h-14 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 shrink-0 cursor-pointer hover:scale-105 transition-transform shadow-md shadow-indigo-500/20 flex items-center justify-center"
-                title="Tap Character!"
-              >
-                <UserAvatarBadge size="md" />
-              </div>
-              <div className="space-y-1.5 flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-indigo-300 font-display">{character.name} says:</span>
-                  <span className="text-[11px] text-cyan-300 font-mono">Lv.{character.level} {character.studyTitle}</span>
-                </div>
-                <p className="text-xs text-slate-200 leading-relaxed font-medium">
-                  "Hey friend! Ready for a quick 3-minute win? Let's knock out your {dueCards.length > 0 ? `${dueCards.length} review cards` : 'practice goal'} and keep that streak blazing!"
-                </p>
-              </div>
+        {/* Side column: life and money */}
+        <aside className="grid content-start gap-6 md:grid-cols-2 xl:grid-cols-1" aria-label="Wallet and progress">
+          <Card className="space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-ink">Wallet</h2>
+              <Button variant="ghost" size="sm" trailingIcon={ArrowRight} onClick={onOpenSanctuary}>
+                Campus
+              </Button>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-white/[0.08] flex items-center justify-between text-xs">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <CoinIcon className="h-7 w-7" />
+                <span className="text-[34px] font-semibold leading-none tracking-tight tabular-nums text-ink">{wallet.toLocaleString()}</span>
+              </div>
+              <p className="mt-2 text-[13px] text-ink-subtle">
+                Today <span className="font-medium tabular-nums text-success">+{ledger.totalEarnings.toLocaleString()}</span>
+                {' · '}
+                <span className="font-medium tabular-nums text-ink-muted">−{ledger.totalExpenses.toLocaleString()}</span> spent
+                {multiplier !== 1 && (
+                  <>
+                    {' · '}
+                    <span className="font-medium text-ink-muted">×{multiplier} pay</span>
+                  </>
+                )}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-line bg-surface p-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-ink-muted">
+                  <Building2 className="h-[18px] w-[18px]" aria-hidden="true" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium text-ink">{housing.name}</p>
+                  <p className="text-xs text-ink-subtle">
+                    Rent <Tokens amount={housing.rentPerDay} iconClassName="h-3 w-3" className="text-ink-muted" /> a day
+                  </p>
+                </div>
+                {rentPaid ? (
+                  <Badge tone="success">
+                    <Check className="h-3 w-3" aria-hidden="true" />
+                    Paid
+                  </Badge>
+                ) : (
+                  <Button variant="gold" size="sm" onClick={payRent} disabled={!canPayRent}>
+                    Pay rent
+                  </Button>
+                )}
+              </div>
+              {!rentPaid && !canPayRent && (
+                <p className="mt-2.5 text-xs leading-relaxed text-danger">
+                  You need {housing.rentPerDay - wallet} more tokens for today's rent. A short review session covers it.
+                </p>
+              )}
+              {rentError && canPayRent && <p className="mt-2.5 text-xs text-danger">{rentError}</p>}
+            </div>
+          </Card>
+
+          <Card className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-ink">Today's earnings</h2>
+              {earnings.length > 0 && (
+                <span className="text-xs tabular-nums text-ink-subtle">
+                  {earnings.reduce((sum, e) => sum + e.paidXp, 0)} XP
+                </span>
+              )}
+            </div>
+            {earnings.length === 0 ? (
+              <p className="text-[13px] leading-relaxed text-ink-muted">
+                Nothing yet today. Your first review pays, and correct answers in mock exams pay the most.
+              </p>
+            ) : (
+              <ul className="space-y-2.5">
+                {earnings.slice(0, 5).map(entry => {
+                  const capped = entry.paidTokens < entry.rawTokens || entry.paidXp < entry.rawXp;
+                  return (
+                    <li key={entry.kind} className="flex items-center justify-between gap-3 text-[13px]">
+                      <span className="flex min-w-0 items-center gap-2 text-ink-muted">
+                        <span className="truncate">{REWARD_LABELS[entry.kind] ?? entry.kind}</span>
+                        {capped && <Badge tone="neutral">Daily limit</Badge>}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-3 tabular-nums">
+                        {entry.paidTokens > 0 && <Tokens amount={entry.paidTokens} signed className="text-gold" />}
+                        <span className="w-14 text-right text-ink-subtle">+{entry.paidXp} XP</span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <p className="border-t border-line pt-3 text-xs leading-relaxed text-ink-subtle">
+              Pay follows learning: every review pays the same, exams pay for correct answers, and each activity has a daily limit.
+            </p>
+          </Card>
+
+          <Card className="space-y-4">
+            <div className="flex items-center gap-3.5">
               <button
                 type="button"
                 onClick={() => setIsCustomizerOpen(true)}
-                className="text-indigo-300 hover:text-indigo-200 font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                aria-label="Customize avatar"
+                className="shrink-0 rounded-2xl transition-transform hover:scale-[1.03] cursor-pointer"
               >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Customize 3D Model</span>
+                <UserAvatarBadge size="sm" />
               </button>
-              <button
-                type="button"
-                onClick={onOpenSanctuary}
-                className="text-slate-300 hover:text-white font-bold flex items-center gap-1 cursor-pointer transition-colors"
-              >
-                <span>3D Campus Life</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Daily Quests Box */}
-          <div className="p-5 rounded-3xl bg-white/[0.03] border border-white/[0.08] space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-amber-400" />
-                <h3 className="text-sm font-bold text-white font-display">Daily Quests</h3>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-semibold text-ink">{character.name}</p>
+                <p className="truncate text-[13px] text-ink-subtle">{role.title}</p>
               </div>
-              <span className="text-[11px] font-mono text-slate-400">Resets in 9h</span>
             </div>
-
-            <div className="space-y-3">
-              {/* Quest 1 */}
+            {nextRole ? (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium">Review 10 flashcards</span>
-                  <span className="font-mono text-amber-300 font-bold">+15 🪙</span>
+                  <span className="text-ink-subtle">Next role: {nextRole.title}</span>
+                  <span className="tabular-nums text-ink-muted">
+                    {totalReviews}/{nextRole.minCardsReviewed}
+                  </span>
                 </div>
-                <div className="w-full h-2 rounded-full bg-slate-900 border border-white/[0.06] overflow-hidden">
-                  <div 
-                    className="h-full bg-amber-400 rounded-full transition-all"
-                    style={{ width: `${Math.min(100, (reviewedToday / 10) * 100)}%` }}
-                  />
-                </div>
+                <ProgressBar
+                  value={((totalReviews - role.minCardsReviewed) / (nextRole.minCardsReviewed - role.minCardsReviewed)) * 100}
+                  label={`Progress to ${nextRole.title}`}
+                />
+                <p className="text-xs text-ink-subtle">Higher roles earn a bigger base wage.</p>
               </div>
-
-              {/* Quest 2 */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium">Achieve a 5-card combo</span>
-                  <span className="font-mono text-pink-300 font-bold">+25 🪙</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-900 border border-white/[0.06] overflow-hidden">
-                  <div 
-                    className="h-full bg-pink-500 rounded-full transition-all"
-                    style={{ width: stats.sessionsCompleted >= 1 || stats.todayMinutes >= 5 ? '100%' : '35%' }}
-                  />
-                </div>
-              </div>
-
-              {/* Quest 3 */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium">Explain 1 concept in Feynman</span>
-                  <span className="font-mono text-purple-300 font-bold">+50 🪙</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-900 border border-white/[0.06] overflow-hidden">
-                  <div 
-                    className="h-full bg-purple-500 rounded-full transition-all"
-                    style={{ width: stats.conceptsMastered > 0 ? '100%' : '0%' }}
-                  />
-                </div>
-              </div>
+            ) : (
+              <p className="text-xs text-ink-subtle">You hold the top academic role.</p>
+            )}
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" className="flex-1" onClick={() => setIsCustomizerOpen(true)}>
+                Edit avatar
+              </Button>
+              <Button variant="secondary" size="sm" className="flex-1" onClick={onOpenSanctuary}>
+                Visit campus
+              </Button>
             </div>
-
-            <div className="pt-2 border-t border-white/[0.06]">
-              <button
-                type="button"
-                onClick={onOpenDashboard}
-                className="w-full py-2 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <span>View FSRS Analytics & Leeches</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Personal Weekly Study Record Widget */}
-          <div 
-            onClick={() => {
-              soundEngine.playTapPop();
-              haptics.light();
-              onOpenDashboard();
-            }}
-            className="p-5 rounded-3xl bg-gradient-to-br from-indigo-950/40 via-purple-950/20 to-slate-900 border border-indigo-500/30 space-y-3 cursor-pointer hover:border-indigo-500/60 transition-all group shadow-sm"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="text-2xl">📈</span>
-                <div>
-                  <h3 className="text-sm font-bold text-white font-display flex items-center gap-1.5">
-                    <span>Weekly Study Earnings</span>
-                    <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      Tokens Earned
-                    </span>
-                  </h3>
-                  <p className="text-[11px] text-slate-400">
-                    {weeklyStats.current >= 300 ? '🔥 Great momentum this week!' : 'Build consistency with daily sprints'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1 text-xs font-bold text-indigo-300 group-hover:text-white transition-colors">
-                <span>Analytics</span>
-                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/[0.06] flex flex-col">
-                <span className="text-slate-400 text-[11px]">This Week</span>
-                <span className="text-amber-300 font-bold text-sm">+{weeklyStats.current} 🪙</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-white/[0.06] flex flex-col">
-                <span className="text-slate-400 text-[11px]">Personal Best</span>
-                <span className="text-purple-300 font-bold text-sm">+{weeklyStats.best} 🪙</span>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
+          </Card>
+        </aside>
       </div>
 
-      {/* Cognitive Science Explainer Modal */}
-      <ScienceExplainerModal
-        isOpen={showScienceModal}
-        onClose={() => setShowScienceModal(false)}
-        initialTopic="fsrs"
-      />
+      <ScienceExplainerModal isOpen={showScienceModal} onClose={() => setShowScienceModal(false)} initialTopic="fsrs" />
 
-      {/* Streak Guardian & Synaptic Freeze Modal */}
       <StreakGuardianModal
         isOpen={isStreakModalOpen}
         onClose={() => {
           setIsStreakModalOpen(false);
-          setHasSynapticFreeze(StorageService.hasSynapticFreeze());
-          setStats(StorageService.getStats());
+          refreshStudy();
         }}
         stats={stats}
-        onLaunchStreakSaver={handleLaunchQuickSprint}
+        onLaunchStreakSaver={startQuickReview}
       />
 
-      {/* Subject Folder Modal */}
       <SubjectFolderModal
         isOpen={isFolderModalOpen}
         onClose={() => {
@@ -827,14 +730,12 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
         }}
         initialFolder={editingFolder}
         onFolderSaved={() => {
-          setFolders(StorageService.getFolders());
-          setSavedSessions(StorageService.getSessions());
+          refreshStudy();
           setIsFolderModalOpen(false);
           setEditingFolder(null);
         }}
       />
 
-      {/* Move Deck to Folder Modal */}
       <MoveToFolderModal
         isOpen={isMoveModalOpen}
         session={movingSession}
@@ -842,29 +743,79 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
           setIsMoveModalOpen(false);
           setMovingSession(null);
         }}
-        onMoved={() => {
-          setSavedSessions(StorageService.getSessions());
-          setFolders(StorageService.getFolders());
-        }}
+        onMoved={refreshStudy}
         onOpenNewFolderModal={() => {
           setIsMoveModalOpen(false);
-          setEditingFolder(null);
-          setIsFolderModalOpen(true);
+          openFolderEditor(null);
         }}
       />
 
-      {/* 3D Character Customizer Studio */}
       {isCustomizerOpen && (
         <Suspense fallback={null}>
-          <CharacterCustomizerModal
-            isOpen={isCustomizerOpen}
-            onClose={() => setIsCustomizerOpen(false)}
-          />
+          <CharacterCustomizerModal isOpen={isCustomizerOpen} onClose={() => setIsCustomizerOpen(false)} />
         </Suspense>
       )}
-
     </div>
   );
 };
+
+interface StatTileProps {
+  icon: LucideIcon;
+  label: string;
+  value: number;
+  unit: string;
+  tone?: 'brand' | 'gold';
+  note?: string;
+  noteIcon?: LucideIcon;
+  progress?: number;
+  onClick?: () => void;
+}
+
+const StatTile: React.FC<StatTileProps> = ({ icon: Icon, label, value, unit, tone = 'brand', note, noteIcon: NoteIcon, progress, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="group flex min-w-0 flex-col gap-3 rounded-2xl border border-line bg-surface p-4 text-left transition-colors hover:border-line-strong hover:bg-surface-hover cursor-pointer"
+  >
+    <span className="flex items-center justify-between gap-2 text-[13px] text-ink-subtle">
+      {label}
+      <Icon className={cn('h-4 w-4', tone === 'gold' ? 'text-gold' : 'text-ink-subtle group-hover:text-brand-text')} aria-hidden="true" />
+    </span>
+    <span className="flex min-w-0 items-baseline gap-1.5">
+      <span className="text-[26px] font-semibold leading-none tracking-tight tabular-nums text-ink">{value.toLocaleString()}</span>
+      <span className="truncate text-[13px] text-ink-subtle">{unit}</span>
+    </span>
+    {progress !== undefined ? (
+      <ProgressBar value={progress} label={`${label} progress`} />
+    ) : (
+      <span className="flex h-4 items-center gap-1 text-xs text-ink-subtle">
+        {NoteIcon && <NoteIcon className="h-3 w-3 text-brand-text" aria-hidden="true" />}
+        {note}
+      </span>
+    )}
+  </button>
+);
+
+const FilterChip: React.FC<{
+  active: boolean;
+  onClick: () => void;
+  count: number;
+  dotClassName?: string;
+  children: React.ReactNode;
+}> = ({ active, onClick, count, dotClassName, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={active}
+    className={cn(
+      'inline-flex h-8 shrink-0 items-center gap-2 rounded-full border px-3 text-[13px] transition-colors cursor-pointer',
+      active ? 'border-transparent bg-ink text-canvas' : 'border-line text-ink-muted hover:border-line-strong hover:text-ink',
+    )}
+  >
+    {dotClassName && <span className={cn('h-2 w-2 rounded-full', dotClassName)} aria-hidden="true" />}
+    <span className="max-w-[160px] truncate">{children}</span>
+    <span className={cn('tabular-nums', active ? 'opacity-70' : 'text-ink-subtle')}>{count}</span>
+  </button>
+);
 
 export default DailyMissionHome;
