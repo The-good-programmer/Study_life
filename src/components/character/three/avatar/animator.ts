@@ -141,6 +141,8 @@ export interface AnimatorTargets {
   restHipsX: number;
   upperArmLen: number;
   forearmLen: number;
+  /** Ponytail pivot, swung by a damped spring (secondary motion). */
+  ponytail?: THREE.Object3D | null;
 }
 
 const _euler = new THREE.Euler();
@@ -158,6 +160,9 @@ export class AvatarAnimator {
   private gaze = new THREE.Vector2();
   private gazeTarget = new THREE.Vector2();
   private targets = new Map<BoneName, THREE.Quaternion>(ANIMATED.map((n) => [n, new THREE.Quaternion()]));
+  private tail = { x: 0, z: 0, vx: 0, vz: 0 };
+  private lastHead = new THREE.Euler();
+  private lastBodyY = 0;
 
   update(dt: number, pose: CharacterPose, a: AnimatorTargets, look?: THREE.Vector3 | null) {
     const step = Math.min(dt, 0.05);
@@ -219,6 +224,25 @@ export class AvatarAnimator {
       if (this.blinkPhase >= 1) this.blinkPhase = -1;
     }
     for (const l of a.lids) l.rotation.x = lid * LID_CLOSED;
+
+    // Ponytail: a damped spring that lags behind head turns and hops.
+    if (a.ponytail) {
+      const head = a.bones.head.rotation;
+      const pitchRate = (head.x - this.lastHead.x) / step;
+      const yawRate = (head.y - this.lastHead.y) / step;
+      const lift = (a.bodyGroup.position.y - this.lastBodyY) / step;
+      this.lastHead.copy(head);
+      this.lastBodyY = a.bodyGroup.position.y;
+      const clamp = (v: number) => THREE.MathUtils.clamp(v, -0.5, 0.5);
+      const targetX = 0.05 * Math.sin(this.time * 1.3) + clamp(-pitchRate * 0.12 + lift * 1.5);
+      const targetZ = 0.04 * Math.sin(this.time * 0.9) + clamp(yawRate * 0.22);
+      const t = this.tail;
+      t.vx += ((targetX - t.x) * 70 - t.vx * 9) * step;
+      t.vz += ((targetZ - t.z) * 70 - t.vz * 9) * step;
+      t.x += t.vx * step;
+      t.z += t.vz * step;
+      a.ponytail.rotation.set(t.x, 0, t.z);
+    }
 
     // Small eye darts every couple of seconds.
     this.gazeTimer -= step;

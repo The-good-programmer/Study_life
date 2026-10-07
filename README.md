@@ -40,6 +40,8 @@ Built-in background audio generated with the Web Audio API: brown noise, rain, a
 
 Optional, non-study features live in the sidebar's collapsed **Extras** group: a customizable 3D student avatar and a home and room designer where you spend tokens earned by studying.
 
+The avatar is a stylized, fully skinned character sculpted in code: body, face, hair (8 styles), clothing (6 tops, 5 bottoms, 4 shoes), hats, glasses and facial hair, with expressions, blinking and IK-driven poses (wave, cheer, reading a book). Clothing is generated from the body itself, so it moves with it, and geometry is built in background Web Workers so the UI never stalls. To inspect it in development, open `http://localhost:5173/avatar-lab.html` (e.g. `?view=head3q&hairStyle=bob-cut&mood=happy`).
+
 ---
 
 ## 🚀 Getting Started
@@ -105,5 +107,5 @@ npx cap open android
 - **Scheduling:** `ts-fsrs` (Free Spaced Repetition Scheduler)
 - **AI:** Google Gemini via `@google/genai` (`gemini-2.5-flash` with fallbacks), plus an offline heuristic fallback
 - **Storage:** local-first (`localStorage` + IndexedDB); optional Node + SQLite backend (`node:sqlite`) for accounts and sync
-- **3D (Extras only, lazy-loaded):** Three.js
+- **3D (Extras only, lazy-loaded):** Three.js; procedural signed-distance-field sculpting meshed with surface nets, a real skeleton with two-bone IK, baked ambient occlusion, and GTAO post-processing in the home designer
 - **Portability:** round-trip `.json`, `.md`, `.tsv` deck export and import

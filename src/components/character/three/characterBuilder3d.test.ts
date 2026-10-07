@@ -120,6 +120,18 @@ describe('characterBuilder3d unit tests', () => {
     char.dispose();
   }, 60000);
 
+  it('keeps the ponytail spring stable through a bouncy pose', () => {
+    const char = buildCharacter3D({ ...sampleConfigs[1].custom, hairStyle: 'ponytail', headwear: 'none' }, { showShadow: false });
+    for (let i = 0; i < 200; i++) char.update(1 / 60, 'cheer');
+    const pivot = char.root.getObjectByName('PonytailPivot');
+    expect(pivot).toBeDefined();
+    for (const v of [pivot!.rotation.x, pivot!.rotation.z]) {
+      expect(Number.isFinite(v)).toBe(true);
+      expect(Math.abs(v)).toBeLessThan(0.8);
+    }
+    char.dispose();
+  });
+
   it('switches poses idle -> study -> wave -> cheer -> idle without NaNs', () => {
     const char = buildCharacter3D(sampleConfigs[0].custom, { showPedestal: false, showShadow: false });
     const poses: CharacterPose[] = ['idle', 'study', 'wave', 'cheer', 'idle'];

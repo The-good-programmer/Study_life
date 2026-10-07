@@ -83,6 +83,7 @@ interface AvatarBuild {
   dims: AvatarDims;
   book: THREE.Group;
   face: () => FaceRig | null;
+  ponytail: () => THREE.Object3D | null;
   apply: (prev: CharacterCustomization, next: CharacterCustomization) => void;
   dispose: () => void;
 }
@@ -117,6 +118,7 @@ function createBuild(
 
   const slots = new Map<SlotName, Slot>();
   let headGeometry: THREE.BufferGeometry | null = null;
+  let ponytail: THREE.Object3D | null = null;
   let face: FaceRig | null = null;
   let disposed = false;
   let readyFired = false;
@@ -286,7 +288,9 @@ function createBuild(
     request('hair', pieces.map((part) => ({ kind: 'hair', style, part, under, ...shape })), (results) => {
       const geos: Partial<Record<HairPart, THREE.BufferGeometry>> = {};
       pieces.forEach((p, i) => (geos[p] = results[i] as THREE.BufferGeometry));
-      return [['head', assembleHair(style, geos, mats.hair)]];
+      const hair = assembleHair(style, geos, mats.hair);
+      ponytail = hair.getObjectByName('PonytailPivot') ?? null;
+      return [['head', hair]];
     });
   };
 
@@ -335,6 +339,7 @@ function createBuild(
     dims,
     book,
     face: () => face,
+    ponytail: () => ponytail,
     apply(prev, next) {
       custom = { ...next };
       if (prev.mood !== next.mood || prev.skinTone !== next.skinTone) rebuildFace();
@@ -454,6 +459,7 @@ export function buildCharacter3D(
       restHipsX: 0,
       upperArmLen: active.dims.upperArmLen,
       forearmLen: active.dims.forearmLen,
+      ponytail: active.ponytail(),
     }, hasLook ? lookTarget : null);
   };
 
