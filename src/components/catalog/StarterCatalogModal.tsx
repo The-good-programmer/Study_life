@@ -21,6 +21,7 @@ import { CURATED_STARTER_DECKS, isBoardExamDeck, rankStarterDecksForGrade } from
 import { StorageService } from '../../services/storageService';
 import { AuthService } from '../../services/authService';
 import { soundEngine } from '../../services/soundEngine';
+import { fillCloze } from '../../utils/cloze';
 
 function createClonedSession(deck: StarterDeckMetadata): StudySession {
   return {
@@ -486,7 +487,7 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="font-medium text-white">{card.question}</div>
+                      <div className="font-medium text-white">{fillCloze(card.question)}</div>
                       <div className="text-slate-400 text-[11px] line-clamp-1">Answer: {card.answer}</div>
                     </div>
                   ))}

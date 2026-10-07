@@ -54,6 +54,7 @@ import { EducationCatalog } from '../../services/educationCatalog';
 import { SubjectFolderModal } from '../studio/SubjectFolderModal';
 import { FOLDER_COLORS } from '../studio/folderOptions';
 import { MoveToFolderModal } from '../studio/MoveToFolderModal';
+import { fillCloze } from '../../utils/cloze';
 
 const StarterCatalogModal = React.lazy(() => import('../catalog/StarterCatalogModal').then(m => ({ default: m.StarterCatalogModal })));
 const DeckStudioModal = React.lazy(() => import('../studio/DeckStudioModal').then(m => ({ default: m.DeckStudioModal })));
@@ -941,7 +942,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
               <ul className="grid gap-3 md:grid-cols-2">
                 {starredCards.map(card => (
                   <li key={card.id} className="space-y-2 rounded-2xl border border-line bg-surface p-4">
-                    <p className="text-[15px] leading-relaxed text-ink">{card.question}</p>
+                    <p className="text-[15px] leading-relaxed text-ink">{fillCloze(card.question)}</p>
                     <p className="rounded-lg bg-surface-hover px-3 py-2 text-[13px] text-ink-muted">{card.answer}</p>
                   </li>
                 ))}

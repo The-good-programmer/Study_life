@@ -21,6 +21,7 @@ import {
 import type { ConceptCheckpoint, RetrievalCard, StudySession } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { MathRenderer } from '../common/MathRenderer';
+import { fillCloze } from '../../utils/cloze';
 
 export type NodeMasteryStatus = 'mastered' | 'consolidating' | 'fragile' | 'unexplored';
 
@@ -700,7 +701,7 @@ export const CurriculumKnowledgeMap: React.FC<CurriculumKnowledgeMapProps> = ({
                   {selectedNode.concept.retrievalCards.slice(0, 4).map((card, idx) => (
                     <div key={card.id} className="p-3 rounded-xl bg-slate-950/50 border border-white/[0.05] flex items-center justify-between gap-3 text-xs">
                       <div className="truncate flex-1 font-medium text-slate-300">
-                        {idx + 1}. <MathRenderer text={card.question} />
+                        {idx + 1}. <MathRenderer text={fillCloze(card.question)} />
                       </div>
                       <span className="text-[11px] font-mono text-slate-500 shrink-0">
                         {card.stability ? `S: ${card.stability.toFixed(1)}d` : 'New'}

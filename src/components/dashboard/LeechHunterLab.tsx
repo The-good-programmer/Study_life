@@ -17,6 +17,7 @@ import { AIService } from '../../services/aiService';
 import { soundEngine } from '../../services/soundEngine';
 import { MathRenderer } from '../common/MathRenderer';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
+import { fillCloze } from '../../utils/cloze';
 
 interface LeechHunterLabProps {
   onBack: () => void;
@@ -254,7 +255,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
                     </div>
 
                     <div className="text-xs text-white font-medium line-clamp-2 leading-snug">
-                      <MathRenderer text={card.question} />
+                      <MathRenderer text={fillCloze(card.question)} />
                     </div>
 
                     <div className="text-[11px] text-slate-400 truncate">
@@ -283,7 +284,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
                   </div>
 
                   <h3 className="text-base sm:text-lg font-bold text-white leading-relaxed font-display">
-                    <MathRenderer text={selectedCard.question} />
+                    <MathRenderer text={fillCloze(selectedCard.question)} />
                   </h3>
 
                   <div className="p-3 rounded-xl bg-slate-950/70 border border-white/[0.06] text-xs text-slate-300 flex items-start gap-2">
@@ -382,7 +383,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
                                 </span>
                                 {opt.atomicCards.map((ac, idx) => (
                                   <div key={idx} className="p-2.5 rounded-xl bg-slate-950/70 border border-white/[0.06] text-[11px] space-y-0.5">
-                                    <div className="text-slate-200 font-medium">Card {idx + 1}: {ac.question}</div>
+                                    <div className="text-slate-200 font-medium">Card {idx + 1}: {fillCloze(ac.question)}</div>
                                     <div className="text-emerald-400 font-mono">Answer: {ac.answer}</div>
                                   </div>
                                 ))}

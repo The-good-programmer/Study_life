@@ -28,6 +28,7 @@ import { FSRSService } from '../../services/fsrsService';
 import { soundEngine } from '../../services/soundEngine';
 import { MathRenderer } from '../common/MathRenderer';
 import { shuffle } from '../../utils/shuffle';
+import { fillCloze, maskCloze } from '../../utils/cloze';
 
 interface InterleavingArenaProps {
   onBack: () => void;
@@ -692,7 +693,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
                 Retrieval Prompt
               </span>
               <div className="text-lg sm:text-xl font-bold text-white leading-relaxed font-sans">
-                <MathRenderer text={currentCard.question} />
+                <MathRenderer text={isRevealed ? fillCloze(currentCard.question) : maskCloze(currentCard.question)} />
               </div>
             </div>
 

@@ -1,22 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { 
-  Award, 
-  Clock, 
-  HelpCircle, 
-  RotateCcw, 
-  ArrowRight, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Brain, 
-  Zap, 
-  Printer, 
-  Sparkles, 
+import {
+  Clock,
+  RotateCcw,
+  ArrowRight,
+  CheckCircle2,
+  AlertTriangle,
+  Printer,
+  Sparkles,
   X,
   Play,
   Check,
   ChevronDown,
   ChevronUp,
-  Share2
+  Share2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { 
@@ -41,8 +37,9 @@ import {
   scoreAnswer,
 } from './examScoring';
 import { getEffectiveCardType, isOptionCorrect } from '../cockpit/retrievalLogic';
-import { UserAvatarBadge } from '../character/UserAvatarBadge';
+import { Badge, Button, Card, CoinIcon, IconButton, Kbd, ProgressBar } from '../ui/primitives';
 import { shuffle } from '../../utils/shuffle';
+import { fillCloze, maskCloze } from '../../utils/cloze';
 
 interface ExamSimulatorProps {
   onBack: () => void;
@@ -104,6 +101,8 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   const [finalReport, setFinalReport] = useState<ExamReport | null>(null);
   const [expandedResultIdx, setExpandedResultIdx] = useState<number | null>(null);
   const [copiedShare, setCopiedShare] = useState(false);
+  const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
+  const [examPay, setExamPay] = useState<{ tokens: number; capped: boolean } | null>(null);
 
   // Pool questions based on configuration
   const handleStartExam = () => {
@@ -203,17 +202,18 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
         results: newResults,
         deckTitle:
           selectedDeckId === 'all'
-            ? 'All Decks (Interleaved Comprehensive)'
+            ? 'All decks'
             : allDecks.find(d => d.id === selectedDeckId)?.title || 'Custom Exam',
         timeSpentSeconds: Math.round((Date.now() - examStartedAtRef.current) / 1000),
         now: new Date(),
       });
 
       StorageService.saveExamReport(report);
-      grantReward(
+      const pay = grantReward(
         { kind: 'exam', weightedScore: report.confidenceWeightedScore },
-        { label: `Mock Exam: ${report.deckTitle.slice(0, 20)} (${report.rawAccuracyPercent}%)` },
+        { label: `Mock exam: ${report.deckTitle.slice(0, 20)} (${report.rawAccuracyPercent}%)` },
       );
+      setExamPay({ tokens: pay.wage?.totalAmount ?? 0, capped: pay.capped });
       soundEngine.playCompletionChime();
 
       try {
@@ -280,9 +280,9 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     return () => clearInterval(interval);
   }, [isTimerActive, timeLimitPerQuestion]);
 
-  // Keyboard Shortcuts (1-4 / A-D for options, Z / X / C for confidence, Enter to submit)
+  // Keyboard shortcuts (1-4 / A-D for options, L / M / H for confidence, Enter to submit)
   useEffect(() => {
-    if (stage !== 'active' || !currentItem) return;
+    if (stage !== 'active' || !currentItem || isExitConfirmOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -290,16 +290,19 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
       const key = e.key.toUpperCase();
 
-      // Confidence Keys: Z = Low, X = Medium, C = High
-      if (key === 'Z') {
-        e.preventDefault();
-        setSelectedConfidence('low');
-      } else if (key === 'X') {
-        e.preventDefault();
-        setSelectedConfidence('medium');
-      } else if (key === 'C') {
-        e.preventDefault();
-        setSelectedConfidence('high');
+      // Confidence keys: L = low, M = medium, H = high. (C used to set high
+      // confidence, which clashed with picking option C.)
+      if (!isAnswerSubmitted) {
+        if (key === 'L') {
+          e.preventDefault();
+          setSelectedConfidence('low');
+        } else if (key === 'M') {
+          e.preventDefault();
+          setSelectedConfidence('medium');
+        } else if (key === 'H') {
+          e.preventDefault();
+          setSelectedConfidence('high');
+        }
       }
 
       // MCQ Choice Keys: A, B, C, D or 1, 2, 3, 4 (only before submit)
@@ -329,7 +332,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [stage, currentItem, isAnswerSubmitted, effectiveCardType, hasOptions, selectedConfidence, handleSubmitCurrentAnswer, advanceQuestion, results]);
+  }, [stage, currentItem, isAnswerSubmitted, effectiveCardType, hasOptions, selectedConfidence, handleSubmitCurrentAnswer, advanceQuestion, results, isExitConfirmOpen]);
 
   // Launch Remediation Session
   const handleLaunchRemediation = () => {
@@ -340,19 +343,16 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
       r => r.quadrant === 'blindspot' || r.quadrant === 'lucky-guess' || r.quadrant === 'known-unknown'
     );
 
-    if (remediationItems.length === 0) {
-      alert('Outstanding! You have zero blindspots or gaps to remediate.');
-      return;
-    }
+    if (remediationItems.length === 0) return;
 
     const sessionId = `remediation-${Date.now()}`;
     const cards = remediationItems.map(item => item.card);
 
     const remediationSession: StudySession = {
       id: sessionId,
-      title: `Remediation Pilot: ${finalReport.deckTitle.slice(0, 35)}`,
-      category: 'Diagnostic Remediation',
-      description: `Targeted cognitive intervention repairing ${cards.length} identified blindspots and fragile traces.`,
+      title: `Exam review: ${finalReport.deckTitle.slice(0, 40)}`,
+      category: 'Exam review',
+      description: `The ${cards.length} questions you missed, guessed or were wrongly sure about.`,
       currentConceptIndex: 0,
       currentPhase: 'priming',
       elapsedSeconds: 0,
@@ -361,16 +361,17 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
         {
           id: `c-${sessionId}-1`,
           order: 1,
-          title: 'Targeted Remediation Queue',
+          title: 'Questions to review',
           estimatedMinutes: Math.max(6, Math.round(cards.length * 1.2)),
-          mentalModel: 'Focused neural repair: Re-wire the mental models behind questions where overconfidence led to errors or guesses masked gaps.',
+          mentalModel: 'Go back over the questions where you were wrong, unsure, or wrongly confident, and fix the understanding behind each one.',
           coreTakeaways: [
-            `Diagnosed ${finalReport.blindspotCount} cognitive blindspots.`,
-            `Diagnosed ${finalReport.luckyGuessCount} lucky guesses requiring stabilization.`
+            `${finalReport.blindspotCount} blind spots: you were sure but wrong.`,
+            `${finalReport.luckyGuessCount} lucky guesses: right, but not sure.`,
+            `${finalReport.knownUnknownCount} honest gaps: wrong, and you knew you were unsure.`,
           ],
           keyTerms: cards.slice(0, 4).map(c => ({ term: c.question.slice(0, 25), definition: c.answer.slice(0, 50) })),
-          feynmanPrompt: `Explain why your initial assumption failed on these concepts and articulate the correct mechanism.`,
-          sampleMasteryExplanation: `A targeted cognitive breakdown reconciling misconceptions with empirical facts.`,
+          feynmanPrompt: `Explain why your first answer was wrong on these questions, and what the correct idea is.`,
+          sampleMasteryExplanation: `A plain explanation of each correct answer and why the mistaken one was tempting.`,
           retrievalCards: cards,
         }
       ]
@@ -385,350 +386,215 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   // -------------------------------------------------------------
   if (stage === 'setup') {
     return (
-      <div className="max-w-2xl mx-auto space-y-6 py-6 animate-fadeIn">
-        
-        {/* Header with AI Proctor */}
-        <div className="text-center space-y-3">
-          <div className="flex items-center justify-center gap-3.5">
-            <div className="relative w-12 h-12 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-amber-500 via-indigo-500 to-cyan-500 shadow-xl shadow-amber-500/20 shrink-0">
-              <UserAvatarBadge size="sm" showBorder={false} />
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-slate-950 animate-ping" />
-            </div>
-            <div className="text-left">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-semibold">
-                <Award className="w-3 h-3 text-amber-400" />
-                <span>Studify High-Stakes Simulator</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight font-display">
-                Mock Exam Simulator
-              </h1>
-            </div>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">
-            Test yourself under genuine exam conditions with <strong>Confidence-Weighted Scoring</strong>. Your customized study partner proctors your session to eliminate illusions of competence before exam day.
+      <div className="mx-auto w-full max-w-2xl space-y-6 animate-fadeIn">
+        <header>
+          <h1 className="text-[26px] font-semibold tracking-tight text-ink sm:text-[30px]">Mock exam</h1>
+          <p className="mt-1 text-[15px] leading-relaxed text-ink-muted">
+            Answer under exam conditions and say how sure you are. Being confidently wrong costs points, so the score shows what you really know.
           </p>
-        </div>
+        </header>
 
-        {/* Configuration Panel */}
-        <div className="p-6 sm:p-8 rounded-3xl glass-panel space-y-6 border-white/[0.1]">
+        <section className="space-y-6 rounded-3xl border border-line bg-surface p-5 sm:p-6">
           {setupError && (
-            <div className="p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center gap-2.5 animate-fadeIn">
-              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-              <span>{setupError}</span>
-            </div>
+            <p role="alert" className="flex items-center gap-2 rounded-xl border border-danger/30 bg-danger-soft px-3.5 py-2.5 text-[13px] text-danger">
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {setupError}
+            </p>
           )}
-          
-          {/* Deck Selection */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 font-display">
-              Select Deck / Subject Area
-            </label>
+
+          <SetupField label="Deck">
             <select
               value={selectedDeckId}
               onChange={(e) => setSelectedDeckId(e.target.value)}
-              className="w-full p-3 rounded-2xl bg-slate-950/80 border border-white/[0.1] text-white text-xs font-semibold outline-none focus:border-indigo-500"
+              className="h-11 w-full rounded-xl border border-line-strong bg-canvas px-3 text-[14px] text-ink outline-none focus:border-brand"
             >
-              <option value="all">⚡ All Decks (Comprehensive Interleaved Exam)</option>
+              <option value="all">All decks</option>
               {allDecks.map(deck => (
                 <option key={deck.id} value={deck.id}>
-                  {deck.title} ({deck.category})
+                  {deck.title}
                 </option>
               ))}
             </select>
-          </div>
+          </SetupField>
 
-          {/* Question Pool Size */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 font-display">
-              Number of Questions
-            </label>
-            <div className="grid grid-cols-4 gap-2">
-              {[5, 10, 15, 25].map(cnt => (
+          <SetupField label="Questions">
+            <Segmented
+              options={[5, 10, 15, 25].map(count => ({ value: count, label: String(count) }))}
+              value={questionCountLimit}
+              onChange={setQuestionCountLimit}
+              label="Number of questions"
+            />
+          </SetupField>
+
+          <SetupField label="Time per question">
+            <Segmented
+              options={[
+                { value: 0, label: 'Untimed' },
+                { value: 90, label: '90 seconds' },
+                { value: 45, label: '45 seconds' },
+              ]}
+              value={timeLimitPerQuestion}
+              onChange={setTimeLimitPerQuestion}
+              label="Time per question"
+            />
+          </SetupField>
+
+          <SetupField label="Feedback">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {([
+                { mode: 'board', title: 'Exam', text: 'See your results at the end, like the real thing.' },
+                { mode: 'training', title: 'Practice', text: 'See the answer and explanation after each question.' },
+              ] as const).map(option => (
                 <button
-                  key={cnt}
+                  key={option.mode}
                   type="button"
-                  onClick={() => setQuestionCountLimit(cnt)}
-                  className={`py-2.5 rounded-xl text-xs font-bold border transition-all ${
-                    questionCountLimit === cnt
-                      ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
-                      : 'bg-slate-950/60 text-slate-400 border-white/[0.08] hover:text-white'
+                  aria-pressed={examMode === option.mode}
+                  onClick={() => setExamMode(option.mode)}
+                  className={`rounded-xl border p-3.5 text-left transition-colors cursor-pointer ${
+                    examMode === option.mode ? 'border-brand bg-brand-soft' : 'border-line hover:border-line-strong hover:bg-surface-hover'
                   }`}
                 >
-                  {cnt} Qs
+                  <span className="block text-[14px] font-medium text-ink">{option.title}</span>
+                  <span className="mt-0.5 block text-[13px] text-ink-subtle">{option.text}</span>
                 </button>
               ))}
             </div>
-          </div>
+          </SetupField>
 
-          {/* Time Pressure Mode */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 font-display">
-              Time Pressure / Pace
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { sec: 45, label: 'Sprint (45s/Q)' },
-                { sec: 90, label: 'Board (90s/Q)' },
-                { sec: 0, label: 'Untimed' },
-              ].map(item => (
-                <button
-                  key={item.sec}
-                  type="button"
-                  onClick={() => setTimeLimitPerQuestion(item.sec)}
-                  className={`py-2.5 rounded-xl text-xs font-bold border transition-all ${
-                    timeLimitPerQuestion === item.sec
-                      ? 'bg-amber-600 text-white border-amber-400 shadow-md shadow-amber-600/30'
-                      : 'bg-slate-950/60 text-slate-400 border-white/[0.08] hover:text-white'
-                  }`}
-                >
-                  {item.label}
-                </button>
+          <div className="rounded-2xl bg-surface-hover p-4">
+            <p className="text-[13px] font-medium text-ink">How scoring works</p>
+            <dl className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-3">
+              {CONFIDENCE_OPTIONS.map(option => (
+                <div key={option.level} className="space-y-0.5">
+                  <dt className="text-ink-muted">{option.label}</dt>
+                  <dd className="tabular-nums text-ink-subtle">
+                    <span className="text-success">{option.right}</span> right · <span className={option.wrongTone}>{option.wrong}</span> wrong
+                  </dd>
+                </div>
               ))}
-            </div>
+            </dl>
+            <p className="mt-3 border-t border-line pt-3 text-xs text-ink-subtle">Your score is paid out in tokens, up to a daily limit.</p>
           </div>
 
-          {/* Feedback Mode */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 font-display">
-              Feedback Style
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setExamMode('board')}
-                className={`p-3 rounded-2xl text-left border transition-all ${
-                  examMode === 'board'
-                    ? 'bg-indigo-950/60 border-indigo-500 text-white'
-                    : 'bg-slate-950/60 border-white/[0.08] text-slate-400'
-                }`}
-              >
-                <div className="text-xs font-bold text-white mb-0.5">Board Exam Mode</div>
-                <div className="text-[11px] text-slate-400">Scores, calibration & blindspots revealed at the end.</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setExamMode('training')}
-                className={`p-3 rounded-2xl text-left border transition-all ${
-                  examMode === 'training'
-                    ? 'bg-indigo-950/60 border-indigo-500 text-white'
-                    : 'bg-slate-950/60 border-white/[0.08] text-slate-400'
-                }`}
-              >
-                <div className="text-xs font-bold text-white mb-0.5">Training Mode</div>
-                <div className="text-[11px] text-slate-400">Instant feedback & explanation after every question.</div>
-              </button>
-            </div>
-          </div>
-
-          {/* Scientific Scoring Callout */}
-          <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] text-xs text-slate-300 space-y-2">
-            <div className="font-bold text-white flex items-center gap-1.5 font-display">
-              <Brain className="w-4 h-4 text-amber-400" />
-              <span>Confidence-Weighted Scoring (Bruno/Bushman Heuristic):</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div className="text-emerald-400">✓ Right + High Conf: <span className="font-bold">+20 pts</span> (Mastery)</div>
-              <div className="text-rose-400">✗ Wrong + High Conf: <span className="font-bold">-15 pts</span> (Blindspot!)</div>
-              <div className="text-amber-400">✓ Right + Low Conf: <span className="font-bold">+5 pts</span> (Guess)</div>
-              <div className="text-slate-400">✗ Wrong + Low Conf: <span className="font-bold">0 pts</span> (Known Gap)</div>
-            </div>
-          </div>
-
-          {/* Launch Buttons */}
-          <div className="flex items-center justify-between pt-2">
-            <button
-              type="button"
-              onClick={onBack}
-              className="px-5 py-3 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors"
-            >
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="ghost" onClick={onBack}>
               Cancel
-            </button>
-
-            <button
-              type="button"
-              onClick={handleStartExam}
-              className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-amber-600 via-indigo-600 to-purple-600 hover:from-amber-500 hover:to-purple-500 text-white font-bold text-xs flex items-center gap-2 shadow-xl shadow-indigo-600/30 transition-all hover:scale-[1.02]"
-            >
-              <Play className="w-4 h-4 fill-white" />
-              <span>Begin Examination</span>
-            </button>
+            </Button>
+            <Button variant="primary" size="lg" icon={Play} onClick={handleStartExam}>
+              Start exam
+            </Button>
           </div>
-
-        </div>
+        </section>
       </div>
     );
   }
 
   // -------------------------------------------------------------
-  // RENDER STAGE 2: ACTIVE EXAM ARENA
+  // RENDER STAGE 2: ACTIVE EXAM
   // -------------------------------------------------------------
   if (stage === 'active' && currentItem) {
-    const progressPercent = Math.round(((currentIndex) / examQuestions.length) * 100);
+    const lastResult = results[results.length - 1];
+    const options = currentItem.card.options || [];
 
     return (
-      <div className="max-w-2xl mx-auto space-y-6 py-4 animate-fadeIn">
-        
-        {/* Top HUD Scrubber & Timer */}
-        <div className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08]">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                if (window.confirm('Exit exam? Progress will not be saved.')) {
-                  setStage('setup');
-                }
-              }}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors"
-              title="Exit Exam"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div>
-              <div className="text-xs font-bold text-white font-display">
+      <div className="mx-auto w-full max-w-2xl space-y-4 animate-fadeIn">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <IconButton icon={X} label="Leave exam" onClick={() => setIsExitConfirmOpen(true)} />
+            <div className="min-w-0">
+              <p className="text-[14px] font-medium tabular-nums text-ink">
                 Question {currentIndex + 1} of {examQuestions.length}
-              </div>
-              <div className="text-[11px] text-slate-400 truncate max-w-[200px]">
-                {currentItem.deckTitle}
-              </div>
+              </p>
+              <p className="truncate text-xs text-ink-subtle">{currentItem.deckTitle}</p>
             </div>
           </div>
-
-          {/* Progress Bar & Countdown Timer */}
-          <div className="flex items-center gap-3">
-            {timeLimitPerQuestion > 0 && (
-              <div className={`px-3 py-1 rounded-xl font-mono text-xs font-bold border flex items-center gap-1.5 ${
-                secondsRemaining <= 10
-                  ? 'bg-rose-950/70 border-rose-500 text-rose-300 animate-pulse'
-                  : 'bg-slate-900 border-white/[0.08] text-amber-400'
-              }`}>
-                <Clock className="w-3.5 h-3.5" />
-                <span>{secondsRemaining}s</span>
-              </div>
-            )}
-
-            <div className="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-amber-500 to-indigo-500 transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
+          {timeLimitPerQuestion > 0 && (
+            <span
+              className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 font-mono text-[13px] font-medium tabular-nums ${
+                secondsRemaining <= 10 ? 'animate-pulse bg-danger-soft text-danger' : 'bg-surface-hover text-ink'
+              }`}
+              aria-live="polite"
+            >
+              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+              {secondsRemaining}s
+            </span>
+          )}
         </div>
+        <ProgressBar value={(currentIndex / examQuestions.length) * 100} label="Exam progress" />
 
-        {/* Question Card */}
-        <div className="p-6 sm:p-8 rounded-3xl glass-panel space-y-6 border-white/[0.1]">
-          
-          <div className="flex items-center justify-between text-xs text-slate-400 uppercase tracking-wider font-bold">
-            <span className="text-indigo-400">{currentItem.conceptTitle}</span>
-            <span className="font-mono text-[11px] text-slate-500">
-              {effectiveCardType === 'image-occlusion' ? 'Image Occlusion' : hasOptions ? 'Multiple Choice' : effectiveCardType === 'cloze' ? 'Cloze Deletion' : 'Concept Recall'}
+        <div className="space-y-6 rounded-3xl border border-line bg-surface-solid p-6 sm:p-8">
+          <div className="flex items-center justify-between gap-3 text-[13px]">
+            <span className="truncate text-ink-subtle">{currentItem.conceptTitle}</span>
+            <span className="shrink-0 text-ink-subtle">
+              {effectiveCardType === 'image-occlusion' ? 'Label the diagram' : hasOptions ? 'Multiple choice' : effectiveCardType === 'cloze' ? 'Fill in the blank' : 'Short answer'}
             </span>
           </div>
 
-          <h3 className="text-xl sm:text-2xl font-bold text-white leading-relaxed font-display">
-            <MathRenderer text={currentItem.card.question} />
+          <h3 className="text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
+            <MathRenderer text={isAnswerSubmitted ? fillCloze(currentItem.card.question) : maskCloze(currentItem.card.question)} />
           </h3>
 
-          {/* Image Occlusion Card View */}
           {effectiveCardType === 'image-occlusion' && currentItem.card.imageUrl && (
-            <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950/80 border border-white/[0.08] flex items-center justify-center p-2 shadow-inner select-none my-3">
+            <div className="relative flex w-full select-none items-center justify-center overflow-hidden rounded-2xl border border-line bg-canvas p-2">
               <img
                 src={currentItem.card.imageUrl}
-                alt="Technical or Anatomical Diagram"
-                className="w-full h-auto object-contain max-h-[360px] pointer-events-none rounded-xl"
+                alt="Diagram with hidden labels"
+                className="pointer-events-none h-auto max-h-[360px] w-full rounded-xl object-contain"
               />
-
-              {/* Overlaid Occlusion Masks */}
-              {(currentItem.card.masks || []).map((mask, idx) => {
+              {(currentItem.card.masks || []).map((mask) => {
                 const isTarget = mask.id === currentItem.card.activeMaskId;
                 const isRevealed = isTarget && isAnswerSubmitted;
-
-                if (currentItem.card.occlusionMode === 'hide-one-reveal-one' && !isTarget) {
-                  return null;
-                }
-
-                if (isTarget) {
-                  return (
-                    <div
-                      key={mask.id}
-                      className={`absolute rounded-lg flex items-center justify-center p-1 transition-all shadow-xl ${
-                        isRevealed
-                          ? 'bg-emerald-950/95 border-2 border-emerald-400 text-emerald-200 ring-2 ring-emerald-500/40'
-                          : 'bg-amber-950/95 border-2 border-amber-400 text-amber-200 animate-pulse ring-2 ring-amber-500/40'
-                      }`}
-                      style={{
-                        left: `${mask.x}%`,
-                        top: `${mask.y}%`,
-                        width: `${mask.width}%`,
-                        height: `${mask.height}%`,
-                      }}
-                    >
-                      <span className="text-[11px] font-bold font-mono truncate px-1">
-                        {isRevealed ? (mask.label || currentItem.card.answer) : `? [Mask #${idx + 1}]`}
-                      </span>
-                    </div>
-                  );
-                }
-
-                return (
+                if (currentItem.card.occlusionMode === 'hide-one-reveal-one' && !isTarget) return null;
+                const box = { left: `${mask.x}%`, top: `${mask.y}%`, width: `${mask.width}%`, height: `${mask.height}%` };
+                return isTarget ? (
                   <div
                     key={mask.id}
-                    className="absolute rounded-lg bg-slate-900/95 border border-slate-700/80 flex items-center justify-center p-1 shadow-md select-none pointer-events-none"
-                    style={{
-                      left: `${mask.x}%`,
-                      top: `${mask.y}%`,
-                      width: `${mask.width}%`,
-                      height: `${mask.height}%`,
-                    }}
+                    className={`absolute flex items-center justify-center rounded-lg p-1 text-[11px] font-semibold shadow-lg ${
+                      isRevealed ? 'bg-success text-brand-ink' : 'animate-pulse bg-gold text-[#2a1d00] ring-2 ring-gold/40'
+                    }`}
+                    style={box}
                   >
-                    <span className="text-[10px] font-mono text-slate-500 font-bold">
-                      [Mask #{idx + 1}]
-                    </span>
+                    <span className="truncate px-1">{isRevealed ? mask.label || currentItem.card.answer : '?'}</span>
                   </div>
+                ) : (
+                  <div key={mask.id} className="pointer-events-none absolute rounded-lg border border-line-strong bg-surface-solid" style={box} />
                 );
               })}
             </div>
           )}
 
-          {/* Multiple Choice Options */}
           {hasOptions && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
-              {(currentItem.card.options && currentItem.card.options.length > 0
-                ? currentItem.card.options
-                : [currentItem.card.answer, 'Option B', 'Option C', 'Option D']
-              ).map((opt, idx) => {
+            <div className="grid gap-2 sm:grid-cols-2">
+              {options.map((opt, idx) => {
                 const letter = ['A', 'B', 'C', 'D'][idx] || String(idx + 1);
                 const isSelected = selectedAnswer === opt;
-
-                let optStyle = 'bg-slate-900/80 hover:bg-slate-800 border-white/[0.08] text-slate-200';
-                if (isSelected) {
-                  optStyle = 'bg-indigo-600/30 border-indigo-500 text-white shadow-lg shadow-indigo-600/20';
-                }
-
-                if (isAnswerSubmitted) {
-                  const isCorrect = opt.trim().toLowerCase() === currentItem.card.answer.trim().toLowerCase();
-                  if (isCorrect) {
-                    optStyle = 'bg-emerald-950/70 border-emerald-500 text-emerald-200 font-bold';
-                  } else if (isSelected) {
-                    optStyle = 'bg-rose-950/70 border-rose-500 text-rose-200';
-                  }
-                }
-
+                const isRight = isOptionCorrect(opt, currentItem.card.answer);
+                const state = isAnswerSubmitted
+                  ? isRight
+                    ? 'border-success bg-success-soft'
+                    : isSelected
+                      ? 'border-danger bg-danger-soft'
+                      : 'border-line opacity-50'
+                  : isSelected
+                    ? 'border-brand bg-brand-soft'
+                    : 'border-line bg-surface hover:border-brand/50 hover:bg-surface-hover';
                 return (
                   <button
                     key={idx}
                     type="button"
                     disabled={isAnswerSubmitted}
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedAnswer(opt)}
-                    className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 ${optStyle}`}
+                    className={`flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-colors disabled:cursor-default cursor-pointer ${state}`}
                   >
-                    <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold font-mono shrink-0 ${
-                      isSelected ? 'bg-indigo-500 text-white' : 'bg-white/[0.08] text-slate-400'
-                    }`}>
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold ${
+                        isSelected && !isAnswerSubmitted ? 'bg-brand text-brand-ink' : 'bg-surface-hover text-ink-muted'
+                      }`}
+                    >
                       {letter}
                     </span>
-                    <span className="text-xs font-medium pt-0.5 leading-snug">
+                    <span className="pt-0.5 text-[15px] leading-snug text-ink">
                       <MathRenderer text={opt} />
                     </span>
                   </button>
@@ -737,447 +603,394 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             </div>
           )}
 
-          {/* Cloze / Standard Free-Text Input */}
           {!hasOptions && !isAnswerSubmitted && (
-            <div className="space-y-2 pt-2">
-              <label className="text-[11px] font-semibold text-slate-400">
-                Type your answer or target keyphrase:
+            <div className="space-y-2">
+              <label htmlFor="exam-answer" className="text-[13px] text-ink-subtle">
+                Your answer
               </label>
               <input
+                id="exam-answer"
                 type="text"
                 value={selectedAnswer}
                 onChange={(e) => setSelectedAnswer(e.target.value)}
-                placeholder="Type your answer..."
-                className="w-full p-3.5 rounded-2xl bg-slate-950/80 border border-white/[0.1] focus:border-indigo-500 text-white text-sm outline-none"
+                placeholder="Type your answer"
+                autoComplete="off"
+                className="h-12 w-full rounded-xl border border-line-strong bg-canvas px-4 text-[15px] text-ink outline-none transition-[border-color,box-shadow] placeholder:text-ink-subtle focus:border-brand focus:ring-4 focus:ring-brand/15"
               />
             </div>
           )}
 
-          {/* Training Mode Feedback Banner */}
-          {isAnswerSubmitted && results[results.length - 1] && (
-            <div className="p-4 rounded-2xl bg-slate-950 border border-white/[0.08] space-y-3 animate-fadeIn">
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  {results[results.length - 1].isCorrect ? (
-                    <span className="text-emerald-400 font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4" /> Correct Retrieval
-                    </span>
-                  ) : (
-                    <span className="text-rose-400 font-bold flex items-center gap-1">
-                      <AlertTriangle className="w-4 h-4" /> Misconception Detected
-                    </span>
-                  )}
-                  <span className="px-2 py-0.5 rounded-full text-[11px] font-mono bg-white/[0.06] text-slate-300">
-                    Quadrant: {results[results.length - 1].quadrant}
-                  </span>
-                </div>
-                <span className={`font-mono font-bold ${
-                  results[results.length - 1].pointsEarned > 0 ? 'text-emerald-400' : 'text-rose-400'
-                }`}>
-                  {results[results.length - 1].pointsEarned > 0 ? `+${results[results.length - 1].pointsEarned}` : results[results.length - 1].pointsEarned} pts
+          {isAnswerSubmitted && lastResult && (
+            <div className="space-y-3 rounded-2xl border border-line bg-surface p-4 animate-fadeIn">
+              <div className="flex items-center justify-between gap-3">
+                <span className={`flex items-center gap-1.5 text-[15px] font-semibold ${lastResult.isCorrect ? 'text-success' : 'text-danger'}`}>
+                  {lastResult.isCorrect ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : <X className="h-4 w-4" aria-hidden="true" />}
+                  {lastResult.isCorrect ? 'Correct' : 'Not quite'}
+                  <span className="text-[13px] font-normal text-ink-subtle">· {QUADRANT_COPY[lastResult.quadrant].label}</span>
+                </span>
+                <span className={`text-[14px] font-semibold tabular-nums ${lastResult.pointsEarned > 0 ? 'text-success' : lastResult.pointsEarned < 0 ? 'text-danger' : 'text-ink-subtle'}`}>
+                  {formatPoints(lastResult.pointsEarned)}
                 </span>
               </div>
-
-              <div className="text-xs text-slate-200">
-                <strong className="text-slate-400 block mb-0.5">Target Answer:</strong>
-                {currentItem.card.answer}
-              </div>
-
+              <p className="text-[14px] text-ink-muted">
+                Answer: <span className="font-medium text-ink">{currentItem.card.answer}</span>
+              </p>
               {currentItem.card.explanation && (
-                <div className="text-[11px] text-slate-400 border-t border-white/[0.06] pt-2 leading-relaxed">
-                  {currentItem.card.explanation}
-                </div>
+                <p className="border-t border-line pt-3 text-[13px] leading-relaxed text-ink-muted">{currentItem.card.explanation}</p>
               )}
             </div>
           )}
 
-          {/* Metacognitive Confidence Selector */}
           {!isAnswerSubmitted && (
-            <div className="pt-4 border-t border-white/[0.08] space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-300 flex items-center gap-1.5 font-display">
-                  <span>Rate Your Subjective Confidence:</span>
-                  <HelpCircle className="w-3.5 h-3.5 text-slate-500" />
-                </span>
-                <span className="text-[11px] font-mono text-slate-500">Press Z, X, or C</span>
+            <div className="space-y-3 border-t border-line pt-5">
+              <div className="flex items-center justify-between gap-2 text-[13px]">
+                <span className="font-medium text-ink">How sure are you?</span>
+                <span className="hidden text-ink-subtle sm:inline">Keys L, M, H</span>
               </div>
-
               <div className="grid grid-cols-3 gap-2">
-                
-                {/* Low Confidence */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedConfidence('low')}
-                  className={`p-3 rounded-2xl border text-left transition-all ${
-                    selectedConfidence === 'low'
-                      ? 'bg-slate-800 border-slate-400 text-white shadow-md'
-                      : 'bg-slate-950/60 border-white/[0.08] text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center justify-between text-xs font-bold mb-1">
-                    <span>Low (Guess)</span>
-                    <kbd className="px-1.5 py-0.5 text-[11px] bg-slate-900 rounded border border-white/[0.1] font-mono">Z</kbd>
-                  </div>
-                  <div className="text-[11px] text-slate-400 leading-tight">+5 if right • 0 if wrong</div>
-                </button>
-
-                {/* Medium Confidence */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedConfidence('medium')}
-                  className={`p-3 rounded-2xl border text-left transition-all ${
-                    selectedConfidence === 'medium'
-                      ? 'bg-amber-950/60 border-amber-500 text-white shadow-md'
-                      : 'bg-slate-950/60 border-white/[0.08] text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center justify-between text-xs font-bold mb-1 text-amber-300">
-                    <span>Medium</span>
-                    <kbd className="px-1.5 py-0.5 text-[11px] bg-amber-950 rounded border border-amber-700 font-mono text-amber-300">X</kbd>
-                  </div>
-                  <div className="text-[11px] text-amber-400/80 leading-tight">+14 if right • -5 if wrong</div>
-                </button>
-
-                {/* High Confidence */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedConfidence('high')}
-                  className={`p-3 rounded-2xl border text-left transition-all ${
-                    selectedConfidence === 'high'
-                      ? 'bg-indigo-950/60 border-indigo-400 text-white shadow-md'
-                      : 'bg-slate-950/60 border-white/[0.08] text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center justify-between text-xs font-bold mb-1 text-indigo-300">
-                    <span>High (Certain)</span>
-                    <kbd className="px-1.5 py-0.5 text-[11px] bg-indigo-950 rounded border border-indigo-700 font-mono text-indigo-300">C</kbd>
-                  </div>
-                  <div className="text-[11px] text-indigo-300/80 leading-tight">+20 if right • -15 if wrong!</div>
-                </button>
-
+                {CONFIDENCE_OPTIONS.map(option => {
+                  const isSelected = selectedConfidence === option.level;
+                  return (
+                    <button
+                      key={option.level}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => setSelectedConfidence(option.level)}
+                      className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition-colors cursor-pointer ${
+                        isSelected ? 'border-brand bg-brand-soft' : 'border-line bg-surface hover:border-line-strong hover:bg-surface-hover'
+                      }`}
+                    >
+                      <span className="flex w-full items-center justify-between gap-2">
+                        <span className="text-[14px] font-semibold text-ink">{option.label}</span>
+                        <Kbd>{option.key}</Kbd>
+                      </span>
+                      <span className="text-xs tabular-nums text-ink-subtle">
+                        {option.right} / {option.wrong}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Submit / Advance Button */}
-          <div className="pt-2 flex justify-end">
+          <div className="flex justify-end">
             {!isAnswerSubmitted ? (
-              <button
-                type="button"
-                onClick={handleSubmitCurrentAnswer}
-                disabled={!selectedConfidence}
-                className={`px-8 py-3.5 rounded-2xl font-bold text-xs flex items-center gap-2 shadow-xl transition-all ${
-                  !selectedConfidence
-                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-white/[0.04]'
-                    : 'bg-gradient-to-r from-amber-600 to-indigo-600 hover:from-amber-500 hover:to-indigo-500 text-white shadow-indigo-600/30 hover:scale-[1.02]'
-                }`}
-              >
-                <span>Submit & Confirm Confidence</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              <Button variant="primary" size="lg" trailingIcon={ArrowRight} onClick={handleSubmitCurrentAnswer} disabled={!selectedConfidence} className="w-full sm:w-auto">
+                Submit answer
+              </Button>
             ) : (
-              <button
-                type="button"
-                onClick={() => advanceQuestion(results)}
-                className="px-8 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-xl shadow-indigo-600/30 transition-all hover:scale-[1.02]"
-              >
-                <span>{currentIndex + 1 < examQuestions.length ? 'Next Question' : 'View Exam Diagnostics'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+              <Button variant="primary" size="lg" trailingIcon={ArrowRight} onClick={() => advanceQuestion(results)} className="w-full sm:w-auto">
+                {currentIndex + 1 < examQuestions.length ? 'Next question' : 'See results'}
+              </Button>
             )}
           </div>
-
         </div>
 
+        {isExitConfirmOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fadeIn"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="leave-exam-title"
+            onClick={() => setIsExitConfirmOpen(false)}
+          >
+            <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl border border-line-strong bg-surface-solid p-6 text-center shadow-2xl">
+              <h3 id="leave-exam-title" className="text-[17px] font-semibold text-ink">Leave this exam?</h3>
+              <p className="mt-2 text-[14px] leading-relaxed text-ink-muted">Your answers so far will not be scored or saved, and nothing is paid.</p>
+              <div className="mt-6 flex gap-2">
+                <Button variant="secondary" className="flex-1" onClick={() => setIsExitConfirmOpen(false)}>
+                  Keep going
+                </Button>
+                <Button
+                  variant="danger"
+                  className="flex-1"
+                  onClick={() => {
+                    setIsExitConfirmOpen(false);
+                    setIsTimerActive(false);
+                    setStage('setup');
+                  }}
+                >
+                  Leave exam
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   // -------------------------------------------------------------
-  // RENDER STAGE 3: POST-EXAM DIAGNOSTIC REPORT
+  // RENDER STAGE 3: RESULTS
   // -------------------------------------------------------------
   if (stage === 'report' && finalReport) {
-    const grade = finalReport.rawAccuracyPercent >= 90 ? 'A+ Mastered' 
-      : finalReport.rawAccuracyPercent >= 80 ? 'A Solid'
-      : finalReport.rawAccuracyPercent >= 70 ? 'B Competent'
-      : finalReport.rawAccuracyPercent >= 60 ? 'C Developing'
-      : 'Remediation Required';
+    const grade = gradeFor(finalReport.rawAccuracyPercent);
+    const reviewCount = finalReport.blindspotCount + finalReport.luckyGuessCount + finalReport.knownUnknownCount;
+    const isCalibrated = finalReport.calibrationPercent >= CALIBRATED_THRESHOLD;
 
     return (
-      <div className="max-w-3xl mx-auto space-y-6 py-6 animate-fadeIn">
-        
-        {/* Report Header Card */}
-        <div className="p-6 sm:p-8 rounded-3xl glass-panel space-y-6 border-amber-500/30 text-center relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="mx-auto w-full max-w-3xl space-y-5 animate-fadeIn">
+        <header>
+          <p className="text-[13px] font-medium text-brand-text">Exam results</p>
+          <h1 className="mt-1 text-[26px] font-semibold tracking-tight text-ink sm:text-[30px]">{finalReport.deckTitle}</h1>
+          <p className="mt-1 text-[14px] text-ink-subtle">
+            {finalReport.totalQuestions} questions · {Math.max(1, Math.round(finalReport.timeSpentSeconds / 60))} min
+          </p>
+        </header>
 
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold">
-            <Award className="w-3.5 h-3.5 text-amber-400" />
-            <span>Official Exam Diagnostic Scorecard</span>
-          </div>
-
-          <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight font-display">
-            {finalReport.deckTitle}
-          </h2>
-
-          {/* High-Level Score Badges */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            
-            {/* Raw Accuracy */}
-            <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] space-y-1">
-              <div className="text-2xl font-black text-white font-mono">{finalReport.rawAccuracyPercent}%</div>
-              <div className="text-[11px] text-slate-400">Raw Accuracy</div>
-            </div>
-
-            {/* Confidence Weighted Score */}
-            <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] space-y-1">
-              <div className="text-2xl font-black text-amber-400 font-mono">
-                {finalReport.confidenceWeightedScore}
-                <span className="text-xs text-slate-500 font-normal"> / {finalReport.maxPossibleScore}</span>
-              </div>
-              <div className="text-[11px] text-slate-400">Weighted Score</div>
-            </div>
-
-            {/* Metacognitive Calibration */}
-            <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] space-y-1">
-              <div className="text-2xl font-black text-indigo-300 font-mono">{finalReport.calibrationPercent}%</div>
-              <div className="text-[11px] text-slate-400" title="How well your confidence predicted whether you were right">Self-Calibration</div>
-            </div>
-
-            {/* Calibrated Grade */}
-            <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] space-y-1">
-              <div className="text-sm font-bold text-emerald-400 truncate pt-1">{grade}</div>
-              <div className="text-[11px] text-slate-400">Mastery Grade</div>
-            </div>
-
-          </div>
-
-          {/* Metacognitive Assessment */}
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-950 via-indigo-950/40 to-slate-950 border border-white/[0.08] flex flex-col sm:flex-row items-center gap-3.5 text-left">
-            <div className="relative w-12 h-12 rounded-2xl overflow-hidden p-0.5 bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 shrink-0 shadow-md">
-              <UserAvatarBadge size="sm" showBorder={false} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-indigo-300 font-display">Metacognitive Assessment</span>
-                <span className={`px-2 py-0.2 rounded-full text-[11px] font-mono font-bold ${
-                  finalReport.calibrationPercent >= CALIBRATED_THRESHOLD ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                }`}>
-                  {finalReport.calibrationPercent >= CALIBRATED_THRESHOLD ? 'Calibrated Mind' : 'Calibration Work Needed'}
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 font-medium leading-relaxed mt-0.5">
-                {finalReport.blindspotCount > 0
-                  ? `You encountered ${finalReport.blindspotCount} dangerous blindspot(s) where high confidence met wrong answers. Launch a Remediation Pilot below to repair them!`
-                  : finalReport.calibrationPercent >= CALIBRATED_THRESHOLD
-                  ? "Flawless calibration! Your metacognitive awareness accurately reflects your memory strength. Zero dangerous blindspots detected."
-                  : "Good effort! Turn those lucky guesses and known unknowns into calibrated mastery before test day."}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                const shareText = `🎓 Studify Mock Exam Scorecard\nDeck: ${finalReport.deckTitle}\nWeighted Score: ${finalReport.confidenceWeightedScore}/${finalReport.maxPossibleScore} (${finalReport.rawAccuracyPercent}% Raw Accuracy)\nMetacognitive Calibration: ${finalReport.calibrationPercent}%\nMastery Grade: ${grade}\n🎯 Calibrated Mastery: ${finalReport.masteryCount} | ⚠️ Blindspots: ${finalReport.blindspotCount}\n\nPowered by Studify 3D Study Platform 🎓✨`;
-                navigator.clipboard.writeText(shareText);
-                setCopiedShare(true);
-                soundEngine.playSuccess();
-                setTimeout(() => setCopiedShare(false), 2500);
-              }}
-              className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-bold text-white border border-white/[0.1] flex items-center justify-center gap-1.5 transition-all shrink-0 cursor-pointer shadow-sm"
-              title="Copy scorecard to clipboard"
-            >
-              {copiedShare ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-indigo-400" />}
-              <span>{copiedShare ? 'Copied to Clipboard!' : 'Share Score'}</span>
-            </button>
-          </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <ResultStat label="Correct" value={`${finalReport.rawAccuracyPercent}%`} />
+          <ResultStat label="Score" value={`${finalReport.confidenceWeightedScore}`} suffix={`/ ${finalReport.maxPossibleScore}`} />
+          <ResultStat label="Calibration" value={`${finalReport.calibrationPercent}%`} hint="How well your confidence predicted whether you were right" />
+          <ResultStat label="Grade" value={grade} />
         </div>
 
-        {/* 4-Quadrant Metacognitive Matrix Breakdown */}
-        <div className="p-6 rounded-3xl glass-panel space-y-4">
-          <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2 font-display">
-              <Brain className="w-4 h-4 text-indigo-400" />
-              <span>Bruno/Bushman 4-Quadrant Metacognitive Matrix</span>
-            </h3>
-            <span className="text-xs text-slate-400 font-mono">
-              {finalReport.totalQuestions} Questions Analyzed
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            
-            {/* Quadrant 1: Calibrated Mastery */}
-            <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 space-y-1.5">
-              <div className="flex items-center justify-between text-emerald-300 font-bold">
-                <span>🎯 Calibrated Mastery</span>
-                <span className="font-mono text-sm">{finalReport.masteryCount}</span>
-              </div>
-              <p className="text-[11px] text-emerald-400/80 leading-relaxed">
-                Correct with High Confidence. Neural memory traces are structurally consolidated into long-term storage.
-              </p>
+        <Card className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[15px] font-semibold text-ink">{isCalibrated ? 'Your confidence was well judged' : 'Your confidence needs tuning'}</h2>
+              <Badge tone={isCalibrated ? 'success' : 'gold'}>{isCalibrated ? 'Calibrated' : 'Keep practising'}</Badge>
             </div>
-
-            {/* Quadrant 2: Lucky Guesses */}
-            <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/40 space-y-1.5">
-              <div className="flex items-center justify-between text-amber-300 font-bold">
-                <span>🎲 Lucky Guesses</span>
-                <span className="font-mono text-sm">{finalReport.luckyGuessCount}</span>
-              </div>
-              <p className="text-[11px] text-amber-400/80 leading-relaxed">
-                Correct with Low Confidence. You guessed accurately, but lack conviction. Fragile synaptic trace.
-              </p>
-            </div>
-
-            {/* Quadrant 3: Known Unknowns */}
-            <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.08] space-y-1.5">
-              <div className="flex items-center justify-between text-slate-300 font-bold">
-                <span>🔍 Known Unknowns</span>
-                <span className="font-mono text-sm">{finalReport.knownUnknownCount}</span>
-              </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Incorrect with Low Confidence. Honest self-awareness of an unlearned concept. Ready for immediate encoding.
-              </p>
-            </div>
-
-            {/* Quadrant 4: Dangerous Blindspots */}
-            <div className={`p-4 rounded-2xl border space-y-1.5 ${
-              finalReport.blindspotCount > 0 
-                ? 'bg-rose-950/40 border-rose-500/60 shadow-lg shadow-rose-950/20' 
-                : 'bg-slate-900/40 border-white/[0.06]'
-            }`}>
-              <div className="flex items-center justify-between text-rose-300 font-bold">
-                <span>⚠️ Cognitive Blindspots</span>
-                <span className="font-mono text-sm font-extrabold">{finalReport.blindspotCount}</span>
-              </div>
-              <p className="text-[11px] text-rose-300/80 leading-relaxed">
-                Incorrect with High Confidence! Illusions of competence that ruin actual test performance. Priority remediation needed.
-              </p>
-            </div>
-
-          </div>
-        </div>
-
-        {/* 1-Click Remediation Deck Launcher */}
-        <div className="p-6 rounded-3xl glass-panel border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-purple-950/30 to-indigo-950/40 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="space-y-1 text-center sm:text-left">
-            <h4 className="text-sm font-bold text-white flex items-center justify-center sm:justify-start gap-2 font-display">
-              <Zap className="w-4 h-4 text-amber-400" />
-              <span>Launch Targeted Remediation Pilot</span>
-            </h4>
-            <p className="text-xs text-slate-300 max-w-md leading-relaxed">
-              Auto-generates a tailored study session containing only your <strong>{finalReport.blindspotCount + finalReport.luckyGuessCount}</strong> blindspots & lucky guesses to eliminate errors.
+            <p className="mt-1 text-[14px] leading-relaxed text-ink-muted">
+              {finalReport.blindspotCount > 0
+                ? `You were sure but wrong on ${finalReport.blindspotCount} ${finalReport.blindspotCount === 1 ? 'question' : 'questions'}. Those are the riskiest in a real exam, so review them first.`
+                : isCalibrated
+                  ? 'You knew what you knew, and no answer was confidently wrong.'
+                  : 'Turn your guesses and gaps into answers you are sure of before the real exam.'}
+            </p>
+            <p className="mt-2 flex items-center gap-1.5 text-[13px] text-ink-subtle">
+              <CoinIcon className="h-4 w-4" />
+              {examPay && examPay.tokens > 0
+                ? <>You earned <span className="font-medium tabular-nums text-gold">{examPay.tokens}</span> tokens{examPay.capped ? ' (daily limit applied)' : ''}.</>
+                : finalReport.confidenceWeightedScore <= 0
+                  ? 'No tokens this time: pay starts once your score is above zero.'
+                  : 'No tokens: you have reached today’s exam pay limit.'}
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={handleLaunchRemediation}
-            className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs flex items-center gap-2 shadow-xl shadow-indigo-600/30 transition-all hover:scale-105 shrink-0"
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={copiedShare ? Check : Share2}
+            className="shrink-0"
+            onClick={() => {
+              const shareText = `Studify mock exam: ${finalReport.deckTitle}\nScore ${finalReport.confidenceWeightedScore}/${finalReport.maxPossibleScore}, ${finalReport.rawAccuracyPercent}% correct, ${finalReport.calibrationPercent}% calibrated (grade ${grade}).`;
+              navigator.clipboard.writeText(shareText);
+              setCopiedShare(true);
+              soundEngine.playSuccess();
+              setTimeout(() => setCopiedShare(false), 2500);
+            }}
           >
-            <Sparkles className="w-4 h-4" />
-            <span>Remediate Blindspots</span>
-          </button>
-        </div>
+            {copiedShare ? 'Copied' : 'Copy result'}
+          </Button>
+        </Card>
 
-        {/* Question-by-Question Diagnostic Review Ledger */}
-        <div className="p-6 rounded-3xl glass-panel space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white font-display">
-              Question-by-Question Metacognitive Ledger
-            </h3>
-            <button
-              onClick={() => window.print()}
-              className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print Report</span>
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {finalReport.questionResults.map((result, idx) => {
-              const isExpanded = expandedResultIdx === idx;
+        <section aria-labelledby="quadrants-title" className="space-y-3">
+          <h2 id="quadrants-title" className="text-[15px] font-semibold text-ink">How sure you were, and whether you were right</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(['mastery', 'lucky-guess', 'known-unknown', 'blindspot'] as const).map(quadrant => {
+              const count =
+                quadrant === 'mastery'
+                  ? finalReport.masteryCount
+                  : quadrant === 'lucky-guess'
+                    ? finalReport.luckyGuessCount
+                    : quadrant === 'known-unknown'
+                      ? finalReport.knownUnknownCount
+                      : finalReport.blindspotCount;
+              const copy = QUADRANT_COPY[quadrant];
               return (
-                <div
-                  key={idx}
-                  className="rounded-2xl border border-white/[0.06] bg-slate-950/60 overflow-hidden transition-all text-xs"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setExpandedResultIdx(isExpanded ? null : idx)}
-                    className="w-full p-4 flex items-center justify-between gap-3 text-left hover:bg-white/[0.02]"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                        result.isCorrect 
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' 
-                          : 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
-                      }`}>
-                        {result.isCorrect ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
-                      </span>
-                      <div>
-                        <div className="font-bold text-white line-clamp-1">{result.card.question}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">
-                          Confidence: <span className="uppercase text-slate-300 font-bold">{result.confidence}</span> • {result.quadrant}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className={`font-mono font-bold ${
-                        result.pointsEarned > 0 ? 'text-emerald-400' : 'text-rose-400'
-                      }`}>
-                        {result.pointsEarned > 0 ? `+${result.pointsEarned}` : result.pointsEarned} pts
-                      </span>
-                      {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
-                    </div>
-                  </button>
-
-                  {isExpanded && (
-                    <div className="p-4 pt-1 border-t border-white/[0.06] space-y-2 bg-slate-900/40 text-xs">
-                      <div>
-                        <span className="font-semibold text-slate-400 block text-[11px]">Your Answer:</span>
-                        <span className={result.isCorrect ? 'text-emerald-300' : 'text-rose-300'}>{result.userAnswer}</span>
-                      </div>
-                      <div>
-                        <span className="font-semibold text-slate-400 block text-[11px]">Target Answer:</span>
-                        <span className="text-white font-medium">{result.card.answer}</span>
-                      </div>
-                      {result.card.explanation && (
-                        <div className="p-3 rounded-xl bg-slate-950 border border-white/[0.06] text-slate-300 text-[11px] leading-relaxed">
-                          <strong>Nuance:</strong> {result.card.explanation}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                <div key={quadrant} className={`rounded-2xl border p-4 ${quadrant === 'blindspot' && count > 0 ? 'border-danger/40 bg-danger-soft' : 'border-line bg-surface'}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`flex items-center gap-2 text-[14px] font-semibold ${copy.tone}`}>
+                      <span className={`h-2 w-2 rounded-full ${copy.dot}`} aria-hidden="true" />
+                      {copy.label}
+                    </span>
+                    <span className="text-[20px] font-semibold tabular-nums text-ink">{count}</span>
+                  </div>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">{copy.description}</p>
                 </div>
               );
             })}
           </div>
+        </section>
+
+        <Card className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-[15px] font-semibold text-ink">Review what you missed</h2>
+            <p className="mt-1 text-[14px] text-ink-muted">
+              {reviewCount > 0
+                ? `A guided session on the ${reviewCount} ${reviewCount === 1 ? 'question' : 'questions'} you missed, guessed or were wrongly sure about.`
+                : 'Nothing to review: every answer was right and you were sure of it.'}
+            </p>
+          </div>
+          <Button variant="primary" icon={Sparkles} onClick={handleLaunchRemediation} disabled={reviewCount === 0} className="shrink-0">
+            Start review
+          </Button>
+        </Card>
+
+        <section aria-labelledby="answers-title" className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="answers-title" className="text-[15px] font-semibold text-ink">Every question</h2>
+            <Button variant="ghost" size="sm" icon={Printer} onClick={() => window.print()}>
+              Print
+            </Button>
+          </div>
+          <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
+            {finalReport.questionResults.map((result, idx) => {
+              const isExpanded = expandedResultIdx === idx;
+              return (
+                <li key={idx}>
+                  <button
+                    type="button"
+                    aria-expanded={isExpanded}
+                    onClick={() => setExpandedResultIdx(isExpanded ? null : idx)}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface-hover cursor-pointer"
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <span
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${result.isCorrect ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'}`}
+                        aria-label={result.isCorrect ? 'Correct' : 'Incorrect'}
+                      >
+                        {result.isCorrect ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-[14px] text-ink">{fillCloze(result.card.question)}</span>
+                        <span className="block text-xs text-ink-subtle">
+                          {CONFIDENCE_OPTIONS.find(o => o.level === result.confidence)?.label} · {QUADRANT_COPY[result.quadrant].label}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className={`text-[13px] font-semibold tabular-nums ${result.pointsEarned > 0 ? 'text-success' : result.pointsEarned < 0 ? 'text-danger' : 'text-ink-subtle'}`}>
+                        {formatPoints(result.pointsEarned)}
+                      </span>
+                      {isExpanded ? <ChevronUp className="h-4 w-4 text-ink-subtle" aria-hidden="true" /> : <ChevronDown className="h-4 w-4 text-ink-subtle" aria-hidden="true" />}
+                    </span>
+                  </button>
+                  {isExpanded && (
+                    <div className="space-y-2 border-t border-line bg-canvas/40 px-4 py-3.5 text-[13px]">
+                      <p>
+                        <span className="text-ink-subtle">Your answer: </span>
+                        <span className={result.isCorrect ? 'text-success' : 'text-danger'}>{result.userAnswer}</span>
+                      </p>
+                      <p>
+                        <span className="text-ink-subtle">Correct answer: </span>
+                        <span className="font-medium text-ink">{result.card.answer}</span>
+                      </p>
+                      {result.card.explanation && <p className="leading-relaxed text-ink-muted">{result.card.explanation}</p>}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="ghost" onClick={onBack}>
+            Done
+          </Button>
+          <Button variant="secondary" icon={RotateCcw} onClick={() => setStage('setup')}>
+            Take another exam
+          </Button>
         </div>
-
-        {/* Bottom Actions */}
-        <div className="flex items-center justify-between pt-2">
-          <button
-            type="button"
-            onClick={onBack}
-            className="px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold transition-all"
-          >
-            Back to Dashboard
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setStage('setup')}
-            className="px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold flex items-center gap-2 transition-all"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Retake Another Exam</span>
-          </button>
-        </div>
-
       </div>
     );
   }
 
   return null;
 };
+
+const CONFIDENCE_OPTIONS: { level: ConfidenceLevel; label: string; key: string; right: string; wrong: string; wrongTone: string }[] = [
+  { level: 'low', label: 'Guessing', key: 'L', right: '+5', wrong: '0', wrongTone: 'text-ink-subtle' },
+  { level: 'medium', label: 'Fairly sure', key: 'M', right: '+14', wrong: '−5', wrongTone: 'text-danger' },
+  { level: 'high', label: 'Certain', key: 'H', right: '+20', wrong: '−15', wrongTone: 'text-danger' },
+];
+
+const QUADRANT_COPY: Record<'mastery' | 'lucky-guess' | 'known-unknown' | 'blindspot', { label: string; description: string; tone: string; dot: string }> = {
+  mastery: {
+    label: 'Knew it',
+    description: 'Right, and you were sure. This knowledge is solid.',
+    tone: 'text-success',
+    dot: 'bg-success',
+  },
+  'lucky-guess': {
+    label: 'Lucky guesses',
+    description: 'Right, but you were not sure. Review these so the knowledge sticks.',
+    tone: 'text-gold',
+    dot: 'bg-gold',
+  },
+  'known-unknown': {
+    label: 'Honest gaps',
+    description: 'Wrong, and you knew you were unsure. These are straightforward to fix by studying.',
+    tone: 'text-ink-muted',
+    dot: 'bg-ink-subtle',
+  },
+  blindspot: {
+    label: 'Blind spots',
+    description: 'Wrong, but you were sure. The riskiest kind of mistake, so review these first.',
+    tone: 'text-danger',
+    dot: 'bg-danger',
+  },
+};
+
+const gradeFor = (accuracy: number): string => {
+  if (accuracy >= 90) return 'A';
+  if (accuracy >= 80) return 'B';
+  if (accuracy >= 70) return 'C';
+  if (accuracy >= 60) return 'D';
+  return 'Not yet';
+};
+
+const formatPoints = (points: number): string => (points > 0 ? `+${points}` : points < 0 ? `−${Math.abs(points)}` : '0');
+
+const SetupField: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div className="space-y-2">
+    <p className="text-[13px] font-medium text-ink">{label}</p>
+    {children}
+  </div>
+);
+
+function Segmented<T extends string | number>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  label: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="grid auto-cols-fr grid-flow-col gap-1 rounded-xl border border-line bg-canvas p-1">
+      {options.map(option => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={String(option.value)}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(option.value)}
+            className={`h-9 rounded-lg px-2 text-[13px] font-medium tabular-nums transition-colors cursor-pointer ${
+              selected ? 'bg-surface-hover text-ink shadow-sm' : 'text-ink-subtle hover:text-ink'
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const ResultStat: React.FC<{ label: string; value: string; suffix?: string; hint?: string }> = ({ label, value, suffix, hint }) => (
+  <div className="rounded-2xl border border-line bg-surface p-4" title={hint}>
+    <p className="text-[13px] text-ink-subtle">{label}</p>
+    <p className="mt-1.5 flex items-baseline gap-1">
+      <span className="text-[24px] font-semibold leading-none tracking-tight tabular-nums text-ink">{value}</span>
+      {suffix && <span className="text-[13px] tabular-nums text-ink-subtle">{suffix}</span>}
+    </p>
+  </div>
+);

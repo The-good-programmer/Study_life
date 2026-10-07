@@ -28,6 +28,7 @@ import { soundEngine } from '../../services/soundEngine';
 import { MoveToFolderModal } from './MoveToFolderModal';
 import { SubjectFolderModal } from './SubjectFolderModal';
 import { FOLDER_COLORS } from './folderOptions';
+import { fillCloze } from '../../utils/cloze';
 
 interface DeckStationModalProps {
   isOpen: boolean;
@@ -579,7 +580,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                       </div>
 
                       <div className="text-xs font-semibold text-white">
-                        {card.question}
+                        {fillCloze(card.question)}
                       </div>
 
                       {isExpanded && (

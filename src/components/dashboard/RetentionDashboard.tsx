@@ -22,6 +22,7 @@ import { grantReward } from '../../services/economy/rewardService';
 import { Badge, Button, Card, Kbd, ProgressBar } from '../ui/primitives';
 
 import { gamepadService, type GamepadAction } from '../../services/gamepadService';
+import { fillCloze, maskCloze } from '../../utils/cloze';
 
 interface RetentionDashboardProps {
   stats: UserStats;
@@ -216,7 +217,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
             <span>Stable for about <span className="font-medium tabular-nums text-ink">{(card.stability || 1).toFixed(1)} days</span></span>
           </div>
           <h3 className="mt-4 text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
-            <MathRenderer text={card.question} />
+            <MathRenderer text={isAnswerRevealed ? fillCloze(card.question) : maskCloze(card.question)} />
           </h3>
           {card.hint && !isAnswerRevealed && (
             <p className="mt-4 rounded-2xl border border-gold/25 bg-gold-soft p-3.5 text-[14px] text-ink">
