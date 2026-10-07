@@ -32,6 +32,7 @@ import { lifeSimService, ACADEMIC_ROLES } from '../../services/lifeSimService';
 import { soundEngine } from '../../services/soundEngine';
 import { haptics } from '../../services/hapticsService';
 import { estimateReward, earningsForDay } from '../../services/economy/rewardService';
+import { buildMatchTiles } from '../game/matchTiles';
 import type { EarningsByKind } from '../../services/economy/rewardService';
 import { REWARD_LABELS } from '../../services/economy/rewardLabels';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
@@ -179,6 +180,13 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
     }
     return best;
   }, [savedSessions, dueInSession]);
+
+  // Speed match needs question-and-answer cards: prefer today's deck, else any deck that has two pairs.
+  const matchSession = useMemo(() => {
+    const playable = (session: StudySession) => buildMatchTiles(session).length >= 4;
+    if (primarySession && playable(primarySession)) return primarySession;
+    return savedSessions.find(playable) ?? null;
+  }, [primarySession, savedSessions]);
 
   const primaryCards = primarySession ? cardCount(primarySession) : 0;
   const estimatedMinutes = Math.max(1, Math.round((primaryCards * SECONDS_PER_CARD) / 60));
@@ -342,9 +350,11 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                 {primarySession && (
                   <div className="flex flex-wrap items-center gap-1 text-[13px]">
                     <span className="mr-1 text-ink-subtle">Or try</span>
-                    <Button variant="ghost" size="sm" icon={Zap} onClick={() => onStartMatch(primarySession)}>
-                      Speed match
-                    </Button>
+                    {matchSession && (
+                      <Button variant="ghost" size="sm" icon={Zap} onClick={() => onStartMatch(matchSession)}>
+                        Speed match
+                      </Button>
+                    )}
                     {onOpenExam && (
                       <Button variant="ghost" size="sm" icon={Award} onClick={onOpenExam}>
                         Mock exam

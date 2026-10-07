@@ -1,53 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { 
-  Zap, 
-  Timer, 
-  ArrowLeft, 
-  RotateCcw, 
-  Trophy, 
-  Flame, 
-  Sparkles, 
-  Play
-} from 'lucide-react';
-import type { StudySession, RetrievalCard } from '../../types';
+import { ArrowLeft, Check, Flame, Play, RotateCcw, Timer, Trophy, Zap } from 'lucide-react';
+import type { StudySession } from '../../types';
 import { soundEngine } from '../../services/soundEngine';
 import { grantReward } from '../../services/economy/rewardService';
-import { characterService } from '../../services/characterService';
-import { UserAvatarBadge } from '../character/UserAvatarBadge';
-import { shuffle } from '../../utils/shuffle';
-
-interface MatchTile {
-  id: string;
-  cardId: string;
-  text: string;
-  type: 'question' | 'answer';
-  isMatched: boolean;
-}
-
-function generateTilesFromSession(session: StudySession): MatchTile[] {
-  const allCards: RetrievalCard[] = session.concepts.flatMap(c => c.retrievalCards);
-  if (allCards.length === 0) return [];
-  const shuffledCards = shuffle(allCards).slice(0, 6);
-  const generated: MatchTile[] = [];
-  shuffledCards.forEach((card, idx) => {
-    generated.push({
-      id: `q-${card.id}-${idx}`,
-      cardId: card.id,
-      text: card.question.length > 90 ? card.question.slice(0, 87) + '...' : card.question,
-      type: 'question',
-      isMatched: false,
-    });
-    generated.push({
-      id: `a-${card.id}-${idx}`,
-      cardId: card.id,
-      text: card.answer.length > 90 ? card.answer.slice(0, 87) + '...' : card.answer,
-      type: 'answer',
-      isMatched: false,
-    });
-  });
-  return shuffle(generated);
-}
+import { shouldIgnoreShortcut } from '../../utils/keyboard';
+import { cn } from '../../utils/cn';
+import { Button, Tokens } from '../ui/primitives';
+import { buildMatchTiles, isMatchingPair, MIN_PAID_PAIRS } from './matchTiles';
+import type { MatchTile } from './matchTiles';
 
 interface MatchArenaProps {
   session: StudySession;
@@ -55,106 +16,98 @@ interface MatchArenaProps {
   onLaunchStudy?: () => void;
 }
 
+const bestTimeKey = (id: string) => `axon_match_best_${id}`;
+const formatSeconds = (ms: number) => (ms / 1000).toFixed(1);
+
+/** Speed match: pair each question with its answer against the clock. */
 export const MatchArena: React.FC<MatchArenaProps> = ({ session, onBack, onLaunchStudy }) => {
-  const [tiles, setTiles] = useState<MatchTile[]>(() => generateTilesFromSession(session));
+  const [tiles, setTiles] = useState<MatchTile[]>(() => buildMatchTiles(session));
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
   const [mismatchedTileIds, setMismatchedTileIds] = useState<string[]>([]);
+  const [startedAt, setStartedAt] = useState(() => Date.now());
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [isRunning, setIsRunning] = useState(true);
   const [isCompleted, setIsCompleted] = useState(false);
   const [streak, setStreak] = useState(0);
   const [maxStreak, setMaxStreak] = useState(0);
-  const [mistakesCount, setMistakesCount] = useState(0);
+  const [mistakes, setMistakes] = useState(0);
+  const [pay, setPay] = useState<{ xp: number; tokens: number } | null>(null);
+  const [isNewBest, setIsNewBest] = useState(false);
   const [bestTimeMs, setBestTimeMs] = useState<number | null>(() => {
-    const raw = localStorage.getItem(`axon_match_best_${session.id}`) || localStorage.getItem(`studify_match_best_${session.id}`);
+    const raw = localStorage.getItem(bestTimeKey(session.id)) || localStorage.getItem(`studify_match_best_${session.id}`);
     return raw ? parseInt(raw, 10) : null;
   });
+  const handleTileClickRef = useRef<(tile: MatchTile) => void>(() => {});
+  const mismatchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(mismatchTimer.current), []);
 
-  const timerRef = useRef<number | null>(null);
-  const handleTileClickRef = useRef<(clickedTile: MatchTile) => void>(() => {});
+  const pairCount = tiles.length / 2;
+  const matchedPairs = tiles.filter(t => t.isMatched).length / 2;
+  const isPaidRound = pairCount >= MIN_PAID_PAIRS;
 
-  // Tile Selection Handler
-  const handleTileClick = (clickedTile: MatchTile) => {
-    if (clickedTile.isMatched || mismatchedTileIds.length > 0) return;
+  // The clock reads real time, so it stays right even if the tab is throttled.
+  useEffect(() => {
+    if (isCompleted) return;
+    const timer = setInterval(() => setElapsedMs(Date.now() - startedAt), 100);
+    return () => clearInterval(timer);
+  }, [isCompleted, startedAt]);
 
-    // First tile tapped
-    if (!selectedTileId) {
-      setSelectedTileId(clickedTile.id);
+  const handleTileClick = (tile: MatchTile) => {
+    if (tile.isMatched || mismatchedTileIds.length > 0 || isCompleted) return;
+    if (!selectedTileId || selectedTileId === tile.id) {
+      setSelectedTileId(selectedTileId === tile.id ? null : tile.id);
+      return;
+    }
+    const first = tiles.find(t => t.id === selectedTileId);
+    if (!first) {
+      setSelectedTileId(tile.id);
       return;
     }
 
-    // Tapping the exact same tile: deselect
-    if (selectedTileId === clickedTile.id) {
-      setSelectedTileId(null);
-      return;
-    }
-
-    const firstTile = tiles.find(t => t.id === selectedTileId);
-    if (!firstTile) {
-      setSelectedTileId(clickedTile.id);
-      return;
-    }
-
-    // Checking if they match!
-    const isPair = firstTile.cardId === clickedTile.cardId && firstTile.type !== clickedTile.type;
-
-    if (isPair) {
-      // MATCH!
-      soundEngine.playCorrectChime();
-      const updatedStreak = streak + 1;
-      setStreak(updatedStreak);
-      if (updatedStreak > maxStreak) setMaxStreak(updatedStreak);
-
-      const nextTiles = tiles.map(t => {
-        if (t.id === firstTile.id || t.id === clickedTile.id) {
-          return { ...t, isMatched: true };
-        }
-        return t;
-      });
-
-      setTiles(nextTiles);
-      setSelectedTileId(null);
-
-      // Check if all matched
-      const allMatched = nextTiles.every(t => t.isMatched);
-      if (allMatched) {
-        setIsCompleted(true);
-        setIsRunning(false);
-        soundEngine.playCompletionChime();
-
-        // Trigger victory celebration
-        try {
-          confetti({
-            particleCount: 80,
-            spread: 70,
-            origin: { y: 0.6 }
-          });
-        } catch {
-          // ignore
-        }
-
-        // Award Study Wage & XP
-        grantReward({ kind: 'match-clear' }, { label: 'Match Arena Clear' });
-
-        // Update high score
-        const finalTime = elapsedMs;
-        const currentBest = bestTimeMs;
-        if (!currentBest || finalTime < currentBest) {
-          setBestTimeMs(finalTime);
-          localStorage.setItem(`axon_match_best_${session.id}`, finalTime.toString());
-        }
-      }
-    } else {
-      // MISMATCH!
+    if (!isMatchingPair(first, tile)) {
       soundEngine.playIncorrectChime();
       setStreak(0);
-      setMistakesCount(prev => prev + 1);
-      setMismatchedTileIds([firstTile.id, clickedTile.id]);
-
-      window.setTimeout(() => {
+      setMistakes(m => m + 1);
+      setMismatchedTileIds([first.id, tile.id]);
+      mismatchTimer.current = setTimeout(() => {
         setMismatchedTileIds([]);
         setSelectedTileId(null);
       }, 650);
+      return;
+    }
+
+    soundEngine.playCorrectChime();
+    const nextStreak = streak + 1;
+    setStreak(nextStreak);
+    setMaxStreak(best => Math.max(best, nextStreak));
+    const nextTiles = tiles.map(t => (t.id === first.id || t.id === tile.id ? { ...t, isMatched: true } : t));
+    setTiles(nextTiles);
+    setSelectedTileId(null);
+
+    if (nextTiles.every(t => t.isMatched)) {
+      const finalTime = Date.now() - startedAt;
+      setElapsedMs(finalTime);
+      setIsCompleted(true);
+      soundEngine.playCompletionChime();
+      if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        try {
+          confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
+        } catch {
+          // Decoration only.
+        }
+      }
+      if (isPaidRound) {
+        const grant = grantReward({ kind: 'match-clear' }, { label: 'Speed match' });
+        setPay({ xp: grant.xp, tokens: grant.wage?.totalAmount ?? 0 });
+      }
+      if (!bestTimeMs || finalTime < bestTimeMs) {
+        setIsNewBest(!!bestTimeMs);
+        setBestTimeMs(finalTime);
+        try {
+          localStorage.setItem(bestTimeKey(session.id), String(finalTime));
+        } catch {
+          // A best time is nice to have.
+        }
+      }
     }
   };
 
@@ -162,282 +115,187 @@ export const MatchArena: React.FC<MatchArenaProps> = ({ session, onBack, onLaunc
     handleTileClickRef.current = handleTileClick;
   });
 
-  // Keyboard navigation: 1-9 to select active tiles, Escape to deselect
+  // Number keys pick the open tiles in order; Escape drops the selection.
   useEffect(() => {
     if (isCompleted || tiles.length === 0) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
         setSelectedTileId(null);
         return;
       }
-
-      const activeTiles = tiles.filter(t => !t.isMatched);
+      if (shouldIgnoreShortcut(e)) return;
+      const open = tiles.filter(t => !t.isMatched);
       const digit = parseInt(e.key, 10);
-      if (!isNaN(digit) && digit >= 1 && digit <= activeTiles.length) {
+      if (digit >= 1 && digit <= Math.min(9, open.length)) {
         e.preventDefault();
-        const targetTile = activeTiles[digit - 1];
-        if (targetTile) {
-          handleTileClickRef.current(targetTile);
-        }
+        handleTileClickRef.current(open[digit - 1]);
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [tiles, isCompleted]);
 
-  // Re-shuffle match game on user request
   const resetGame = () => {
-    setTiles(generateTilesFromSession(session));
+    clearTimeout(mismatchTimer.current);
+    setTiles(buildMatchTiles(session));
     setSelectedTileId(null);
     setMismatchedTileIds([]);
+    setStartedAt(Date.now());
     setElapsedMs(0);
-    setIsRunning(true);
     setIsCompleted(false);
     setStreak(0);
-    setMistakesCount(0);
-  };
-
-  // Stopwatch loop
-  useEffect(() => {
-    if (isRunning && !isCompleted) {
-      const interval = window.setInterval(() => {
-        setElapsedMs(prev => prev + 100);
-      }, 100);
-      timerRef.current = interval;
-      return () => clearInterval(interval);
-    }
-  }, [isRunning, isCompleted]);
-
-
-
-  const formatSeconds = (ms: number) => {
-    return (ms / 1000).toFixed(1);
+    setMaxStreak(0);
+    setMistakes(0);
+    setPay(null);
+    setIsNewBest(false);
   };
 
   if (tiles.length === 0) {
     return (
-      <div className="max-w-xl mx-auto p-8 rounded-3xl glass-panel text-center space-y-5 animate-fade-in">
-        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
-          <Sparkles className="w-7 h-7" />
-        </div>
-        <div className="space-y-1.5">
-          <h3 className="text-xl font-bold text-white font-display">No Flashcards In This Deck</h3>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
-            Match Arena requires at least 1 flashcard to construct memory pairs. Add flashcards in Deck Studio or import a starter deck from the catalog.
-          </p>
-        </div>
-        <button
-          onClick={onBack}
-          className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-colors cursor-pointer"
-        >
-          Return to Deck
-        </button>
+      <div className="mx-auto mt-10 w-full max-w-md rounded-3xl border border-line bg-surface p-8 text-center animate-fadeIn">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-soft text-gold">
+          <Zap className="h-6 w-6" aria-hidden="true" />
+        </span>
+        <h1 className="mt-4 text-lg font-semibold text-ink">Not enough cards to match</h1>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">
+          Speed match needs cards with a question and an answer. Add some to this deck first.
+        </p>
+        <Button variant="primary" icon={ArrowLeft} className="mt-5" onClick={onBack}>
+          Back
+        </Button>
       </div>
     );
   }
 
-  const activeTiles = tiles.filter(t => !t.isMatched);
+  const openTiles = tiles.filter(t => !t.isMatched);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in text-slate-100">
-      {/* Top Navigation Bar */}
-      <div className="flex items-center justify-between gap-4 p-4 rounded-2xl glass-panel">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Exit Game</span>
-        </button>
-
-        <div className="flex items-center gap-4">
-          {/* Live Timer */}
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-950/80 border border-white/[0.08] text-xs font-mono font-bold text-amber-400">
-            <Timer className="w-4 h-4" />
-            <span>{formatSeconds(elapsedMs)}s</span>
-          </div>
-
-          {/* Streak Counter */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-bold">
-            <Flame className="w-4 h-4 text-orange-400 fill-orange-400" />
-            <span>{streak}x Combo</span>
-          </div>
+    <div className="mx-auto w-full max-w-4xl animate-fadeIn">
+      <header className="flex items-center justify-between gap-3">
+        <Button variant="ghost" icon={ArrowLeft} onClick={onBack} className="-ml-2">
+          Back
+        </Button>
+        <div className="min-w-0 text-center">
+          <p className="text-xs font-medium text-brand-text">Speed match</p>
+          <h1 className="truncate text-[15px] font-semibold text-ink">{session.title}</h1>
         </div>
+        <Button variant="ghost" icon={RotateCcw} onClick={resetGame} className="-mr-2">
+          <span className="hidden sm:inline">New game</span>
+        </Button>
+      </header>
 
-        <button
-          onClick={resetGame}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
-          title="Restart with new shuffled pairs"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Reset</span>
-        </button>
-      </div>
-
-      {/* Main Game Arena */}
       {!isCompleted ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs text-slate-400 px-2">
-            <span>Tap or press numeric keys <span className="font-mono text-indigo-300 bg-white/[0.08] px-1.5 py-0.5 rounded text-[11px]">1-9</span> to match prompts with answers.</span>
-            <span>
-              {tiles.filter(t => t.isMatched).length / 2} / {tiles.length / 2} Pairs Matched
-            </span>
-          </div>
+        <>
+          <dl className="mt-5 grid grid-cols-3 gap-2">
+            <Stat icon={Timer} label="Time" value={`${formatSeconds(elapsedMs)}s`} />
+            <Stat icon={Check} label="Pairs" value={`${matchedPairs} / ${pairCount}`} />
+            <Stat icon={Flame} label="Streak" value={`×${streak}`} highlight={streak >= 3} />
+          </dl>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {tiles.map((tile) => {
-              const isSelected = selectedTileId === tile.id;
-              const isMismatched = mismatchedTileIds.includes(tile.id);
-              const isMatched = tile.isMatched;
-              const activeIndex = activeTiles.findIndex(t => t.id === tile.id);
+          <p className="mt-5 text-[13px] text-ink-subtle">
+            Pick a question, then its answer.
+            <span className="hidden sm:inline"> Number keys work too.</span>
+            {!isPaidRound && ` Practice round: decks with ${MIN_PAID_PAIRS}+ cards pay.`}
+          </p>
 
-              if (isMatched) {
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
+            {tiles.map(tile => {
+              if (tile.isMatched) {
                 return (
                   <div
                     key={tile.id}
-                    className="p-4 rounded-2xl bg-emerald-950/10 border border-emerald-500/20 text-emerald-400/30 opacity-20 pointer-events-none transition-all duration-500 scale-95 flex items-center justify-center min-h-[105px] text-center text-xs"
+                    className="flex min-h-[112px] items-center justify-center rounded-2xl border border-dashed border-line text-success/60"
+                    aria-hidden="true"
                   >
-                    Matched
+                    <Check className="h-5 w-5" />
                   </div>
                 );
               }
-
+              const isSelected = selectedTileId === tile.id;
+              const isMismatched = mismatchedTileIds.includes(tile.id);
+              const keyNumber = openTiles.findIndex(t => t.id === tile.id) + 1;
               return (
-                <div
+                <button
                   key={tile.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={isSelected}
-                  aria-label={`${tile.type === 'question' ? 'Prompt' : 'Target Match'}: ${tile.text}`}
+                  type="button"
                   onClick={() => handleTileClick(tile)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleTileClick(tile);
-                    }
-                  }}
-                  className={`p-4 rounded-2xl border transition-all duration-200 select-none flex flex-col justify-between cursor-pointer min-h-[115px] group text-left relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
-                    isSelected
-                      ? 'bg-indigo-600/30 border-indigo-400 shadow-lg shadow-indigo-600/30 scale-[1.03] text-white'
-                      : isMismatched
-                      ? 'bg-rose-950/60 border-rose-500 text-rose-200 animate-pulse'
-                      : 'bg-slate-950/60 border-white/[0.08] hover:border-indigo-500/40 hover:bg-slate-900/80 text-slate-200 hover:scale-[1.01]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                      {tile.type === 'question' ? 'Prompt' : 'Target Match'}
-                    </span>
-                    {activeIndex >= 0 && activeIndex < 9 && (
-                      <span className="text-[11px] font-mono text-slate-500 bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded">
-                        {activeIndex + 1}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="text-xs font-medium leading-relaxed mt-1 mb-auto line-clamp-4">
-                    {tile.text}
-                  </div>
-
-                  {isSelected && (
-                    <div className="mt-2 text-[11px] font-semibold text-indigo-300 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-indigo-400" />
-                      <span>Select match...</span>
-                    </div>
+                  aria-pressed={isSelected}
+                  aria-label={`${tile.type === 'question' ? 'Question' : 'Answer'}: ${tile.text}`}
+                  className={cn(
+                    'flex min-h-[112px] flex-col rounded-2xl border p-3.5 text-left transition-[background-color,border-color,transform] duration-150 cursor-pointer',
+                    isSelected && 'border-brand bg-brand-soft',
+                    isMismatched && 'border-danger bg-danger-soft animate-shake',
+                    !isSelected && !isMismatched && 'border-line bg-surface hover:border-line-strong hover:bg-surface-hover',
                   )}
-                </div>
+                >
+                  <span className="flex items-center justify-between gap-2 text-xs text-ink-subtle">
+                    <span className={cn(tile.type === 'answer' && 'text-success')}>{tile.type === 'question' ? 'Question' : 'Answer'}</span>
+                    {keyNumber > 0 && keyNumber <= 9 && (
+                      <kbd className="hidden h-5 min-w-5 items-center justify-center rounded border border-line px-1 font-mono text-[10.5px] sm:inline-flex">
+                        {keyNumber}
+                      </kbd>
+                    )}
+                  </span>
+                  <span className="mt-1.5 line-clamp-4 text-[13px] font-medium leading-relaxed text-ink">{tile.text}</span>
+                </button>
               );
             })}
           </div>
-        </div>
+        </>
       ) : (
-        /* Victory Screen */
-        <div className="p-8 sm:p-12 rounded-3xl glass-panel text-center space-y-6 max-w-xl mx-auto border-emerald-500/30 shadow-2xl shadow-emerald-500/10 animate-fade-in relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <section className="mx-auto mt-8 max-w-md rounded-3xl border border-line-strong bg-surface p-6 text-center animate-rise sm:p-8">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-success-soft text-success">
+            <Trophy className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <h2 className="mt-4 text-2xl font-semibold text-ink">All matched</h2>
+          <p className="mt-1 text-[15px] text-ink-muted">
+            {pairCount} pairs in {formatSeconds(elapsedMs)} seconds
+            {isNewBest && <span className="ml-1.5 font-medium text-success">· new best</span>}
+          </p>
 
-          <div className="relative w-20 h-20 rounded-3xl p-1 bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 mx-auto shadow-2xl shadow-purple-500/20 flex items-center justify-center">
-            <UserAvatarBadge size="lg" showBorder={false} />
-            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-400 ring-4 ring-slate-950 animate-ping" />
-          </div>
+          <dl className="mt-6 grid grid-cols-3 gap-2 text-left">
+            <Stat label="Time" value={`${formatSeconds(elapsedMs)}s`} />
+            <Stat label="Best streak" value={`×${maxStreak}`} />
+            <Stat label="Mistakes" value={String(mistakes)} />
+          </dl>
 
-          <div className="space-y-1.5">
-            <h2 className="text-2xl font-black text-white font-display">
-              Matching Arena Cleared!
-            </h2>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold font-mono">
-              <span>🪙 +20 Study Wage Deposited</span>
-            </div>
-            <p className="text-xs text-slate-300">
-              <span className="text-cyan-300 font-bold font-display">{characterService.getCharacter().name || 'Study Partner'}:</span> "Blazing synaptic recall speed! Active association trains instant memory indexing."
-            </p>
-          </div>
+          <p className="mt-4 text-[13px] text-ink-subtle">
+            {pay && (pay.tokens > 0 || pay.xp > 0) ? (
+              <span className="inline-flex items-center gap-1.5">
+                Paid
+                {pay.tokens > 0 && <Tokens amount={pay.tokens} signed className="text-ink-muted" />}
+                {pay.xp > 0 && <span className="tabular-nums text-ink-muted">+{pay.xp} XP</span>}
+              </span>
+            ) : isPaidRound ? (
+              "You have had today's paid speed matches. Keep playing for practice."
+            ) : (
+              `Practice round. Decks with ${MIN_PAID_PAIRS} or more cards pay.`
+            )}
+            {bestTimeMs !== null && !isNewBest && <span className="block mt-1">Your best: {formatSeconds(bestTimeMs)}s</span>}
+          </p>
 
-          <div className="grid grid-cols-3 gap-3 p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] text-center">
-            <div className="space-y-0.5">
-              <span className="text-[11px] text-slate-400 uppercase font-semibold">Time</span>
-              <div className="text-lg font-bold text-amber-400 font-mono">
-                {formatSeconds(elapsedMs)}s
-              </div>
-            </div>
-
-            <div className="space-y-0.5 border-x border-white/[0.08]">
-              <span className="text-[11px] text-slate-400 uppercase font-semibold">Max Combo</span>
-              <div className="text-lg font-bold text-indigo-400 font-mono">
-                {maxStreak}x
-              </div>
-            </div>
-
-            <div className="space-y-0.5">
-              <span className="text-[11px] text-slate-400 uppercase font-semibold">Errors</span>
-              <div className="text-lg font-bold text-rose-400 font-mono">
-                {mistakesCount}
-              </div>
-            </div>
-          </div>
-
-          {bestTimeMs && (
-            <div className="text-xs text-emerald-400 font-semibold flex items-center justify-center gap-1.5">
-              <Trophy className="w-3.5 h-3.5" />
-              <span>Personal Best: {formatSeconds(bestTimeMs)}s</span>
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-            <button
-              onClick={resetGame}
-              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.12] text-xs font-bold text-white transition-colors flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Play Again</span>
-            </button>
-
+          <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
+            <Button icon={RotateCcw} onClick={resetGame} data-autofocus>
+              Play again
+            </Button>
             {onLaunchStudy && (
-              <button
-                onClick={onLaunchStudy}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>Full Study Pilot</span>
-                <Play className="w-3.5 h-3.5 fill-white" />
-              </button>
+              <Button variant="primary" icon={Play} onClick={onLaunchStudy}>
+                Study this deck
+              </Button>
             )}
           </div>
-        </div>
+        </section>
       )}
-
-      {/* Footer Info */}
-      <div className="p-3 px-4 rounded-xl bg-white/[0.02] border border-white/[0.04] text-[11px] text-slate-500 flex items-center justify-between">
-        <span className="flex items-center gap-1.5">
-          <Zap className="w-3.5 h-3.5 text-amber-400" />
-          <span>Active association speed training • Rapid mental model indexing</span>
-        </span>
-        <span className="font-mono text-slate-400">{session.title}</span>
-      </div>
     </div>
   );
 };
+
+const Stat: React.FC<{ icon?: typeof Timer; label: string; value: string; highlight?: boolean }> = ({ icon: Icon, label, value, highlight }) => (
+  <div className="rounded-2xl border border-line bg-surface px-3 py-2.5">
+    <dt className="flex items-center gap-1.5 text-xs text-ink-subtle">
+      {Icon && <Icon className={cn('h-3.5 w-3.5', highlight && 'text-gold')} aria-hidden="true" />}
+      {label}
+    </dt>
+    <dd className="mt-0.5 font-mono text-lg font-semibold tabular-nums text-ink">{value}</dd>
+  </div>
+);
