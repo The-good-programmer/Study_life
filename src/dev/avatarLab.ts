@@ -52,12 +52,19 @@ const buildMs = performance.now() - t0;
 scene.add(avatar.root);
 let pose = (params.get('pose') as CharacterPose) || custom.pose;
 
-let tris = 0;
-avatar.root.traverse((o) => {
-  const m = o as THREE.Mesh;
-  if (m.isMesh && m.geometry.index) tris += m.geometry.index.count / 3;
-});
-document.getElementById('hud')!.textContent = `build ${buildMs.toFixed(0)} ms · ${Math.round(tris / 1000)}k tris · ${custom.gender}/${custom.bodyType}/${custom.hairStyle}/${custom.outfitTop}`;
+// Geometry is meshed in workers: report when the avatar actually appears.
+const hud = document.getElementById('hud')!;
+const readyPoll = setInterval(() => {
+  if (!avatar.root.getObjectByName('Avatar')) return;
+  clearInterval(readyPoll);
+  let tris = 0;
+  avatar.root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && m.geometry.index) tris += m.geometry.index.count / 3;
+  });
+  hud.textContent = `main thread ${buildMs.toFixed(0)} ms · ready after ${(performance.now() - t0).toFixed(0)} ms · ${Math.round(tris / 1000)}k tris · ${custom.gender}/${custom.bodyType}/${custom.hairStyle}/${custom.outfitTop}`;
+  renderer.render(scene, camera);
+}, 20);
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {

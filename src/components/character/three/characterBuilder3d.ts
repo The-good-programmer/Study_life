@@ -1,19 +1,19 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { CharacterCustomization, CharacterPose } from '../../../types/character';
-import { meshSdf } from './sdf/surfaceNets';
-import { getAvatarDims, EYE_DEPTH, type AvatarDims } from './avatar/anatomy';
 import { buildRig, type AvatarRig, type BoneName } from './avatar/rig';
-import { buildBodyParts, composeBody, computeSkinWeights, type BodyPart } from './avatar/body';
-import { handSdf, handBounds } from './avatar/hands';
-import { headBaseSdf, headSdf, headBounds, headLayout, traceFront } from './avatar/head';
+import { headBaseSdf, headLayout } from './avatar/head';
 import { buildFace, getEyeTexture, type FaceRig } from './avatar/face';
-import { buildTopSpec, buildBottomSpec, shoeSpec, type GarmentSpec } from './avatar/clothing';
-import { buildHair } from './avatar/hair';
-import { buildEyewear, buildHeadwear, buildFacialHair } from './avatar/accessories';
-import { toGeometry, filterTriangles, GeometryCache } from './avatar/geometry';
+import { buildTopSpec } from './avatar/clothing';
+import { hairParts, assembleHair, type HairPart } from './avatar/hair';
+import {
+  buildEyewear, headwearParts, assembleHeadwear, assembleFacialHair, type HeadwearPart,
+} from './avatar/accessories';
 import { AvatarAnimator } from './avatar/animator';
 import { createAvatarMaterials, type AvatarMaterials, lipColorFor } from './avatar/materials';
+import { shapeContext, eyeCentres, type GeometryJob } from './avatar/jobs';
+import { geometryService, type Resolved } from './avatar/geometryService';
+import type { AvatarDims } from './avatar/anatomy';
 
 export interface CharacterModelInstance {
   root: THREE.Group;
@@ -35,27 +35,13 @@ export function disposeHierarchy(obj: THREE.Object3D) {
   });
 }
 
-// Shared across avatars: identical bodies, garments and hair reuse geometry.
-const cache = new GeometryCache<THREE.BufferGeometry>(48);
-
-// Mesh resolutions (metres per cell), tuned for a ~70k-triangle avatar.
-const BODY_CELL = 0.011;
-const HEAD_CELL = 0.0048;
-const HAND_CELL = 0.003;
-const GARMENT_CELL = 0.0098;
-const SHOE_CELL = 0.0045;
-
-const shapeKey = (d: AvatarDims) => `${d.gender}|${d.bodyType}`;
-
-/** Eyeball centres on the face surface, slightly sunk into their sockets. */
-function eyeCentres(d: AvatarDims): [number, number, number][] {
-  const L = headLayout(d);
-  const base = headBaseSdf(d);
-  return [1, -1].map((side) => {
-    const x = side * L.eyeX;
-    const z = traceFront(base, x, L.eyeY) ?? L.eyeZ + L.eyeR;
-    // Eyes are flattened to EYE_DEPTH; sink them so ~40% of that depth shows.
-    return [x, L.eyeY, z - L.eyeR * EYE_DEPTH * 0.6] as [number, number, number];
+/** Frees per-avatar geometry/materials under obj (cached geometry is shared). */
+function disposeOwned(obj: THREE.Object3D) {
+  obj.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if (!mesh.geometry.userData.shared) mesh.geometry.dispose();
+    if (mesh.userData.ownsMaterial) (mesh.material as THREE.Material).dispose();
   });
 }
 
@@ -78,11 +64,309 @@ function getBlobShadowTexture(): THREE.CanvasTexture {
   return blobShadowTexture;
 }
 
+// ─── One assembled avatar (a skeleton plus everything bound to it) ───────────
+
+type SlotName = 'hands' | 'head' | 'face' | 'top' | 'bottom' | 'shoes' | 'bodySkin' | 'hair' | 'headwear' | 'facialHair' | 'eyewear';
+type Placed = Array<[BoneName | null, THREE.Object3D]>;
+
+interface Slot {
+  objects: THREE.Object3D[];
+  leases: Array<() => void>;
+  version: number;
+  pending: Array<() => void>;
+}
+
+interface AvatarBuild {
+  group: THREE.Group;
+  rig: AvatarRig;
+  dims: AvatarDims;
+  book: THREE.Group;
+  face: () => FaceRig | null;
+  apply: (prev: CharacterCustomization, next: CharacterCustomization) => void;
+  dispose: () => void;
+}
+
 /**
- * Builds the stylized, fully skinned 3D student avatar. The body, head,
- * hands, clothing and hair are sculpted as signed distance fields and meshed
- * on the fly; the body and clothes share one skeleton so everything bends
- * together. ~1.55 m tall, feet on y = 0, facing +Z.
+ * Builds an avatar for one body shape. Each part ("slot") requests its
+ * geometry from the shared service and swaps in only when every piece has
+ * arrived, so changes never flicker. `onReady` fires once all parts exist.
+ */
+function createBuild(initial: CharacterCustomization, mats: AvatarMaterials, onReady: () => void): AvatarBuild {
+  let custom = { ...initial };
+  const shape = { gender: custom.gender, bodyType: custom.bodyType };
+  const ctx = shapeContext(shape.gender, shape.bodyType);
+  const dims = ctx.dims;
+  // Each avatar animates its own bones (the context rig is only a template).
+  const rig = buildRig(dims);
+
+  const group = new THREE.Group();
+  group.name = 'Avatar';
+  group.add(rig.root);
+  const headRoot = new THREE.Group();
+  headRoot.name = 'HeadRoot';
+  headRoot.scale.setScalar(dims.headScale);
+  rig.bones.head.add(headRoot);
+  const book = buildBook(mats);
+  rig.bones.chest.add(book);
+
+  const slots = new Map<SlotName, Slot>();
+  let headGeometry: THREE.BufferGeometry | null = null;
+  let face: FaceRig | null = null;
+  let disposed = false;
+  let readyFired = false;
+  const awaiting = new Set<SlotName>(['hands', 'head', 'face', 'top', 'bottom', 'shoes', 'bodySkin', 'hair', 'headwear', 'facialHair', 'eyewear']);
+
+  const slotOf = (name: SlotName) => {
+    let s = slots.get(name);
+    if (!s) {
+      s = { objects: [], leases: [], version: 0, pending: [] };
+      slots.set(name, s);
+    }
+    return s;
+  };
+  const parentFor = (bone: BoneName | null) => (bone === 'head' ? headRoot : bone ? rig.bones[bone] : group);
+
+  /** Replaces a slot's contents with `objects` (attached to their bones). */
+  const install = (name: SlotName, objects: Placed, leases: Array<() => void>) => {
+    const s = slotOf(name);
+    for (const obj of s.objects) {
+      obj.removeFromParent();
+      disposeOwned(obj);
+    }
+    for (const release of s.leases) release();
+    s.objects = objects.map(([bone, obj]) => {
+      parentFor(bone).add(obj);
+      return obj;
+    });
+    s.leases = leases;
+    if (awaiting.delete(name) && awaiting.size === 0 && !readyFired && !disposed) {
+      readyFired = true;
+      onReady();
+    }
+  };
+
+  /**
+   * Requests every job for a slot, installs what `assemble` builds from the
+   * results (in job order), then runs `after`. A newer request for the same
+   * slot supersedes an older one that is still in flight.
+   */
+  const request = (name: SlotName, jobs: GeometryJob[], assemble: (results: Resolved[]) => Placed, after?: () => void) => {
+    const s = slotOf(name);
+    for (const cancel of s.pending) cancel();
+    const version = ++s.version;
+    const results: Resolved[] = new Array(jobs.length);
+    const leases: Array<() => void> = [];
+    let remaining = jobs.length;
+    let issued = false;
+    const finish = () => {
+      if (disposed || version !== s.version) {
+        leases.forEach((l) => l());
+        return;
+      }
+      s.pending = [];
+      install(name, assemble(results), leases);
+      after?.();
+    };
+    jobs.forEach((job, i) => {
+      leases.push(
+        geometryService.get(job, (r) => {
+          results[i] = r;
+          remaining--;
+          if (remaining === 0 && issued) finish();
+        })
+      );
+    });
+    issued = true;
+    s.pending = leases;
+    if (remaining === 0) finish();
+  };
+
+  const skinned = (geo: THREE.BufferGeometry, material: THREE.Material, name: string) => {
+    const m = new THREE.SkinnedMesh(geo, material);
+    m.name = name;
+    m.bind(rig.skeleton, new THREE.Matrix4());
+    m.castShadow = true;
+    m.frustumCulled = false;
+    return m;
+  };
+  const rigid = (geo: THREE.BufferGeometry, material: THREE.Material, name?: string) => {
+    const m = new THREE.Mesh(geo, material);
+    m.castShadow = true;
+    if (name) m.name = name;
+    return m;
+  };
+  const boots = () => custom.shoes === 'boots';
+
+  // ── Slots ──────────────────────────────────────────────────────────────
+  const requestHands = () =>
+    request('hands', [{ kind: 'hand', side: 'L', ...shape }, { kind: 'hand', side: 'R', ...shape }], ([l, r]) => [
+      ['handL', rigid(l as THREE.BufferGeometry, mats.skin)],
+      ['handR', rigid(r as THREE.BufferGeometry, mats.skin)],
+    ]);
+
+  const rebuildFace = () => {
+    if (!headGeometry) return;
+    face?.dispose();
+    face = buildFace(dims, headLayout(dims), headBaseSdf(dims), new THREE.Mesh(headGeometry), eyeCentres(dims), custom.mood, lipColorFor(custom), {
+      skin: mats.skin,
+      lid: mats.lid,
+      hair: mats.brow,
+      eye: mats.eye,
+      lash: mats.lash,
+    });
+    install('face', [['head', face.group]], []);
+  };
+
+  const requestHead = () =>
+    request(
+      'head',
+      [{ kind: 'head', ...shape }],
+      ([g]) => {
+        headGeometry = g as THREE.BufferGeometry;
+        return [['head', rigid(headGeometry, mats.skin, 'Head')]];
+      },
+      rebuildFace // the face's decals are projected onto the new head
+    );
+
+  const requestTop = () => {
+    const top = custom.outfitTop;
+    request('top', [{ kind: 'top', top, ...shape }], ([g]) => {
+      // Details are placed with the bind-pose template rig (bone-local
+      // positions are the same for every avatar, whatever its current pose).
+      const spec = buildTopSpec(top, ctx.rig, dims, ctx.parts, { secondary: mats.topSecondary, button: mats.button, gold: mats.gold });
+      const out: Placed = [[null, skinned(g as THREE.BufferGeometry, mats.top, 'Top')]];
+      for (const d of spec.details ?? []) out.push([d.bone, d.object]);
+      return out;
+    });
+  };
+
+  const requestBottom = () =>
+    request('bottom', [{ kind: 'bottom', bottom: custom.outfitBottom, boots: boots(), ...shape }], ([g]) => [
+      [null, skinned(g as THREE.BufferGeometry, mats.bottom, 'Bottom')],
+    ]);
+
+  const requestShoes = () =>
+    request('shoes', [{ kind: 'shoe', shoes: custom.shoes, ...shape }], ([g]) => [
+      ['footL', rigid(g as THREE.BufferGeometry, mats.shoes)],
+      ['footR', rigid(g as THREE.BufferGeometry, mats.shoes)],
+    ]);
+
+  /** Skin only where clothing doesn't cover it (no poke-through, fewer triangles). */
+  const requestBodySkin = () =>
+    request(
+      'bodySkin',
+      [
+        { kind: 'body', ...shape },
+        { kind: 'bodyCull', top: custom.outfitTop, bottom: custom.outfitBottom, boots: boots(), ...shape },
+      ],
+      ([bodyGeo, indices]) => {
+        const source = bodyGeo as THREE.BufferGeometry;
+        const culled = new THREE.BufferGeometry();
+        for (const attr of Object.keys(source.attributes)) culled.setAttribute(attr, source.getAttribute(attr));
+        culled.setIndex(new THREE.BufferAttribute(indices as Uint32Array, 1));
+        culled.boundingBox = source.boundingBox;
+        culled.boundingSphere = source.boundingSphere;
+        return [[null, skinned(culled, mats.skin, 'Body')]];
+      }
+    );
+
+  const requestHair = () => {
+    const style = custom.hairStyle;
+    const pieces = hairParts(style);
+    request('hair', pieces.map((part) => ({ kind: 'hair', style, part, ...shape })), (results) => {
+      const geos: Partial<Record<HairPart, THREE.BufferGeometry>> = {};
+      pieces.forEach((p, i) => (geos[p] = results[i] as THREE.BufferGeometry));
+      return [['head', assembleHair(style, geos, mats.hair)]];
+    });
+  };
+
+  const requestHeadwear = () => {
+    const { headwear, hairStyle } = custom;
+    const pieces = headwearParts(headwear);
+    request('headwear', pieces.map((part) => ({ kind: 'headwear', headwear, hair: hairStyle, part, ...shape })), (results) => {
+      const geos: Partial<Record<HeadwearPart, THREE.BufferGeometry>> = {};
+      pieces.forEach((p, i) => (geos[p] = results[i] as THREE.BufferGeometry));
+      const obj = assembleHeadwear(headwear, hairStyle, dims, mats, geos);
+      return obj ? [['head', obj]] : [];
+    });
+  };
+
+  const requestFacialHair = () => {
+    const style = custom.facialHair ?? 'none';
+    if (style === 'none') {
+      request('facialHair', [], () => []);
+      return;
+    }
+    request('facialHair', [{ kind: 'facialHair', style, ...shape }], ([g]) => [
+      ['head', assembleFacialHair(style, g as THREE.BufferGeometry, mats.facialHair)],
+    ]);
+  };
+
+  const requestEyewear = () =>
+    request('eyewear', [], () => {
+      const obj = buildEyewear(custom.eyewear, dims, eyeCentres(dims), mats);
+      return obj ? [['head', obj]] : [];
+    });
+
+  requestHands();
+  requestHead();
+  requestTop();
+  requestBottom();
+  requestShoes();
+  requestBodySkin();
+  requestHair();
+  requestHeadwear();
+  requestFacialHair();
+  requestEyewear();
+
+  return {
+    group,
+    rig,
+    dims,
+    book,
+    face: () => face,
+    apply(prev, next) {
+      custom = { ...next };
+      if (prev.mood !== next.mood || prev.skinTone !== next.skinTone) rebuildFace();
+      const topChanged = prev.outfitTop !== next.outfitTop;
+      const bottomChanged = prev.outfitBottom !== next.outfitBottom || (prev.shoes === 'boots') !== (next.shoes === 'boots');
+      if (topChanged) requestTop();
+      if (bottomChanged) requestBottom();
+      if (prev.shoes !== next.shoes) requestShoes();
+      if (topChanged || bottomChanged) requestBodySkin();
+      if (prev.hairStyle !== next.hairStyle) requestHair();
+      if (prev.headwear !== next.headwear || prev.hairStyle !== next.hairStyle) requestHeadwear();
+      if (prev.eyewear !== next.eyewear) requestEyewear();
+      if (prev.facialHair !== next.facialHair) requestFacialHair();
+    },
+    dispose() {
+      disposed = true;
+      for (const s of slots.values()) {
+        for (const cancel of s.pending) cancel();
+        for (const obj of s.objects) {
+          obj.removeFromParent();
+          disposeOwned(obj);
+        }
+        for (const release of s.leases) release();
+      }
+      slots.clear();
+      face?.dispose();
+      face = null;
+      disposeHierarchy(book);
+      group.removeFromParent();
+    },
+  };
+}
+
+// ─── Public instance ─────────────────────────────────────────────────────────
+
+/**
+ * Builds the stylized, fully skinned 3D student avatar (~1.55 m tall, feet on
+ * y = 0, facing +Z). Body, head, hands, clothes and hair are sculpted as
+ * signed distance fields and meshed in background workers; parts swap in as
+ * they finish, and a body-shape change swaps in a whole new avatar once it is
+ * ready, so the scene never stalls or flickers. Without workers (tests) the
+ * avatar is complete when this returns.
  */
 export function buildCharacter3D(
   custom: CharacterCustomization,
@@ -90,9 +374,11 @@ export function buildCharacter3D(
 ): CharacterModelInstance {
   const root = new THREE.Group();
   root.name = 'Character3D_Root';
-
   let current: CharacterCustomization = { ...custom };
-  const mats: AvatarMaterials = createAvatarMaterials(current);
+  const mats = createAvatarMaterials(current);
+  const animator = new AvatarAnimator();
+  const lookTarget = new THREE.Vector3();
+  let hasLook = false;
 
   if (options.showShadow !== false) {
     const shadow = new THREE.Mesh(
@@ -106,254 +392,47 @@ export function buildCharacter3D(
   }
   if (options.showPedestal) root.add(buildPedestal());
 
-  const avatar = new THREE.Group();
-  avatar.name = 'Avatar';
-  root.add(avatar);
+  let active: AvatarBuild | null = null;
+  let pending: AvatarBuild | null = null;
 
-  const animator = new AvatarAnimator();
-  const lookTarget = new THREE.Vector3();
-  let hasLook = false;
-
-  // ── Mutable build state ────────────────────────────────────────────────
-  let dims: AvatarDims;
-  let rig: AvatarRig;
-  let parts: BodyPart[];
-  let bodyGeo: THREE.BufferGeometry;
-  let bodyMesh: THREE.SkinnedMesh | null = null;
-  let face: FaceRig | null = null;
-  let headMesh: THREE.Mesh;
-  // Everything on the head lives under headRoot, scaled by dims.headScale.
-  let headRoot: THREE.Group;
-  const book = buildBook(mats);
-  // Geometry this avatar currently holds from the shared cache, by key.
-  const held = new Map<string, THREE.BufferGeometry>();
-  const slots: Record<string, THREE.Object3D[]> = {};
-  let topSpec: GarmentSpec | null = null;
-  let bottomSpec: GarmentSpec | null = null;
-  let culledBody: THREE.BufferGeometry | null = null;
-
-  const acquire = (key: string, create: () => THREE.BufferGeometry) => {
-    let geo = held.get(key);
-    if (!geo) {
-      geo = cache.acquire(key, () => {
-        const g = create();
-        g.userData.shared = true;
-        return g;
-      });
-      held.set(key, geo);
-    }
-    return geo;
+  const swapIn = (build: AvatarBuild) => {
+    if (active && active !== build) active.dispose();
+    active = build;
+    if (pending === build) pending = null;
+    root.add(build.group);
   };
-  const releaseMatching = (prefix: string) => {
-    for (const k of [...held.keys()]) {
-      if (k.startsWith(prefix)) {
-        cache.release(k);
-        held.delete(k);
+
+  /** Assembles an avatar off-screen and swaps it in when every part is ready. */
+  const startBuild = (c: CharacterCustomization) => {
+    pending?.dispose();
+    pending = null;
+    let build: AvatarBuild | null = null;
+    let readyBeforeReturn = false;
+    build = createBuild(c, mats, () => {
+      if (!build) {
+        readyBeforeReturn = true; // synchronous geometry: ready inside createBuild
+        return;
       }
-    }
-  };
-  /** Removes a slot's objects, freeing per-avatar geometry (cached geometry is shared). */
-  const clearSlot = (slot: string) => {
-    for (const obj of slots[slot] ?? []) {
-      obj.removeFromParent();
-      obj.traverse((child) => {
-        const mesh = child as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        if (!mesh.geometry.userData.shared) mesh.geometry.dispose();
-        if (mesh.userData.ownsMaterial) (mesh.material as THREE.Material).dispose();
-      });
-    }
-    slots[slot] = [];
-  };
-  const attach = (slot: string, bone: BoneName | null, obj: THREE.Object3D) => {
-    (bone === 'head' ? headRoot : bone ? rig.bones[bone] : avatar).add(obj);
-    (slots[slot] ??= []).push(obj);
-  };
-  const skinned = (geo: THREE.BufferGeometry, material: THREE.Material | THREE.Material[]) => {
-    const mesh = new THREE.SkinnedMesh(geo, material);
-    mesh.bind(rig.skeleton, new THREE.Matrix4());
-    mesh.castShadow = true;
-    mesh.frustumCulled = false;
-    return mesh;
-  };
-
-  // ── Builders ────────────────────────────────────────────────────────────
-  function buildSkeletonAndBody() {
-    dims = getAvatarDims(current.gender, current.bodyType);
-    rig = buildRig(dims);
-    parts = buildBodyParts(rig, dims);
-    avatar.add(rig.root);
-    headRoot = new THREE.Group();
-    headRoot.name = 'HeadRoot';
-    headRoot.scale.setScalar(dims.headScale);
-    rig.bones.head.add(headRoot);
-    const sk = shapeKey(dims);
-
-    bodyGeo = acquire(`body|${sk}`, () => {
-      const field = composeBody(parts);
-      const data = meshSdf(field, { min: [-0.47, 0.06, -0.2], max: [0.47, 1.32, 0.2], cellSize: BODY_CELL, ao: { distance: 0.06 } });
-      return toGeometry(data, { skin: computeSkinWeights(data.positions, parts, rig.boneIndex) });
+      if (pending === build) swapIn(build);
     });
+    if (readyBeforeReturn) swapIn(build);
+    else pending = build;
+  };
+  startBuild(current);
 
-    for (const s of ['L', 'R'] as const) {
-      const side = s === 'L' ? 1 : -1;
-      const geo = acquire(`hand|${sk}|${s}`, () => {
-        const b = handBounds(dims);
-        return toGeometry(meshSdf(handSdf(dims, side as 1 | -1), { ...b, cellSize: HAND_CELL, ao: { distance: 0.014 } }));
-      });
-      const hand = new THREE.Mesh(geo, mats.skin);
-      hand.castShadow = true;
-      attach('core', `hand${s}`, hand);
-    }
-
-    const centres = eyeCentres(dims);
-    const headGeo = acquire(`head|${sk}`, () =>
-      toGeometry(meshSdf(headSdf(dims, centres), { ...headBounds(), cellSize: HEAD_CELL, ao: { distance: 0.02, strength: 0.75 } }))
-    );
-    headMesh = new THREE.Mesh(headGeo, mats.skin);
-    headMesh.castShadow = true;
-    headMesh.name = 'Head';
-    attach('core', 'head', headMesh);
-
-    rig.bones.chest.add(book);
-  }
-
-  function rebuildFace() {
-    clearSlot('face');
-    face?.dispose();
-    const layout = headLayout(dims);
-    face = buildFace(dims, layout, headBaseSdf(dims), headMesh, eyeCentres(dims), current.mood, lipColorFor(current), {
-      skin: mats.skin,
-      lid: mats.lid,
-      hair: mats.brow,
-      eye: mats.eye,
-      lash: mats.lash,
-    });
-    attach('face', 'head', face.group);
-  }
-
-  function rebuildTop() {
-    clearSlot('top');
-    releaseMatching('top|');
-    topSpec = buildTopSpec(current.outfitTop, rig, dims, parts, {
-      secondary: mats.topSecondary, button: mats.button, gold: mats.gold,
-    });
-    const spec = topSpec;
-    const geo = acquire(`top|${current.outfitTop}|${shapeKey(dims)}`, () => garmentGeometry(spec, rig));
-    const mesh = skinned(geo, mats.top);
-    mesh.name = 'Top';
-    attach('top', null, mesh);
-    for (const d of spec.details ?? []) attach('top', d.bone, d.object);
-  }
-
-  function rebuildBottom() {
-    clearSlot('bottom');
-    releaseMatching('bottom|');
-    bottomSpec = buildBottomSpec(current.outfitBottom, current.shoes, rig, dims, parts);
-    const spec = bottomSpec;
-    const boots = current.shoes === 'boots' ? 'boots' : 'low';
-    const geo = acquire(`bottom|${current.outfitBottom}|${boots}|${shapeKey(dims)}`, () => garmentGeometry(spec, rig));
-    const mesh = skinned(geo, mats.bottom);
-    mesh.name = 'Bottom';
-    attach('bottom', null, mesh);
-    for (const d of spec.details ?? []) attach('bottom', d.bone, d.object);
-  }
-
-  function rebuildShoes() {
-    clearSlot('shoes');
-    releaseMatching('shoe|');
-    const geo = acquire(`shoe|${current.shoes}|${shapeKey(dims)}`, () => {
-      const spec = shoeSpec(current.shoes, dims);
-      return toGeometry(meshSdf(spec.sdf, { min: spec.min, max: spec.max, cellSize: SHOE_CELL, ao: { distance: 0.02 } }), { materialOf: spec.materialOf });
-    });
-    for (const s of ['L', 'R'] as const) {
-      const shoe = new THREE.Mesh(geo, mats.shoes);
-      shoe.castShadow = true;
-      attach('shoes', `foot${s}`, shoe);
-    }
-  }
-
-  /** Skin only where clothing doesn't cover it (no poke-through, fewer triangles). */
-  function rebuildBodySkin() {
-    if (bodyMesh) bodyMesh.removeFromParent();
-    culledBody?.dispose();
-    const top = topSpec!.sdf;
-    const bottom = bottomSpec!.sdf;
-    culledBody = filterTriangles(bodyGeo, (x, y, z) => top(x, y, z) > -0.0045 && bottom(x, y, z) > -0.0045);
-    bodyMesh = skinned(culledBody, mats.skin);
-    bodyMesh.name = 'Body';
-    avatar.add(bodyMesh);
-  }
-
-  function rebuildHair() {
-    clearSlot('hair');
-    releaseMatching('hair|');
-    const obj = buildHair(current.hairStyle, dims, mats.hair, (key, create) => acquire(`hair|${key}|${shapeKey(dims)}`, create));
-    if (obj) attach('hair', 'head', obj);
-  }
-
-  function rebuildHeadwear() {
-    clearSlot('headwear');
-    const obj = buildHeadwear(current.headwear, current.hairStyle, dims, mats);
-    if (obj) attach('headwear', 'head', obj);
-  }
-
-  function rebuildEyewear() {
-    clearSlot('eyewear');
-    const obj = buildEyewear(current.eyewear, dims, eyeCentres(dims), mats);
-    if (obj) attach('eyewear', 'head', obj);
-  }
-
-  function rebuildFacialHair() {
-    clearSlot('facialHair');
-    releaseMatching('beard|');
-    const style = current.facialHair ?? 'none';
-    const obj = buildFacialHair(style, dims, mats.facialHair, (key, create) => acquire(`beard|${key}|${shapeKey(dims)}`, create));
-    if (obj) attach('facialHair', 'head', obj);
-  }
-
-  function buildAll() {
-    buildSkeletonAndBody();
-    rebuildFace();
-    rebuildTop();
-    rebuildBottom();
-    rebuildShoes();
-    rebuildBodySkin();
-    rebuildHair();
-    rebuildHeadwear();
-    rebuildEyewear();
-    rebuildFacialHair();
-  }
-
-  function teardown() {
-    for (const slot of Object.keys(slots)) clearSlot(slot);
-    face?.dispose();
-    face = null;
-    bodyMesh?.removeFromParent();
-    bodyMesh = null;
-    culledBody?.dispose();
-    culledBody = null;
-    book.removeFromParent();
-    rig?.root.removeFromParent();
-    for (const k of held.keys()) cache.release(k);
-    held.clear();
-  }
-
-  buildAll();
-
-  // ── Public API ────────────────────────────────────────────────────────
   const update = (dt: number, poseOverride?: CharacterPose) => {
-    if (!face) return;
+    const face = active?.face();
+    if (!active || !face) return;
     animator.update(dt, poseOverride || current.pose || 'idle', {
-      bones: rig.bones,
-      bodyGroup: avatar,
+      bones: active.rig.bones,
+      bodyGroup: active.group,
       lids: face.lids,
       eyeballs: face.eyeballs,
       restLid: face.restLid,
-      book,
+      book: active.book,
       restHipsX: 0,
-      upperArmLen: dims.upperArmLen,
-      forearmLen: dims.forearmLen,
+      upperArmLen: active.dims.upperArmLen,
+      forearmLen: active.dims.forearmLen,
     }, hasLook ? lookTarget : null);
   };
 
@@ -365,23 +444,13 @@ export function buildCharacter3D(
       mats.eye.map = getEyeTexture(next.eyeColor);
       mats.eye.needsUpdate = true;
     }
-
-    if (prev.gender !== next.gender || prev.bodyType !== next.bodyType) {
-      teardown();
-      buildAll();
+    if (!active || pending || prev.gender !== next.gender || prev.bodyType !== next.bodyType) {
+      // A new body shape needs a new skeleton (and a build still in flight is
+      // simply restarted with the latest settings).
+      startBuild(current);
       return;
     }
-    if (prev.mood !== next.mood || prev.skinTone !== next.skinTone) rebuildFace();
-    const topChanged = prev.outfitTop !== next.outfitTop;
-    const bottomChanged = prev.outfitBottom !== next.outfitBottom || (prev.shoes === 'boots') !== (next.shoes === 'boots');
-    if (topChanged) rebuildTop();
-    if (bottomChanged) rebuildBottom();
-    if (prev.shoes !== next.shoes) rebuildShoes();
-    if (topChanged || bottomChanged) rebuildBodySkin();
-    if (prev.hairStyle !== next.hairStyle) rebuildHair();
-    if (prev.headwear !== next.headwear || prev.hairStyle !== next.hairStyle) rebuildHeadwear();
-    if (prev.eyewear !== next.eyewear) rebuildEyewear();
-    if (prev.facialHair !== next.facialHair) rebuildFacialHair();
+    active.apply(prev, current);
   };
 
   const setLookTarget = (target: THREE.Vector3) => {
@@ -390,26 +459,22 @@ export function buildCharacter3D(
   };
 
   const dispose = () => {
-    teardown();
+    pending?.dispose();
+    active?.dispose();
+    pending = null;
+    active = null;
     root.removeFromParent();
     root.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (mesh.isMesh && (mesh.name === 'BlobShadow' || mesh.name === 'Pedestal')) mesh.geometry.dispose();
+      const m = child as THREE.Mesh;
+      if (m.isMesh) {
+        m.geometry.dispose();
+        (m.material as THREE.Material).dispose();
+      }
     });
-    disposeHierarchy(book);
     mats.dispose();
   };
 
   return { root, update, updateCustomization, setLookTarget, dispose };
-}
-
-/** Meshes, skins and splits a garment into material groups. */
-function garmentGeometry(spec: GarmentSpec, rig: AvatarRig): THREE.BufferGeometry {
-  const data = meshSdf(spec.sdf, { min: spec.min, max: spec.max, cellSize: GARMENT_CELL, ao: { distance: 0.06 } });
-  return toGeometry(data, {
-    materialOf: spec.materialOf,
-    skin: computeSkinWeights(data.positions, spec.weightParts, rig.boneIndex),
-  });
 }
 
 /** Open textbook held in the study / read poses (child of the chest bone). */

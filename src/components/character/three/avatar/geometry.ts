@@ -2,20 +2,34 @@ import * as THREE from 'three';
 import type { MeshData } from '../sdf/surfaceNets';
 
 /**
- * Builds a BufferGeometry from mesher output. When `materialOf` is given, each
- * vertex gets a `zone` attribute (0, 1, 2) that zoned materials use to pick a
- * colour, so one mesh can carry e.g. contrast sleeves with clean boundaries.
+ * Plain typed-array mesh data: everything a geometry needs, in a form that can
+ * be transferred between a worker and the main thread without copying.
  */
-export function toGeometry(
+export interface GeometryPayload {
+  positions: Float32Array;
+  normals: Float32Array;
+  indices: Uint32Array;
+  /** Baked ambient occlusion as an RGB vertex colour. */
+  color?: Float32Array;
+  skinIndex?: Uint16Array;
+  skinWeight?: Float32Array;
+  /** Colour zone per vertex (see makeZoned in materials.ts). */
+  zone?: Float32Array;
+}
+
+/**
+ * Packs mesher output into a payload. When `materialOf` is given, each vertex
+ * gets a `zone` value that zoned materials use to pick a colour, so one mesh
+ * can carry e.g. contrast sleeves with clean boundaries.
+ */
+export function buildPayload(
   data: MeshData,
   opts: {
     materialOf?: (x: number, y: number, z: number) => number;
     skin?: { skinIndex: Uint16Array; skinWeight: Float32Array };
   } = {}
-): THREE.BufferGeometry {
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
+): GeometryPayload {
+  const payload: GeometryPayload = { positions: data.positions, normals: data.normals, indices: data.indices };
   if (data.ao) {
     // Ambient occlusion baked as a (grey) vertex colour, multiplied into the diffuse.
     const colors = new Float32Array(data.ao.length * 3);
@@ -26,22 +40,48 @@ export function toGeometry(
       colors[i * 3 + 1] = a * (0.94 + 0.06 * a);
       colors[i * 3 + 2] = a * (0.9 + 0.1 * a);
     }
-    g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    payload.color = colors;
   }
   if (opts.skin) {
-    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(opts.skin.skinIndex, 4));
-    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(opts.skin.skinWeight, 4));
+    payload.skinIndex = opts.skin.skinIndex;
+    payload.skinWeight = opts.skin.skinWeight;
   }
   if (opts.materialOf) {
     const p = data.positions;
     const zone = new Float32Array(p.length / 3);
     for (let v = 0; v < zone.length; v++) zone[v] = opts.materialOf(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
-    g.setAttribute('zone', new THREE.BufferAttribute(zone, 1));
+    payload.zone = zone;
   }
-  g.setIndex(new THREE.BufferAttribute(data.indices, 1));
+  return payload;
+}
+
+/** The ArrayBuffers of a payload, for zero-copy postMessage transfer. */
+export function payloadTransferables(p: GeometryPayload): ArrayBuffer[] {
+  return [p.positions, p.normals, p.indices, p.color, p.skinIndex, p.skinWeight, p.zone]
+    .filter((a): a is NonNullable<typeof a> => Boolean(a))
+    .map((a) => a.buffer as ArrayBuffer);
+}
+
+export function payloadToGeometry(p: GeometryPayload): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(p.positions, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(p.normals, 3));
+  if (p.color) g.setAttribute('color', new THREE.BufferAttribute(p.color, 3));
+  if (p.skinIndex) g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(p.skinIndex, 4));
+  if (p.skinWeight) g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(p.skinWeight, 4));
+  if (p.zone) g.setAttribute('zone', new THREE.BufferAttribute(p.zone, 1));
+  g.setIndex(new THREE.BufferAttribute(p.indices, 1));
   g.computeBoundingBox();
   g.computeBoundingSphere();
   return g;
+}
+
+/** Mesher output straight to a geometry (synchronous convenience). */
+export function toGeometry(
+  data: MeshData,
+  opts: Parameters<typeof buildPayload>[1] = {}
+): THREE.BufferGeometry {
+  return payloadToGeometry(buildPayload(data, opts));
 }
 
 /**

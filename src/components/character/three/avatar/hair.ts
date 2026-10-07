@@ -3,9 +3,8 @@ import type { HairStyle } from '../../../../types/character';
 import {
   type Sdf, v3, ellipsoid, roundCone, capsule, torusY, smin, smax,
 } from '../sdf/sdf';
-import { meshSdf } from '../sdf/surfaceNets';
 import type { AvatarDims } from './anatomy';
-import { toGeometry } from './geometry';
+import type { MeshSpec } from './meshSpec';
 
 const HAIR_CELL = 0.0044;
 const BOUNDS = { min: [-0.21, -0.2, -0.26] as [number, number, number], max: [0.21, 0.36, 0.2] as [number, number, number] };
@@ -219,40 +218,46 @@ const tieMaterial = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness:
 
 export const PONYTAIL_PIVOT = new THREE.Vector3(0, 0.168, -0.128);
 
-/**
- * Builds the hair for a style as a child of the head bone. `acquire` caches
- * generated geometry by key (shared between avatars).
- */
-export function buildHair(
-  style: HairStyle,
-  d: AvatarDims,
-  material: THREE.Material,
-  acquire: (key: string, create: () => THREE.BufferGeometry) => THREE.BufferGeometry
-): THREE.Object3D | null {
-  const group = new THREE.Group();
-  group.name = `Hair_${style}`;
+/** Separately meshed pieces of a hairstyle. */
+export type HairPart = 'main' | 'ponytail-tail' | 'ponytail-tie';
+
+export function hairParts(style: HairStyle): HairPart[] {
+  return style === 'ponytail' ? ['main', 'ponytail-tail', 'ponytail-tie'] : ['main'];
+}
+
+/** What to mesh for one piece of a hairstyle (head-bone space). */
+export function hairMeshSpec(style: HairStyle, part: HairPart, d: AvatarDims): MeshSpec {
+  if (part === 'ponytail-tail') {
+    return { sdf: ponytailSdf(), min: [-0.05, -0.23, -0.1], max: [0.05, 0.04, 0.04], cellSize: 0.0038, ao: { distance: 0.02 } };
+  }
+  if (part === 'ponytail-tie') {
+    return { sdf: torusY(v3(0, 0, 0), 0.02, 0.007), min: [-0.04, -0.02, -0.04], max: [0.04, 0.02, 0.04], cellSize: 0.002 };
+  }
   // Big volumes need fewer cells per centimetre to look smooth.
   const cell = style === 'curly-afro' || style === 'long-wavy' || style === 'bob-cut' ? HAIR_CELL * 1.3 : HAIR_CELL;
-  const geo = acquire(style, () => toGeometry(meshSdf(styleSdf(style, d), { ...BOUNDS, cellSize: cell, ao: { distance: 0.025 } })));
-  const mesh = new THREE.Mesh(geo, material);
+  return { sdf: styleSdf(style, d), ...BOUNDS, cellSize: cell, ao: { distance: 0.025 } };
+}
+
+/** Assembles a hairstyle (child of the head) from its meshed parts. */
+export function assembleHair(
+  style: HairStyle,
+  geos: Partial<Record<HairPart, THREE.BufferGeometry>>,
+  material: THREE.Material
+): THREE.Object3D {
+  const group = new THREE.Group();
+  group.name = `Hair_${style}`;
+  const mesh = new THREE.Mesh(geos.main, material);
   mesh.castShadow = true;
   group.add(mesh);
 
-  if (style === 'ponytail') {
+  if (style === 'ponytail' && geos['ponytail-tail'] && geos['ponytail-tie']) {
     const pivot = new THREE.Group();
     pivot.name = 'PonytailPivot';
     pivot.position.copy(PONYTAIL_PIVOT);
-    const tailGeo = acquire('ponytail-tail', () =>
-      toGeometry(meshSdf(ponytailSdf(), { min: [-0.05, -0.23, -0.1], max: [0.05, 0.04, 0.04], cellSize: 0.0038, ao: { distance: 0.02 } }))
-    );
-    const tail = new THREE.Mesh(tailGeo, material);
+    const tail = new THREE.Mesh(geos['ponytail-tail'], material);
     tail.castShadow = true;
     pivot.add(tail);
-    // Hair tie.
-    const tieGeo = acquire('ponytail-tie', () =>
-      toGeometry(meshSdf(torusY(v3(0, 0, 0), 0.02, 0.007), { min: [-0.04, -0.02, -0.04], max: [0.04, 0.02, 0.04], cellSize: 0.002 }))
-    );
-    const tie = new THREE.Mesh(tieGeo, tieMaterial);
+    const tie = new THREE.Mesh(geos['ponytail-tie'], tieMaterial);
     tie.rotation.x = Math.PI / 2 - 0.5;
     tie.position.set(0, -0.006, -0.01);
     pivot.add(tie);
