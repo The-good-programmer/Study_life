@@ -6,8 +6,8 @@
  * window.lab.set({...}) updates the avatar live.
  */
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { buildCharacter3D } from '../components/character/three/characterBuilder3d';
+import { applyStudioLighting } from '../components/character/three/studio';
 import { characterService } from '../services/characterService';
 import type { CharacterCustomization, CharacterPose } from '../types/character';
 
@@ -30,35 +30,16 @@ const stage = document.getElementById('stage')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
 stage.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111827);
-const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+applyStudioLighting(scene, renderer);
 
 const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 50);
 const view = VIEWS[params.get('view') ?? 'full'] ?? VIEWS.full;
 camera.position.set(...view.pos);
 camera.lookAt(...view.target);
-
-scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 0.5));
-const key = new THREE.DirectionalLight(0xfff4e6, 1.8);
-key.position.set(2.5, 4, 3.5);
-key.castShadow = true;
-key.shadow.mapSize.set(2048, 2048);
-key.shadow.camera.left = -1.2;
-key.shadow.camera.right = 1.2;
-key.shadow.camera.top = 2.2;
-key.shadow.camera.bottom = -0.2;
-key.shadow.normalBias = 0.02;
-scene.add(key);
-const rim = new THREE.DirectionalLight(0x9db4ff, 1.0);
-rim.position.set(-3, 2.5, -2.5);
-scene.add(rim);
 
 const ground = new THREE.Mesh(new THREE.CircleGeometry(3, 64), new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 }));
 ground.rotation.x = -Math.PI / 2;

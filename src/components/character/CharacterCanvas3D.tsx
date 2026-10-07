@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { CharacterCustomization, CharacterPose } from '../../types/character';
 import { buildCharacter3D, type CharacterModelInstance } from './three/characterBuilder3d';
+import { applyStudioLighting } from './three/studio';
 
 export interface CharacterCanvas3DProps {
   customization: CharacterCustomization;
@@ -79,48 +79,10 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
     });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
     container.appendChild(renderer.domElement);
 
-    // Environment PMREM (Natural studio reflection and metallic sheen)
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    pmremGenerator.compileEquirectangularShader();
-    const roomEnv = new RoomEnvironment();
-    const envTexture = pmremGenerator.fromScene(roomEnv, 0.04).texture;
-    scene.environment = envTexture;
-
-    // 4. Studio Lighting Rig (Balanced to prevent overexposure with environment map)
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334155, 0.5);
-    scene.add(hemiLight);
-
-    // Warm Key Light
-    const keyLight = new THREE.DirectionalLight(0xfff7ed, 1.8);
-    keyLight.position.set(2.5, 4.0, 3.5);
-    keyLight.castShadow = true;
-    keyLight.shadow.mapSize.width = 2048;
-    keyLight.shadow.mapSize.height = 2048;
-    keyLight.shadow.camera.near = 0.5;
-    keyLight.shadow.camera.far = 10;
-    keyLight.shadow.camera.left = -1.2;
-    keyLight.shadow.camera.right = 1.2;
-    keyLight.shadow.camera.top = 2.4;
-    keyLight.shadow.camera.bottom = -0.2;
-    keyLight.shadow.bias = -0.0005;
-    keyLight.shadow.normalBias = 0.02;
-    scene.add(keyLight);
-
-    // Cool Rim Light
-    const rimLight = new THREE.DirectionalLight(0x818cf8, 1.0);
-    rimLight.position.set(-3.0, 2.5, -2.5);
-    scene.add(rimLight);
-
-    // Soft Front Fill
-    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.4);
-    fillLight.position.set(0, 1.5, 3.0);
-    scene.add(fillLight);
+    // 4. Studio lighting rig (key, fill, two rims, dim environment).
+    const studio = applyStudioLighting(scene, renderer);
 
     // 5. Controls
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -132,7 +94,8 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
     controls.enabled = interactiveRef.current;
     controls.autoRotate = mountProps.autoRotate;
     controls.autoRotateSpeed = 1.8;
-    controls.minDistance = 0.8;
+    // Close enough for the face close-up preset.
+    controls.minDistance = 0.45;
     controls.maxDistance = 5.0;
     controls.minPolarAngle = Math.PI / 6;
     controls.maxPolarAngle = Math.PI / 1.8;
@@ -206,9 +169,7 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
       resizeObserver.disconnect();
       controls.dispose();
       charInstance.dispose();
-      pmremGenerator.dispose();
-      roomEnv.dispose();
-      envTexture.dispose();
+      studio.dispose();
       renderer.dispose();
       container.replaceChildren();
       characterRef.current = null;
