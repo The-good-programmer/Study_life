@@ -63,7 +63,7 @@ export const PrimingPhase: React.FC<PrimingPhaseProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white font-display">Step 1: Quick Overview</span>
+              <span className="font-bold text-white font-display">Overview</span>
               <button
                 type="button"
                 onClick={() => {

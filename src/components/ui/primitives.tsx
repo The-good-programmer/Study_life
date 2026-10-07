@@ -55,7 +55,7 @@ export const Tokens: React.FC<{ amount: number; className?: string; iconClassNam
   </span>
 );
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'gold';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'gold' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
@@ -64,6 +64,7 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   secondary: 'bg-surface text-ink border border-line-strong hover:bg-surface-hover',
   ghost: 'text-ink-muted hover:text-ink hover:bg-surface-hover',
   gold: 'bg-gold text-[#2a1d00] hover:brightness-105 shadow-[inset_0_1px_0_rgb(255_255_255/0.35)]',
+  danger: 'bg-danger text-brand-ink hover:brightness-110 shadow-[inset_0_1px_0_rgb(255_255_255/0.2)]',
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
@@ -259,4 +260,39 @@ export const Kbd: React.FC<{ children: React.ReactNode; className?: string }> = 
   >
     {children}
   </kbd>
+);
+
+/** Accessible on/off switch with a visible label. */
+export const Toggle: React.FC<{
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  className?: string;
+}> = ({ checked, onChange, label, className }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    onClick={() => onChange(!checked)}
+    className={cn(
+      'inline-flex h-8 items-center gap-2 rounded-lg px-2 text-[13px] text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer',
+      className,
+    )}
+  >
+    <span
+      className={cn(
+        'relative inline-flex h-[18px] w-8 shrink-0 items-center rounded-full transition-colors',
+        checked ? 'bg-brand' : 'bg-line-strong',
+      )}
+      aria-hidden="true"
+    >
+      <span
+        className={cn(
+          'absolute h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform',
+          checked ? 'translate-x-[16px]' : 'translate-x-[2px]',
+        )}
+      />
+    </span>
+    {label}
+  </button>
 );

@@ -1,19 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { 
-  Zap, 
-  HelpCircle, 
-  Eye, 
-  CheckCircle2, 
-  RotateCw, 
-  Timer, 
-  Sparkles, 
-  Brain, 
+import {
+  HelpCircle,
+  Eye,
+  CheckCircle2,
+  Timer,
+  Brain,
   ArrowRight,
   Check,
   FileText,
-  Gamepad2,
   X,
-  Star
+  Star,
+  Keyboard,
+  Lightbulb,
 } from 'lucide-react';
 import type { CardType, ConceptCheckpoint, FSRSRating, DiagnosticDistractor } from '../../types';
 import { FSRSService } from '../../services/fsrsService';
@@ -28,6 +26,7 @@ import { StudyHUD } from './StudyHUD';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
 import { haptics } from '../../services/hapticsService';
 import { buildQuizOptions } from '../../utils/quizOptions';
+import { Badge, Button, IconButton, Kbd, Toggle } from '../ui/primitives';
 import {
   blendInterleavedCards,
   evaluateBlurting,
@@ -518,158 +517,122 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 
   if (!currentCard && activeTab === 'cards') {
     return (
-      <div className="p-8 text-center text-slate-300 glass-panel rounded-3xl">
-        <p>No retrieval cards found for this concept.</p>
-        <button
-          onClick={onComplete}
-          className="mt-4 px-6 py-3 rounded-2xl bg-indigo-600 text-white font-semibold text-xs"
-        >
+      <div className="mx-auto max-w-md rounded-3xl border border-line bg-surface-solid p-8 text-center">
+        <p className="text-[15px] text-ink-muted">This concept has no flashcards yet.</p>
+        <Button variant="primary" className="mt-5" onClick={onComplete}>
           Continue
-        </button>
+        </Button>
       </div>
     );
   }
 
   const intervals = currentCard ? FSRSService.previewIntervals(currentCard) : null;
-  const progressPercent = cards.length > 0 ? Math.round(((currentIndex) / cards.length) * 100) : 0;
 
   // Real-time recognition in Blurting
-  const liveRecognizedTerms = blurtingTargets.filter(term => 
+  const liveRecognizedTerms = blurtingTargets.filter(term =>
     blurtingText.toLowerCase().includes(term.toLowerCase())
   );
 
+  const canMixEarlierTopics = Boolean(allConcepts && conceptIndex !== undefined && conceptIndex > 0);
+  const isChoiceCard = effectiveType === 'multiple-choice' || hasInteractiveOptions;
+  const cardSource = currentCard?.sourceAnchor || concept.sourceAnchor;
+
+  const toggleStar = () => {
+    if (!currentCard) return;
+    const newStatus = StorageService.toggleCardStar(currentCard.id);
+    setStarredCardIds(prev => {
+      const next = new Set(prev);
+      if (newStatus) next.add(currentCard.id);
+      else next.delete(currentCard.id);
+      return next;
+    });
+    soundEngine.playSuccess();
+  };
+
+  const swipeStamp = (() => {
+    if (!touchOffset) return null;
+    const { x, y } = touchOffset;
+    if (Math.abs(x) > 30 && Math.abs(x) > Math.abs(y)) {
+      return x > 0
+        ? { text: isAnswerRevealed ? 'Good' : 'Show answer', tone: 'bg-brand', strength: (x - 20) / 45, position: 'left-6 top-6 -rotate-6' }
+        : { text: isAnswerRevealed ? 'Again' : 'Show answer', tone: 'bg-danger', strength: (-x - 20) / 45, position: 'right-6 top-6 rotate-6' };
+    }
+    if (Math.abs(y) > 30 && Math.abs(y) > Math.abs(x)) {
+      return y < 0
+        ? { text: isAnswerRevealed ? 'Easy' : 'Show answer', tone: 'bg-success', strength: (-y - 20) / 45, position: 'inset-x-0 bottom-6 mx-auto w-fit' }
+        : { text: isAnswerRevealed ? 'Hard' : 'Show answer', tone: 'bg-gold', strength: (y - 20) / 45, position: 'inset-x-0 top-6 mx-auto w-fit' };
+    }
+    return null;
+  })();
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fadeIn py-2">
-      
-      {/* Header & Mode Switcher */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-amber-950/40 border border-amber-500/25 backdrop-blur-md">
-        <div className="flex items-center gap-3 text-xs sm:text-sm text-amber-300">
-          <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-            <Zap className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-white font-display">Step 2: Interactive Practice</div>
-            <div className="text-[11px] text-amber-300/80">
-              Keep your streak going! Tap the correct answer to build your combo.
-            </div>
-          </div>
+    <div className="mx-auto w-full max-w-2xl space-y-4 py-2 animate-fadeIn">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div role="tablist" aria-label="Practice mode" className="inline-flex rounded-xl border border-line bg-canvas p-1">
+          {([
+            { tab: 'cards', label: 'Cards' },
+            { tab: 'blurting', label: 'Speed recall' },
+          ] as const).map(({ tab, label }) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab}
+              onClick={() => setActiveTab(tab)}
+              className={`inline-flex h-8 items-center rounded-lg px-3 text-[13px] font-medium transition-colors cursor-pointer ${
+                activeTab === tab ? 'bg-surface-hover text-ink shadow-sm' : 'text-ink-subtle hover:text-ink'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* Mode Toggle: Quiz vs Flip vs Blurting vs Interleaving */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {allConcepts && conceptIndex !== undefined && conceptIndex > 0 && (
-            <button
-              type="button"
-              onClick={() => setInterleaveEnabled(prev => !prev)}
-              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border ${
-                interleaveEnabled
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
-                  : 'bg-slate-950/80 text-slate-400 border-white/[0.08] hover:text-white'
-              }`}
-              title="Mix in questions from earlier topics to strengthen retention"
-            >
-              <Brain className="w-3.5 h-3.5 text-amber-400" />
-              <span>Mix: {interleaveEnabled ? 'ON' : 'OFF'}</span>
-            </button>
+        <div className="flex flex-wrap items-center gap-0.5">
+          {activeTab === 'cards' && (
+            <Toggle checked={interactiveMode} onChange={setInteractiveMode} label="Multiple choice" />
           )}
-
-          <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-white/[0.08] text-xs font-semibold shrink-0">
-            <button
-              type="button"
-              onClick={() => setInteractiveMode(prev => !prev)}
-              className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-                interactiveMode
-                  ? 'bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold shadow'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title="Toggle interactive multiple-choice quiz vs classic flip cards"
-            >
-              <Zap className="w-3 h-3" />
-              <span>{interactiveMode ? 'Quiz' : 'Flip'}</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('cards')}
-              className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activeTab === 'cards'
-                  ? 'bg-indigo-600 text-white shadow font-bold'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Cards
-            </button>
-            <button
-              onClick={() => setActiveTab('blurting')}
-              className={`px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-                activeTab === 'blurting'
-                  ? 'bg-purple-600 text-white shadow font-bold'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Brain className="w-3 h-3" />
-              <span>Speed Recall</span>
-            </button>
-          </div>
+          {canMixEarlierTopics && (
+            <Toggle checked={interleaveEnabled} onChange={setInterleaveEnabled} label="Mix earlier topics" />
+          )}
+          <IconButton icon={Keyboard} label="Shortcuts and controller" onClick={() => setShowErgonomicsHelp(true)} />
+          <IconButton icon={HelpCircle} label="Why recall works" onClick={() => setShowScienceModal(true)} />
         </div>
       </div>
 
-      {/* MODE 1: Flashcards Arena */}
+      {/* Flashcards */}
       {activeTab === 'cards' && currentCard && intervals && (
         <div className="space-y-4">
-          
-          {/* Study HUD & Dynamic Combo Counter */}
           <StudyHUD
             currentIndex={currentIndex}
             totalCards={cards.length}
             lastRating={lastRating}
             combo={combo}
             isAnswerRevealed={isAnswerRevealed}
+            isShowingChoiceResult={isAnswerRevealed && selectedOption !== null}
             gamepadConnected={gamepadConnected}
             gamepadName={gamepadName}
             onOpenShortcuts={() => setShowErgonomicsHelp(true)}
           />
 
-          {/* Card progress scrubber & Ergonomic Hardware / Touch HUD */}
-          <div className="flex items-center justify-between text-xs text-slate-400 font-mono px-1">
-            <div className="flex items-center gap-2">
+          {(interleaveMap.has(currentCard.id) || lastGamepadAction || touchFeedback) && (
+            <div className="flex flex-wrap items-center gap-1.5">
               {interleaveMap.has(currentCard.id) && (
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-mono font-bold flex items-center gap-1.5 shadow-sm">
-                  <Brain className="w-3 h-3 text-amber-400" />
-                  <span>Delayed Recall • {interleaveMap.get(currentCard.id)}</span>
-                </span>
+                <Badge tone="gold">
+                  <Brain className="h-3 w-3" aria-hidden="true" />
+                  From an earlier topic: {interleaveMap.get(currentCard.id)}
+                </Badge>
               )}
-              
-              {lastGamepadAction && (
-                <span className="px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 border border-indigo-500/40 text-[11px] font-mono animate-bounce">
-                  Pad: {lastGamepadAction.toUpperCase()}
-                </span>
-              )}
-
-              {touchFeedback && (
-                <span className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-200 border border-purple-500/40 text-[11px] font-mono animate-fadeIn">
-                  {touchFeedback}
-                </span>
-              )}
+              {lastGamepadAction && <Badge tone="brand">Controller: {lastGamepadAction}</Badge>}
+              {touchFeedback && <Badge tone="neutral">{touchFeedback}</Badge>}
             </div>
+          )}
 
-            <div className="flex items-center gap-2">
-              <div className="w-24 sm:w-32 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-300"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-              <span className="text-[11px] font-bold text-slate-400 font-mono">{progressPercent}%</span>
-            </div>
-          </div>
-
-          {/* Realistic Card Deck Container with stacked card silhouette */}
-          <div className="relative group">
-            {/* Background stacked shadow layer */}
-            <div className="absolute -inset-1.5 rounded-[28px] bg-indigo-500/10 blur-sm pointer-events-none" />
-            <div className="absolute top-2 inset-x-2 h-full rounded-3xl bg-slate-900/60 border border-white/[0.04] pointer-events-none transform translate-y-1" />
-
-            {/* Main Interactive Card */}
-            <div 
+          {/* Card */}
+          <div className="relative">
+            <div className="pointer-events-none absolute inset-x-4 -bottom-2 h-full rounded-3xl border border-line bg-surface" aria-hidden="true" />
+            <div
               onClick={() => {
                 if (!isSwipingActive && !touchOffset && !isAnswerRevealed && effectiveType !== 'multiple-choice') {
                   handleRevealAnswer();
@@ -684,230 +647,140 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
               onMouseLeave={handleMouseUp}
               style={{
                 touchAction: 'pan-y',
-                transform: touchOffset 
-                  ? `translate3d(${touchOffset.x}px, ${touchOffset.y * 0.4}px, 0) rotate(${touchOffset.x * 0.05}deg)` 
+                transform: touchOffset
+                  ? `translate3d(${touchOffset.x}px, ${touchOffset.y * 0.4}px, 0) rotate(${touchOffset.x * 0.05}deg)`
                   : undefined,
-                transition: touchOffset ? 'none' : 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease, border-color 0.3s ease',
+                transition: touchOffset ? 'none' : 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.2s ease',
               }}
-              className={`relative min-h-[380px] rounded-3xl glass-panel p-6 sm:p-8 flex flex-col justify-between select-none ${
-                effectiveType !== 'multiple-choice' && !isAnswerRevealed ? 'cursor-grab active:cursor-grabbing hover:border-indigo-500/40 hover:shadow-xl' : ''
-              } ${
-                isAnswerRevealed 
-                  ? 'border-indigo-500/50 shadow-2xl shadow-indigo-500/15' 
-                  : ''
-              }`}
+              className={`relative flex min-h-[360px] select-none flex-col rounded-3xl border bg-surface-solid p-6 shadow-[0_1px_0_rgb(255_255_255/0.04)_inset,0_24px_48px_-28px_rgb(0_0_0/0.6)] sm:p-8 ${
+                isAnswerRevealed ? 'border-line-strong' : 'border-line'
+              } ${effectiveType !== 'multiple-choice' && !isAnswerRevealed ? 'cursor-grab hover:border-line-strong active:cursor-grabbing' : ''}`}
             >
-              {/* Dynamic Tactile Swipe Direction Stamps */}
-              {touchOffset && touchOffset.x > 30 && Math.abs(touchOffset.x) > Math.abs(touchOffset.y) && (
-                <div 
-                  className="absolute top-6 left-6 z-30 pointer-events-none px-4 py-2 rounded-2xl bg-emerald-500/95 text-white font-black text-sm uppercase tracking-wider border-2 border-emerald-300 shadow-xl rotate-[-10deg] flex items-center gap-1.5 animate-pulse"
-                  style={{ opacity: Math.min(1, (touchOffset.x - 20) / 45) }}
+              {swipeStamp && (
+                <div
+                  className={`pointer-events-none absolute z-30 rounded-xl px-3 py-1.5 text-sm font-semibold text-brand-ink shadow-lg ${swipeStamp.tone} ${swipeStamp.position}`}
+                  style={{ opacity: Math.min(1, Math.max(0, swipeStamp.strength)) }}
                 >
-                  <Check className="w-4 h-4 stroke-[3]" />
-                  <span>{isAnswerRevealed ? 'GOOD' : 'REVEAL'}</span>
+                  {swipeStamp.text}
                 </div>
               )}
 
-              {touchOffset && touchOffset.x < -30 && Math.abs(touchOffset.x) > Math.abs(touchOffset.y) && (
-                <div 
-                  className="absolute top-6 right-6 z-30 pointer-events-none px-4 py-2 rounded-2xl bg-rose-500/95 text-white font-black text-sm uppercase tracking-wider border-2 border-rose-300 shadow-xl rotate-[10deg] flex items-center gap-1.5 animate-pulse"
-                  style={{ opacity: Math.min(1, (-touchOffset.x - 20) / 45) }}
-                >
-                  <X className="w-4 h-4 stroke-[3]" />
-                  <span>{isAnswerRevealed ? 'AGAIN' : 'REVEAL'}</span>
+              {/* Card header */}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[13px] font-medium text-ink-subtle">{CARD_TYPE_LABELS[effectiveType]}</span>
+                <div className="flex items-center gap-1">
+                  {cardSource && onInspectSource && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onInspectSource(cardSource.pageNumber, cardSource.snippet);
+                      }}
+                      className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-ink-subtle transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer"
+                      title={`Open the source at page ${cardSource.pageNumber}`}
+                    >
+                      <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                      Page {cardSource.pageNumber}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleStar();
+                    }}
+                    aria-pressed={starredCardIds.has(currentCard.id)}
+                    aria-label={starredCardIds.has(currentCard.id) ? 'Unstar card (S)' : 'Star card (S)'}
+                    title={starredCardIds.has(currentCard.id) ? 'Unstar card (S)' : 'Star card for later (S)'}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-ink-subtle transition-colors hover:bg-surface-hover hover:text-gold cursor-pointer"
+                  >
+                    <Star className={`h-4 w-4 ${starredCardIds.has(currentCard.id) ? 'fill-gold text-gold' : ''}`} aria-hidden="true" />
+                  </button>
                 </div>
-              )}
+              </div>
 
-              {touchOffset && touchOffset.y < -30 && Math.abs(touchOffset.y) > Math.abs(touchOffset.x) && (
-                <div 
-                  className="absolute bottom-6 inset-x-0 mx-auto w-fit z-30 pointer-events-none px-4 py-2 rounded-2xl bg-cyan-500/95 text-white font-black text-sm uppercase tracking-wider border-2 border-cyan-300 shadow-xl flex items-center gap-1.5 animate-pulse"
-                  style={{ opacity: Math.min(1, (-touchOffset.y - 20) / 45) }}
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>{isAnswerRevealed ? 'EASY' : 'REVEAL'}</span>
-                </div>
-              )}
-
-              {touchOffset && touchOffset.y > 30 && Math.abs(touchOffset.y) > Math.abs(touchOffset.x) && (
-                <div 
-                  className="absolute top-6 inset-x-0 mx-auto w-fit z-30 pointer-events-none px-4 py-2 rounded-2xl bg-amber-500/95 text-white font-black text-sm uppercase tracking-wider border-2 border-amber-300 shadow-xl flex items-center gap-1.5 animate-pulse"
-                  style={{ opacity: Math.min(1, (touchOffset.y - 20) / 45) }}
-                >
-                  <Timer className="w-4 h-4" />
-                  <span>{isAnswerRevealed ? 'HARD' : 'REVEAL'}</span>
-                </div>
-              )}
-
-              {/* Question & Interaction Area */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-xs text-slate-400 uppercase tracking-wider font-bold font-display">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${
-                      effectiveType === 'image-occlusion'
-                        ? 'bg-emerald-400'
-                        : effectiveType === 'cloze' 
-                        ? 'bg-purple-400' 
-                        : effectiveType === 'multiple-choice' 
-                        ? 'bg-sky-400' 
-                        : 'bg-indigo-400'
-                    }`} />
-                    <span>
-                      {effectiveType === 'image-occlusion'
-                        ? 'Image Occlusion Recall'
-                        : effectiveType === 'cloze' 
-                        ? 'Cloze Deletion Recall' 
-                        : effectiveType === 'multiple-choice' 
-                        ? 'Multiple Choice Diagnostic' 
-                        : 'Target Concept Recall'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {currentCard && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const newStatus = StorageService.toggleCardStar(currentCard.id);
-                          setStarredCardIds(prev => {
-                            const next = new Set(prev);
-                            if (newStatus) next.add(currentCard.id);
-                            else next.delete(currentCard.id);
-                            return next;
-                          });
-                          soundEngine.playSuccess();
-                        }}
-                        className="p-1 rounded-lg hover:bg-white/[0.1] text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
-                        title={starredCardIds.has(currentCard.id) ? 'Unstar card (Press S)' : 'Star card for priority drill (Press S)'}
-                      >
-                        <Star className={`w-3.5 h-3.5 ${starredCardIds.has(currentCard.id) ? 'fill-amber-400 text-amber-400' : ''}`} />
-                      </button>
-                    )}
-
-                    {(currentCard?.sourceAnchor || concept.sourceAnchor) && onInspectSource && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const targetPage = currentCard?.sourceAnchor?.pageNumber || concept.sourceAnchor?.pageNumber;
-                          const targetSnippet = currentCard?.sourceAnchor?.snippet || concept.sourceAnchor?.snippet;
-                          onInspectSource(targetPage, targetSnippet);
-                        }}
-                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-900/90 hover:bg-indigo-950/80 text-indigo-300 hover:text-indigo-200 border border-indigo-500/30 flex items-center gap-1 transition-all hover:scale-105 shadow-sm"
-                        title={`Inspect Ground Truth on Page ${(currentCard?.sourceAnchor || concept.sourceAnchor)?.pageNumber}`}
-                      >
-                        <FileText className="w-3 h-3 text-indigo-400" />
-                        <span>Source: p.{(currentCard?.sourceAnchor || concept.sourceAnchor)?.pageNumber}</span>
-                      </button>
-                    )}
-
-                    <span className={`text-[11px] font-mono px-2.5 py-0.5 rounded-full border ${
-                      effectiveType === 'image-occlusion'
-                        ? (isAnswerRevealed ? 'text-emerald-300 bg-emerald-950/80 border-emerald-500/30' : 'text-amber-300 bg-amber-950/80 border-amber-500/30')
-                        : effectiveType === 'cloze'
-                        ? 'text-purple-300 bg-purple-950/80 border-purple-500/30'
-                        : effectiveType === 'multiple-choice'
-                        ? (isAnswerRevealed ? (isCorrect ? 'text-emerald-300 bg-emerald-950/80 border-emerald-500/30' : 'text-rose-300 bg-rose-950/80 border-rose-500/30') : 'text-sky-300 bg-sky-950/80 border-sky-500/30')
-                        : 'text-indigo-300 bg-indigo-950/80 border-indigo-500/30'
-                    }`}>
-                      {isAnswerRevealed 
-                        ? (effectiveType === 'multiple-choice' ? (isCorrect ? '✓ Correct' : '✗ Review Answer') : 'Revealed') 
-                        : (effectiveType === 'multiple-choice' ? 'Select Option [A-D / 1-4]' : 'Tap Card or Press Space')}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Cloze Deletion Content */}
-                {effectiveType === 'cloze' && (
-                  <div className="pt-2">
-                    {(() => {
-                      const rawText = currentCard.clozeTemplate || currentCard.question;
-                      if (rawText.includes('{{') && rawText.includes('}}')) {
-                        const parts = rawText.split(/\{\{(.*?)\}\}/g);
-                        return (
-                          <div className="text-xl sm:text-2xl font-bold text-white leading-relaxed font-display">
-                            {parts.map((segment, idx) => {
-                              if (idx % 2 === 1) {
-                                return !isAnswerRevealed ? (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleRevealAnswer();
-                                    }}
-                                    className="inline-flex items-center gap-1 px-3 py-1 mx-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/35 border border-purple-500/50 text-purple-300 font-bold text-sm tracking-wide shadow-md transition-all animate-pulse align-middle"
-                                  >
-                                    <span>[ ? ]</span>
-                                    <span className="text-[11px] font-normal opacity-80">Reveal</span>
-                                  </button>
-                                ) : (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center px-3 py-1 mx-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-extrabold text-sm tracking-wide shadow-inner animate-fadeIn align-middle"
-                                  >
-                                    {segment}
-                                  </span>
-                                );
-                              }
-                              return <span key={idx}><MathRenderer text={segment} /></span>;
-                            })}
-                          </div>
-                        );
-                      }
-                      return (
-                        <div className="space-y-4">
-                          <h3 className="text-xl sm:text-2xl font-bold text-white leading-relaxed font-display">
-                            <MathRenderer text={currentCard.question} />
-                          </h3>
-                          <div className="p-4 rounded-2xl bg-purple-950/30 border border-purple-500/30 flex items-center justify-between">
-                            <span className="text-sm text-purple-200">Missing Key Term:</span>
-                            {!isAnswerRevealed ? (
+              {/* Prompt */}
+              <div className="mt-4 space-y-5">
+                {effectiveType === 'cloze' && (() => {
+                  const rawText = currentCard.clozeTemplate || currentCard.question;
+                  if (rawText.includes('{{') && rawText.includes('}}')) {
+                    const parts = rawText.split(/\{\{(.*?)\}\}/g);
+                    return (
+                      <p className="text-[22px] font-semibold leading-relaxed tracking-tight text-ink sm:text-[26px]">
+                        {parts.map((segment, idx) => {
+                          if (idx % 2 === 1) {
+                            return !isAnswerRevealed ? (
                               <button
+                                key={idx}
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleRevealAnswer();
                                 }}
-                                className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md transition-all"
+                                aria-label="Reveal the missing word"
+                                className="mx-1 inline-flex min-w-16 items-center justify-center rounded-lg border border-dashed border-brand/60 bg-brand-soft px-3 align-baseline text-[0.8em] font-medium text-brand-text cursor-pointer"
                               >
-                                Reveal Blank [ ? ]
+                                ?
                               </button>
                             ) : (
-                              <span className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-extrabold text-sm font-mono">
-                                {currentCard.answer}
+                              <span key={idx} className="mx-1 rounded-lg bg-success-soft px-2 text-success">
+                                {segment}
                               </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
+                            );
+                          }
+                          return <span key={idx}><MathRenderer text={segment} /></span>;
+                        })}
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="space-y-4">
+                      <h3 className="text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
+                        <MathRenderer text={currentCard.question} />
+                      </h3>
+                      <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
+                        <span className="text-[14px] text-ink-muted">Missing word</span>
+                        {!isAnswerRevealed ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRevealAnswer();
+                            }}
+                          >
+                            Reveal
+                          </Button>
+                        ) : (
+                          <span className="rounded-lg bg-success-soft px-2.5 py-1 text-[15px] font-semibold text-success">{currentCard.answer}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
-                {/* Multiple Choice & Interactive Quiz Content */}
-                {(effectiveType === 'multiple-choice' || hasInteractiveOptions) && (
-                  <div className="space-y-4 pt-1">
-                    <h3 className="text-xl sm:text-2xl font-bold text-white leading-relaxed font-display">
+                {isChoiceCard && (
+                  <div className="space-y-5">
+                    <h3 className="text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
                       <MathRenderer text={currentCard.question} />
                     </h3>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+                    <div className="grid gap-2 sm:grid-cols-2">
                       {activeOptions.map((opt, idx) => {
                         const letter = ['A', 'B', 'C', 'D'][idx] || String(idx + 1);
-                        const isThisCorrect = opt.trim().toLowerCase() === currentCard.answer.trim().toLowerCase();
+                        const isThisCorrect = isOptionCorrect(opt, currentCard.answer);
                         const isSelected = selectedOption === opt;
-
-                        let buttonStyle = 'bg-slate-900/80 hover:bg-slate-800 border-white/[0.08] hover:border-indigo-500/50 text-slate-200 hover:scale-[1.01]';
-                        if (isAnswerRevealed) {
-                          if (isThisCorrect) {
-                            buttonStyle = 'bg-emerald-950/70 border-emerald-500 text-emerald-200 shadow-lg shadow-emerald-500/20 scale-[1.01]';
-                          } else if (isSelected) {
-                            buttonStyle = 'bg-rose-950/70 border-rose-500 text-rose-200';
-                          } else {
-                            buttonStyle = 'bg-slate-950/40 border-white/[0.04] text-slate-500 opacity-60';
-                          }
-                        }
-
+                        const state = !isAnswerRevealed
+                          ? 'border-line bg-surface hover:border-brand/50 hover:bg-surface-hover'
+                          : isThisCorrect
+                            ? 'border-success bg-success-soft'
+                            : isSelected
+                              ? 'border-danger bg-danger-soft'
+                              : 'border-line opacity-50';
+                        const badge = isAnswerRevealed && isThisCorrect
+                          ? 'bg-success text-brand-ink'
+                          : isAnswerRevealed && isSelected
+                            ? 'bg-danger text-brand-ink'
+                            : 'bg-surface-hover text-ink-muted';
                         return (
                           <button
                             key={idx}
@@ -919,365 +792,207 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                               handleSelectOption(opt);
                             }}
                             disabled={isAnswerRevealed}
-                            className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 relative cursor-pointer ${buttonStyle}`}
+                            className={`flex items-start gap-3 rounded-2xl border p-3.5 text-left transition-colors disabled:cursor-default cursor-pointer ${state}`}
                           >
-                            <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold font-mono shrink-0 ${
-                              isAnswerRevealed && isThisCorrect
-                                ? 'bg-emerald-500 text-slate-950'
-                                : isAnswerRevealed && isSelected
-                                ? 'bg-rose-500 text-white'
-                                : 'bg-white/[0.08] text-slate-300'
-                            }`}>
+                            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-semibold ${badge}`}>
                               {letter}
                             </span>
-                            <div className="text-sm font-medium leading-snug pt-0.5 font-sans">
+                            <span className="pt-0.5 text-[15px] leading-snug text-ink">
                               <MathRenderer text={opt} />
-                            </div>
+                            </span>
                           </button>
                         );
                       })}
                     </div>
-
-                    {isAnswerRevealed && (
-                      <div className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between animate-fadeIn ${
-                        isCorrect 
-                          ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300' 
-                          : 'bg-rose-950/60 border-rose-500/50 text-rose-200'
-                      }`}>
-                        <div className="flex items-center gap-2">
-                          {isCorrect ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <RotateCw className="w-4 h-4 text-rose-400" />}
-                          <span className="font-bold">
-                            {isCorrect ? 'Accurate recall! Synaptic trace reinforced.' : `Target Answer: ${currentCard.answer}`}
-                          </span>
-                        </div>
-                        <span className="font-mono font-bold text-xs">{isCorrect ? '+5 🪙 Wage' : 'FSRS Grading Below'}</span>
-                      </div>
-                    )}
                   </div>
                 )}
 
-                {/* Image Occlusion Card Content */}
                 {effectiveType === 'image-occlusion' && currentCard.imageUrl && (
-                  <div className="space-y-4 pt-1">
-                    <h3 className="text-base sm:text-lg font-bold text-white leading-relaxed font-display">
+                  <div className="space-y-4">
+                    <h3 className="text-[18px] font-semibold leading-snug text-ink">
                       <MathRenderer text={currentCard.question} />
                     </h3>
-
-                    <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950/80 border border-white/[0.08] flex items-center justify-center p-2 shadow-inner select-none">
+                    <div className="relative flex w-full select-none items-center justify-center overflow-hidden rounded-2xl border border-line bg-canvas p-2">
                       <img
                         src={currentCard.imageUrl}
-                        alt="Anatomical or Technical Diagram"
-                        className="w-full h-auto object-contain max-h-[380px] pointer-events-none rounded-xl"
+                        alt="Diagram with hidden labels"
+                        className="pointer-events-none h-auto max-h-[380px] w-full rounded-xl object-contain"
                       />
-
-                      {/* Overlaid Occlusion Masks */}
                       {(currentCard.masks || []).map((mask, idx) => {
                         const isTarget = mask.id === currentCard.activeMaskId;
                         const isRevealed = isTarget && isAnswerRevealed;
-
-                        if (currentCard.occlusionMode === 'hide-one-reveal-one' && !isTarget) {
-                          return null; // surrounding labels remain visible
-                        }
-
+                        if (currentCard.occlusionMode === 'hide-one-reveal-one' && !isTarget) return null;
+                        const box = { left: `${mask.x}%`, top: `${mask.y}%`, width: `${mask.width}%`, height: `${mask.height}%` };
                         if (isTarget) {
                           return (
-                            <div
+                            <button
                               key={mask.id}
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleToggleReveal();
                               }}
-                              className={`absolute rounded-lg flex items-center justify-center p-1 transition-all cursor-pointer shadow-xl ${
-                                isRevealed
-                                  ? 'bg-emerald-950/95 border-2 border-emerald-400 text-emerald-200 ring-2 ring-emerald-500/40'
-                                  : 'bg-amber-950/95 border-2 border-amber-400 text-amber-200 animate-pulse ring-2 ring-amber-500/40 hover:scale-[1.02]'
+                              aria-label={isRevealed ? `Label: ${mask.label || currentCard.answer}` : `Reveal hidden label ${idx + 1}`}
+                              className={`absolute flex items-center justify-center rounded-lg p-1 text-[11px] font-semibold shadow-lg transition-colors cursor-pointer ${
+                                isRevealed ? 'bg-success text-brand-ink' : 'animate-pulse bg-gold text-[#2a1d00] ring-2 ring-gold/40'
                               }`}
-                              style={{
-                                left: `${mask.x}%`,
-                                top: `${mask.y}%`,
-                                width: `${mask.width}%`,
-                                height: `${mask.height}%`,
-                              }}
+                              style={box}
                             >
-                              <span className="text-[11px] font-bold font-mono truncate px-1">
-                                {isRevealed ? (mask.label || currentCard.answer) : `? [Mask #${idx + 1}]`}
-                              </span>
-                            </div>
+                              <span className="truncate px-1">{isRevealed ? mask.label || currentCard.answer : '?'}</span>
+                            </button>
                           );
                         }
-
-                        // Non-target masks in Hide-All mode: solid opaque block
-                        return (
-                          <div
-                            key={mask.id}
-                            className="absolute rounded-lg bg-slate-900/95 border border-white/20 shadow-md"
-                            style={{
-                              left: `${mask.x}%`,
-                              top: `${mask.y}%`,
-                              width: `${mask.width}%`,
-                              height: `${mask.height}%`,
-                            }}
-                          />
-                        );
+                        return <div key={mask.id} className="absolute rounded-lg border border-line-strong bg-surface-solid" style={box} />;
                       })}
                     </div>
                   </div>
                 )}
 
-                {/* Standard Card Content (When interactive options not active) */}
                 {effectiveType === 'standard' && !hasInteractiveOptions && (
-                  <h3 className="text-xl sm:text-2xl font-bold text-white leading-relaxed font-display">
+                  <h3 className="text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
                     <MathRenderer text={currentCard.question} />
                   </h3>
                 )}
 
-                {/* 3-Tier Socratic Hint Ladder */}
+                {/* Hints */}
                 {!isAnswerRevealed && (
-                  <div onClick={(e) => e.stopPropagation()} className="pt-2 space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          haptics.light();
-                          soundEngine.playTapPop();
-                          setHintLevel(prev => (prev >= 3 ? 0 : prev + 1));
-                        }}
-                        className={`text-xs px-3 py-1.5 rounded-xl border flex items-center gap-1.5 transition-all font-semibold cursor-pointer ${
-                          hintLevel > 0 
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm' 
-                            : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-amber-400 border-white/[0.08]'
-                        }`}
-                        title="Climb the 3-tier Socratic Hint Ladder"
-                      >
-                        <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-                        <span>
-                          {hintLevel === 0 && (currentCard.hint ? 'Need a hint? [H]' : 'Socratic Hint [H]')}
-                          {hintLevel === 1 && '💡 Clue 1/3: Socratic Nudge'}
-                          {hintLevel === 2 && '🌊 Clue 2/3: Physical Analogy'}
-                          {hintLevel === 3 && '🔍 Clue 3/3: Core Simplification'}
-                        </span>
-                      </button>
-
-                      {hintLevel > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setHintLevel(0)}
-                          className="text-[11px] text-slate-500 hover:text-slate-300 underline cursor-pointer"
-                        >
-                          Hide hints
-                        </button>
-                      )}
-                    </div>
+                  <div onClick={(e) => e.stopPropagation()} className="space-y-2.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Lightbulb}
+                      onClick={() => {
+                        haptics.light();
+                        soundEngine.playTapPop();
+                        setHintLevel(prev => (prev >= 3 ? 0 : prev + 1));
+                      }}
+                      className="-ml-2"
+                    >
+                      {hintLevel === 0 ? 'Show a hint' : hintLevel < 3 ? `Another hint (${hintLevel}/3)` : 'Hide hints'}
+                      <Kbd className="ml-1">H</Kbd>
+                    </Button>
 
                     {hintLevel > 0 && hintLadder && (
-                      <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 text-xs text-amber-200 animate-fadeIn space-y-2.5 font-sans">
-                        {hintLevel >= 1 && (
-                          <div className="flex items-start gap-2">
-                            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[11px] uppercase font-bold shrink-0 mt-0.5">
-                              1. Socratic Nudge
-                            </span>
-                            <span className="text-slate-200 leading-relaxed font-medium">
-                              <MathRenderer text={hintLadder.level1Prompt} />
-                            </span>
-                          </div>
-                        )}
-                        {hintLevel >= 2 && (
-                          <div className="flex items-start gap-2 pt-2 border-t border-amber-500/20">
-                            <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono text-[11px] uppercase font-bold shrink-0 mt-0.5">
-                              2. Analogy Anchor
-                            </span>
-                            <span className="text-slate-200 leading-relaxed font-medium">
-                              <MathRenderer text={hintLadder.level2Analogy} />
-                            </span>
-                          </div>
-                        )}
-                        {hintLevel >= 3 && (
-                          <div className="flex items-start gap-2 pt-2 border-t border-amber-500/20">
-                            <span className="px-1.5 py-0.5 rounded bg-pink-500/20 text-pink-300 font-mono text-[11px] uppercase font-bold shrink-0 mt-0.5">
-                              3. Core Deconstruction
-                            </span>
-                            <span className="text-slate-200 leading-relaxed font-medium">
-                              <MathRenderer text={hintLadder.level3Deconstruction} />
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                      <ol className="space-y-3 rounded-2xl border border-gold/25 bg-gold-soft p-4 text-[14px] leading-relaxed text-ink animate-fadeIn">
+                        {[hintLadder.level1Prompt, hintLadder.level2Analogy, hintLadder.level3Deconstruction]
+                          .slice(0, hintLevel)
+                          .map((hint, i) => (
+                            <li key={i} className="flex gap-3">
+                              <span className="mt-0.5 shrink-0 text-xs font-semibold uppercase tracking-wide text-gold">
+                                {['Nudge', 'Analogy', 'Simplest'][i]}
+                              </span>
+                              <span><MathRenderer text={hint} /></span>
+                            </li>
+                          ))}
+                      </ol>
                     )}
                   </div>
                 )}
               </div>
 
-              {/* Target Answer Revealed */}
+              {/* Answer */}
               {isAnswerRevealed ? (
-                <div className="mt-6 pt-6 border-t border-white/[0.08] space-y-4 animate-fadeIn">
-                  {effectiveType !== 'multiple-choice' && !hasInteractiveOptions && (
-                    <>
-                      <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider font-display">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Target Recall Answer</span>
-                      </div>
-                      
-                      <div className="text-base sm:text-lg font-medium text-slate-100 leading-relaxed font-sans">
-                        <MathRenderer text={currentCard.answer} />
-                      </div>
-                    </>
-                  )}
-
-                  {currentCard.explanation && (
-                    <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] text-xs text-slate-300 leading-relaxed font-sans">
-                      <span className="font-bold text-indigo-300 block mb-0.5 font-display">Cognitive Detail:</span>
-                      <MathRenderer text={currentCard.explanation} />
-                    </div>
-                  )}
-
-                  {(() => {
-                    const diagram = currentCard.diagramDataUrl || StorageService.getConceptDiagram(currentCard.conceptId);
-                    if (!diagram) return null;
-                    return (
-                      <div className="p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/30 space-y-2 animate-fadeIn">
-                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-purple-300 font-display">
-                          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                          <span>Dual-Coding Mental Model Diagram</span>
-                        </div>
-                        <div className="rounded-xl overflow-hidden bg-slate-950/90 border border-white/[0.06] p-2 flex justify-center">
-                          <img
-                            src={diagram}
-                            alt="Hand-drawn conceptual diagram"
-                            className="max-h-56 object-contain rounded-lg"
-                          />
+                (!isChoiceCard || currentCard.explanation || currentCard.diagramDataUrl || StorageService.getConceptDiagram(currentCard.conceptId)) && (
+                  <div className="mt-6 space-y-4 border-t border-line pt-6 animate-fadeIn">
+                    {!isChoiceCard && (
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-success">Answer</p>
+                        <div className="mt-1.5 text-[17px] leading-relaxed text-ink">
+                          <MathRenderer text={currentCard.answer} />
                         </div>
                       </div>
-                    );
-                  })()}
-                </div>
-              ) : (effectiveType !== 'multiple-choice' && !hasInteractiveOptions) ? (
-                <div className="pt-8 flex flex-col items-center justify-center gap-2">
-                  <button
+                    )}
+                    {currentCard.explanation && (
+                      <div className="rounded-2xl bg-surface-hover p-4 text-[14px] leading-relaxed text-ink-muted">
+                        <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-subtle">Why</span>
+                        <MathRenderer text={currentCard.explanation} />
+                      </div>
+                    )}
+                    {(() => {
+                      const diagram = currentCard.diagramDataUrl || StorageService.getConceptDiagram(currentCard.conceptId);
+                      if (!diagram) return null;
+                      return (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Your sketch</p>
+                          <div className="flex justify-center rounded-2xl border border-line bg-canvas p-2">
+                            <img src={diagram} alt="Your diagram of this concept" className="max-h-56 rounded-lg object-contain" />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )
+              ) : !isChoiceCard ? (
+                <div className="mt-auto flex flex-col items-center gap-2 pt-8">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    icon={Eye}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleToggleReveal();
                     }}
-                    className="btn-tactile btn-tactile-primary w-full sm:w-auto px-8 py-4 rounded-2xl text-white font-black text-sm sm:text-base flex items-center justify-center gap-3 cursor-pointer group"
+                    className="w-full sm:w-auto sm:px-8"
                   >
-                    <Eye className="w-5 h-5 text-white group-hover:scale-110 transition-transform" />
-                    <span>Reveal Target Answer</span>
-                    <kbd className="hidden sm:inline-block px-2 py-0.5 text-xs bg-black/30 border border-white/20 rounded text-white font-mono">
-                      Space
-                    </kbd>
-                  </button>
-                  <span className="text-xs text-slate-400 font-medium">Tap anywhere or press Space • Swipe left/right on mobile</span>
+                    Show answer
+                    <kbd className="ml-1 hidden h-5 items-center rounded border border-white/25 bg-white/15 px-1.5 font-mono text-[10.5px] sm:inline-flex">Space</kbd>
+                  </Button>
+                  <span className="text-xs text-ink-subtle">Or tap the card. On a phone, swipe it.</span>
                 </div>
               ) : null}
 
-              {/* FSRS Rating Buttons (Shown for classic flip cards) */}
+              {/* Rating */}
               {isAnswerRevealed && selectedOption === null && (
-                <div 
-                  onClick={(e) => e.stopPropagation()} 
-                  className="mt-8 pt-6 border-t border-white/[0.08] space-y-3 animate-fadeIn"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-                    <span>Rate retrieval difficulty (FSRS scheduling):</span>
-                    <span className="text-[11px] text-slate-500 hidden sm:inline font-mono">Press 1, 2, 3, or 4</span>
+                <div onClick={(e) => e.stopPropagation()} className="mt-8 space-y-3 border-t border-line pt-6 animate-fadeIn">
+                  <div className="flex items-center justify-between gap-2 text-[13px]">
+                    <span className="font-medium text-ink">How well did you remember it?</span>
+                    <span className="hidden text-ink-subtle sm:inline">Keys 1 to 4</span>
                   </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    
-                    {/* Again [1] */}
-                    <button
-                      onClick={() => handleRate('again')}
-                      className="btn-tactile btn-tactile-rose p-3.5 rounded-2xl text-left transition-all group"
-                    >
-                      <div className="flex items-center justify-between text-xs font-bold text-white mb-1">
-                        <div className="flex items-center gap-1.5">
-                          <span>Again</span>
-                          <kbd className="px-1.5 py-0.5 text-[11px] bg-black/30 rounded border border-white/20 text-white font-mono">
-                            1
-                          </kbd>
-                        </div>
-                        <RotateCw className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform" />
-                      </div>
-                      <div className="text-xs font-bold text-rose-100 font-mono">{intervals?.again || '1m'}</div>
-                      <div className="text-[11px] text-rose-200 font-medium mt-0.5">Forgot / Repeat</div>
-                    </button>
-
-                    {/* Hard [2] */}
-                    <button
-                      onClick={() => handleRate('hard')}
-                      className="btn-tactile btn-tactile-amber p-3.5 rounded-2xl text-left transition-all"
-                    >
-                      <div className="flex items-center justify-between text-xs font-bold text-white mb-1">
-                        <span>Hard</span>
-                        <kbd className="px-1.5 py-0.5 text-[11px] bg-black/30 rounded border border-white/20 text-white font-mono">
-                          2
-                        </kbd>
-                      </div>
-                      <div className="text-xs font-bold text-amber-100 font-mono">{intervals?.hard || '1d'}</div>
-                      <div className="text-[11px] text-amber-200 font-medium mt-0.5">Heavy effort</div>
-                    </button>
-
-                    {/* Good [3] */}
-                    <button
-                      onClick={() => handleRate('good')}
-                      className="btn-tactile btn-tactile-primary p-3.5 rounded-2xl text-left transition-all"
-                    >
-                      <div className="flex items-center justify-between text-xs font-bold text-white mb-1">
-                        <span>Good</span>
-                        <kbd className="px-1.5 py-0.5 text-[11px] bg-black/30 rounded border border-white/20 text-white font-mono">
-                          3
-                        </kbd>
-                      </div>
-                      <div className="text-xs font-bold text-indigo-100 font-mono">{intervals?.good || '3d'}</div>
-                      <div className="text-[11px] text-indigo-200 font-medium mt-0.5">Correct recall</div>
-                    </button>
-
-                    {/* Easy [4] */}
-                    <button
-                      onClick={() => handleRate('easy')}
-                      className="btn-tactile btn-tactile-emerald p-3.5 rounded-2xl text-left transition-all"
-                    >
-                      <div className="flex items-center justify-between text-xs font-bold text-white mb-1">
-                        <span>Easy</span>
-                        <kbd className="px-1.5 py-0.5 text-[11px] bg-black/30 rounded border border-white/20 text-white font-mono">
-                          4
-                        </kbd>
-                      </div>
-                      <div className="text-xs font-bold text-emerald-100 font-mono">{intervals?.easy || '7d'}</div>
-                      <div className="text-[11px] text-emerald-200 font-medium mt-0.5">Instant recall</div>
-                    </button>
-
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {RATING_BUTTONS.map(({ rating, label, key, className, labelClassName }) => (
+                      <button
+                        key={rating}
+                        type="button"
+                        onClick={() => handleRate(rating)}
+                        className={`group flex flex-col items-start gap-1 rounded-xl border border-line bg-surface p-3 text-left transition-colors cursor-pointer ${className}`}
+                      >
+                        <span className="flex w-full items-center justify-between">
+                          <span className={`text-[14px] font-semibold ${labelClassName}`}>{label}</span>
+                          <Kbd>{key}</Kbd>
+                        </span>
+                        <span className="text-[13px] tabular-nums text-ink-muted">Back in {intervals[rating]}</span>
+                      </button>
+                    ))}
                   </div>
+                  <p className="text-xs leading-relaxed text-ink-subtle">
+                    Every rating earns the same XP, so there is no reason to round up. Your rating only decides when the card comes back.
+                  </p>
                 </div>
               )}
-
             </div>
           </div>
         </div>
       )}
 
-      {/* MODE 2: The 60-Second Blurting Method */}
+      {/* Speed recall */}
       {activeTab === 'blurting' && (
-        <div className="p-6 sm:p-8 rounded-3xl glass-panel space-y-6 animate-fadeIn">
-          
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-white flex items-center gap-2 font-display">
-                <Brain className="w-5 h-5 text-amber-400" />
-                <span>The 60-Second Blurting Arena</span>
-              </h3>
-              <p className="text-xs text-slate-400">
-                Speed brain-dump: Write every keyword, formula, and nuance you recall before the timer elapses.
+        <section className="space-y-5 rounded-3xl border border-line bg-surface-solid p-6 sm:p-8 animate-fadeIn">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-[17px] font-semibold text-ink">Speed recall</h3>
+              <p className="mt-1 text-[14px] leading-relaxed text-ink-muted">
+                Write down everything you remember about this concept in 60 seconds. Earns up to 40 XP, depending on how much you recall.
               </p>
             </div>
-
-            {/* Circular Timer countdown badge */}
-            <div className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border font-mono text-sm font-bold ${
-              blurtingSeconds <= 10 && isBlurtingRunning
-                ? 'bg-rose-950/60 border-rose-500 text-rose-300 animate-pulse'
-                : 'bg-slate-950 border-white/[0.1] text-amber-400'
-            }`}>
-              <Timer className="w-4 h-4" />
-              <span>{blurtingSeconds}s</span>
-            </div>
+            <span
+              className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 text-[15px] font-semibold tabular-nums ${
+                blurtingSeconds <= 10 && isBlurtingRunning ? 'animate-pulse bg-danger-soft text-danger' : 'bg-surface-hover text-ink'
+              }`}
+              aria-live="polite"
+            >
+              <Timer className="h-4 w-4" aria-hidden="true" />
+              {blurtingSeconds}s
+            </span>
           </div>
 
           {!blurtingResult ? (
@@ -1286,31 +1001,29 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                 rows={7}
                 value={blurtingText}
                 onChange={(e) => setBlurtingText(e.target.value)}
-                placeholder={isBlurtingRunning ? "Type rapidly! Dump all terminology, mechanisms, and takeaways you recall..." : "Click 'Start 60s Blurting Challenge' to begin..."}
+                placeholder={isBlurtingRunning ? 'Terms, mechanisms, examples: anything you remember.' : 'Press Start to begin the 60-second timer.'}
                 disabled={!isBlurtingRunning}
-                className="w-full p-4 rounded-2xl bg-slate-950/80 border border-white/[0.12] focus:border-amber-500 text-white text-sm outline-none resize-none placeholder:text-slate-500 transition-all leading-relaxed font-sans"
+                aria-label="Everything you remember"
+                className="w-full resize-none rounded-2xl border border-line-strong bg-canvas p-4 text-[15px] leading-relaxed text-ink outline-none transition-[border-color,box-shadow] placeholder:text-ink-subtle focus:border-brand focus:ring-4 focus:ring-brand/15 disabled:opacity-60"
               />
 
-              {/* Live recognition chips while typing */}
               {isBlurtingRunning && (
                 <div className="space-y-2">
-                  <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider font-display">
-                    Real-Time Concept Recognition ({liveRecognizedTerms.length}/{blurtingTargets.length}):
-                  </div>
+                  <p className="text-[13px] text-ink-subtle">
+                    Recognised {liveRecognizedTerms.length} of {blurtingTargets.length}
+                  </p>
                   <div className="flex flex-wrap gap-1.5">
                     {blurtingTargets.map((term, idx) => {
                       const isFound = blurtingText.toLowerCase().includes(term.toLowerCase());
                       return (
-                        <span 
-                          key={idx} 
-                          className={`text-xs px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 ${
-                            isFound 
-                              ? 'bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 font-semibold' 
-                              : 'bg-slate-900/60 border border-white/[0.06] text-slate-500'
+                        <span
+                          key={idx}
+                          className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[13px] transition-colors ${
+                            isFound ? 'bg-success-soft font-medium text-success' : 'bg-surface-hover text-ink-subtle'
                           }`}
                         >
-                          {isFound ? <Check className="w-3 h-3 text-emerald-400" /> : null}
-                          <span>{term}</span>
+                          {isFound && <Check className="h-3 w-3" aria-hidden="true" />}
+                          {isFound ? term : '•••'}
                         </span>
                       );
                     })}
@@ -1318,273 +1031,202 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                 </div>
               )}
 
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-xs text-slate-400 font-mono">
-                  {blurtingText.trim().split(/\s+/).filter(Boolean).length} words dumped
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <span className="text-[13px] tabular-nums text-ink-subtle">
+                  {blurtingText.trim().split(/\s+/).filter(Boolean).length} words
                 </span>
-
                 {!isBlurtingRunning ? (
-                  <button
-                    onClick={handleStartBlurting}
-                    className="px-6 py-3 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-amber-600/25 transition-all hover:scale-[1.02]"
-                  >
-                    <Timer className="w-4 h-4" />
-                    <span>Start 60s Blurting Challenge (+25 🪙 Wage)</span>
-                  </button>
+                  <Button variant="primary" icon={Timer} onClick={handleStartBlurting}>
+                    Start
+                  </Button>
                 ) : (
-                  <button
-                    onClick={handleEvaluateBlurting}
-                    className="px-6 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/25 transition-all"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Evaluate Blurting Now</span>
-                  </button>
+                  <Button variant="primary" icon={CheckCircle2} onClick={handleEvaluateBlurting}>
+                    Finish
+                  </Button>
                 )}
               </div>
             </div>
           ) : (
-            /* Blurting Results Analysis */
             <div className="space-y-5 animate-fadeIn">
-              <div className="p-5 rounded-2xl bg-slate-950/80 border border-white/[0.08] space-y-4">
-                <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
-                  <div className="text-xs font-bold text-white flex items-center gap-2 font-display">
-                    <Sparkles className="w-4 h-4 text-amber-400" />
-                    <span>Active Blurting Mastery Breakdown (+25 🪙 Wage)</span>
-                  </div>
-                  <span className="text-xs font-bold text-emerald-400 font-mono">
-                    {blurtingResult.recalled.length} / {concept.keyTerms.length} Key Terms Recalled
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  {/* Recalled */}
-                  <div className="space-y-2">
-                    <span className="font-bold text-emerald-400 uppercase tracking-wide text-[11px] block font-display">
-                      Recalled From Long-Term Memory
-                    </span>
-                    {blurtingResult.recalled.length === 0 ? (
-                      <p className="text-slate-500 italic">No specific nomenclature terms were captured in this run.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {blurtingResult.recalled.map((t, idx) => (
-                          <span key={idx} className="px-2.5 py-1 rounded-xl bg-emerald-950/60 border border-emerald-800/60 text-emerald-300 font-semibold flex items-center gap-1">
-                            <Check className="w-3 h-3 text-emerald-400" />
-                            <span>{t}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Missed */}
-                  <div className="space-y-2">
-                    <span className="font-bold text-amber-400 uppercase tracking-wide text-[11px] block font-display">
-                      Omitted / Faded Concepts
-                    </span>
-                    {blurtingResult.missed.length === 0 ? (
-                      <p className="text-emerald-400 font-semibold">Flawless cognitive recall! You captured every single key term.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {blurtingResult.missed.map((t, idx) => (
-                          <span key={idx} className="px-2.5 py-1 rounded-xl bg-amber-950/40 border border-amber-800/40 text-amber-300 font-medium">
-                            ⚠ {t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <div className="flex items-baseline justify-between gap-3 border-b border-line pb-4">
+                <p className="text-[15px] font-medium text-ink">You recalled</p>
+                <p className="text-[22px] font-semibold tabular-nums text-ink">
+                  {blurtingResult.recalled.length}
+                  <span className="text-[15px] font-normal text-ink-subtle"> of {blurtingTargets.length}</span>
+                </p>
               </div>
-
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => {
-                    setBlurtingText('');
-                    setBlurtingResult(null);
-                  }}
-                  className="px-4 py-2.5 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold hover:bg-slate-800 border border-white/[0.08]"
-                >
-                  Retry Blurting
-                </button>
-                <button
-                  onClick={() => setActiveTab('cards')}
-                  className="px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition-all"
-                >
-                  <span>Proceed to FSRS Flashcards</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
-        </div>
-      )}
-
-      {/* Ergonomic Hardware & Gesture Mapping Modal */}
-      {showErgonomicsHelp && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-          <div className="max-w-md w-full p-6 rounded-3xl bg-[#0d101e] border border-white/[0.12] shadow-2xl space-y-5 text-slate-200">
-            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
-                  <Gamepad2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white font-display">Ergonomic Review Navigation</h3>
-                  <p className="text-[11px] text-slate-400">High-speed active recall with zero wrist fatigue</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowErgonomicsHelp(false)}
-                className="p-1.5 rounded-xl hover:bg-white/[0.08] text-slate-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Controller status banner */}
-            <div className={`p-3 rounded-2xl border text-xs flex items-center justify-between ${
-              gamepadConnected 
-                ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' 
-                : 'bg-slate-900/60 border-white/[0.06] text-slate-400'
-            }`}>
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${gamepadConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
-                <span className="font-semibold">{gamepadConnected ? (gamepadName || 'Connected') : 'No Gamepad Detected'}</span>
-              </div>
-              <span className="text-[11px] font-mono text-slate-500">
-                {gamepadConnected ? 'Ready (W3C API)' : 'Plug or pair Bluetooth'}
-              </span>
-            </div>
-
-            {/* Mappings */}
-            <div className="space-y-3 text-xs">
-              <div className="p-3 rounded-2xl bg-slate-950 border border-white/[0.06] space-y-2">
-                <div className="font-bold text-indigo-300 flex items-center gap-1.5 font-display">
-                  <Gamepad2 className="w-3.5 h-3.5" />
-                  <span>Gamepad / 8BitDo / Joy-Con Mappings</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-                  <div><kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-white">A / Cross</kbd> Flip / Good (3)</div>
-                  <div><kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-white">B / Circle</kbd> Rate Again (1)</div>
-                  <div><kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-white">X / Square</kbd> Rate Hard (2)</div>
-                  <div><kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-white">Y / Tri</kbd> Rate Easy (4)</div>
-                  <div><kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-white">L1 / LB</kbd> Toggle Hint</div>
-                  <div><kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-white">D-Pad</kbd> &larr;Again &rarr;Good &uarr;Easy &darr;Hard</div>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950 border border-white/[0.06] space-y-2">
-                <div className="font-bold text-purple-300 flex items-center gap-1.5 font-display">
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>Mobile Touch Swipes (On Card)</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-                  <div><span className="text-slate-400">Swipe Left:</span> <span className="text-rose-300 font-bold">Again (1)</span></div>
-                  <div><span className="text-slate-400">Swipe Right:</span> <span className="text-emerald-300 font-bold">Good (3)</span></div>
-                  <div><span className="text-slate-400">Swipe Up:</span> <span className="text-sky-300 font-bold">Easy (4)</span></div>
-                  <div><span className="text-slate-400">Swipe Down:</span> <span className="text-amber-300 font-bold">Hard (2)</span></div>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-950 border border-white/[0.06] space-y-2">
-                <div className="font-bold text-slate-300 flex items-center gap-1.5 font-display">
-                  <span>⌨️ Keyboard Fast-Row</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-                  <div><kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-white">Space</kbd> Flip / Reveal</div>
-                  <div><kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-white">1 - 4</kbd> Again to Easy</div>
-                  <div><kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-white">H</kbd> Hint Toggle</div>
-                  <div><kbd className="px-1.5 py-0.5 rounded bg-white/[0.08] text-white">A-D</kbd> Pick MCQ Option</div>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowErgonomicsHelp(false)}
-              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-lg shadow-indigo-600/30"
-            >
-              Got It
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Duolingo-style Bottom Feedback Banner */}
-      {isAnswerRevealed && selectedOption !== null && currentCard && (
-        <div className={`fixed bottom-0 inset-x-0 z-50 p-4 sm:p-6 border-t shadow-2xl backdrop-blur-2xl animate-slideUp transition-all duration-300 ${
-          isCorrect 
-            ? 'bg-[#081f14]/95 border-emerald-500/40 text-emerald-100' 
-            : 'bg-[#260c13]/95 border-rose-500/40 text-rose-100'
-        }`}>
-          <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5 w-full sm:w-auto">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-xl font-black shadow-lg ${
-                isCorrect 
-                  ? 'bg-emerald-500 text-slate-950 ring-4 ring-emerald-500/20' 
-                  : 'bg-rose-500 text-white ring-4 ring-rose-500/20'
-              }`}>
-                {isCorrect ? '✓' : '✕'}
-              </div>
-              <div className="space-y-0.5">
-                <div className="text-base sm:text-lg font-black font-display flex items-center gap-2">
-                  <span>{isCorrect ? (combo >= 3 ? `Brilliant! Combo x${combo} 🔥` : 'Nicely done!') : 'Incorrect'}</span>
-                  {isCorrect && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-bold">
-                      +5 🪙
-                    </span>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-success">Remembered</p>
+                  {blurtingResult.recalled.length === 0 ? (
+                    <p className="text-[13px] text-ink-subtle">None of the key terms this time.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {blurtingResult.recalled.map((t, idx) => (
+                        <span key={idx} className="rounded-lg bg-success-soft px-2.5 py-1 text-[13px] font-medium text-success">{t}</span>
+                      ))}
+                    </div>
                   )}
                 </div>
-                <div className="text-xs sm:text-sm text-slate-200">
-                  {isCorrect ? (
-                    <span className="text-emerald-300 font-medium">Memory trace locked in!</span>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gold">To review</p>
+                  {blurtingResult.missed.length === 0 ? (
+                    <p className="text-[13px] font-medium text-success">You got every key term.</p>
                   ) : (
-                    <div className="space-y-1.5">
-                      <div>Correct answer: <strong className="text-white font-bold">{currentCard.answer}</strong></div>
-                      {misconception && (
-                        <div className="p-2 sm:p-2.5 rounded-xl bg-black/40 border border-rose-500/30 text-xs text-rose-200 flex items-start gap-2 max-w-xl animate-fadeIn">
-                          <span className="text-sm shrink-0">💡</span>
-                          <div className="space-y-0.5">
-                            <div className="font-bold text-rose-300 flex items-center gap-1.5">
-                              <span>Studify's Diagnostic ({misconception.trapTitle || misconception.trapType}):</span>
-                            </div>
-                            <p className="text-[12px] text-slate-200 leading-relaxed font-sans font-normal">
-                              {misconception.trapExplanation}
-                            </p>
-                          </div>
-                        </div>
-                      )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {blurtingResult.missed.map((t, idx) => (
+                        <span key={idx} className="rounded-lg bg-gold-soft px-2.5 py-1 text-[13px] text-ink">{t}</span>
+                      ))}
                     </div>
                   )}
                 </div>
               </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setBlurtingText('');
+                    setBlurtingResult(null);
+                  }}
+                >
+                  Try again
+                </Button>
+                <Button variant="primary" trailingIcon={ArrowRight} onClick={() => setActiveTab('cards')}>
+                  Back to cards
+                </Button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Shortcuts and controller */}
+      {showErgonomicsHelp && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setShowErgonomicsHelp(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="shortcuts-title"
+        >
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md space-y-5 rounded-3xl border border-line-strong bg-surface-solid p-6 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 id="shortcuts-title" className="text-[17px] font-semibold text-ink">Shortcuts</h3>
+              <IconButton icon={X} label="Close" onClick={() => setShowErgonomicsHelp(false)} />
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleRate(isCorrect ? 'good' : 'again')}
-              className={`w-full sm:w-auto px-8 py-3.5 rounded-2xl font-black text-sm tracking-wide shadow-xl flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${
-                isCorrect 
-                  ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/30' 
-                  : 'bg-rose-500 hover:bg-rose-400 text-white shadow-rose-500/30'
-              }`}
-            >
-              <span>{isCorrect ? 'CONTINUE' : 'GOT IT'}</span>
-              <span className="text-[11px] opacity-75 font-mono hidden sm:inline">[Enter ↵]</span>
-            </button>
+            <ShortcutGroup
+              title="Keyboard"
+              items={[
+                ['Space', 'Show answer'],
+                ['1 – 4', 'Again, Hard, Good, Easy'],
+                ['A – D', 'Pick a choice'],
+                ['H', 'Hint'],
+                ['S', 'Star card'],
+                ['Enter', 'Continue'],
+              ]}
+            />
+            <ShortcutGroup
+              title="Swipe on the card"
+              items={[
+                ['Left', 'Again'],
+                ['Down', 'Hard'],
+                ['Right', 'Good'],
+                ['Up', 'Easy'],
+              ]}
+            />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">Game controller</p>
+                <Badge tone={gamepadConnected ? 'success' : 'neutral'}>{gamepadConnected ? gamepadName || 'Connected' : 'Not connected'}</Badge>
+              </div>
+              <p className="text-[13px] leading-relaxed text-ink-muted">
+                Pair a Bluetooth controller and press any button. A flips and rates Good, B Again, X Hard, Y Easy, and the left bumper shows a hint.
+              </p>
+            </div>
+
+            <Button variant="primary" className="w-full" onClick={() => setShowErgonomicsHelp(false)}>
+              Done
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Cognitive Neuroscience Explainer Modal */}
-      <ScienceExplainerModal
-        isOpen={showScienceModal}
-        onClose={() => setShowScienceModal(false)}
-        initialTopic="retrieval"
-      />
+      {/* Multiple-choice feedback */}
+      {isAnswerRevealed && selectedOption !== null && currentCard && (
+        <div
+          role="status"
+          className={`fixed inset-x-0 bottom-0 z-50 border-t-2 bg-canvas-raised/95 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur-xl animate-slideUp ${
+            isCorrect ? 'border-success' : 'border-danger'
+          }`}
+        >
+          <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <div className="flex items-start gap-3.5">
+              <span
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-brand-ink ${isCorrect ? 'bg-success' : 'bg-danger'}`}
+                aria-hidden="true"
+              >
+                {isCorrect ? <Check className="h-6 w-6" /> : <X className="h-6 w-6" />}
+              </span>
+              <div className="min-w-0 space-y-1">
+                <p className="text-[17px] font-semibold text-ink">
+                  {isCorrect ? (combo >= 3 ? `Correct, ${combo} in a row` : 'Correct') : 'Not quite'}
+                </p>
+                {!isCorrect && (
+                  <p className="text-[14px] text-ink-muted">
+                    The answer is <strong className="font-semibold text-ink">{currentCard.answer}</strong>
+                  </p>
+                )}
+                {!isCorrect && misconception && (
+                  <p className="max-w-xl rounded-xl border border-danger/25 bg-danger-soft px-3 py-2 text-[13px] leading-relaxed text-ink-muted">
+                    <span className="font-medium text-ink">{misconception.trapTitle || 'Common mix-up'}: </span>
+                    {misconception.trapExplanation}
+                  </p>
+                )}
+              </div>
+            </div>
+            <Button
+              variant={isCorrect ? 'primary' : 'secondary'}
+              size="lg"
+              onClick={() => handleRate(isCorrect ? 'good' : 'again')}
+              className="w-full shrink-0 sm:w-auto"
+            >
+              Continue
+              <kbd className="ml-1 hidden h-5 items-center rounded border border-current/25 px-1.5 font-mono text-[10.5px] opacity-80 sm:inline-flex">Enter</kbd>
+            </Button>
+          </div>
+        </div>
+      )}
 
+      <ScienceExplainerModal isOpen={showScienceModal} onClose={() => setShowScienceModal(false)} initialTopic="retrieval" />
     </div>
   );
 };
+
+const CARD_TYPE_LABELS: Record<CardType, string> = {
+  standard: 'Flashcard',
+  cloze: 'Fill in the blank',
+  'multiple-choice': 'Multiple choice',
+  'image-occlusion': 'Label the diagram',
+};
+
+const RATING_BUTTONS: { rating: FSRSRating; label: string; key: string; className: string; labelClassName: string }[] = [
+  { rating: 'again', label: 'Again', key: '1', className: 'hover:border-danger/50 hover:bg-danger-soft', labelClassName: 'text-danger' },
+  { rating: 'hard', label: 'Hard', key: '2', className: 'hover:border-gold/50 hover:bg-gold-soft', labelClassName: 'text-gold' },
+  { rating: 'good', label: 'Good', key: '3', className: 'hover:border-brand/50 hover:bg-brand-soft', labelClassName: 'text-brand-text' },
+  { rating: 'easy', label: 'Easy', key: '4', className: 'hover:border-success/50 hover:bg-success-soft', labelClassName: 'text-success' },
+];
+
+const ShortcutGroup: React.FC<{ title: string; items: [string, string][] }> = ({ title, items }) => (
+  <div className="space-y-2">
+    <p className="text-xs font-semibold uppercase tracking-wide text-ink-subtle">{title}</p>
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
+      {items.map(([key, action]) => (
+        <div key={key} className="flex items-center justify-between gap-2">
+          <dt className="text-ink-muted">{action}</dt>
+          <dd><Kbd>{key}</Kbd></dd>
+        </div>
+      ))}
+    </dl>
+  </div>
+);
