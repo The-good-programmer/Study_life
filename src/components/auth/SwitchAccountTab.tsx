@@ -22,10 +22,10 @@ export const SwitchAccountTab: React.FC<SwitchAccountTabProps> = ({
 }) => (
   <div className="space-y-4">
     <div className="flex items-center justify-between">
-      <span className="text-xs font-bold text-slate-300">Switch to Another Profile</span>
+      <span className="text-xs font-semibold text-ink-muted">Accounts on this browser</span>
       <button
         onClick={onAddAccount}
-        className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 cursor-pointer"
+        className="text-xs text-brand-text hover:text-ink font-semibold flex items-center gap-1 cursor-pointer"
       >
         <UserPlus className="w-3.5 h-3.5" />
         <span>Add another account</span>
@@ -40,8 +40,8 @@ export const SwitchAccountTab: React.FC<SwitchAccountTabProps> = ({
             key={acc.id}
             className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-all ${
               isCurrent
-                ? 'bg-indigo-950/40 border-indigo-500/50 ring-1 ring-indigo-500/30'
-                : 'bg-slate-900/60 border-white/[0.08] hover:bg-white/[0.04]'
+                ? 'bg-brand-soft border-brand/50 ring-1 ring-brand-soft'
+                : 'bg-surface border-line hover:bg-surface-hover'
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
@@ -49,24 +49,24 @@ export const SwitchAccountTab: React.FC<SwitchAccountTabProps> = ({
                 pictureUrl={acc.pictureUrl}
                 name={acc.name}
                 avatar={acc.avatar}
-                className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-xl"
+                className="w-10 h-10 rounded-xl bg-brand-soft border border-brand/30 text-xl"
               />
               <div className="min-w-0">
-                <div className="text-xs font-bold text-white truncate flex items-center gap-2">
+                <div className="text-xs font-semibold text-ink truncate flex items-center gap-2">
                   {acc.name}
                   {acc.provider === 'google' && (
-                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-white text-slate-900 font-medium flex items-center gap-1 shadow-sm">
+                    <span className="inline-flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-[11px] font-medium text-ink-muted">
                       <GoogleIcon className="w-2.5 h-2.5" />
                       Google
                     </span>
                   )}
                   {isCurrent && (
-                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono">
+                    <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-success-soft text-success font-mono">
                       Active
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] text-slate-400 truncate">{acc.email}</div>
+                <div className="text-[11px] text-ink-subtle truncate">{acc.email}</div>
               </div>
             </div>
 
@@ -74,7 +74,7 @@ export const SwitchAccountTab: React.FC<SwitchAccountTabProps> = ({
               {!isCurrent && (
                 <button
                   onClick={() => onSwitch(acc)}
-                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  className="px-3 py-1.5 rounded-xl bg-brand hover:bg-brand-hover text-brand-ink font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <span>Switch</span>
                   <ArrowRight className="w-3 h-3" />
@@ -86,12 +86,12 @@ export const SwitchAccountTab: React.FC<SwitchAccountTabProps> = ({
       })}
     </div>
 
-    <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between">
-      <button onClick={onBack} className="text-xs text-slate-400 hover:text-white cursor-pointer">
+    <div className="pt-2 border-t border-line flex items-center justify-between">
+      <button onClick={onBack} className="text-xs text-ink-subtle hover:text-ink cursor-pointer">
         ← Back to Profile
       </button>
-      <button onClick={onLogout} className="text-xs text-rose-400 hover:text-rose-300 font-semibold cursor-pointer">
-        Log Out to Guest Mode
+      <button onClick={onLogout} className="text-xs text-danger hover:opacity-80 font-semibold cursor-pointer">
+        Log out and continue as a guest
       </button>
     </div>
   </div>

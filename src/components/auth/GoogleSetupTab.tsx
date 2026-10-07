@@ -54,9 +54,9 @@ export const GoogleSetupTab: React.FC<GoogleSetupTabProps> = ({ profile, guest, 
     <form onSubmit={handleSubmit} className="space-y-4">
       <ErrorBanner message={error} />
 
-      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-purple-950/30 border border-blue-500/30 flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-3.5">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-11 h-11 rounded-2xl bg-white/[0.08] border border-white/[0.12] flex items-center justify-center text-xl shrink-0 overflow-hidden">
+          <div className="w-11 h-11 rounded-2xl bg-surface-hover border border-line-strong flex items-center justify-center text-xl shrink-0 overflow-hidden">
             {profile.pictureUrl ? (
               <img src={profile.pictureUrl} alt={profile.name} className="w-full h-full object-cover" />
             ) : (
@@ -64,30 +64,29 @@ export const GoogleSetupTab: React.FC<GoogleSetupTabProps> = ({ profile, guest, 
             )}
           </div>
           <div className="min-w-0">
-            <div className="text-xs font-bold text-white truncate flex items-center gap-1.5">
+            <div className="text-xs font-semibold text-ink truncate flex items-center gap-1.5">
               <span>{profile.name}</span>
-              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1 font-mono">
-                <CheckCircle2 className="w-2.5 h-2.5 text-blue-400" />
-                Verified Google
+              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-brand-soft text-brand-text border border-brand/30 flex items-center gap-1 font-mono">
+                <CheckCircle2 className="w-2.5 h-2.5 text-brand-text" />
+                Google
               </span>
             </div>
-            <div className="text-[11px] text-slate-400 truncate">{profile.email}</div>
+            <div className="text-[11px] text-ink-subtle truncate">{profile.email}</div>
           </div>
         </div>
       </div>
 
-      <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08] text-xs text-slate-300 flex items-start gap-2.5">
-        <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-        <span className="leading-relaxed text-slate-400 text-[11px]">
-          One last step! Gemini AI customizes flashcard depth, vocabulary, and exam topics based on your country and
-          grade curriculum.
+      <div className="p-3 rounded-2xl bg-surface border border-line text-xs text-ink-muted flex items-start gap-2.5">
+        <Info className="w-4 h-4 text-brand-text shrink-0 mt-0.5" />
+        <span className="leading-relaxed text-ink-subtle text-[11px]">
+          One last step: your country and level help Studify match decks to your curriculum.
         </span>
       </div>
 
       <EducationFields
         value={edu}
         onChange={setEdu}
-        title="Target Grade & Educational System"
+        title="Your level"
         customGradePlaceholder="e.g. 4th Grade, University Sophomore, or AP Scholar"
       />
 
@@ -105,7 +104,7 @@ export const GoogleSetupTab: React.FC<GoogleSetupTabProps> = ({ profile, guest, 
         <button
           type="button"
           onClick={onCancel}
-          className="py-3 px-4 rounded-xl bg-slate-900 text-slate-300 hover:text-white border border-white/[0.08] text-xs font-semibold cursor-pointer"
+          className="py-3 px-4 rounded-xl bg-canvas text-ink-muted hover:text-ink border border-line text-xs font-semibold cursor-pointer"
         >
           Cancel
         </button>

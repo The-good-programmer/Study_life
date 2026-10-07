@@ -87,9 +87,9 @@ export const RegisterTab: React.FC<RegisterTabProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-indigo-400" />
-              Full Name
+            <label className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+              <User className="h-3.5 w-3.5 text-ink-subtle" />
+              Name
             </label>
             <input
               type="text"
@@ -97,13 +97,13 @@ export const RegisterTab: React.FC<RegisterTabProps> = ({
               placeholder="Alex Rivera"
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/[0.1] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <Mail className="w-3.5 h-3.5 text-indigo-400" />
+            <label className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+              <Mail className="h-3.5 w-3.5 text-ink-subtle" />
               Email
             </label>
             <input
@@ -112,16 +112,16 @@ export const RegisterTab: React.FC<RegisterTabProps> = ({
               placeholder="alex@school.edu"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/[0.1] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              className="h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
             />
           </div>
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+          <label className="flex items-center justify-between text-[13px] font-medium text-ink">
             <span className="flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-indigo-400" />
-              Create Password
+              <Lock className="h-3.5 w-3.5 text-ink-subtle" />
+              Password
             </span>
             {password && (
               <span className={`text-[11px] font-semibold ${strength.color.split(' ')[0]}`}>{strength.label}</span>
@@ -135,18 +135,18 @@ export const RegisterTab: React.FC<RegisterTabProps> = ({
               placeholder="At least 6 characters"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/[0.1] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 pr-10"
+              className="h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none pr-10"
             />
             <button
               type="button"
               onClick={() => setShowPassword(shown => !shown)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+              className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-ink-subtle transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
           {password && (
-            <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-1">
+            <div className="w-full h-1 bg-surface-hover rounded-full overflow-hidden mt-1">
               <div
                 className={`h-full transition-all duration-300 ${strength.color.split(' ')[1]}`}
                 style={{ width: `${strength.percent}%` }}
@@ -158,16 +158,16 @@ export const RegisterTab: React.FC<RegisterTabProps> = ({
         <EducationFields value={edu} onChange={setEdu} />
 
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-            <School className="w-3.5 h-3.5 text-indigo-400" />
-            School or University (Optional)
+          <label className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+            <School className="h-3.5 w-3.5 text-ink-subtle" />
+            School (optional)
           </label>
           <input
             type="text"
             placeholder="e.g. Stanford University, Lincoln High, or Self-Taught"
             value={institution}
             onChange={e => setInstitution(e.target.value)}
-            className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/[0.1] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            className="h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
           />
         </div>
 
@@ -182,16 +182,16 @@ export const RegisterTab: React.FC<RegisterTabProps> = ({
         )}
 
         <PrimaryGradientButton loading={isRegistering} icon={<UserPlus className="w-4 h-4" />} className="mt-2">
-          Create Free Private Account
+          Create account
         </PrimaryGradientButton>
 
         <div className="text-center pt-2">
           <button
             type="button"
             onClick={onGotoLogin}
-            className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer"
+            className="text-xs text-brand-text hover:text-ink font-semibold cursor-pointer"
           >
-            Already have an account? Log in here →
+            Already have an account? Log in
           </button>
         </div>
       </form>

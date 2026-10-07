@@ -1,10 +1,15 @@
 import React from 'react';
 import { AlertCircle, CheckCircle2, Sparkles } from 'lucide-react';
+import { cn } from '../../utils/cn';
 
 /** Small presentational pieces shared by the account modal's tabs. */
 
+/** Text inputs in the account forms. */
+export const AUTH_INPUT =
+  'h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none';
+
 export const GoogleIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
-  <svg className={className} viewBox="0 0 24 24">
+  <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
     <path
       fill="#4285F4"
       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -27,25 +32,28 @@ export const GoogleIcon: React.FC<{ className?: string }> = ({ className = 'w-4 
 const AVATAR_OPTIONS = ['🧠', '🚀', '🦉', '🎓', '⚡', '🔬', '🪐', '🎨', '💡', '🧬', '🏆', '💎', '📚', '🌟'];
 
 export const Spinner: React.FC<{ tone?: 'light' | 'dark' }> = ({ tone = 'light' }) => (
-  <div
-    className={`w-4 h-4 border-2 rounded-full animate-spin ${
-      tone === 'light' ? 'border-white/30 border-t-white' : 'border-slate-400 border-t-slate-900'
-    }`}
+  <span
+    className={cn(
+      'inline-block h-4 w-4 animate-spin rounded-full border-2',
+      tone === 'light' ? 'border-white/30 border-t-white' : 'border-black/20 border-t-black/70',
+    )}
+    role="status"
+    aria-label="Loading"
   />
 );
 
 export const ErrorBanner: React.FC<{ message: string | null }> = ({ message }) =>
   message ? (
-    <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2.5 animate-shake">
-      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+    <div className="flex items-start gap-2.5 rounded-xl bg-danger-soft px-3.5 py-2.5 text-[13px] text-danger animate-shake" role="alert">
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <span>{message}</span>
     </div>
   ) : null;
 
 export const SuccessBanner: React.FC<{ message: string | null }> = ({ message }) =>
   message ? (
-    <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5 animate-fadeIn">
-      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+    <div className="flex items-start gap-2.5 rounded-xl bg-success-soft px-3.5 py-2.5 text-[13px] text-success animate-fadeIn" role="status">
+      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
       <span>{message}</span>
     </div>
   ) : null;
@@ -58,16 +66,20 @@ export const TabButton: React.FC<{
 }> = ({ active, onClick, icon, children }) => (
   <button
     type="button"
+    role="tab"
+    aria-selected={active}
     onClick={onClick}
-    className={`pb-2.5 px-3 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
-      active ? 'border-indigo-500 text-white font-bold' : 'border-transparent text-slate-400 hover:text-slate-200'
-    }`}
+    className={cn(
+      'inline-flex shrink-0 items-center gap-1.5 border-b-2 pb-2.5 text-[13px] font-medium transition-colors cursor-pointer',
+      active ? 'border-ink text-ink' : 'border-transparent text-ink-subtle hover:text-ink',
+    )}
   >
     {icon}
-    <span>{children}</span>
+    {children}
   </button>
 );
 
+/** Follows Google's button style: white in both themes. */
 export const GoogleSignInButton: React.FC<{
   label: string;
   loading: boolean;
@@ -77,27 +89,28 @@ export const GoogleSignInButton: React.FC<{
     type="button"
     onClick={onClick}
     disabled={loading}
-    className="w-full py-2.5 px-4 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-semibold text-xs transition-all flex items-center justify-center gap-2.5 shadow-sm border border-slate-200 cursor-pointer disabled:opacity-60"
+    className="flex h-10 w-full items-center justify-center gap-2.5 rounded-xl border border-[#dadce0] bg-white px-4 text-sm font-medium text-[#1f1f1f] transition-colors hover:bg-[#f8f9fa] disabled:opacity-60 cursor-pointer"
   >
     {loading ? (
       <Spinner tone="dark" />
     ) : (
       <>
-        <GoogleIcon className="w-4 h-4" />
-        <span>{label}</span>
+        <GoogleIcon className="h-4 w-4" />
+        {label}
       </>
     )}
   </button>
 );
 
 export const OrDivider: React.FC<{ label: string }> = ({ label }) => (
-  <div className="flex items-center gap-3 my-1">
-    <div className="flex-1 h-px bg-white/[0.08]" />
-    <span className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">{label}</span>
-    <div className="flex-1 h-px bg-white/[0.08]" />
+  <div className="flex items-center gap-3">
+    <div className="h-px flex-1 bg-line" />
+    <span className="text-xs text-ink-subtle">{label}</span>
+    <div className="h-px flex-1 bg-line" />
   </div>
 );
 
+/** The main submit button of an account form. */
 export const PrimaryGradientButton: React.FC<{
   loading: boolean;
   icon: React.ReactNode;
@@ -105,18 +118,27 @@ export const PrimaryGradientButton: React.FC<{
   size?: 'md' | 'sm';
   fullWidth?: boolean;
   className?: string;
-}> = ({ loading, icon, children, size = 'md', fullWidth = true, className = '' }) => (
+  /** Id of the form to submit, when the button sits outside it (e.g. in a dialog footer). */
+  form?: string;
+}> = ({ loading, icon, children, size = 'md', fullWidth = true, className = '', form }) => (
   <button
     type="submit"
+    form={form}
     disabled={loading}
-    className={`${fullWidth ? 'w-full' : ''} ${size === 'md' ? 'py-3 text-sm' : 'py-3 text-xs'} px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${className}`}
+    className={cn(
+      'inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-4 font-medium text-brand-ink transition-colors hover:bg-brand-hover disabled:opacity-60 cursor-pointer',
+      'shadow-[inset_0_1px_0_rgb(255_255_255/0.2),0_1px_2px_rgb(0_0_0/0.3)]',
+      size === 'md' ? 'h-11 text-sm' : 'h-10 text-[13px]',
+      fullWidth && 'w-full',
+      className,
+    )}
   >
     {loading ? (
       <Spinner />
     ) : (
       <>
         {icon}
-        <span>{children}</span>
+        {children}
       </>
     )}
   </button>
@@ -127,22 +149,20 @@ export const AvatarPicker: React.FC<{
   value: string;
   onChange: (avatar: string) => void;
 }> = ({ label, value, onChange }) => (
-  <div className="space-y-1.5">
-    <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-      <span>{label}</span>
-      <span className="text-[11px] text-slate-500">Selected: {value}</span>
-    </label>
-    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+  <div>
+    <p className="text-[13px] font-medium text-ink">{label}</p>
+    <div className="mt-1.5 flex gap-1.5 overflow-x-auto pb-1 no-scrollbar" role="radiogroup" aria-label={label}>
       {AVATAR_OPTIONS.map(av => (
         <button
           key={av}
           type="button"
+          role="radio"
+          aria-checked={value === av}
           onClick={() => onChange(av)}
-          className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg transition-all shrink-0 cursor-pointer ${
-            value === av
-              ? 'bg-indigo-600 ring-2 ring-indigo-400 scale-110 shadow-md'
-              : 'bg-slate-900 border border-white/[0.08] hover:bg-white/[0.08]'
-          }`}
+          className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg transition-colors cursor-pointer',
+            value === av ? 'bg-brand-soft ring-2 ring-brand' : 'border border-line hover:bg-surface-hover',
+          )}
         >
           {av}
         </button>
@@ -158,26 +178,24 @@ export const GuestMigrationToggle: React.FC<{
   onChange: (checked: boolean) => void;
   target: string;
 }> = ({ deckCount, cardCount, checked, onChange, target }) => (
-  <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 space-y-2">
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-        <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-        Guest Study Progress Detected
+  <label className="flex cursor-pointer select-none items-start gap-3 rounded-2xl border border-brand/30 bg-brand-soft p-3.5">
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={e => onChange(e.target.checked)}
+      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-brand"
+    />
+    <span className="min-w-0">
+      <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+        <Sparkles className="h-3.5 w-3.5 text-brand-text" aria-hidden="true" />
+        Bring your guest progress
       </span>
-      <span className="text-[11px] font-mono text-slate-400">
-        {deckCount} decks • {cardCount} cards
+      <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">
+        Move your {deckCount} {deckCount === 1 ? 'deck' : 'decks'} and {cardCount} {cardCount === 1 ? 'card' : 'cards'}, with their review
+        history, into this {target}.
       </span>
-    </div>
-    <label className="flex items-start gap-2.5 text-xs text-slate-300 cursor-pointer select-none">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={e => onChange(e.target.checked)}
-        className="mt-0.5 rounded border-indigo-500/50 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-      />
-      <span>Import my current guest flashcards, decks, and FSRS memory stats into this {target}</span>
-    </label>
-  </div>
+    </span>
+  </label>
 );
 
 export const AccountAvatar: React.FC<{

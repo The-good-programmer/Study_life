@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, UserPlus, LogIn, ShieldCheck, RefreshCw, Edit3 } from 'lucide-react';
+import { X, User, UserPlus, LogIn, RefreshCw, Edit3 } from 'lucide-react';
 import type { UserAccount, GoogleProfilePayload } from '../../types';
 import { AuthService } from '../../services/authService';
 import { GoogleAuthService } from '../../services/googleAuthService';
 import { StorageService } from '../../services/storageService';
-import { Dialog } from '../common/Dialog';
+import { ConfirmDialog } from '../common/ConfirmDialog';
+import { Dialog, DialogPanel } from '../common/Dialog';
+import { IconButton } from '../ui/primitives';
 import { GoogleIcon, TabButton } from './AuthParts';
 import { LoginTab } from './LoginTab';
 import type { LoginPrefill } from './LoginTab';
@@ -47,6 +49,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isClientIdDialogOpen, setIsClientIdDialogOpen] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Reset when the modal opens (adjusting state during render)
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
@@ -156,113 +159,89 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     finish(null);
   };
 
-  const handleDeleteAccount = (userId: string) => {
-    if (
-      window.confirm(
-        'Are you sure you want to permanently delete this account and all its isolated study data? This cannot be undone.',
-      )
-    ) {
-      AuthService.deleteAccount(userId);
-      onUserChanged?.(null);
-      setTab('login');
-    }
+  const handleDeleteAccount = (userId: string) => setPendingDeleteId(userId);
+
+  const confirmDeleteAccount = () => {
+    if (!pendingDeleteId) return;
+    AuthService.deleteAccount(pendingDeleteId);
+    setPendingDeleteId(null);
+    onUserChanged?.(null);
+    setTab('login');
   };
 
   const title = currentUser
-    ? 'Student Account'
+    ? 'Your account'
     : tab === 'google-setup'
-    ? 'Complete Profile'
+    ? 'Finish setting up'
     : tab === 'register'
-    ? 'Create Account'
-    : 'Welcome Back';
+    ? 'Create an account'
+    : 'Welcome back';
 
   const subtitle = currentUser
-    ? `Logged in as ${currentUser.name}`
+    ? `Signed in as ${currentUser.name}`
     : tab === 'google-setup'
-    ? 'Set up your educational grade for Gemini AI personalization'
-    : 'Local-first private account encrypted on your device';
+    ? 'Tell us your level so Studify can pitch your decks at the right difficulty.'
+    : 'Your account and study data are saved in this browser.';
 
   return (
     <Dialog isOpen={isOpen} onClose={onClose} titleId="auth-modal-title" className="max-w-lg">
-      <div className="relative w-full bg-[#0e111d] border border-white/[0.12] rounded-3xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[92vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-white/[0.02]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-              <ShieldCheck className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 id="auth-modal-title" className="text-base font-bold text-white font-display flex items-center gap-2">
+      <DialogPanel>
+        <div className="shrink-0 border-b border-line px-5 pt-5 sm:px-6">
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 id="auth-modal-title" className="text-[17px] font-semibold text-ink">
                 {title}
-                <span className="text-[11px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                  100% Offline
-                </span>
               </h2>
-              <p className="text-xs text-slate-400">{subtitle}</p>
+              <p className="mt-1 text-[13px] text-ink-subtle">{subtitle}</p>
             </div>
+            <IconButton icon={X} label="Close" onClick={onClose} className="-mr-2 -mt-1.5" />
           </div>
 
-          <button
-            onClick={onClose}
-            aria-label="Close student account"
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer"
-            title="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex border-b border-white/[0.06] bg-slate-950/40 px-6 pt-2 gap-2 text-xs font-semibold">
-          {!currentUser ? (
-            tab === 'google-setup' ? (
-              <div className="pb-2.5 px-3 border-b-2 border-indigo-500 text-white font-bold flex items-center gap-2">
-                <GoogleIcon className="w-3.5 h-3.5" />
-                <span>Complete Google Setup</span>
-              </div>
+          <div role="tablist" aria-label="Account" className="-mb-px mt-4 flex gap-5 overflow-x-auto no-scrollbar">
+            {!currentUser ? (
+              tab === 'google-setup' ? (
+                <span className="inline-flex items-center gap-1.5 border-b-2 border-ink pb-2.5 text-[13px] font-medium text-ink">
+                  <GoogleIcon className="h-3.5 w-3.5" />
+                  Google account
+                </span>
+              ) : (
+                <>
+                  <TabButton active={tab === 'login'} onClick={() => goTo('login')} icon={<LogIn className="h-3.5 w-3.5" aria-hidden="true" />}>
+                    Log in
+                  </TabButton>
+                  <TabButton
+                    active={tab === 'register'}
+                    onClick={() => goTo('register')}
+                    icon={<UserPlus className="h-3.5 w-3.5" aria-hidden="true" />}
+                  >
+                    Create account
+                  </TabButton>
+                </>
+              )
             ) : (
               <>
-                <TabButton
-                  active={tab === 'login'}
-                  onClick={() => goTo('login')}
-                  icon={<LogIn className="w-3.5 h-3.5" />}
-                >
-                  Log In
+                <TabButton active={tab === 'profile'} onClick={() => setTab('profile')} icon={<User className="h-3.5 w-3.5" aria-hidden="true" />}>
+                  Overview
                 </TabButton>
-                <TabButton
-                  active={tab === 'register'}
-                  onClick={() => goTo('register')}
-                  icon={<UserPlus className="w-3.5 h-3.5" />}
-                >
-                  Create Account
+                <TabButton active={tab === 'edit'} onClick={() => setTab('edit')} icon={<Edit3 className="h-3.5 w-3.5" aria-hidden="true" />}>
+                  Edit profile
                 </TabButton>
+                {allAccounts.length > 1 && (
+                  <TabButton
+                    active={tab === 'switch'}
+                    onClick={() => setTab('switch')}
+                    icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />}
+                  >
+                    Switch account
+                    <span className="tabular-nums text-ink-subtle">{allAccounts.length}</span>
+                  </TabButton>
+                )}
               </>
-            )
-          ) : (
-            <>
-              <TabButton active={tab === 'profile'} onClick={() => setTab('profile')} icon={<User className="w-3.5 h-3.5" />}>
-                Overview
-              </TabButton>
-              <TabButton active={tab === 'edit'} onClick={() => setTab('edit')} icon={<Edit3 className="w-3.5 h-3.5" />}>
-                Edit Profile
-              </TabButton>
-              {allAccounts.length > 1 && (
-                <TabButton
-                  active={tab === 'switch'}
-                  onClick={() => setTab('switch')}
-                  icon={<RefreshCw className="w-3.5 h-3.5" />}
-                >
-                  Switch Account ({allAccounts.length})
-                </TabButton>
-              )}
-            </>
-          )}
+            )}
+          </div>
         </div>
 
-        <div className="p-6 overflow-y-auto space-y-5 flex-1">
-          <div className="p-2.5 rounded-xl bg-indigo-950/30 border border-indigo-500/20 text-[11px] text-indigo-200/90 flex items-center gap-2">
-            <span className="text-sm">🔒</span>
-            <span>Local profile: accounts and study history are stored privately in this browser.</span>
-          </div>
-
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
           {tab === 'login' && !currentUser && (
             <LoginTab
               key={loginPrefill?.email ?? 'login'}
@@ -334,7 +313,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             />
           )}
         </div>
-      </div>
+      </DialogPanel>
+
+      <ConfirmDialog
+        isOpen={!!pendingDeleteId}
+        title="Delete this account?"
+        confirmLabel="Delete account"
+        tone="danger"
+        onConfirm={confirmDeleteAccount}
+        onCancel={() => setPendingDeleteId(null)}
+      >
+        This removes the account and all of its decks, cards, review history and stats from this browser. You cannot undo it.
+      </ConfirmDialog>
 
       {isClientIdDialogOpen && (
         <GoogleClientIdDialog

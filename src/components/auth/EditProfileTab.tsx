@@ -60,32 +60,32 @@ export const EditProfileTab: React.FC<EditProfileTabProps> = ({ user, onCancel, 
       <AvatarPicker label="Profile Avatar" value={avatar} onChange={setAvatar} />
 
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-          <User className="w-3.5 h-3.5 text-indigo-400" />
-          Display Name
+        <label className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+          <User className="h-3.5 w-3.5 text-ink-subtle" />
+          Name
         </label>
         <input
           type="text"
           required
           value={name}
           onChange={e => setName(e.target.value)}
-          className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/[0.1] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+          className="h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
         />
       </div>
 
       <EducationFields value={edu} onChange={setEdu} title="Target Grade & Educational System" />
 
       <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-          <School className="w-3.5 h-3.5 text-indigo-400" />
-          School or Institution
+        <label className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+          <School className="h-3.5 w-3.5 text-ink-subtle" />
+          School
         </label>
         <input
           type="text"
           placeholder="e.g. Harvard University"
           value={institution}
           onChange={e => setInstitution(e.target.value)}
-          className="w-full px-3.5 py-2 rounded-xl bg-slate-900/80 border border-white/[0.1] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+          className="h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
         />
       </div>
 
@@ -93,7 +93,7 @@ export const EditProfileTab: React.FC<EditProfileTabProps> = ({ user, onCancel, 
         <button
           type="button"
           onClick={onCancel}
-          className="py-2.5 px-4 rounded-xl bg-slate-900 text-slate-300 hover:text-white border border-white/[0.08] text-xs font-semibold cursor-pointer"
+          className="py-2.5 px-4 rounded-xl bg-canvas text-ink-muted hover:text-ink border border-line text-xs font-semibold cursor-pointer"
         >
           Cancel
         </button>
@@ -102,7 +102,7 @@ export const EditProfileTab: React.FC<EditProfileTabProps> = ({ user, onCancel, 
           <button
             type="button"
             onClick={() => onDelete(user.id)}
-            className="p-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+            className="p-2.5 rounded-xl bg-danger-soft hover:bg-danger-soft text-danger border border-danger/30 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
             title="Delete Account"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -111,9 +111,9 @@ export const EditProfileTab: React.FC<EditProfileTabProps> = ({ user, onCancel, 
 
           <button
             type="submit"
-            className="py-2.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
+            className="py-2.5 px-5 rounded-xl bg-brand hover:bg-brand-hover text-brand-ink font-semibold text-xs shadow-md transition-all cursor-pointer"
           >
-            Save Changes
+            Save changes
           </button>
         </div>
       </div>
