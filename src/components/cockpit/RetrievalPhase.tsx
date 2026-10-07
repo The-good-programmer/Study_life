@@ -15,7 +15,7 @@ import {
   X,
   Star
 } from 'lucide-react';
-import type { CardType, ConceptCheckpoint, FSRSRating, RetrievalCard, DiagnosticDistractor } from '../../types';
+import type { CardType, ConceptCheckpoint, FSRSRating, DiagnosticDistractor } from '../../types';
 import { FSRSService } from '../../services/fsrsService';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
@@ -27,6 +27,14 @@ import { StudyHUD } from './StudyHUD';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
 import { haptics } from '../../services/hapticsService';
 import { buildQuizOptions } from '../../utils/quizOptions';
+import {
+  blendInterleavedCards,
+  evaluateBlurting,
+  getBlurtingTargets,
+  getEffectiveCardType,
+  isOptionCorrect,
+  xpForRating,
+} from './retrievalLogic';
 
 interface RetrievalPhaseProps {
   concept: ConceptCheckpoint;
@@ -46,43 +54,10 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
   const [interleaveEnabled, setInterleaveEnabled] = useState(true);
 
   // In-Flight Interleaving: Blends 1-2 flashcards from prior checkpoints in the session
-  const { cards, interleaveMap } = useMemo(() => {
-    const currentCards = concept.retrievalCards || [];
-    if (!allConcepts || conceptIndex === undefined || conceptIndex === 0 || !interleaveEnabled) {
-      return { cards: currentCards, interleaveMap: new Map<string, string>() };
-    }
-
-    const priorCardsWithOrigin: { card: RetrievalCard; originTitle: string }[] = [];
-    allConcepts.slice(0, conceptIndex).forEach(pc => {
-      (pc.retrievalCards || []).forEach(rc => {
-        priorCardsWithOrigin.push({ card: rc, originTitle: pc.title });
-      });
-    });
-
-    if (priorCardsWithOrigin.length === 0) {
-      return { cards: currentCards, interleaveMap: new Map<string, string>() };
-    }
-
-    const countToPick = Math.min(2, Math.max(1, Math.round(currentCards.length * 0.4)));
-    const picked = [...priorCardsWithOrigin]
-      .sort((a, b) => {
-        const hashA = (a.card.id.charCodeAt(0) * 31 + concept.id.charCodeAt(0)) % 17;
-        const hashB = (b.card.id.charCodeAt(0) * 31 + concept.id.charCodeAt(0)) % 17;
-        return hashA - hashB;
-      })
-      .slice(0, countToPick);
-
-    const map = new Map<string, string>();
-    picked.forEach(p => map.set(p.card.id, p.originTitle));
-
-    const combined = [...currentCards];
-    picked.forEach((p, idx) => {
-      const targetPos = Math.min(combined.length, 1 + idx * 2);
-      combined.splice(targetPos, 0, p.card);
-    });
-
-    return { cards: combined, interleaveMap: map };
-  }, [concept, allConcepts, conceptIndex, interleaveEnabled]);
+  const { cards, interleaveMap } = useMemo(
+    () => blendInterleavedCards(concept, allConcepts, conceptIndex, interleaveEnabled),
+    [concept, allConcepts, conceptIndex, interleaveEnabled],
+  );
 
   const [activeTab, setActiveTab] = useState<'cards' | 'blurting'>('cards');
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -146,15 +121,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 
   const [interactiveMode, setInteractiveMode] = useState<boolean>(true);
 
-  const effectiveType: CardType = currentCard
-    ? (currentCard.cardType || (
-        currentCard.imageUrl && currentCard.masks && currentCard.masks.length > 0
-          ? 'image-occlusion'
-          : currentCard.clozeTemplate || currentCard.question.includes('{{')
-          ? 'cloze'
-          : (currentCard.options && currentCard.options.length > 0 ? 'multiple-choice' : 'standard')
-      ))
-    : 'standard';
+  const effectiveType: CardType = getEffectiveCardType(currentCard);
 
   // Smart distractor generation: 4-choice quiz options for standard cards only
   const computedOptions = useMemo(() => {
@@ -185,8 +152,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     StorageService.saveCard(updatedCard);
 
     // Reward XP
-    const xpGained = rating === 'easy' ? 15 : 10;
-    StorageService.addWeeklyXP(xpGained);
+    StorageService.addWeeklyXP(xpForRating(rating));
 
     setLastRating(rating);
 
@@ -230,13 +196,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     if (selectedOption !== null || !currentCard) return;
     setSelectedOption(option);
     
-    // Resilient matching: handle "A) Option", "1. Option", or exact text
-    const cleanOpt = option.replace(/^[a-d1-4][).\s-]+\s*/i, '').trim().toLowerCase();
-    const cleanAns = currentCard.answer.replace(/^[a-d1-4][).\s-]+\s*/i, '').trim().toLowerCase();
-    const rawOpt = option.trim().toLowerCase();
-    const rawAns = currentCard.answer.trim().toLowerCase();
-
-    const correct = rawOpt === rawAns || cleanOpt === cleanAns || cleanOpt === rawAns || rawOpt === cleanAns;
+    const correct = isOptionCorrect(option, currentCard.answer);
     setIsCorrect(correct);
     handleRevealAnswer();
     if (correct) {
@@ -513,30 +473,11 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     setIsSwipingActive(false);
   };
 
-  const blurtingTargets = useMemo<string[]>(() => {
-    if (concept.keyTerms && concept.keyTerms.length > 0) {
-      return concept.keyTerms.map(k => k.term);
-    }
-    if (concept.coreTakeaways && concept.coreTakeaways.length > 0) {
-      return concept.coreTakeaways;
-    }
-    return (concept.retrievalCards || []).map(c => c.answer);
-  }, [concept.keyTerms, concept.coreTakeaways, concept.retrievalCards]);
+  const blurtingTargets = useMemo<string[]>(() => getBlurtingTargets(concept), [concept]);
 
   const handleEvaluateBlurting = useCallback(() => {
     setIsBlurtingRunning(false);
-    const lower = blurtingText.toLowerCase();
-
-    const recalledTerms = blurtingTargets
-      .filter(term => lower.includes(term.toLowerCase()));
-
-    const missedTerms = blurtingTargets
-      .filter(term => !lower.includes(term.toLowerCase()));
-
-    setBlurtingResult({
-      recalled: recalledTerms,
-      missed: missedTerms,
-    });
+    setBlurtingResult(evaluateBlurting(blurtingText, blurtingTargets));
 
     soundEngine.playCompletionChime();
     StorageService.addWeeklyXP(40);
