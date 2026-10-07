@@ -22,7 +22,6 @@ import confetti from 'canvas-confetti';
 import type { 
   CardType, 
   ConfidenceLevel, 
-  ExamQuadrant, 
   ExamQuestionResult, 
   ExamReport, 
   RetrievalCard, 
@@ -36,6 +35,13 @@ import { CURATED_STARTER_DECKS } from '../../data/curatedStarterCatalog';
 import { MathRenderer } from '../common/MathRenderer';
 
 import { evaluateTextAnswer } from './examEvaluator';
+import {
+  CALIBRATED_THRESHOLD,
+  buildExamReport,
+  examRewards,
+  scoreAnswer,
+} from './examScoring';
+import { getEffectiveCardType, isOptionCorrect } from '../cockpit/retrievalLogic';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
 import { shuffle } from '../../utils/shuffle';
 
@@ -92,7 +98,8 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   const [results, setResults] = useState<ExamQuestionResult[]>([]);
   const [secondsRemaining, setSecondsRemaining] = useState<number>(45);
   const [isTimerActive, setIsTimerActive] = useState(false);
-  const [elapsedTotalSeconds, setElapsedTotalSeconds] = useState(0);
+  // Wall-clock start of the exam, so time spent is right for untimed and training exams too
+  const examStartedAtRef = useRef(0);
 
   // Report state
   const [finalReport, setFinalReport] = useState<ExamReport | null>(null);
@@ -142,19 +149,13 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     setIsAnswerSubmitted(false);
     setSecondsRemaining(timeLimitPerQuestion);
     setIsTimerActive(timeLimitPerQuestion > 0);
-    setElapsedTotalSeconds(0);
+    examStartedAtRef.current = Date.now();
     setStage('active');
   };
 
   const currentItem = examQuestions[currentIndex];
 
-  const effectiveCardType: CardType = currentItem?.card
-    ? (currentItem.card.cardType || (
-        currentItem.card.clozeTemplate || currentItem.card.question.includes('{{')
-          ? 'cloze'
-          : (currentItem.card.options && currentItem.card.options.length > 0 ? 'multiple-choice' : 'standard')
-      ))
-    : 'standard';
+  const effectiveCardType: CardType = getEffectiveCardType(currentItem?.card);
 
   const hasOptions = !!(currentItem?.card?.options && currentItem.card.options.length > 0);
 
@@ -164,46 +165,13 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
       throw new Error('No active question');
     }
 
-    const targetAnswer = currentItem.card.answer.trim().toLowerCase();
-    const cleanUserAns = userAns.trim().toLowerCase();
-
     // Check correctness
-    let isCorrect = false;
-    if (hasOptions) {
-      const strippedUser = cleanUserAns.replace(/^[a-d1-4][).\s-]+\s*/i, '').trim();
-      const strippedTarget = targetAnswer.replace(/^[a-d1-4][).\s-]+\s*/i, '').trim();
-      isCorrect = cleanUserAns === targetAnswer || strippedUser === strippedTarget || strippedUser === targetAnswer || cleanUserAns === strippedTarget;
-    } else {
-      isCorrect = evaluateTextAnswer(userAns, currentItem.card.answer);
-    }
+    const isCorrect = hasOptions
+      ? isOptionCorrect(userAns, currentItem.card.answer)
+      : evaluateTextAnswer(userAns, currentItem.card.answer);
 
     // Determine Quadrant & Points
-    let quadrant: ExamQuadrant;
-    let points = 0;
-
-    if (isCorrect) {
-      if (conf === 'high') {
-        quadrant = 'mastery';
-        points = 20; // Calibrated Mastery
-      } else if (conf === 'medium') {
-        quadrant = 'mastery';
-        points = 14;
-      } else {
-        quadrant = 'lucky-guess';
-        points = 5; // Lucky Guess
-      }
-    } else {
-      if (conf === 'high') {
-        quadrant = 'blindspot';
-        points = -15; // Dangerous Misconception / Illusion
-      } else if (conf === 'medium') {
-        quadrant = 'known-unknown';
-        points = -5;
-      } else {
-        quadrant = 'known-unknown';
-        points = 0; // Acknowledged Gap
-      }
-    }
+    const { quadrant, points } = scoreAnswer(isCorrect, conf);
 
     return {
       card: currentItem.card,
@@ -232,49 +200,22 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     } else {
       // Exam Finished! Compile Report
       setIsTimerActive(false);
-      const totalQ = examQuestions.length;
-      const correctCount = newResults.filter(r => r.isCorrect).length;
-      const rawAccuracy = Math.round((correctCount / totalQ) * 100);
-      const totalPoints = newResults.reduce((acc, r) => acc + r.pointsEarned, 0);
-      const maxPossible = totalQ * 20;
-
-      const blindspots = newResults.filter(r => r.quadrant === 'blindspot').length;
-      const luckyGuesses = newResults.filter(r => r.quadrant === 'lucky-guess').length;
-      const knownUnknowns = newResults.filter(r => r.quadrant === 'known-unknown').length;
-      const mastery = newResults.filter(r => r.quadrant === 'mastery').length;
-
-      // Calibration accuracy: percentage of answers where confidence matched correctness
-      // High confidence matches correct; Low confidence matches incorrect
-      const calibratedItems = newResults.filter(r => 
-        (r.confidence === 'high' && r.isCorrect) || 
-        (r.confidence === 'low' && !r.isCorrect) ||
-        (r.confidence === 'medium')
-      ).length;
-      const calibrationPercent = Math.round((calibratedItems / totalQ) * 100);
-
-      const report: ExamReport = {
-        id: `exam-${Date.now()}`,
-        date: new Date().toISOString(),
-        deckTitle: selectedDeckId === 'all' ? 'All Decks (Interleaved Comprehensive)' : (allDecks.find(d => d.id === selectedDeckId)?.title || 'Custom Exam'),
-        totalQuestions: totalQ,
-        correctCount,
-        rawAccuracyPercent: rawAccuracy,
-        confidenceWeightedScore: totalPoints,
-        maxPossibleScore: maxPossible,
-        calibrationPercent,
-        blindspotCount: blindspots,
-        luckyGuessCount: luckyGuesses,
-        knownUnknownCount: knownUnknowns,
-        masteryCount: mastery,
-        timeSpentSeconds: elapsedTotalSeconds,
-        questionResults: newResults,
-      };
+      const report = buildExamReport({
+        results: newResults,
+        deckTitle:
+          selectedDeckId === 'all'
+            ? 'All Decks (Interleaved Comprehensive)'
+            : allDecks.find(d => d.id === selectedDeckId)?.title || 'Custom Exam',
+        timeSpentSeconds: Math.round((Date.now() - examStartedAtRef.current) / 1000),
+        now: new Date(),
+      });
 
       StorageService.saveExamReport(report);
-      StorageService.addXP(Math.max(10, Math.round(totalPoints / 2)));
+      const rewards = examRewards(report);
+      StorageService.addXP(rewards.xp);
       lifeSimService.awardStudyWage(
         `Mock Exam: ${report.deckTitle.slice(0, 20)} (${report.rawAccuracyPercent}%)`,
-        Math.max(30, Math.round(totalPoints))
+        rewards.wage
       );
       soundEngine.playCompletionChime();
 
@@ -291,7 +232,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
       setFinalReport(report);
       setStage('report');
     }
-  }, [currentIndex, examQuestions.length, timeLimitPerQuestion, selectedDeckId, allDecks, elapsedTotalSeconds]);
+  }, [currentIndex, examQuestions.length, timeLimitPerQuestion, selectedDeckId, allDecks]);
 
   // Handle Question Submission
   const handleSubmitCurrentAnswer = useCallback(() => {
@@ -337,7 +278,6 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
         }
         return prev - 1;
       });
-      setElapsedTotalSeconds(t => t + 1);
     }, 1000);
 
     return () => clearInterval(interval);
@@ -1003,7 +943,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             {/* Metacognitive Calibration */}
             <div className="p-4 rounded-2xl bg-slate-950/80 border border-white/[0.08] space-y-1">
               <div className="text-2xl font-black text-indigo-300 font-mono">{finalReport.calibrationPercent}%</div>
-              <div className="text-[11px] text-slate-400">Self-Calibration</div>
+              <div className="text-[11px] text-slate-400" title="How well your confidence predicted whether you were right">Self-Calibration</div>
             </div>
 
             {/* Calibrated Grade */}
@@ -1023,15 +963,15 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-indigo-300 font-display">Metacognitive Assessment</span>
                 <span className={`px-2 py-0.2 rounded-full text-[11px] font-mono font-bold ${
-                  finalReport.calibrationPercent >= 80 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  finalReport.calibrationPercent >= CALIBRATED_THRESHOLD ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                 }`}>
-                  {finalReport.calibrationPercent >= 80 ? 'Calibrated Mind' : 'Calibration Work Needed'}
+                  {finalReport.calibrationPercent >= CALIBRATED_THRESHOLD ? 'Calibrated Mind' : 'Calibration Work Needed'}
                 </span>
               </div>
               <p className="text-xs text-slate-300 font-medium leading-relaxed mt-0.5">
                 {finalReport.blindspotCount > 0
                   ? `You encountered ${finalReport.blindspotCount} dangerous blindspot(s) where high confidence met wrong answers. Launch a Remediation Pilot below to repair them!`
-                  : finalReport.calibrationPercent >= 80
+                  : finalReport.calibrationPercent >= CALIBRATED_THRESHOLD
                   ? "Flawless calibration! Your metacognitive awareness accurately reflects your memory strength. Zero dangerous blindspots detected."
                   : "Good effort! Turn those lucky guesses and known unknowns into calibrated mastery before test day."}
               </p>
