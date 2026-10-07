@@ -12,6 +12,7 @@ import type { StudySession, DiagnosticProbe, DiagnosticReport, RetrievalCard } f
 import { MathRenderer } from '../common/MathRenderer';
 import { soundEngine } from '../../services/soundEngine';
 import { StorageService } from '../../services/storageService';
+import { shuffle } from '../../utils/shuffle';
 
 interface DiagnosticPhaseProps {
   session: StudySession;
@@ -41,13 +42,12 @@ function generateProbes(session: StudySession): DiagnosticProbe[] {
     // Otherwise find any valid standard card
     const standardCard = cards[0];
     if (standardCard) {
-      const distractors = allCards
+      const distractorPool = allCards
         .filter(c => c.id !== standardCard.id && c.answer.length < 120)
-        .map(c => c.answer)
-        .sort(() => 0.5 - Math.random())
-        .slice(0, 3);
+        .map(c => c.answer);
+      const distractors = shuffle(distractorPool).slice(0, 3);
 
-      const options = [standardCard.answer, ...distractors].sort(() => 0.5 - Math.random());
+      const options = shuffle([standardCard.answer, ...distractors]);
 
       probes.push({
         conceptId: concept.id,
@@ -68,7 +68,7 @@ function generateProbes(session: StudySession): DiagnosticProbe[] {
         .map(t => t.definition)
         .slice(0, 3);
 
-      const options = [targetTerm.definition, ...otherTerms].sort(() => 0.5 - Math.random());
+      const options = shuffle([targetTerm.definition, ...otherTerms]);
 
       probes.push({
         conceptId: concept.id,

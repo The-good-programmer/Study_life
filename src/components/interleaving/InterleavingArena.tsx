@@ -27,6 +27,7 @@ import { FSRSService } from '../../services/fsrsService';
 import { soundEngine } from '../../services/soundEngine';
 import { lifeSimService } from '../../services/lifeSimService';
 import { MathRenderer } from '../common/MathRenderer';
+import { shuffle } from '../../utils/shuffle';
 
 interface InterleavingArenaProps {
   onBack: () => void;
@@ -166,7 +167,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
 
     // Shuffle cards within each domain
     domains.forEach(d => {
-      poolByDomain[d].sort(() => Math.random() - 0.5);
+      poolByDomain[d] = shuffle(poolByDomain[d]);
     });
 
     const interleaved: InterleavedCard[] = [];

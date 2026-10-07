@@ -16,6 +16,7 @@ import { StorageService } from '../../services/storageService';
 import { lifeSimService } from '../../services/lifeSimService';
 import { characterService } from '../../services/characterService';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
+import { shuffle } from '../../utils/shuffle';
 
 interface MatchTile {
   id: string;
@@ -28,7 +29,7 @@ interface MatchTile {
 function generateTilesFromSession(session: StudySession): MatchTile[] {
   const allCards: RetrievalCard[] = session.concepts.flatMap(c => c.retrievalCards);
   if (allCards.length === 0) return [];
-  const shuffledCards = [...allCards].sort(() => Math.random() - 0.5).slice(0, 6);
+  const shuffledCards = shuffle(allCards).slice(0, 6);
   const generated: MatchTile[] = [];
   shuffledCards.forEach((card, idx) => {
     generated.push({
@@ -46,7 +47,7 @@ function generateTilesFromSession(session: StudySession): MatchTile[] {
       isMatched: false,
     });
   });
-  return generated.sort(() => Math.random() - 0.5);
+  return shuffle(generated);
 }
 
 interface MatchArenaProps {

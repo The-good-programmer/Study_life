@@ -37,6 +37,7 @@ import { MathRenderer } from '../common/MathRenderer';
 
 import { evaluateTextAnswer } from './examEvaluator';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
+import { shuffle } from '../../utils/shuffle';
 
 interface ExamSimulatorProps {
   onBack: () => void;
@@ -126,7 +127,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     setSetupError(null);
 
     // Shuffle pool
-    pool = [...pool].sort(() => Math.random() - 0.5);
+    pool = shuffle(pool);
 
     // Limit count
     if (questionCountLimit > 0 && pool.length > questionCountLimit) {
