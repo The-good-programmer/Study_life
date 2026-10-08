@@ -1,0 +1,26 @@
+# Render Blueprint for the Studify API (use: New > Blueprint, then fill in the secrets Render asks for).
+# The website itself is built separately (VITE_API_BASE_URL must point at this service's /api).
+services:
+  - type: web
+    name: studify-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL # Supabase *pooler* connection string
+        sync: false
+      - key: JWT_SECRET # 32+ random characters
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: ALLOWED_ORIGINS # e.g. https://app.example.com
+        sync: false

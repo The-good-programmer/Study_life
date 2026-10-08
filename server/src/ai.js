@@ -60,21 +60,19 @@ setInterval(() => {
 }, RATE_WINDOW_MS).unref();
 
 /**
- * Persistent per-user daily quota. Returns true and records one request when
- * the user is under quota; returns false otherwise.
+ * Persistent per-user daily quota. Returns true and records one request when the user is under quota;
+ * false otherwise. One atomic statement, so simultaneous requests can't slip past the limit.
  */
-export function consumeDailyQuota(userId) {
+export async function consumeDailyQuota(userId) {
   const limit = Number(process.env.AI_DAILY_QUOTA) || 200;
   const day = new Date().toISOString().slice(0, 10);
-  const row = db.prepare('SELECT count FROM ai_usage WHERE user_id = ? AND day = ?').get(userId, day);
-  if (row && row.count >= limit) {
-    return false;
-  }
-  db.prepare(`
-    INSERT INTO ai_usage (user_id, day, count) VALUES (?, ?, 1)
-    ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1
-  `).run(userId, day);
-  return true;
+  const changed = await db.run(
+    `INSERT INTO ai_usage (user_id, day, count) VALUES ($1, $2, 1)
+     ON CONFLICT (user_id, day) DO UPDATE SET count = ai_usage.count + 1
+     WHERE ai_usage.count < $3`,
+    [userId, day, limit],
+  );
+  return changed > 0;
 }
 
 export async function generateContent({ contents, responseMimeType, enableThinking, responseSchema }) {

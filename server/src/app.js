@@ -6,7 +6,7 @@
  */
 
 import { URL } from 'node:url';
-import './db.js'; // Initialize database tables
+import { db } from './db.js'; // Importing it connects and migrates the database first
 import { getAuthUser } from './auth.js';
 import { handleAuthRoutes } from './routes/authRoutes.js';
 import { handleSyncRoutes } from './routes/syncRoutes.js';
@@ -20,9 +20,14 @@ const DEFAULT_ALLOWED_ORIGINS = ['http://localhost:5173', 'http://localhost:5175
 function getAllowedOrigins() {
   const configured = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
-    .map((o) => o.trim())
+    .map((o) => o.trim().replace(/\/+$/, ''))
     .filter(Boolean);
-  return new Set(configured.length > 0 ? configured : DEFAULT_ALLOWED_ORIGINS);
+  if (configured.length > 0) return new Set(configured);
+  if (process.env.NODE_ENV === 'production') {
+    console.warn('[Server] ALLOWED_ORIGINS is not set: no website can call this API from a browser. Set it to your site, e.g. https://app.example.com');
+    return new Set();
+  }
+  return new Set(DEFAULT_ALLOWED_ORIGINS);
 }
 
 function setCorsHeaders(req, res, allowedOrigins) {
@@ -44,8 +49,8 @@ function sendJson(res, status, payload) {
  * Guards the shared Gemini proxy: signed-in users only, burst rate limit,
  * and a persistent daily quota. Returns the user, or null after responding.
  */
-function authorizeAiRequest(req, res, ai) {
-  const user = getAuthUser(req);
+async function authorizeAiRequest(req, res, ai) {
+  const user = await getAuthUser(req);
   if (!user) {
     sendJson(res, 401, { error: 'Sign in to use the shared AI service, or add your own Gemini API key in Settings.' });
     return null;
@@ -58,7 +63,7 @@ function authorizeAiRequest(req, res, ai) {
     sendJson(res, 429, { error: 'Rate limit exceeded. Please wait a moment before sending more AI requests.' });
     return null;
   }
-  if (!ai.consumeDailyQuota(user.id)) {
+  if (!(await ai.consumeDailyQuota(user.id))) {
     sendJson(res, 429, { error: 'Daily AI limit reached. It resets at midnight UTC, or add your own Gemini API key in Settings.' });
     return null;
   }
@@ -86,9 +91,9 @@ export function createApp({ ai = defaultAi } = {}) {
     const pathname = parsedUrl.pathname;
     const searchParams = parsedUrl.searchParams;
 
-    // Read JSON body for POST / PUT / PATCH
+    // Read JSON body for POST / PUT / PATCH / DELETE
     let body = null;
-    if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
       try {
         const chunks = [];
         let totalSize = 0;
@@ -121,19 +126,26 @@ export function createApp({ ai = defaultAi } = {}) {
     try {
       // 1. HEALTH CHECK
       if (pathname === '/api/health' && req.method === 'GET') {
-        return sendJson(res, 200, {
-          status: 'ok',
+        let dbOk = true;
+        try {
+          await db.one('SELECT 1 AS ok');
+        } catch (err) {
+          dbOk = false;
+          console.error('[Server] Health check: database unreachable:', err.message);
+        }
+        return sendJson(res, dbOk ? 200 : 503, {
+          status: dbOk ? 'ok' : 'degraded',
           version: '1.0.0',
           uptime: Math.floor(process.uptime()),
           timestamp: Date.now(),
-          db: 'connected',
+          db: dbOk ? 'connected' : 'unreachable',
           aiProxyAvailable: ai.isAiConfigured(),
         });
       }
 
       // 2. AI PROXY GATEWAYS (REST & SSE STREAMING) — signed-in users only
       if (pathname === '/api/ai/generate' && req.method === 'POST') {
-        if (!authorizeAiRequest(req, res, ai)) return;
+        if (!(await authorizeAiRequest(req, res, ai))) return;
 
         const { contents, responseMimeType, enableThinking, responseSchema } = body || {};
         if (!isValidContents(contents)) {
@@ -150,7 +162,7 @@ export function createApp({ ai = defaultAi } = {}) {
       }
 
       if (pathname === '/api/ai/stream' && req.method === 'POST') {
-        if (!authorizeAiRequest(req, res, ai)) return;
+        if (!(await authorizeAiRequest(req, res, ai))) return;
 
         const { contents, responseMimeType, enableThinking } = body || {};
         if (!isValidContents(contents)) {
@@ -181,12 +193,12 @@ export function createApp({ ai = defaultAi } = {}) {
       }
 
       // 4. CLOUD SYNC ROUTES
-      if (handleSyncRoutes(req, res, pathname, body)) {
+      if (await handleSyncRoutes(req, res, pathname, body)) {
         return;
       }
 
       // 5. COMMUNITY DECK ROUTES
-      if (handleDeckRoutes(req, res, pathname, body, searchParams)) {
+      if (await handleDeckRoutes(req, res, pathname, body, searchParams)) {
         return;
       }
 

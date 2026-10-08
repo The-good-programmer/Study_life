@@ -27,5 +27,6 @@ dist-ssr
 
 # Database & Server Data
 server/data/*.sqlite*
+server/data/pgdata/
 server/.env
 !server/.env.example

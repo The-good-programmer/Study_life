@@ -4,6 +4,7 @@
  */
 
 import crypto from 'node:crypto';
+import { promisify } from 'node:util';
 import { db } from './db.js';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -37,9 +38,11 @@ export function generateSalt() {
   return crypto.randomBytes(16).toString('hex');
 }
 
-export function hashPassword(password, salt) {
-  // PBKDF2 with 100,000 iterations to match client-side Web Crypto PBKDF2
-  const derived = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+const pbkdf2 = promisify(crypto.pbkdf2);
+
+/** PBKDF2 with 100,000 iterations (to match client-side Web Crypto PBKDF2), off the main thread. */
+export async function hashPassword(password, salt) {
+  const derived = await pbkdf2(password, salt, 100000, 32, 'sha256');
   return 'pbkdf2$' + derived.toString('hex');
 }
 
@@ -50,11 +53,11 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-export function verifyPassword(password, user) {
+export async function verifyPassword(password, user) {
   if (!user.password_hash || !user.password_salt) return false;
 
   if (user.password_hash.startsWith('pbkdf2$')) {
-    return safeEqual(hashPassword(password, user.password_salt), user.password_hash);
+    return safeEqual(await hashPassword(password, user.password_salt), user.password_hash);
   }
 
   // Legacy SHA-256 fallback
@@ -125,7 +128,7 @@ export function verifyToken(token) {
   }
 }
 
-export function getAuthUser(req) {
+export async function getAuthUser(req) {
   const authHeader = req.headers['authorization'] || '';
   if (!authHeader.startsWith('Bearer ')) return null;
 
@@ -133,9 +136,7 @@ export function getAuthUser(req) {
   const payload = verifyToken(token);
   if (!payload || !payload.sub) return null;
 
-  const stmt = db.prepare('SELECT * FROM users WHERE id = ?');
-  const user = stmt.get(payload.sub);
-  return user || null;
+  return db.one('SELECT * FROM users WHERE id = $1', [payload.sub]);
 }
 
 // ─── Google ID token verification ────────────────────────────────────────────
