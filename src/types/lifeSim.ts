@@ -48,7 +48,7 @@ export interface LedgerExpense {
   name: string;
   emoji: string;
   cost: number;
-  category: MealCategory | 'housing' | 'gear';
+  category: MealCategory | 'housing' | 'gear' | 'streak';
   purchasedAt: string;
 }
 

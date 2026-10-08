@@ -231,6 +231,25 @@ describe('lifeSimService', () => {
     expect(evaluation.jurorFeedback.length).toBeGreaterThan(0);
   });
 
+  it('sells one streak freeze at a time and records it in the day’s spending', () => {
+    expect(lifeSimService.buyStreakFreeze().success).toBe(true);
+    expect(StorageService.hasSynapticFreeze()).toBe(true);
+    expect(lifeSimService.getWalletBalance()).toBe(50);
+    expect(lifeSimService.getDailyLedger().expenses[0]).toMatchObject({ name: 'Streak freeze', cost: 50 });
+
+    const again = lifeSimService.buyStreakFreeze();
+    expect(again.success).toBe(false);
+    expect(lifeSimService.getWalletBalance()).toBe(50);
+  });
+
+  it('does not sell a streak freeze without the tokens for it', () => {
+    characterService.spendCoins(80);
+    const result = lifeSimService.buyStreakFreeze();
+    expect(result.success).toBe(false);
+    expect(StorageService.hasSynapticFreeze()).toBe(false);
+    expect(lifeSimService.getWalletBalance()).toBe(20);
+  });
+
   it('replaces a meal boost with the next one instead of stacking them', () => {
     lifeSimService.buyMeal('pancakes');
     lifeSimService.buyMeal('cold_brew');

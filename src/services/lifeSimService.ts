@@ -22,6 +22,9 @@ import { characterService } from './characterService';
 import { soundEngine } from './soundEngine';
 import { StorageService } from './storageService';
 
+/** What a streak freeze costs; it covers one missed day. */
+export const STREAK_FREEZE_COST = 50;
+
 export const HOUSING_CATALOG: HousingProperty[] = [
   {
     id: 'dorm',
@@ -1918,6 +1921,36 @@ class LifeSimService {
     this.notify();
     try { soundEngine.playCoinCascade(); } catch {}
     return { success: true, item };
+  }
+
+  /** Buys a streak freeze, which covers one missed day. You can hold one at a time. */
+  public buyStreakFreeze(): { success: boolean; error?: string } {
+    this.rollOverIfNewDay();
+    if (StorageService.hasSynapticFreeze()) {
+      return { success: false, error: 'You already have a streak freeze ready.' };
+    }
+    const balance = this.getWalletBalance();
+    if (balance < STREAK_FREEZE_COST) {
+      return { success: false, error: `A streak freeze costs ${STREAK_FREEZE_COST} tokens. You have ${balance}.` };
+    }
+    if (!characterService.spendCoins(STREAK_FREEZE_COST)) {
+      return { success: false, error: 'Could not take the tokens just now.' };
+    }
+    StorageService.setSynapticFreeze(true);
+    this.currentLedger.expenses.unshift({
+      id: `streak_${Date.now()}`,
+      mealId: 'streak_freeze',
+      name: 'Streak freeze',
+      emoji: '❄️',
+      cost: STREAK_FREEZE_COST,
+      category: 'streak',
+      purchasedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+    this.currentLedger.totalExpenses += STREAK_FREEZE_COST;
+    this.currentLedger.netBalance = this.currentLedger.totalEarnings - this.currentLedger.totalExpenses;
+    this.saveLedger(this.currentLedger);
+    this.notify();
+    return { success: true };
   }
 
   public getLifestyleTier(): LifestyleTier {
