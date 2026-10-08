@@ -60,7 +60,7 @@ export const renderFormattedText = (raw: string): string => {
 
   // Parse inline code `code`
   const withCode = withFractions.replace(/`([^`]+)`/g, (_, code) => {
-    return `<code class="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 font-mono text-[0.9em] border border-slate-700/60">${code}</code>`;
+    return `<code class="px-1.5 py-0.5 rounded border border-line bg-surface-hover font-mono text-[0.9em] text-ink">${code}</code>`;
   });
 
   return withCode;

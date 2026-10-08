@@ -63,6 +63,6 @@ describe('MathRenderer - renderFormattedText', () => {
   it('formats inline code with code tags', () => {
     const input = 'Use `console.log(x)` for debugging';
     const rendered = renderFormattedText(input);
-    expect(rendered).toContain('<code class="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 font-mono text-[0.9em] border border-slate-700/60">console.log(x)</code>');
+    expect(rendered).toMatch(/<code class="[^"]*">console\.log\(x\)<\/code>/);
   });
 });

@@ -24,7 +24,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ text, className = ''
           return (
             <span
               key={idx}
-              className="block my-2 text-center font-serif text-indigo-300 font-medium py-1.5 px-3 bg-slate-950/60 rounded-xl border border-indigo-950/50"
+              className="my-2 block rounded-xl border border-line bg-canvas px-3 py-1.5 text-center font-serif font-medium text-ink"
               dangerouslySetInnerHTML={{ __html: renderFormattedText(formula) }}
             />
           );
@@ -33,7 +33,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ text, className = ''
           return (
             <span
               key={idx}
-              className="font-serif text-indigo-300 font-medium mx-0.5 italic"
+              className="mx-0.5 font-serif font-medium italic text-brand-text"
               dangerouslySetInnerHTML={{ __html: renderFormattedText(formula) }}
             />
           );
