@@ -1,5 +1,6 @@
 import type { EarningEntry, ExamReport, InterleavingSessionReport, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
 import { deckWithSavedProgress, withSavedProgress } from '../utils/cardProgress';
+import { transferableGuestCoins } from './economy/wallet';
 import { IndexedDbService } from './indexedDbService';
 
 const STORAGE_KEYS = {
@@ -16,7 +17,34 @@ const STORAGE_KEYS = {
   FOLDERS: 'studify_folders_v1',
   EARNINGS: 'studify_earnings_v1',
   COMPLETIONS: 'studify_paid_completions_v1',
+  WEEKLY_XP: 'studify_weekly_xp_v1',
 };
+
+/** The Monday a date's week starts on, as YYYY-MM-DD in UTC. */
+const weekStartOf = (date: Date): string => {
+  const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+  return day.toISOString().split('T')[0];
+};
+
+/**
+ * Life-sim data: the avatar and wallet, the day's ledger, meal boosts, the home and its
+ * furniture, and the streak freeze. Kept per profile like study data, through lifeKey().
+ */
+export const LIFE_KEYS = {
+  CHARACTER: 'studify_user_character_v1',
+  LEDGER: 'studify_daily_ledger_v1',
+  BUFFS: 'studify_active_buffs_v1',
+  LEDGER_HISTORY: 'studify_ledger_history_v1',
+  ROOM_DESIGNS: 'studify_room_designs_v1',
+  OWNED_FURNITURE: 'studify_owned_furniture_v1',
+  HOME_FINISHES: 'studify_home3d_finishes_v1',
+  HOME_ROTATIONS: 'studify_home3d_rotations_v1',
+  STREAK_FREEZE: 'axon_synaptic_freeze_active',
+} as const;
+
+/** Set once the device-wide life-sim data of older versions has been given to a profile. */
+const LIFE_SPLIT_MARKER = 'studify_life_data_split_v1';
 
 /** Study data stored per profile (guest or account): what a reset or account deletion removes. */
 const PROFILE_DATA_KEYS = [
@@ -30,6 +58,7 @@ const PROFILE_DATA_KEYS = [
   STORAGE_KEYS.DIAGRAMS,
   STORAGE_KEYS.FOLDERS,
   STORAGE_KEYS.COMPLETIONS,
+  STORAGE_KEYS.WEEKLY_XP,
 ];
 
 const LEVEL_TITLES = [
@@ -58,6 +87,47 @@ export class StorageService {
     this.activeUserId = userId;
     this.overflow.clear();
     void this.hydrateOverflow();
+    // Services that cache a profile's data in memory (wallet, ledger) reload it.
+    this.profileListeners.forEach(fn => {
+      try { fn(); } catch {}
+    });
+  }
+
+  private static profileListeners = new Set<() => void>();
+
+  /** Called after switching profiles (signing in or out). */
+  public static addProfileListener(listener: () => void): () => void {
+    this.profileListeners.add(listener);
+    return () => this.profileListeners.delete(listener);
+  }
+
+  /** The active profile's storage key for a piece of life-sim data (see LIFE_KEYS). */
+  public static lifeKey(base: string): string {
+    this.splitDeviceLifeDataOnce();
+    return this.getKey(base);
+  }
+
+  /**
+   * Older versions kept life-sim data once per device. The first time this version runs,
+   * that copy goes to the active profile: moved, not copied, so tokens are never
+   * duplicated. A guest already owns it (the guest's keys have no suffix).
+   */
+  private static splitDeviceLifeDataOnce(): void {
+    try {
+      if (localStorage.getItem(LIFE_SPLIT_MARKER)) return;
+      localStorage.setItem(LIFE_SPLIT_MARKER, '1');
+      if (!this.activeUserId) return;
+      for (const base of Object.values(LIFE_KEYS)) {
+        const deviceCopy = localStorage.getItem(base);
+        const ownKey = `${base}_${this.activeUserId}`;
+        if (deviceCopy !== null && localStorage.getItem(ownKey) === null) {
+          localStorage.setItem(ownKey, deviceCopy);
+          localStorage.removeItem(base);
+        }
+      }
+    } catch {
+      // Storage unavailable: nothing to split.
+    }
   }
 
   public static getActiveUserId(): string | null {
@@ -192,7 +262,7 @@ export class StorageService {
 
   public static hasSynapticFreeze(): boolean {
     try {
-      return localStorage.getItem('axon_synaptic_freeze_active') === 'true';
+      return localStorage.getItem(this.lifeKey(LIFE_KEYS.STREAK_FREEZE)) === 'true';
     } catch {
       return false;
     }
@@ -201,9 +271,9 @@ export class StorageService {
   public static setSynapticFreeze(active: boolean): void {
     try {
       if (active) {
-        localStorage.setItem('axon_synaptic_freeze_active', 'true');
+        localStorage.setItem(this.lifeKey(LIFE_KEYS.STREAK_FREEZE), 'true');
       } else {
-        localStorage.removeItem('axon_synaptic_freeze_active');
+        localStorage.removeItem(this.lifeKey(LIFE_KEYS.STREAK_FREEZE));
       }
     } catch {}
     this.notifyMutation();
@@ -256,7 +326,7 @@ export class StorageService {
           if (hasFreeze && stats.currentStreak > 0) {
             // Shield the streak! Consume freeze item
             try {
-              localStorage.removeItem('axon_synaptic_freeze_active');
+              localStorage.removeItem(this.lifeKey(LIFE_KEYS.STREAK_FREEZE));
             } catch {}
             // Treat the missed day as protected by backdating lastActiveDate to yesterday
             const yesterday = new Date(curr.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -272,7 +342,7 @@ export class StorageService {
         } else if (diffDays > 2) {
           // Missed multiple days: streak resets (freeze only covers 1 missed day)
           try {
-            localStorage.removeItem('axon_synaptic_freeze_active');
+            localStorage.removeItem(this.lifeKey(LIFE_KEYS.STREAK_FREEZE));
           } catch {}
           stats.currentStreak = 0;
           stats.todayMinutes = 0;
@@ -327,13 +397,18 @@ export class StorageService {
     };
   }
 
+  /**
+   * XP earned this week (from Monday, in UTC like the app's days) and the best week so
+   * far, per profile. Older versions kept one ever-growing total per device; it is ignored.
+   */
   public static getWeeklyXP(): { current: number; best: number } {
     try {
-      const rawCurrent = localStorage.getItem('lotti_weekly_xp') || localStorage.getItem('axon_weekly_xp') || '0';
-      const rawBest = localStorage.getItem('lotti_weekly_xp_best') || '0';
-      const current = parseInt(rawCurrent, 10) || 0;
-      const best = Math.max(parseInt(rawBest, 10) || 0, current);
-      return { current, best };
+      const saved = JSON.parse(this.readRaw(this.getKey(STORAGE_KEYS.WEEKLY_XP)) || 'null') as
+        | { week: string; current: number; best: number }
+        | null;
+      if (!saved) return { current: 0, best: 0 };
+      const current = saved.week === weekStartOf(new Date()) ? saved.current : 0;
+      return { current, best: Math.max(saved.best || 0, current) };
     } catch {
       return { current: 0, best: 0 };
     }
@@ -343,11 +418,12 @@ export class StorageService {
     const safeAmount = Math.max(0, Math.round(amount));
     const { current, best } = this.getWeeklyXP();
     const next = current + safeAmount;
-    const nextBest = Math.max(best, next);
-    try {
-      localStorage.setItem('lotti_weekly_xp', next.toString());
-      localStorage.setItem('lotti_weekly_xp_best', nextBest.toString());
-    } catch {}
+    this.safeSetItem(
+      this.getKey(STORAGE_KEYS.WEEKLY_XP),
+      JSON.stringify({ week: weekStartOf(new Date()), current: next, best: Math.max(best, next) }),
+    );
+    // The device-wide totals of older versions are no longer read.
+    ['lotti_weekly_xp', 'lotti_weekly_xp_best', 'axon_weekly_xp'].forEach(key => localStorage.removeItem(key));
     this.addXP(safeAmount);
     return next;
   }
@@ -1436,7 +1512,13 @@ export class StorageService {
       } catch {}
     }
 
-    // 10. Clear Guest Data to prevent ghost state or duplicate migrations
+    // 10. Life-sim data: the wallet, home and avatar. Only when the guest copy is cleared,
+    // so tokens move rather than being duplicated.
+    if (clearGuest) {
+      this.moveGuestLifeData(userId);
+    }
+
+    // 11. Clear Guest Data to prevent ghost state or duplicate migrations
     if (clearGuest) {
       this.clearGuestData();
     }
@@ -1446,11 +1528,44 @@ export class StorageService {
   }
 
   /**
+   * Moves the guest's life-sim data into an account, then removes the guest's copy.
+   * An account without its own takes the guest's as is. One that has its own keeps it,
+   * and gains the guest's tokens beyond the starting gift (see transferableGuestCoins)
+   * and any furniture the guest bought.
+   */
+  private static moveGuestLifeData(userId: string): void {
+    this.splitDeviceLifeDataOnce();
+    for (const base of Object.values(LIFE_KEYS)) {
+      try {
+        const guestRaw = localStorage.getItem(base);
+        if (guestRaw === null) continue;
+        const ownKey = `${base}_${userId}`;
+        const ownRaw = localStorage.getItem(ownKey);
+        if (ownRaw === null) {
+          localStorage.setItem(ownKey, guestRaw);
+        } else if (base === LIFE_KEYS.CHARACTER) {
+          const own = JSON.parse(ownRaw);
+          const guest = JSON.parse(guestRaw);
+          const extra = transferableGuestCoins(Number(guest.coins) || 0);
+          if (extra > 0) localStorage.setItem(ownKey, JSON.stringify({ ...own, coins: (Number(own.coins) || 0) + extra }));
+        } else if (base === LIFE_KEYS.OWNED_FURNITURE) {
+          const own: string[] = JSON.parse(ownRaw);
+          const guest: string[] = JSON.parse(guestRaw);
+          localStorage.setItem(ownKey, JSON.stringify(Array.from(new Set([...own, ...guest]))));
+        }
+        localStorage.removeItem(base);
+      } catch {
+        // A corrupt guest value is left behind rather than merged.
+      }
+    }
+  }
+
+  /**
    * Deletes all local storage keys associated with a deleted user
    */
   public static purgeUserData(userId: string): void {
     try {
-      void this.removeProfileData(`_${userId}`);
+      void this.removeProfileData(`_${userId}`, [...PROFILE_DATA_KEYS, ...Object.values(LIFE_KEYS)]);
     } catch (e) {
       console.warn('[StorageService] Error purging user data:', e);
     }

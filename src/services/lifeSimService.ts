@@ -20,7 +20,7 @@ import {
 } from '../types/lifeSim';
 import { characterService } from './characterService';
 import { soundEngine } from './soundEngine';
-import { StorageService } from './storageService';
+import { LIFE_KEYS, StorageService } from './storageService';
 
 /** What a streak freeze costs; it covers one missed day. */
 export const STREAK_FREEZE_COST = 50;
@@ -1454,11 +1454,6 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
   },
 ];
 
-const LEDGER_STORAGE_KEY = 'studify_daily_ledger_v1';
-const BUFFS_STORAGE_KEY = 'studify_active_buffs_v1';
-const HISTORY_STORAGE_KEY = 'studify_ledger_history_v1';
-const ROOM_DESIGNS_KEY = 'studify_room_designs_v1';
-const OWNED_FURNITURE_KEY = 'studify_owned_furniture_v1';
 
 type LifeSimListener = () => void;
 
@@ -1470,6 +1465,19 @@ class LifeSimService {
   private listeners: Set<LifeSimListener> = new Set();
 
   constructor() {
+    this.currentLedger = this.loadLedger();
+    this.activeBuffs = this.loadBuffs();
+    this.equippedFurniture = this.loadEquippedFurniture();
+    this.ownedFurniture = this.loadOwnedFurniture();
+    this.cleanExpiredBuffs();
+    // Each profile has its own ledger, boosts and home; switch to them on sign-in and sign-out.
+    StorageService.addProfileListener(() => {
+      this.reloadProfile();
+      this.notify();
+    });
+  }
+
+  private reloadProfile(): void {
     this.currentLedger = this.loadLedger();
     this.activeBuffs = this.loadBuffs();
     this.equippedFurniture = this.loadEquippedFurniture();
@@ -1502,7 +1510,7 @@ class LifeSimService {
     };
 
     try {
-      const raw = localStorage.getItem(LEDGER_STORAGE_KEY);
+      const raw = localStorage.getItem(StorageService.lifeKey(LIFE_KEYS.LEDGER));
       if (raw) {
         const parsed: DailyLedger = JSON.parse(raw);
         if (parsed.date === today) {
@@ -1530,23 +1538,23 @@ class LifeSimService {
 
   private archiveLedger(ledger: DailyLedger) {
     try {
-      const rawHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
+      const rawHistory = localStorage.getItem(StorageService.lifeKey(LIFE_KEYS.LEDGER_HISTORY));
       const history: DailyLedger[] = rawHistory ? JSON.parse(rawHistory) : [];
       // Keep up to 30 days
       const updated = [ledger, ...history.filter(h => h.date !== ledger.date)].slice(0, 30);
-      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updated));
+      localStorage.setItem(StorageService.lifeKey(LIFE_KEYS.LEDGER_HISTORY), JSON.stringify(updated));
     } catch {}
   }
 
   private saveLedger(ledger: DailyLedger) {
     try {
-      localStorage.setItem(LEDGER_STORAGE_KEY, JSON.stringify(ledger));
+      localStorage.setItem(StorageService.lifeKey(LIFE_KEYS.LEDGER), JSON.stringify(ledger));
     } catch {}
   }
 
   private loadBuffs(): ActiveBuff[] {
     try {
-      const raw = localStorage.getItem(BUFFS_STORAGE_KEY);
+      const raw = localStorage.getItem(StorageService.lifeKey(LIFE_KEYS.BUFFS));
       if (raw) {
         return JSON.parse(raw);
       }
@@ -1556,14 +1564,14 @@ class LifeSimService {
 
   private saveBuffs() {
     try {
-      localStorage.setItem(BUFFS_STORAGE_KEY, JSON.stringify(this.activeBuffs));
+      localStorage.setItem(StorageService.lifeKey(LIFE_KEYS.BUFFS), JSON.stringify(this.activeBuffs));
     } catch {}
   }
 
   private loadEquippedFurniture(): EquippedFurnitureState {
     const fallback = JSON.parse(JSON.stringify(DEFAULT_EQUIPPED_FURNITURE));
     try {
-      const raw = localStorage.getItem(ROOM_DESIGNS_KEY);
+      const raw = localStorage.getItem(StorageService.lifeKey(LIFE_KEYS.ROOM_DESIGNS));
       if (raw) {
         const parsed = JSON.parse(raw);
         // Ensure all rooms exist
@@ -1580,7 +1588,7 @@ class LifeSimService {
 
   private saveEquippedFurniture() {
     try {
-      localStorage.setItem(ROOM_DESIGNS_KEY, JSON.stringify(this.equippedFurniture));
+      localStorage.setItem(StorageService.lifeKey(LIFE_KEYS.ROOM_DESIGNS), JSON.stringify(this.equippedFurniture));
     } catch {}
   }
 
@@ -1589,7 +1597,7 @@ class LifeSimService {
     // All zero-cost starter items are owned by default
     FURNITURE_CATALOG.filter(f => f.cost === 0).forEach(f => owned.add(f.id));
     try {
-      const raw = localStorage.getItem(OWNED_FURNITURE_KEY);
+      const raw = localStorage.getItem(StorageService.lifeKey(LIFE_KEYS.OWNED_FURNITURE));
       if (raw) {
         const parsed: string[] = JSON.parse(raw);
         parsed.forEach(id => owned.add(id));
@@ -1600,7 +1608,7 @@ class LifeSimService {
 
   private saveOwnedFurniture() {
     try {
-      localStorage.setItem(OWNED_FURNITURE_KEY, JSON.stringify(Array.from(this.ownedFurniture)));
+      localStorage.setItem(StorageService.lifeKey(LIFE_KEYS.OWNED_FURNITURE), JSON.stringify(Array.from(this.ownedFurniture)));
     } catch {}
   }
 
@@ -2095,7 +2103,7 @@ class LifeSimService {
 
   public getHistory(): DailyLedger[] {
     try {
-      const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+      const raw = localStorage.getItem(StorageService.lifeKey(LIFE_KEYS.LEDGER_HISTORY));
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
@@ -2352,10 +2360,10 @@ class LifeSimService {
   }
 
   public resetForTesting() {
-    localStorage.removeItem(LEDGER_STORAGE_KEY);
-    localStorage.removeItem(BUFFS_STORAGE_KEY);
-    localStorage.removeItem(ROOM_DESIGNS_KEY);
-    localStorage.removeItem(OWNED_FURNITURE_KEY);
+    localStorage.removeItem(StorageService.lifeKey(LIFE_KEYS.LEDGER));
+    localStorage.removeItem(StorageService.lifeKey(LIFE_KEYS.BUFFS));
+    localStorage.removeItem(StorageService.lifeKey(LIFE_KEYS.ROOM_DESIGNS));
+    localStorage.removeItem(StorageService.lifeKey(LIFE_KEYS.OWNED_FURNITURE));
     this.currentLedger = this.loadLedger();
     this.activeBuffs = [];
     this.equippedFurniture = this.loadEquippedFurniture();

@@ -11,10 +11,10 @@ import {
   type CharacterMood,
   type CharacterPose,
 } from '../types/character';
-import { StorageService } from './storageService';
+import { LIFE_KEYS, StorageService } from './storageService';
+import { STARTING_COINS } from './economy/wallet';
 import { soundEngine } from './soundEngine';
 
-const CHARACTER_STORAGE_KEY = 'studify_user_character_v1';
 const LEGACY_AXOLOTL_KEY = 'studify_axolotl_sanctuary_v1';
 
 export type CharacterListener = (character: CharacterCustomization) => void;
@@ -97,6 +97,11 @@ class CharacterService {
 
   constructor() {
     this.character = this.loadCharacter();
+    // Each profile has its own avatar and wallet; switch to it on sign-in and sign-out.
+    StorageService.addProfileListener(() => {
+      this.character = this.loadCharacter();
+      this.notify();
+    });
   }
 
   private loadCharacter(): CharacterCustomization {
@@ -125,7 +130,7 @@ class CharacterService {
       pose: 'idle',
       level: 1,
       xp: 25,
-      coins: 150,
+      coins: STARTING_COINS,
       energy: 90,
       happiness: 85,
       hunger: 80,
@@ -134,7 +139,7 @@ class CharacterService {
     };
 
     try {
-      const raw = localStorage.getItem(CHARACTER_STORAGE_KEY);
+      const raw = localStorage.getItem(StorageService.lifeKey(LIFE_KEYS.CHARACTER));
       if (raw) {
         const parsed = JSON.parse(raw);
         // If it was the legacy placeholder default from the first version, upgrade to the male default
@@ -151,7 +156,7 @@ class CharacterService {
       const legacyRaw = localStorage.getItem(LEGACY_AXOLOTL_KEY);
       if (legacyRaw) {
         const legacy = JSON.parse(legacyRaw);
-        return {
+        const migrated: CharacterCustomization = {
           ...defaultCharacter,
           coins: typeof legacy.axonCoins === 'number' ? legacy.axonCoins : defaultCharacter.coins,
           level: typeof legacy.friendshipLevel === 'number' ? legacy.friendshipLevel : defaultCharacter.level,
@@ -159,6 +164,10 @@ class CharacterService {
           happiness: typeof legacy.happiness === 'number' ? legacy.happiness : defaultCharacter.happiness,
           energy: typeof legacy.energy === 'number' ? legacy.energy : defaultCharacter.energy,
         };
+        // Adopted once, by this profile: saved here, then removed so no other profile takes the same coins.
+        localStorage.setItem(StorageService.lifeKey(LIFE_KEYS.CHARACTER), JSON.stringify(migrated));
+        localStorage.removeItem(LEGACY_AXOLOTL_KEY);
+        return migrated;
       }
     } catch {
       // Fallback
@@ -199,7 +208,7 @@ class CharacterService {
   private notify() {
     this.listeners.forEach((fn) => fn({ ...this.character }));
     try {
-      localStorage.setItem(CHARACTER_STORAGE_KEY, JSON.stringify(this.character));
+      localStorage.setItem(StorageService.lifeKey(LIFE_KEYS.CHARACTER), JSON.stringify(this.character));
     } catch (e) {
       console.warn('[CharacterService] Failed to persist state:', e);
     }

@@ -45,7 +45,7 @@ import { lifeSimService, HOME_ROOMS, FURNITURE_CATALOG, HOUSING_CATALOG } from '
 import { type HomeRoomId, type DesignSlotType, type RoomDesignEvaluation, type HousingTier } from '../../types/lifeSim';
 import type { StudySession } from '../../types';
 import { soundEngine, type SoundType } from '../../services/soundEngine';
-import { StorageService } from '../../services/storageService';
+import { LIFE_KEYS, StorageService } from '../../services/storageService';
 import { cn } from '../../utils/cn';
 import { Badge, Button, IconButton, Kbd, Tokens } from '../ui/primitives';
 import { CafeDialog } from './CafeDialog';
@@ -138,8 +138,6 @@ const SITE_FEATURES = [
   { icon: '🌸', title: 'Garden', desc: 'Cherry blossoms, cypress and hedges' },
 ];
 
-const FINISH_STORAGE_KEY = 'studify_home3d_finishes_v1';
-const ROTATION_STORAGE_KEY = 'studify_home3d_rotations_v1';
 
 const WALL_FINISHES: { id: WallFinishId; label: string; color: string }[] = [
   { id: 'white_modern', label: 'Matte White Plaster', color: '#eeebe5' },
@@ -157,7 +155,7 @@ const FLOOR_FINISHES: { id: FloorFinishId; label: string; color: string }[] = [
 
 const readFinishes = (): { wall: WallFinishId; floor: FloorFinishId } => {
   try {
-    const raw = localStorage.getItem(FINISH_STORAGE_KEY);
+    const raw = localStorage.getItem(StorageService.lifeKey(LIFE_KEYS.HOME_FINISHES));
     if (raw) {
       const parsed = JSON.parse(raw) as { wall?: WallFinishId; floor?: FloorFinishId };
       return {
@@ -173,7 +171,7 @@ const readFinishes = (): { wall: WallFinishId; floor: FloorFinishId } => {
 
 const readRotations = (): Record<string, number> => {
   try {
-    const raw = localStorage.getItem(ROTATION_STORAGE_KEY);
+    const raw = localStorage.getItem(StorageService.lifeKey(LIFE_KEYS.HOME_ROTATIONS));
     if (raw) return JSON.parse(raw);
   } catch {
     /* ignore corrupt storage */
@@ -897,7 +895,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     libRef.current?.setWallFinish(wallTexture);
     libRef.current?.setFloorFinish(floorTexture);
     try {
-      localStorage.setItem(FINISH_STORAGE_KEY, JSON.stringify({ wall: wallTexture, floor: floorTexture }));
+      localStorage.setItem(StorageService.lifeKey(LIFE_KEYS.HOME_FINISHES), JSON.stringify({ wall: wallTexture, floor: floorTexture }));
     } catch {
       /* storage unavailable */
     }
@@ -1132,7 +1130,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     const updated = { ...furnitureRotations, [selectedFurniture.id]: next };
     setFurnitureRotations(updated);
     try {
-      localStorage.setItem(ROTATION_STORAGE_KEY, JSON.stringify(updated));
+      localStorage.setItem(StorageService.lifeKey(LIFE_KEYS.HOME_ROTATIONS), JSON.stringify(updated));
     } catch {}
     soundEngine.playTapPop();
     showToast(`Turned the ${selectedFurniture.label.toLowerCase()} a quarter turn`);
