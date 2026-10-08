@@ -260,6 +260,16 @@ export class StorageService {
     return { level, title: LEVEL_TITLES[titleIndex] };
   }
 
+  /** The learner's level and title, from their XP. A cheap read for display. */
+  public static getStudyLevel(): { level: number; title: string } {
+    try {
+      const raw = this.readRaw(this.getKey(STORAGE_KEYS.STATS));
+      return this.calculateLevel(raw ? Number(JSON.parse(raw).xp) || 0 : 0);
+    } catch {
+      return this.calculateLevel(0);
+    }
+  }
+
   public static hasSynapticFreeze(): boolean {
     try {
       return localStorage.getItem(this.lifeKey(LIFE_KEYS.STREAK_FREEZE)) === 'true';

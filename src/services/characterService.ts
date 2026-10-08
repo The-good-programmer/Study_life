@@ -205,26 +205,6 @@ class CharacterService {
     return { ...this.character };
   }
 
-  // Alias for backward compatibility with old mascot services
-  public getState(): CharacterCustomization & { 
-    axonCoins: number;
-    skin: string;
-    accessory: string;
-    evolutionStage: string;
-    friendshipLevel: number;
-    friendshipXP: number;
-  } {
-    return {
-      ...this.character,
-      axonCoins: this.character.coins,
-      skin: 'user-3d',
-      accessory: this.character.headwear,
-      evolutionStage: this.character.level >= 6 ? 'celestial' : this.character.level >= 3 ? 'adult' : 'juvenile',
-      friendshipLevel: this.character.level,
-      friendshipXP: this.character.xp,
-    };
-  }
-
   public subscribe(listener: CharacterListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -352,101 +332,6 @@ class CharacterService {
       happiness: this.character.happiness,
       energy: this.character.energy,
     };
-  }
-
-  public pet(): { happiness: number; xpGained: number; leveledUp: boolean } {
-    return this.motivate();
-  }
-
-  public motivate(): { happiness: number; xpGained: number; leveledUp: boolean } {
-    this.character.happiness = Math.min(100, this.character.happiness + 8);
-    this.character.energy = Math.min(100, this.character.energy + 5);
-    this.character.mood = 'happy';
-    
-    const xpReward = 5;
-    this.character.xp += xpReward;
-    StorageService.addXP(2);
-
-    const requiredXP = this.character.level * 60;
-    let leveledUp = false;
-
-    if (this.character.xp >= requiredXP) {
-      this.character.level += 1;
-      this.character.xp -= requiredXP;
-      leveledUp = true;
-      this.updateTitleByLevel();
-    }
-
-    soundEngine.playSuccess();
-    this.notify();
-    return {
-      happiness: this.character.happiness,
-      xpGained: xpReward,
-      leveledUp,
-    };
-  }
-
-  public doTrick(): { trickName: string } {
-    this.character.mood = 'proud';
-    this.character.pose = 'cheer';
-    this.notify();
-    setTimeout(() => {
-      this.character.pose = 'idle';
-      this.notify();
-    }, 2500);
-    return { trickName: 'Victory High Five & Focus Stance' };
-  }
-
-  private updateTitleByLevel() {
-    const titles = [
-      'Curious Scholar',
-      'Dedicated Novice',
-      'Methodical Thinker',
-      'Focus Specialist',
-      'Dean\'s List Contender',
-      'Research Associate',
-      'Academic Maestro',
-      'Distinguished Polymath',
-    ];
-    const idx = Math.min(titles.length - 1, Math.max(0, this.character.level - 1));
-    this.character.studyTitle = titles[idx];
-  }
-
-  public awardStudySessionRewards(
-    cardsReviewed: number,
-    durationMinutes: number = 5,
-    accuracy: number = 0.85,
-    skipCoins: boolean = false
-  ): {
-    coinsEarned: number;
-    xpEarned: number;
-    leveledUp: boolean;
-  } {
-    const accuracyBonus = Math.round(accuracy * 10);
-    const coinsEarned = Math.max(15, Math.round(cardsReviewed * 5 + durationMinutes * 3));
-    const xpEarned = Math.max(10, Math.round(cardsReviewed * 4 + durationMinutes * 2 + accuracyBonus));
-
-    if (!skipCoins) {
-      this.character.coins = (this.character.coins || 0) + coinsEarned;
-    }
-
-    this.character.energy = Math.min(100, (this.character.energy || 70) + 20);
-    this.character.happiness = Math.min(100, (this.character.happiness || 80) + 15);
-    this.character.mood = 'focused';
-
-    this.character.xp += xpEarned;
-    const requiredXP = this.character.level * 60;
-    let leveledUp = false;
-
-    if (this.character.xp >= requiredXP) {
-      this.character.level += 1;
-      this.character.xp -= requiredXP;
-      leveledUp = true;
-      this.updateTitleByLevel();
-    }
-
-    this.notify();
-    return { coinsEarned, xpEarned, leveledUp };
   }
 
   /** A named style: clothes, hair and accessories. Your figure and skin tone stay as you chose them. */

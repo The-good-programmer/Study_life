@@ -5,6 +5,7 @@ import { soundEngine } from '../../services/soundEngine';
 import { characterService } from '../../services/characterService';
 import { type CharacterCustomization } from '../../types/character';
 import { UserAvatarBadge } from './UserAvatarBadge';
+import { useStudyLevel } from '../../hooks/useStudyLevel';
 
 // The customizer pulls in three.js; load it only when the user opens it.
 const CharacterCustomizerModal = lazy(() =>
@@ -43,6 +44,7 @@ export const CharacterCompanion: React.FC<CharacterCompanionProps> = ({
   onOpenCustomizer,
 }) => {
   const [character, setCharacter] = useState<CharacterCustomization>(() => characterService.getCharacter());
+  const studyLevel = useStudyLevel();
   const [tipIndex, setTipIndex] = useState(0);
   const [isWobbling, setIsWobbling] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -132,7 +134,7 @@ export const CharacterCompanion: React.FC<CharacterCompanionProps> = ({
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-ink">
                 <span className="truncate">{character.name}</span>
-                <span className="shrink-0 tabular-nums text-ink-subtle">Level {character.level}</span>
+                <span className="shrink-0 tabular-nums text-ink-subtle">Level {studyLevel.level}</span>
               </span>
               <button
                 type="button"

@@ -27,6 +27,7 @@ import {
 } from '../../types/character';
 import { characterService, type StylePresetId } from '../../services/characterService';
 import { soundEngine } from '../../services/soundEngine';
+import { useStudyLevel } from '../../hooks/useStudyLevel';
 import { cn } from '../../utils/cn';
 import { Dialog, DialogPanel } from '../common/Dialog';
 import { Button, IconButton } from '../ui/primitives';
@@ -91,6 +92,7 @@ const sameColor = (a: string | undefined, b: string) => (a ?? '').toLowerCase() 
 export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> = ({ isOpen, onClose, onSaved }) => {
   const [activeTab, setActiveTab] = useState<TabId>('you');
   const [character, setCharacter] = useState<CharacterCustomization>(() => characterService.getCharacter());
+  const studyLevel = useStudyLevel();
   const [cameraView, setCameraView] = useState<CameraView>('full');
   const [pose, setPose] = useState<CharacterPose>('idle');
   const [autoRotate, setAutoRotate] = useState(false);
@@ -145,7 +147,7 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
 
           <div className="pointer-events-none relative flex items-start justify-between gap-3 p-4">
             <div className="pointer-events-auto min-w-0">
-              <p className="text-xs text-ink-subtle">Your avatar · level {character.level}</p>
+              <p className="text-xs text-ink-subtle">Your avatar · level {studyLevel.level}</p>
               <h2 id="avatar-title" className="truncate text-[17px] font-semibold text-ink">
                 {character.name || 'Your avatar'}
               </h2>
@@ -261,7 +263,7 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
                   <Swatches palette={SKIN_TONE_PALETTE} value={character.skinTone} onPick={skinTone => update({ skinTone })} />
                 </OptionGroup>
                 <p className="rounded-2xl bg-surface-hover px-4 py-3 text-[13px] text-ink-muted">
-                  <span className="font-medium text-ink">{character.studyTitle}</span> · level {character.level}. Your level rises as you study.
+                  <span className="font-medium text-ink">{studyLevel.title}</span> · level {studyLevel.level}. Your level rises as you study.
                 </p>
               </>
             )}
