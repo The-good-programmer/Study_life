@@ -630,6 +630,47 @@ describe('StorageService deck edits', () => {
   });
 });
 
+describe('StorageService review progress', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    StorageService.setActiveUserId(null);
+  });
+
+  const card = (id: string) => ({ id, conceptId: 'k', question: `Q ${id}`, answer: `A ${id}`, stability: 1, difficulty: 5, reps: 0, lapses: 0 }) as RetrievalCard;
+  const deckWith = (id: string, ids: string[]) =>
+    ({ id, title: id, concepts: [{ id: 'k', title: 'K', retrievalCards: ids.map(card) }] }) as never;
+  const reviewed = (id: string) => ({ ...card(id), reps: 3, lapses: 1, stability: 12, nextReviewDate: '2026-10-19T09:00:00.000Z' });
+
+  it('keeps reviews made while a study session held the deck in memory', () => {
+    StorageService.saveSession(deckWith('deck', ['a', 'b']));
+    const inMemory = StorageService.getSessions().find(s => s.id === 'deck')!;
+    // A review saves its card on its own; the session then saves the deck it loaded earlier.
+    StorageService.saveCard(reviewed('a'));
+    StorageService.saveSession({ ...inMemory, currentConceptIndex: 1 });
+
+    const stored = StorageService.getSessions().find(s => s.id === 'deck')!;
+    expect(stored.currentConceptIndex).toBe(1);
+    expect(stored.concepts[0].retrievalCards[0]).toMatchObject({ reps: 3, lapses: 1, stability: 12 });
+    expect(StorageService.getAllCards().find(c => c.id === 'a')).toMatchObject({ reps: 3, stability: 12 });
+  });
+
+  it('gives an older copy of a card, or of a deck, the saved progress and keeps its content', () => {
+    StorageService.saveSession(deckWith('deck', ['a', 'b']));
+    const olderDeck = StorageService.getSessions().find(s => s.id === 'deck')!;
+    StorageService.saveCard(reviewed('a'));
+
+    expect(StorageService.withLatestProgress({ ...card('a'), question: 'Edited' })).toMatchObject({
+      question: 'Edited',
+      reps: 3,
+      lapses: 1,
+      stability: 12,
+    });
+    const [a, b] = StorageService.deckWithLatestProgress(olderDeck).concepts[0].retrievalCards;
+    expect(a).toMatchObject({ reps: 3, nextReviewDate: '2026-10-19T09:00:00.000Z' });
+    expect(b).toMatchObject({ reps: 0 });
+  });
+});
+
 describe('StorageService profile data', () => {
   const idb = new Map<string, string>();
 

@@ -222,8 +222,8 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
     const latency = Math.max(1, elapsedSeconds);
     const isCorrect = rating === 'good' || rating === 'easy';
 
-    // FSRS stability update
-    const { updatedCard } = FSRSService.schedule(currentCard, rating);
+    // Schedule from the saved progress; the deck's own copy of the card can be older.
+    const { updatedCard } = FSRSService.schedule(StorageService.withLatestProgress(currentCard), rating);
     StorageService.saveCard(updatedCard);
 
     // Self-graded, so every rating earns the same flat review XP.

@@ -25,15 +25,17 @@ type AmbientTheme = 'obsidian' | 'library' | 'indigo-flow' | 'nordic-frost';
 
 export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, onOpenDashboard }) => {
   const [session, setSession] = useState<StudySession>(() => {
+    // Decks saved before reviews were kept in them can hold older copies of their cards.
+    const latest = StorageService.deckWithLatestProgress(initialSession);
     if (
-      !initialSession.casualFlashcardMode &&
-      !initialSession.diagnosticReport &&
-      initialSession.currentConceptIndex === 0 &&
-      initialSession.currentPhase === 'priming'
+      !latest.casualFlashcardMode &&
+      !latest.diagnosticReport &&
+      latest.currentConceptIndex === 0 &&
+      latest.currentPhase === 'priming'
     ) {
-      return { ...initialSession, currentPhase: 'diagnostic' };
+      return { ...latest, currentPhase: 'diagnostic' };
     }
-    return initialSession;
+    return latest;
   });
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(!!document.fullscreenElement);

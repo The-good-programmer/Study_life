@@ -1,4 +1,5 @@
 import type { EarningEntry, ExamReport, InterleavingSessionReport, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
+import { deckWithSavedProgress, withSavedProgress } from '../utils/cardProgress';
 import { IndexedDbService } from './indexedDbService';
 
 const STORAGE_KEYS = {
@@ -676,6 +677,32 @@ export class StorageService {
     return cards;
   }
 
+  /** The saved cards by id, without the backfill from decks that getAllCards does. */
+  private static savedCardsById(): Map<string, RetrievalCard> {
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.CARDS));
+    if (!raw) return new Map();
+    try {
+      const cards: RetrievalCard[] = JSON.parse(raw);
+      return new Map(cards.map(card => [card.id, card]));
+    } catch {
+      return new Map();
+    }
+  }
+
+  /**
+   * The card with its saved review progress. A deck's own copy of a card can be older
+   * (a deck held in memory during a study session, say); schedule reviews from this,
+   * or a review overwrites the ones made since that copy was taken.
+   */
+  public static withLatestProgress(card: RetrievalCard): RetrievalCard {
+    return withSavedProgress(card, this.savedCardsById().get(card.id));
+  }
+
+  /** The deck with each card's saved review progress. */
+  public static deckWithLatestProgress(session: StudySession): StudySession {
+    return deckWithSavedProgress(session, this.savedCardsById());
+  }
+
   public static getDueCards(): RetrievalCard[] {
     const all = this.getAllCards();
     const now = new Date();
@@ -767,9 +794,17 @@ export class StorageService {
       IndexedDbService.setItem(`pdf_${session.id}`, session.sourceDocument.pdfDataUrl).catch(() => {});
     }
 
-    // Create a lightweight copy for localStorage that won't blow the 5MB limit
+    // Sync the deck's cards into the review queue first; the queue keeps each card's furthest progress.
+    const sessionCards = session.concepts?.flatMap(c => c.retrievalCards || []) || [];
+    if (sessionCards.length > 0) {
+      this.syncSessionCardsToGlobalQueue(sessionCards);
+    }
+
+    // Store the deck with that progress. A deck held in memory during a study session still has
+    // its cards as they were when it was loaded, and saving it must not roll back the reviews since.
+    // The copy is also lightweight, so a PDF payload doesn't blow the 5MB limit.
     const lightweightSession: StudySession = {
-      ...session,
+      ...deckWithSavedProgress(session, this.savedCardsById()),
       sourceDocument: session.sourceDocument ? {
         ...session.sourceDocument,
         pdfDataUrl: session.sourceDocument.pdfDataUrl && session.sourceDocument.pdfDataUrl.length > 20000
@@ -789,12 +824,6 @@ export class StorageService {
     }
     this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions.slice(0, 30)));
     this.removeCardsNoLongerInAnyDeck(removedCardIds, sessions);
-
-    // Automatically sync cards into the global FSRS cards queue
-    const sessionCards = session.concepts?.flatMap(c => c.retrievalCards || []) || [];
-    if (sessionCards.length > 0) {
-      this.syncSessionCardsToGlobalQueue(sessionCards);
-    }
 
     this.notifyMutation();
   }

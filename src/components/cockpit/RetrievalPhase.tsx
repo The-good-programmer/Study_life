@@ -148,8 +148,8 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
   const handleRate = useCallback((rating: FSRSRating) => {
     if (!currentCard) return;
 
-    // Schedule through FSRS algorithm
-    const { updatedCard } = FSRSService.schedule(currentCard, rating);
+    // Schedule from the saved progress: this copy is older if the card was already reviewed this session.
+    const { updatedCard } = FSRSService.schedule(StorageService.withLatestProgress(currentCard), rating);
     StorageService.saveCard(updatedCard);
 
     // Reward XP

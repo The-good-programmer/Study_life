@@ -24,6 +24,7 @@ import { ExportService } from '../../services/exportService';
 import { soundEngine } from '../../services/soundEngine';
 import { lifeSimService } from '../../services/lifeSimService';
 import { estimateReward } from '../../services/economy/rewardService';
+import { cardStatusOf, isCardDue, type CardStatus } from '../../utils/cardProgress';
 import { maskCloze } from '../../utils/cloze';
 import { cn } from '../../utils/cn';
 import { CARD_TYPE_LABELS, getEffectiveCardType } from '../cockpit/retrievalLogic';
@@ -46,14 +47,6 @@ interface DeckStationModalProps {
   onEditInStudio: (session: StudySession) => void;
 }
 
-/** A card counts as mastered once it is expected to stay remembered for three weeks. */
-const MASTERED_STABILITY_DAYS = 21;
-
-type CardStatus = 'mastered' | 'learning' | 'new';
-
-const statusOf = (card: RetrievalCard): CardStatus =>
-  card.reps === 0 ? 'new' : card.stability >= MASTERED_STABILITY_DAYS ? 'mastered' : 'learning';
-
 const STATUS_STYLES: Record<CardStatus, { label: string; dot: string }> = {
   mastered: { label: 'Mastered', dot: 'bg-success' },
   learning: { label: 'Learning', dot: 'bg-brand' },
@@ -72,29 +65,9 @@ const formatMemory = (days: number): string => {
 
 type CardFilter = 'all' | 'starred' | CardType;
 
-/**
- * Reviews and stars are saved per card, so the deck's own copies can lag behind.
- * Takes progress from the saved cards and content from the deck.
- */
-const withSavedProgress = (session: StudySession): RetrievalCard[] => {
-  const saved = new Map(StorageService.getAllCards().map(card => [card.id, card]));
-  return session.concepts.flatMap(concept =>
-    concept.retrievalCards.map(card => {
-      const live = saved.get(card.id);
-      if (!live) return card;
-      return {
-        ...card,
-        stability: live.stability ?? card.stability,
-        difficulty: live.difficulty ?? card.difficulty,
-        reps: live.reps ?? card.reps,
-        lapses: live.lapses ?? card.lapses,
-        lastReviewDate: live.lastReviewDate ?? card.lastReviewDate,
-        nextReviewDate: live.nextReviewDate ?? card.nextReviewDate,
-        isStarred: live.isStarred ?? card.isStarred,
-      };
-    }),
-  );
-};
+/** The deck's cards with their saved progress. */
+const cardsOf = (session: StudySession): RetrievalCard[] =>
+  StorageService.deckWithLatestProgress(session).concepts.flatMap(concept => concept.retrievalCards);
 
 const totalMinutesOf = (session: StudySession): number =>
   session.concepts.reduce((sum, concept) => sum + (concept.estimatedMinutes || 5), 0);
@@ -140,7 +113,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
   const [folders, setFolders] = useState<SubjectFolder[]>(() => StorageService.getFolders());
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
-  const [cards, setCards] = useState<RetrievalCard[]>(() => (session ? withSavedProgress(session) : []));
+  const [cards, setCards] = useState<RetrievalCard[]>(() => (session ? cardsOf(session) : []));
   const [now] = useState(() => new Date());
   // What a full guided session pays today, after daily caps and the housing bonus.
   const [guidedPay] = useState(() => {
@@ -155,11 +128,9 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
   const totalMinutes = totalMinutesOf(session);
   const counts = { mastered: 0, learning: 0, new: 0 };
   cards.forEach(card => {
-    counts[statusOf(card)] += 1;
+    counts[cardStatusOf(card)] += 1;
   });
-  const dueCount = cards.filter(
-    card => card.reps > 0 && card.nextReviewDate && new Date(card.nextReviewDate) <= now,
-  ).length;
+  const dueCount = cards.filter(card => isCardDue(card, now)).length;
   const masteredPercent = cards.length ? Math.round((counts.mastered / cards.length) * 100) : 0;
   const starredCards = cards.filter(card => card.isStarred);
 
@@ -560,7 +531,7 @@ const CardRow: React.FC<{
   onToggleExpand: () => void;
   onToggleStar: () => void;
 }> = ({ card, number, now, isExpanded, onToggleExpand, onToggleStar }) => {
-  const status = statusOf(card);
+  const status = cardStatusOf(card);
   const nextReview = describeNextReview(card, now);
   const detailsId = `card-details-${card.id}`;
 
