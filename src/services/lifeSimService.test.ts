@@ -14,10 +14,11 @@ const moveIntoStudio = () => {
 describe('lifeSimService', () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem('studify_life_data_split_v1', '1');
+    // Services keep the wallet and ledger in memory: reload them from the now empty storage.
+    StorageService.setActiveUserId(null);
     lifeSimService.resetForTesting();
-    // Reset coins
-    const char = characterService.getCharacter();
-    characterService.addCoins(100 - (char.coins || 0));
+    characterService.addCoins(100 - characterService.getWalletBalance());
   });
 
   afterEach(() => {

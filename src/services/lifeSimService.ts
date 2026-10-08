@@ -1472,12 +1472,28 @@ class LifeSimService {
     this.cleanExpiredBuffs();
     // Each profile has its own ledger, boosts and home; switch to them on sign-in and sign-out.
     StorageService.addProfileListener(() => {
-      this.reloadProfile();
+      this.reloadFromStorage();
       this.notify();
     });
+    // The wallet is kept by characterService; its changes (here or in another tab) are news here too.
+    characterService.subscribe(() => this.notify());
+    // Rent, meals or furniture bought in another tab: show them here too.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', event => {
+        const watched = [LIFE_KEYS.LEDGER, LIFE_KEYS.BUFFS, LIFE_KEYS.ROOM_DESIGNS, LIFE_KEYS.OWNED_FURNITURE];
+        if (event.key === null || watched.some(base => event.key === StorageService.lifeKey(base))) {
+          this.reloadFromStorage();
+          this.notify();
+        }
+      });
+    }
   }
 
-  private reloadProfile(): void {
+  /**
+   * Reads the saved ledger, boosts and home. Every change starts here, so it builds on
+   * what another tab saved instead of overwriting it with this tab's older copy.
+   */
+  private reloadFromStorage(): void {
     this.currentLedger = this.loadLedger();
     this.activeBuffs = this.loadBuffs();
     this.equippedFurniture = this.loadEquippedFurniture();
@@ -1641,27 +1657,10 @@ class LifeSimService {
    * so rent, meals and earnings never carry over from yesterday.
    */
   private rollOverIfNewDay(): void {
-    const today = this.getTodayDateString();
-    if (this.currentLedger.date === today) return;
-    this.archiveLedger(this.currentLedger);
-    this.currentLedger = {
-      date: today,
-      breakfastId: null,
-      lunchId: null,
-      dinnerId: null,
-      drinkId: null,
-      eatenMeals: {},
-      totalExpenses: 0,
-      totalEarnings: 0,
-      netBalance: 0,
-      housingTier: this.currentLedger.housingTier || 'dorm',
-      rentPaidToday: false,
-      ownedGear: this.currentLedger.ownedGear || [],
-      academicRoleId: this.currentLedger.academicRoleId || 'role_freshman',
-      expenses: [],
-      wages: [],
-    };
-    this.saveLedger(this.currentLedger);
+    if (this.currentLedger.date === this.getTodayDateString()) return;
+    // The saved ledger is the one to roll over (loadLedger archives it and starts today's):
+    // another tab may have added to it since, or already started today's.
+    this.currentLedger = this.loadLedger();
     // Deferred: this can run while a component renders, and listeners set state.
     queueMicrotask(() => this.notify());
   }
@@ -1718,6 +1717,7 @@ class LifeSimService {
       }
     }
     if (this.currentLedger.academicRoleId !== unlocked.id) {
+      this.reloadFromStorage();
       this.currentLedger.academicRoleId = unlocked.id;
       this.saveLedger(this.currentLedger);
     }
@@ -1770,7 +1770,7 @@ class LifeSimService {
   }
 
   public payDailyRent(): { success: boolean; error?: string } {
-    this.rollOverIfNewDay();
+    this.reloadFromStorage();
     if (this.currentLedger.rentPaidToday) {
       return { success: false, error: "Today's rent has already been paid!" };
     }
@@ -1810,7 +1810,7 @@ class LifeSimService {
 
   /** Moves up to a bigger home: needs the study milestone and the renovation cost. Homes are never rented outright. */
   public upgradeHousing(targetTier: HousingTier): { success: boolean; error?: string; property?: HousingProperty } {
-    this.rollOverIfNewDay();
+    this.reloadFromStorage();
     const target = HOUSING_CATALOG.find(h => h.id === targetTier);
     if (!target) {
       return { success: false, error: 'Housing property not found' };
@@ -1890,7 +1890,7 @@ class LifeSimService {
   }
 
   public buyGear(gearId: string): { success: boolean; error?: string; item?: StudentGearItem } {
-    this.rollOverIfNewDay();
+    this.reloadFromStorage();
     const item = STUDENT_GEAR_CATALOG.find(g => g.id === gearId);
     if (!item) {
       return { success: false, error: 'Gear item not found' };
@@ -1933,7 +1933,7 @@ class LifeSimService {
 
   /** Buys a streak freeze, which covers one missed day. You can hold one at a time. */
   public buyStreakFreeze(): { success: boolean; error?: string } {
-    this.rollOverIfNewDay();
+    this.reloadFromStorage();
     if (StorageService.hasSynapticFreeze()) {
       return { success: false, error: 'You already have a streak freeze ready.' };
     }
@@ -1974,7 +1974,7 @@ class LifeSimService {
   }
 
   public buyMeal(mealId: string): { success: boolean; error?: string; meal?: MealItem } {
-    this.rollOverIfNewDay();
+    this.reloadFromStorage();
     const meal = CAFETERIA_MENU.find(m => m.id === mealId);
     if (!meal) {
       return { success: false, error: 'Meal item not found' };
@@ -2060,7 +2060,7 @@ class LifeSimService {
     totalAmount: number;
     activity: string;
   } {
-    this.rollOverIfNewDay();
+    this.reloadFromStorage();
     const multiplier = this.getActiveMultiplier();
     const totalAmount = Math.max(1, Math.round(rawAmount * multiplier));
     const buffBonus = Math.max(0, totalAmount - rawAmount);
@@ -2164,7 +2164,7 @@ class LifeSimService {
     furnitureId: string, 
     autoEquipRoom?: HomeRoomId
   ): { success: boolean; error?: string; item?: RoomFurnitureItem } {
-    this.rollOverIfNewDay();
+    this.reloadFromStorage();
     const item = FURNITURE_CATALOG.find(f => f.id === furnitureId);
     if (!item) {
       return { success: false, error: 'Furniture item not found' };
@@ -2232,6 +2232,7 @@ class LifeSimService {
   }
 
   public equipFurniture(furnitureId: string, roomId: HomeRoomId): { success: boolean; error?: string } {
+    this.reloadFromStorage();
     const item = FURNITURE_CATALOG.find(f => f.id === furnitureId);
     if (!item) {
       return { success: false, error: 'Furniture item not found' };
@@ -2344,6 +2345,7 @@ class LifeSimService {
   }
 
   public resetToStarterLife() {
+    this.reloadFromStorage();
     this.currentLedger.housingTier = 'dorm';
     this.currentLedger.ownedGear = [];
     this.currentLedger.rentPaidToday = false;

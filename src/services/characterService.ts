@@ -1,15 +1,10 @@
-import { 
+import {
   type CharacterCustomization,
-  type CharacterGender,
-  type BodyType,
   type HairStyle,
   type Eyewear,
   type Headwear,
   type OutfitTop,
   type OutfitBottom,
-  type Shoes,
-  type CharacterMood,
-  type CharacterPose,
 } from '../types/character';
 import { LIFE_KEYS, StorageService } from './storageService';
 import { STARTING_COINS } from './economy/wallet';
@@ -123,10 +118,13 @@ class CharacterService {
   constructor() {
     this.character = this.loadCharacter();
     // Each profile has its own avatar and wallet; switch to it on sign-in and sign-out.
-    StorageService.addProfileListener(() => {
-      this.character = this.loadCharacter();
-      this.notify();
-    });
+    StorageService.addProfileListener(() => this.reload());
+    // Tokens earned or spent in another tab: show the new balance here too.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', event => {
+        if (event.key === null || event.key === StorageService.lifeKey(LIFE_KEYS.CHARACTER)) this.reload();
+      });
+    }
   }
 
   private loadCharacter(): CharacterCustomization {
@@ -210,98 +208,37 @@ class CharacterService {
     return () => this.listeners.delete(listener);
   }
 
-  private notify() {
-    this.listeners.forEach((fn) => fn({ ...this.character }));
+  /** Takes the saved character, which another tab may have changed, and tells listeners. */
+  private reload() {
+    this.character = this.loadCharacter();
+    this.emit();
+  }
+
+  private emit() {
+    this.listeners.forEach(fn => fn({ ...this.character }));
+  }
+
+  /**
+   * Changes the saved character. It is read again first, so a change made in another tab
+   * (tokens spent there, say) is kept instead of being overwritten by this tab's older copy.
+   */
+  private update(change: (latest: CharacterCustomization) => Partial<CharacterCustomization>) {
+    const latest = this.loadCharacter();
+    this.character = { ...latest, ...change(latest) };
     try {
       localStorage.setItem(StorageService.lifeKey(LIFE_KEYS.CHARACTER), JSON.stringify(this.character));
     } catch (e) {
       console.warn('[CharacterService] Failed to persist state:', e);
     }
+    this.emit();
   }
 
+  /**
+   * Changes how the avatar looks, and only that: an editor holding a copy of the whole
+   * character (opened before tokens were spent, say) can't write its old balance back.
+   */
   public updateCustomization(partial: Partial<CharacterCustomization>) {
-    this.character = {
-      ...this.character,
-      ...partial,
-    };
-    this.notify();
-  }
-
-  public updateName(name: string) {
-    const trimmed = name.trim().slice(0, 24);
-    if (!trimmed) return;
-    this.character.name = trimmed;
-    this.notify();
-  }
-
-  public setGender(gender: CharacterGender) {
-    this.character.gender = gender;
-    this.notify();
-  }
-
-  public setBodyType(bodyType: BodyType) {
-    this.character.bodyType = bodyType;
-    this.notify();
-  }
-
-  public setSkinTone(skinTone: string) {
-    this.character.skinTone = skinTone;
-    this.notify();
-  }
-
-  public setHair(hairStyle: HairStyle, hairColor?: string) {
-    this.character.hairStyle = hairStyle;
-    if (hairColor) {
-      this.character.hairColor = hairColor;
-    }
-    this.notify();
-  }
-
-  public setHairColor(color: string) {
-    this.character.hairColor = color;
-    this.notify();
-  }
-
-  public setEyeColor(color: string) {
-    this.character.eyeColor = color;
-    this.notify();
-  }
-
-  public setEyewear(eyewear: Eyewear, color?: string) {
-    this.character.eyewear = eyewear;
-    if (color) this.character.eyewearColor = color;
-    this.notify();
-  }
-
-  public setHeadwear(headwear: Headwear, color?: string) {
-    this.character.headwear = headwear;
-    if (color) this.character.headwearColor = color;
-    this.notify();
-  }
-
-  public setOutfit(
-    top: OutfitTop,
-    bottom: OutfitBottom,
-    options?: { topColor?: string; topSecondaryColor?: string; bottomColor?: string; shoes?: Shoes; shoesColor?: string }
-  ) {
-    this.character.outfitTop = top;
-    this.character.outfitBottom = bottom;
-    if (options?.topColor) this.character.topColor = options.topColor;
-    if (options?.topSecondaryColor) this.character.topSecondaryColor = options.topSecondaryColor;
-    if (options?.bottomColor) this.character.bottomColor = options.bottomColor;
-    if (options?.shoes) this.character.shoes = options.shoes;
-    if (options?.shoesColor) this.character.shoesColor = options.shoesColor;
-    this.notify();
-  }
-
-  public setMood(mood: CharacterMood) {
-    this.character.mood = mood;
-    this.notify();
-  }
-
-  public setPose(pose: CharacterPose) {
-    this.character.pose = pose;
-    this.notify();
+    this.update(() => appearanceOf(partial));
   }
 
   public getWalletBalance(): number {
@@ -309,24 +246,28 @@ class CharacterService {
   }
 
   public addCoins(amount: number) {
-    this.character.coins = Math.max(0, (this.character.coins || 0) + amount);
-    this.notify();
+    this.update(latest => ({ coins: Math.max(0, (latest.coins || 0) + amount) }));
   }
 
+  /** Takes tokens from the wallet as saved right now; false, with nothing taken, when there aren't enough. */
   public spendCoins(amount: number): boolean {
-    if ((this.character.coins || 0) < amount) return false;
-    this.character.coins -= amount;
-    this.notify();
-    return true;
+    let spent = false;
+    this.update(latest => {
+      if ((latest.coins || 0) < amount) return {};
+      spent = true;
+      return { coins: latest.coins - amount };
+    });
+    return spent;
   }
 
   public feed(_snackType: string = 'berry'): { hunger: number; happiness: number; energy: number } {
-    this.character.hunger = Math.min(100, (this.character.hunger || 70) + 25);
-    this.character.energy = Math.min(100, (this.character.energy || 70) + 15);
-    this.character.happiness = Math.min(100, (this.character.happiness || 80) + 10);
-    this.character.mood = 'energetic';
+    this.update(latest => ({
+      hunger: Math.min(100, (latest.hunger || 70) + 25),
+      energy: Math.min(100, (latest.energy || 70) + 15),
+      happiness: Math.min(100, (latest.happiness || 80) + 10),
+      mood: 'energetic',
+    }));
     soundEngine.playSuccess();
-    this.notify();
     return {
       hunger: this.character.hunger,
       happiness: this.character.happiness,
