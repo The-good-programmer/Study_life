@@ -146,6 +146,12 @@ async function migrate(db) {
 }
 
 const connectionString = (process.env.DATABASE_URL || '').trim();
+if (!connectionString && process.env.NODE_ENV === 'production') {
+  // The embedded database lives on the server's own disk, which hosts like Render wipe on every deploy:
+  // it would look healthy while losing every account. Refuse to start instead.
+  console.error('[Database] FATAL: DATABASE_URL must be set in production (a PostgreSQL connection string).');
+  process.exit(1);
+}
 export const db = connectionString ? await connectPostgres(connectionString) : await connectEmbedded();
 await migrate(db);
 
