@@ -19,6 +19,78 @@ const LEGACY_AXOLOTL_KEY = 'studify_axolotl_sanctuary_v1';
 
 export type CharacterListener = (character: CharacterCustomization) => void;
 
+export type StylePresetId = 'scholar' | 'tech' | 'athlete' | 'cozy' | 'creative';
+
+/** Clothes, hair and accessories for each named style; never figure or skin tone. */
+const STYLE_PRESETS: Record<StylePresetId, Partial<CharacterCustomization>> = {
+  scholar: {
+    outfitTop: 'button-down',
+    topColor: '#1e3a8a',
+    topSecondaryColor: '#ffffff',
+    outfitBottom: 'chinos',
+    bottomColor: '#b49f82',
+    hairStyle: 'side-part',
+    hairColor: '#382212',
+    eyewear: 'wireframe',
+    headwear: 'none',
+    shoes: 'loafers',
+    shoesColor: '#78350f',
+  },
+  tech: {
+    outfitTop: 'casual-tee',
+    topColor: '#334155',
+    outfitBottom: 'jeans',
+    bottomColor: '#1e293b',
+    hairStyle: 'spiky',
+    hairColor: '#06b6d4',
+    eyewear: 'thick-frame',
+    headwear: 'headphones',
+    headwearColor: '#06b6d4',
+    shoes: 'sneakers',
+    shoesColor: '#ffffff',
+  },
+  athlete: {
+    outfitTop: 'varsity-jacket',
+    topColor: '#991b1b',
+    topSecondaryColor: '#ffffff',
+    outfitBottom: 'joggers',
+    bottomColor: '#1e293b',
+    hairStyle: 'ponytail',
+    hairColor: '#66391a',
+    eyewear: 'none',
+    headwear: 'cap',
+    headwearColor: '#991b1b',
+    shoes: 'running',
+    shoesColor: '#dc2626',
+  },
+  cozy: {
+    outfitTop: 'hoodie',
+    topColor: '#4f46e5',
+    topSecondaryColor: '#6366f1',
+    outfitBottom: 'pleated-skirt',
+    bottomColor: '#1d4ed8',
+    hairStyle: 'bob-cut',
+    hairColor: '#e5b958',
+    eyewear: 'round',
+    headwear: 'beanie',
+    headwearColor: '#4f46e5',
+    shoes: 'sneakers',
+    shoesColor: '#ffffff',
+  },
+  creative: {
+    outfitTop: 'sweater',
+    topColor: '#065f46',
+    outfitBottom: 'chinos',
+    bottomColor: '#b49f82',
+    hairStyle: 'curly-afro',
+    hairColor: '#171717',
+    eyewear: 'round',
+    headwear: 'none',
+    shoes: 'boots',
+    shoesColor: '#78350f',
+  },
+};
+
 class CharacterService {
   private character: CharacterCustomization;
   private listeners: Set<CharacterListener> = new Set();
@@ -343,117 +415,32 @@ class CharacterService {
     return { coinsEarned, xpEarned, leveledUp };
   }
 
-  public applyPreset(presetId: 'scholar' | 'tech' | 'athlete' | 'cozy' | 'creative') {
-    switch (presetId) {
-      case 'scholar':
-        this.updateCustomization({
-          gender: 'male',
-          outfitTop: 'button-down',
-          topColor: '#1e3a8a',
-          topSecondaryColor: '#ffffff',
-          outfitBottom: 'chinos',
-          bottomColor: '#b49f82',
-          hairStyle: 'side-part',
-          hairColor: '#382212',
-          eyewear: 'wireframe',
-          headwear: 'none',
-          shoes: 'loafers',
-          shoesColor: '#78350f',
-        });
-        break;
-      case 'tech':
-        this.updateCustomization({
-          gender: 'nonbinary',
-          outfitTop: 'casual-tee',
-          topColor: '#334155',
-          outfitBottom: 'jeans',
-          bottomColor: '#1e293b',
-          hairStyle: 'spiky',
-          hairColor: '#06b6d4',
-          eyewear: 'thick-frame',
-          headwear: 'headphones',
-          headwearColor: '#06b6d4',
-          shoes: 'sneakers',
-          shoesColor: '#ffffff',
-        });
-        break;
-      case 'athlete':
-        this.updateCustomization({
-          gender: 'female',
-          outfitTop: 'varsity-jacket',
-          topColor: '#991b1b',
-          topSecondaryColor: '#ffffff',
-          outfitBottom: 'joggers',
-          bottomColor: '#1e293b',
-          hairStyle: 'ponytail',
-          hairColor: '#66391a',
-          eyewear: 'none',
-          headwear: 'cap',
-          headwearColor: '#991b1b',
-          shoes: 'running',
-          shoesColor: '#dc2626',
-        });
-        break;
-      case 'cozy':
-        this.updateCustomization({
-          gender: 'female',
-          outfitTop: 'hoodie',
-          topColor: '#4f46e5',
-          topSecondaryColor: '#6366f1',
-          outfitBottom: 'pleated-skirt',
-          bottomColor: '#1d4ed8',
-          hairStyle: 'bob-cut',
-          hairColor: '#e5b958',
-          eyewear: 'round',
-          headwear: 'beanie',
-          headwearColor: '#4f46e5',
-          shoes: 'sneakers',
-          shoesColor: '#ffffff',
-        });
-        break;
-      case 'creative':
-        this.updateCustomization({
-          gender: 'nonbinary',
-          outfitTop: 'sweater',
-          topColor: '#065f46',
-          outfitBottom: 'chinos',
-          bottomColor: '#b49f82',
-          hairStyle: 'curly-afro',
-          hairColor: '#171717',
-          skinTone: '#8c5332',
-          eyewear: 'round',
-          headwear: 'none',
-          shoes: 'boots',
-          shoesColor: '#78350f',
-        });
-        break;
-    }
+  /** A named style: clothes, hair and accessories. Your figure and skin tone stay as you chose them. */
+  public presetLook(presetId: StylePresetId): Partial<CharacterCustomization> {
+    return { ...STYLE_PRESETS[presetId] };
   }
 
-  public randomize() {
-    const genders: CharacterGender[] = ['male', 'female', 'nonbinary'];
+  /** A random style: hair, clothes and accessories, again leaving figure and skin tone alone. */
+  public randomLook(): Partial<CharacterCustomization> {
     const hairStyles: HairStyle[] = ['short-fade', 'curly-afro', 'bob-cut', 'long-wavy', 'ponytail', 'spiky', 'side-part', 'buzz'];
     const tops: OutfitTop[] = ['hoodie', 'varsity-jacket', 'button-down', 'sweater', 'lab-coat', 'casual-tee'];
     const bottoms: OutfitBottom[] = ['jeans', 'chinos', 'joggers', 'pleated-skirt', 'shorts'];
     const eyes: Eyewear[] = ['none', 'wireframe', 'thick-frame', 'round', 'sunglasses'];
     const heads: Headwear[] = ['none', 'cap', 'beanie', 'mortarboard', 'headphones'];
     const hairColors = ['#171717', '#382212', '#66391a', '#e5b958', '#06b6d4', '#f472b6', '#8b5cf6'];
-    const skinTones = ['#ffdfd3', '#fcd0ba', '#e5b88f', '#d2996e', '#bb7e53', '#8c5332', '#54321d'];
     const topColors = ['#1e3a8a', '#991b1b', '#065f46', '#334155', '#d97706', '#581c87', '#4f46e5'];
 
     const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
-    this.updateCustomization({
-      gender: pick(genders),
+    return {
       hairStyle: pick(hairStyles),
       hairColor: pick(hairColors),
-      skinTone: pick(skinTones),
       outfitTop: pick(tops),
       topColor: pick(topColors),
       outfitBottom: pick(bottoms),
       eyewear: pick(eyes),
       headwear: pick(heads),
-    });
+    };
   }
 }
 

@@ -1,46 +1,35 @@
 import React, { useState } from 'react';
-import confetti from 'canvas-confetti';
-import { 
-  X, 
-  Sparkles, 
-  RotateCw, 
-  User, 
-  Shirt, 
-  Glasses, 
-  Check, 
-  Shuffle, 
-  Smile, 
-  BookOpen, 
-  Trophy, 
-  Hand, 
-  Palette
-} from 'lucide-react';
-import { 
-  type CharacterCustomization, 
-  type CharacterGender, 
-  type BodyType, 
-  type HairStyle, 
-  type Eyewear, 
-  type Headwear, 
-  type OutfitTop, 
-  type OutfitBottom, 
-  type Shoes, 
+import { BookOpen, Check, Glasses, Hand, Palette, RotateCw, Shirt, Shuffle, Smile, Sparkles, Trophy, User, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  type BodyType,
+  type CharacterCustomization,
+  type CharacterGender,
   type CharacterPose,
+  type Eyewear,
   type FacialHair,
-  SKIN_TONE_PALETTE,
-  HAIR_COLOR_PALETTE,
-  EYE_COLOR_PALETTE,
-  TOP_COLOR_PALETTE,
-  BOTTOM_COLOR_PALETTE,
-  SHOE_COLOR_PALETTE,
-  HAIR_STYLE_META,
-  FACIAL_HAIR_META,
-  OUTFIT_TOP_META,
-  OUTFIT_BOTTOM_META,
+  type HairStyle,
+  type Headwear,
+  type OutfitBottom,
+  type OutfitTop,
+  type Shoes,
   ACCESSORY_META,
+  BOTTOM_COLOR_PALETTE,
+  EYE_COLOR_PALETTE,
+  FACIAL_HAIR_META,
+  HAIR_COLOR_PALETTE,
+  HAIR_STYLE_META,
+  OUTFIT_BOTTOM_META,
+  OUTFIT_TOP_META,
+  SHOE_COLOR_PALETTE,
+  SKIN_TONE_PALETTE,
+  TOP_COLOR_PALETTE,
 } from '../../types/character';
-import { characterService } from '../../services/characterService';
+import { characterService, type StylePresetId } from '../../services/characterService';
 import { soundEngine } from '../../services/soundEngine';
+import { cn } from '../../utils/cn';
+import { Dialog, DialogPanel } from '../common/Dialog';
+import { Button, IconButton } from '../ui/primitives';
 import { CharacterCanvas3D } from './CharacterCanvas3D';
 
 export interface CharacterCustomizerModalProps {
@@ -49,821 +38,442 @@ export interface CharacterCustomizerModalProps {
   onSaved?: (character: CharacterCustomization) => void;
 }
 
-type TabType = 'identity' | 'hair-face' | 'wardrobe' | 'accessories' | 'presets';
+type TabId = 'you' | 'hair-face' | 'clothes' | 'accessories' | 'styles';
+type CameraView = 'full' | 'portrait' | 'torso';
 
-export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> = ({
-  isOpen,
-  onClose,
-  onSaved,
-}) => {
-  const [activeTab, setActiveTab] = useState<TabType>('identity');
+const TABS: { id: TabId; label: string; icon: LucideIcon; camera: CameraView }[] = [
+  { id: 'you', label: 'You', icon: User, camera: 'full' },
+  { id: 'hair-face', label: 'Hair and face', icon: Palette, camera: 'portrait' },
+  { id: 'clothes', label: 'Clothes', icon: Shirt, camera: 'torso' },
+  { id: 'accessories', label: 'Accessories', icon: Glasses, camera: 'portrait' },
+  { id: 'styles', label: 'Styles', icon: Sparkles, camera: 'full' },
+];
+
+const FIGURES: { id: CharacterGender; label: string }[] = [
+  { id: 'female', label: 'Feminine' },
+  { id: 'male', label: 'Masculine' },
+  { id: 'nonbinary', label: 'Androgynous' },
+];
+
+const BUILDS: { id: BodyType; label: string }[] = [
+  { id: 'slender', label: 'Slender' },
+  { id: 'average', label: 'Average' },
+  { id: 'athletic', label: 'Athletic' },
+];
+
+const SHOES: { id: Shoes; label: string; icon: string }[] = [
+  { id: 'sneakers', label: 'Sneakers', icon: '👟' },
+  { id: 'boots', label: 'Boots', icon: '🥾' },
+  { id: 'loafers', label: 'Loafers', icon: '👞' },
+  { id: 'running', label: 'Running shoes', icon: '👟' },
+];
+
+const ACCENT_COLORS = ['#4f46e5', '#06b6d4', '#ec4899', '#10b981', '#f59e0b', '#0f172a', '#e2e8f0'];
+
+const STYLE_PRESETS: { id: StylePresetId; title: string; desc: string; icon: string }[] = [
+  { id: 'scholar', title: 'Honor roll', desc: 'Button-down, chinos, side part, wire frames', icon: '📖' },
+  { id: 'tech', title: 'Tech', desc: 'Tee, headphones, spiky cyan hair, sneakers', icon: '💻' },
+  { id: 'athlete', title: 'Varsity', desc: 'Varsity jacket, joggers, cap, ponytail', icon: '🏆' },
+  { id: 'cozy', title: 'Late night', desc: 'Hoodie, pleated skirt, beanie, bob', icon: '☕' },
+  { id: 'creative', title: 'Studio', desc: 'Cable sweater, curls, round glasses, boots', icon: '🎨' },
+];
+
+const POSES: { id: CharacterPose; label: string; icon: LucideIcon }[] = [
+  { id: 'idle', label: 'Relaxed', icon: Smile },
+  { id: 'wave', label: 'Wave', icon: Hand },
+  { id: 'study', label: 'Reading', icon: BookOpen },
+  { id: 'cheer', label: 'Cheer', icon: Trophy },
+];
+
+const sameColor = (a: string | undefined, b: string) => (a ?? '').toLowerCase() === b.toLowerCase();
+
+/** The avatar editor: a live 3D preview beside the options. Nothing is kept until Save. */
+export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> = ({ isOpen, onClose, onSaved }) => {
+  const [activeTab, setActiveTab] = useState<TabId>('you');
   const [character, setCharacter] = useState<CharacterCustomization>(() => characterService.getCharacter());
-  const [cameraView, setCameraView] = useState<'full' | 'portrait' | 'torso'>('full');
+  const [cameraView, setCameraView] = useState<CameraView>('full');
   const [pose, setPose] = useState<CharacterPose>('idle');
   const [autoRotate, setAutoRotate] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
-  if (!isOpen) return null;
+  // Start from the saved avatar each time the editor opens (adjusting state during render).
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) {
+      setCharacter(characterService.getCharacter());
+      setHasChanges(false);
+      setActiveTab('you');
+      setCameraView('full');
+    }
+  }
 
-  const updateField = <K extends keyof CharacterCustomization>(key: K, value: CharacterCustomization[K]) => {
-    setCharacter((prev) => {
-      const next = { ...prev, [key]: value };
-      return next;
-    });
+  const update = (partial: Partial<CharacterCustomization>) => {
+    setCharacter(prev => ({ ...prev, ...partial }));
     setHasChanges(true);
     soundEngine.playTapPop();
   };
 
-  const handleSave = () => {
+  const save = () => {
     characterService.updateCustomization(character);
-    setHasChanges(false);
     soundEngine.playSuccess();
-    try {
-      confetti({
-        particleCount: 35,
-        spread: 60,
-        origin: { y: 0.6 },
-        colors: ['#6366f1', '#38bdf8', '#ec4899', '#fbbf24'],
-      });
-    } catch {}
-
-    if (onSaved) onSaved(character);
+    onSaved?.(character);
     onClose();
   };
 
-  const handleRandomize = () => {
-    characterService.randomize();
-    const updated = characterService.getCharacter();
-    setCharacter(updated);
-    setHasChanges(true);
-    soundEngine.playTapPop();
-  };
-
-  const handlePreset = (preset: 'scholar' | 'tech' | 'athlete' | 'cozy' | 'creative') => {
-    characterService.applyPreset(preset);
-    const updated = characterService.getCharacter();
-    setCharacter(updated);
-    setHasChanges(true);
-    soundEngine.playSuccess();
+  const openTab = (tab: (typeof TABS)[number]) => {
+    setActiveTab(tab.id);
+    setCameraView(tab.camera);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div 
-        className="relative w-full max-w-5xl h-[92vh] max-h-[850px] bg-[#0c1222] border border-indigo-500/30 rounded-3xl shadow-2xl flex flex-col md:flex-row overflow-hidden"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="customizer-title"
-      >
-        {/* Top Floating Controls on Mobile / Close Button */}
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-4 right-4 z-20 p-2.5 rounded-full bg-slate-900/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700/60 transition-all cursor-pointer"
-          title="Close"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        {/* =========================================================================
-            LEFT COLUMN: 3D Interactive Viewport
-           ========================================================================= */}
-        <div className="w-full md:w-5/12 lg:w-1/2 h-[42vh] md:h-full bg-gradient-to-b from-[#0a1128] via-[#0b1430] to-[#060a17] relative flex flex-col items-center justify-between border-b md:border-b-0 md:border-r border-slate-800/80">
-          {/* Header Title & Character Name */}
-          <div className="w-full p-4 z-10 flex items-center justify-between pointer-events-none">
-            <div className="pointer-events-auto">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-mono font-bold tracking-widest text-indigo-300 uppercase">3D Character Studio</span>
-              </div>
-              <h2 id="customizer-title" className="text-xl font-black text-white font-display tracking-tight flex items-center gap-2">
-                <span>{character.name || 'Student Avatar'}</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">
-                  Lv.{character.level}
-                </span>
-              </h2>
-            </div>
-          </div>
-
-          {/* 3D Canvas Canvas */}
-          <div className="absolute inset-0 w-full h-full">
+    <Dialog isOpen={isOpen} onClose={onClose} titleId="avatar-title" className="max-w-5xl">
+      <DialogPanel className="h-[92dvh] max-h-[860px] md:flex-row">
+        {/* Preview */}
+        <div className="relative flex h-[38dvh] shrink-0 flex-col justify-between overflow-hidden border-b border-line bg-canvas md:h-auto md:w-1/2 md:border-b-0 md:border-r">
+          <div className="absolute inset-0">
             <CharacterCanvas3D
               customization={character}
               pose={pose}
               cameraView={cameraView}
               autoRotate={autoRotate}
-              showPedestal={true}
-              interactive={true}
+              showPedestal
+              interactive
+              className="min-h-0!"
             />
           </div>
 
-          {/* Viewport Toolbar Controls */}
-          <div className="w-full p-3 sm:p-4 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-            {/* Camera View Switcher */}
-            <div className="flex items-center gap-1 bg-slate-900/80 backdrop-blur-md p-1 rounded-xl border border-slate-700/60 pointer-events-auto shadow-lg">
-              <button
-                type="button"
-                onClick={() => setCameraView('portrait')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
-                  cameraView === 'portrait' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Face & Hair
-              </button>
-              <button
-                type="button"
-                onClick={() => setCameraView('torso')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
-                  cameraView === 'torso' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Outfit
-              </button>
-              <button
-                type="button"
-                onClick={() => setCameraView('full')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
-                  cameraView === 'full' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Full Body
-              </button>
+          <div className="pointer-events-none relative flex items-start justify-between gap-3 p-4">
+            <div className="pointer-events-auto min-w-0">
+              <p className="text-xs text-ink-subtle">Your avatar · level {character.level}</p>
+              <h2 id="avatar-title" className="truncate text-[17px] font-semibold text-ink">
+                {character.name || 'Your avatar'}
+              </h2>
             </div>
+            <IconButton icon={X} label="Close" onClick={onClose} className="pointer-events-auto -mr-1 -mt-1 shrink-0 md:hidden" />
+          </div>
 
-            {/* Pose & Auto-spin */}
-            <div className="flex items-center gap-1.5 pointer-events-auto">
-              <button
-                type="button"
-                onClick={() => setAutoRotate((prev) => !prev)}
-                className={`p-2 rounded-xl backdrop-blur-md border transition-all ${
-                  autoRotate 
-                    ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/60' 
-                    : 'bg-slate-900/80 text-slate-400 hover:text-white border-slate-700/60'
-                }`}
-                title="Toggle 360° Turntable"
-              >
-                <RotateCw className={`w-4 h-4 ${autoRotate ? 'animate-spin [animation-duration:6s]' : ''}`} />
-              </button>
-
-              <div className="flex items-center gap-1 bg-slate-900/80 backdrop-blur-md p-1 rounded-xl border border-slate-700/60 shadow-lg">
+          <div className="pointer-events-none relative flex flex-wrap items-center justify-between gap-2 p-3">
+            <div role="radiogroup" aria-label="Camera" className="pointer-events-auto flex rounded-xl border border-line-strong bg-surface-solid/90 p-1 backdrop-blur">
+              {(
+                [
+                  { id: 'portrait', label: 'Face' },
+                  { id: 'torso', label: 'Outfit' },
+                  { id: 'full', label: 'Full' },
+                ] as const
+              ).map(view => (
                 <button
+                  key={view.id}
                   type="button"
-                  onClick={() => setPose('idle')}
-                  className={`p-1.5 rounded-lg transition-all ${pose === 'idle' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                  title="Relaxed Pose"
+                  role="radio"
+                  aria-checked={cameraView === view.id}
+                  onClick={() => setCameraView(view.id)}
+                  className={cn(
+                    'h-7 rounded-lg px-2.5 text-xs font-medium transition-colors cursor-pointer',
+                    cameraView === view.id ? 'bg-ink text-canvas' : 'text-ink-muted hover:text-ink',
+                  )}
                 >
-                  <Smile className="w-4 h-4" />
+                  {view.label}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setPose('wave')}
-                  className={`p-1.5 rounded-lg transition-all ${pose === 'wave' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                  title="Wave Pose"
-                >
-                  <Hand className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPose('study')}
-                  className={`p-1.5 rounded-lg transition-all ${pose === 'study' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                  title="Study & Read Pose"
-                >
-                  <BookOpen className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPose('cheer')}
-                  className={`p-1.5 rounded-lg transition-all ${pose === 'cheer' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                  title="Victory Cheer Pose"
-                >
-                  <Trophy className="w-4 h-4" />
-                </button>
-              </div>
+              ))}
+            </div>
+            <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-line-strong bg-surface-solid/90 p-1 backdrop-blur">
+              <IconButton
+                icon={RotateCw}
+                label="Turntable"
+                active={autoRotate}
+                aria-pressed={autoRotate}
+                onClick={() => setAutoRotate(v => !v)}
+                className="h-8 w-8"
+              />
+              <span className="mx-0.5 h-5 w-px bg-line" aria-hidden="true" />
+              {POSES.map(p => (
+                <IconButton
+                  key={p.id}
+                  icon={p.icon}
+                  label={`${p.label} pose`}
+                  active={pose === p.id}
+                  aria-pressed={pose === p.id}
+                  onClick={() => setPose(p.id)}
+                  className="h-8 w-8"
+                />
+              ))}
             </div>
           </div>
         </div>
 
-        {/* =========================================================================
-            RIGHT COLUMN: Customizer Controls & Studio Dashboard
-           ========================================================================= */}
-        <div className="w-full md:w-7/12 lg:w-1/2 flex-1 flex flex-col h-[50vh] md:h-full bg-[#0a0f1d] overflow-hidden">
-          {/* Navigation Tabs */}
-          <div className="flex items-center gap-1 p-3 border-b border-slate-800/80 overflow-x-auto scrollbar-none bg-[#0d1426]">
-            <button
-              type="button"
-              onClick={() => { setActiveTab('identity'); setCameraView('full'); }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                activeTab === 'identity' 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' 
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-            >
-              <User className="w-3.5 h-3.5" />
-              <span>Identity</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setActiveTab('hair-face'); setCameraView('portrait'); }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                activeTab === 'hair-face' 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' 
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-            >
-              <Palette className="w-3.5 h-3.5" />
-              <span>Hair &amp; Face</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setActiveTab('wardrobe'); setCameraView('torso'); }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                activeTab === 'wardrobe' 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' 
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-            >
-              <Shirt className="w-3.5 h-3.5" />
-              <span>Wardrobe</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setActiveTab('accessories'); setCameraView('portrait'); }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                activeTab === 'accessories' 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' 
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-            >
-              <Glasses className="w-3.5 h-3.5" />
-              <span>Gear</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { setActiveTab('presets'); setCameraView('full'); }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                activeTab === 'presets' 
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' 
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Styles</span>
-            </button>
+        {/* Options */}
+        <div className="flex min-h-0 flex-1 flex-col md:w-1/2">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line pl-3 pr-2">
+            <div role="tablist" aria-label="Avatar options" className="flex gap-4 overflow-x-auto px-1 pt-3 no-scrollbar">
+              {TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  onClick={() => openTab(tab)}
+                  className={cn(
+                    'flex shrink-0 items-center gap-1.5 border-b-2 pb-2.5 text-[13px] font-medium transition-colors cursor-pointer',
+                    activeTab === tab.id ? 'border-ink text-ink' : 'border-transparent text-ink-subtle hover:text-ink',
+                  )}
+                >
+                  <tab.icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <IconButton icon={X} label="Close" onClick={onClose} className="hidden shrink-0 md:inline-flex" />
           </div>
 
-          {/* Tab Content Panel (Scrollable) */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 text-slate-200">
-            {/* ==================== TAB: IDENTITY ==================== */}
-            {activeTab === 'identity' && (
-              <div className="space-y-6">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+            {activeTab === 'you' && (
+              <>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Character Name
+                  <label htmlFor="avatar-name" className="text-[13px] font-medium text-ink">
+                    Name
                   </label>
                   <input
+                    id="avatar-name"
                     type="text"
                     value={character.name}
-                    onChange={(e) => updateField('name', e.target.value)}
-                    placeholder="Enter character name..."
+                    onChange={e => update({ name: e.target.value })}
+                    placeholder="What should we call you?"
                     maxLength={24}
-                    className="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-medium focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                    className="mt-1.5 h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Sex &amp; Silhouette
-                  </label>
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {(['female', 'male', 'nonbinary'] as CharacterGender[]).map((genderOption) => {
-                      const isSelected = character.gender === genderOption;
-                      const labels = {
-                        female: { label: 'Female', desc: 'Slender, curved frame' },
-                        male: { label: 'Male', desc: 'Broader athletic frame' },
-                        nonbinary: { label: 'Non-Binary', desc: 'Balanced sleek frame' },
-                      };
-                      return (
-                        <button
-                          key={genderOption}
-                          type="button"
-                          onClick={() => updateField('gender', genderOption)}
-                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-md shadow-indigo-500/10'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                          }`}
-                        >
-                          <div className="text-sm font-bold flex items-center justify-between">
-                            <span>{labels[genderOption].label}</span>
-                            {isSelected && <Check className="w-4 h-4 text-indigo-400" />}
-                          </div>
-                          <div className="text-[11px] text-slate-500 mt-0.5">{labels[genderOption].desc}</div>
-                        </button>
-                      );
-                    })}
+                <OptionGroup label="Figure">
+                  <div className="grid grid-cols-3 gap-2">
+                    {FIGURES.map(f => (
+                      <OptionTile key={f.id} label={f.label} selected={character.gender === f.id} onClick={() => update({ gender: f.id })} />
+                    ))}
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Body Build
-                  </label>
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {(['slender', 'average', 'athletic'] as BodyType[]).map((bt) => {
-                      const isSelected = character.bodyType === bt;
-                      return (
-                        <button
-                          key={bt}
-                          type="button"
-                          onClick={() => updateField('bodyType', bt)}
-                          className={`py-2.5 px-3 rounded-xl border text-center font-bold text-xs capitalize transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/25 border-indigo-500 text-white'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          {bt}
-                        </button>
-                      );
-                    })}
+                </OptionGroup>
+                <OptionGroup label="Build">
+                  <div className="grid grid-cols-3 gap-2">
+                    {BUILDS.map(b => (
+                      <OptionTile key={b.id} label={b.label} selected={character.bodyType === b.id} onClick={() => update({ bodyType: b.id })} />
+                    ))}
                   </div>
-                </div>
-
-                {/* Academic Title & Status Card */}
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-purple-950/30 to-slate-900/60 border border-indigo-500/20 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-mono uppercase text-indigo-300 font-bold tracking-wider">Academic Rank</span>
-                    <h4 className="text-sm font-black text-white">{character.studyTitle}</h4>
-                    <p className="text-xs text-slate-400">Level {character.level} • {character.coins} Coins in Wallet</p>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300">
-                    <Trophy className="w-5 h-5" />
-                  </div>
-                </div>
-              </div>
+                </OptionGroup>
+                <OptionGroup label="Skin tone">
+                  <Swatches palette={SKIN_TONE_PALETTE} value={character.skinTone} onPick={skinTone => update({ skinTone })} />
+                </OptionGroup>
+                <p className="rounded-2xl bg-surface-hover px-4 py-3 text-[13px] text-ink-muted">
+                  <span className="font-medium text-ink">{character.studyTitle}</span> · level {character.level}. Your level rises as you study.
+                </p>
+              </>
             )}
 
-            {/* ==================== TAB: HAIR & FACE ==================== */}
             {activeTab === 'hair-face' && (
-              <div className="space-y-6">
-                {/* Hair Style */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Hairstyle
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {(Object.keys(HAIR_STYLE_META) as HairStyle[]).map((hs) => {
-                      const meta = HAIR_STYLE_META[hs];
-                      const isSelected = character.hairStyle === hs;
-                      return (
-                        <button
-                          key={hs}
-                          type="button"
-                          onClick={() => updateField('hairStyle', hs)}
-                          className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/25 border-indigo-500 text-white shadow-md'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                          }`}
-                        >
-                          <span className="text-xl mb-1">{meta.icon}</span>
-                          <span className="text-xs font-bold line-clamp-1">{meta.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Facial Hair (for masculine / custom styling) */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                      Beard &amp; Facial Hair
-                    </label>
-                    <span className="text-[11px] text-slate-500 font-medium">Stubble, goatee, beard</span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {(Object.keys(FACIAL_HAIR_META) as FacialHair[]).map((fh) => {
-                      const meta = FACIAL_HAIR_META[fh];
-                      const isSelected = (character.facialHair || 'none') === fh;
-                      return (
-                        <button
-                          key={fh}
-                          type="button"
-                          onClick={() => updateField('facialHair', fh)}
-                          className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/25 border-indigo-500 text-white shadow-md'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                          }`}
-                        >
-                          <span className="text-xl mb-1">{meta.icon}</span>
-                          <span className="text-xs font-bold line-clamp-1">{meta.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Hair Color */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Hair Color
-                  </label>
-                  <div className="flex flex-wrap gap-2.5">
-                    {HAIR_COLOR_PALETTE.map((pal) => (
-                      <button
-                        key={pal.id}
-                        type="button"
-                        onClick={() => updateField('hairColor', pal.color)}
-                        className={`w-9 h-9 rounded-full border-2 transition-transform cursor-pointer relative ${
-                          character.hairColor.toLowerCase() === pal.color.toLowerCase()
-                            ? 'scale-110 border-white shadow-lg shadow-indigo-500/30'
-                            : 'border-slate-700/80 hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: pal.color }}
-                        title={pal.label}
-                      >
-                        {character.hairColor.toLowerCase() === pal.color.toLowerCase() && (
-                          <Check className="w-4 h-4 text-white absolute inset-0 m-auto drop-shadow-md" />
-                        )}
-                      </button>
+              <>
+                <OptionGroup label="Hairstyle">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {(Object.keys(HAIR_STYLE_META) as HairStyle[]).map(hs => (
+                      <OptionTile
+                        key={hs}
+                        icon={HAIR_STYLE_META[hs].icon}
+                        label={HAIR_STYLE_META[hs].name}
+                        selected={character.hairStyle === hs}
+                        onClick={() => update({ hairStyle: hs })}
+                      />
                     ))}
                   </div>
-                </div>
-
-                {/* Skin Tone */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Skin Tone
-                  </label>
-                  <div className="flex flex-wrap gap-2.5">
-                    {SKIN_TONE_PALETTE.map((pal) => (
-                      <button
-                        key={pal.id}
-                        type="button"
-                        onClick={() => updateField('skinTone', pal.color)}
-                        className={`w-9 h-9 rounded-full border-2 transition-transform cursor-pointer relative ${
-                          character.skinTone.toLowerCase() === pal.color.toLowerCase()
-                            ? 'scale-110 border-indigo-400 shadow-lg'
-                            : 'border-slate-700/80 hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: pal.color }}
-                        title={pal.label}
-                      >
-                        {character.skinTone.toLowerCase() === pal.color.toLowerCase() && (
-                          <Check className="w-4 h-4 text-slate-900 absolute inset-0 m-auto" />
-                        )}
-                      </button>
+                </OptionGroup>
+                <OptionGroup label="Hair colour">
+                  <Swatches palette={HAIR_COLOR_PALETTE} value={character.hairColor} onPick={hairColor => update({ hairColor })} />
+                </OptionGroup>
+                <OptionGroup label="Facial hair">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {(Object.keys(FACIAL_HAIR_META) as FacialHair[]).map(fh => (
+                      <OptionTile
+                        key={fh}
+                        icon={FACIAL_HAIR_META[fh].icon}
+                        label={FACIAL_HAIR_META[fh].name}
+                        selected={(character.facialHair || 'none') === fh}
+                        onClick={() => update({ facialHair: fh })}
+                      />
                     ))}
                   </div>
-                </div>
-
-                {/* Eye Color */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Eye Color
-                  </label>
-                  <div className="flex flex-wrap gap-2.5">
-                    {EYE_COLOR_PALETTE.map((pal) => (
-                      <button
-                        key={pal.id}
-                        type="button"
-                        onClick={() => updateField('eyeColor', pal.color)}
-                        className={`w-9 h-9 rounded-full border-2 transition-transform cursor-pointer relative ${
-                          character.eyeColor.toLowerCase() === pal.color.toLowerCase()
-                            ? 'scale-110 border-white shadow-lg'
-                            : 'border-slate-700/80 hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: pal.color }}
-                        title={pal.label}
-                      >
-                        {character.eyeColor.toLowerCase() === pal.color.toLowerCase() && (
-                          <Check className="w-4 h-4 text-white absolute inset-0 m-auto" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                </OptionGroup>
+                <OptionGroup label="Eye colour">
+                  <Swatches palette={EYE_COLOR_PALETTE} value={character.eyeColor} onPick={eyeColor => update({ eyeColor })} />
+                </OptionGroup>
+              </>
             )}
 
-            {/* ==================== TAB: WARDROBE ==================== */}
-            {activeTab === 'wardrobe' && (
-              <div className="space-y-6">
-                {/* Top Clothing */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Top / Outerwear
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {(Object.keys(OUTFIT_TOP_META) as OutfitTop[]).map((top) => {
-                      const meta = OUTFIT_TOP_META[top];
-                      const isSelected = character.outfitTop === top;
-                      return (
-                        <button
-                          key={top}
-                          type="button"
-                          onClick={() => updateField('outfitTop', top)}
-                          className={`p-3 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/25 border-indigo-500 text-white shadow-md'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                          }`}
-                        >
-                          <span className="text-2xl mb-1">{meta.icon}</span>
-                          <span className="text-xs font-bold">{meta.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Top Color Palette */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Top Primary Color
-                  </label>
-                  <div className="flex flex-wrap gap-2.5">
-                    {TOP_COLOR_PALETTE.map((pal) => (
-                      <button
-                        key={pal.id}
-                        type="button"
-                        onClick={() => updateField('topColor', pal.color)}
-                        className={`w-9 h-9 rounded-full border-2 transition-transform cursor-pointer relative ${
-                          character.topColor.toLowerCase() === pal.color.toLowerCase()
-                            ? 'scale-110 border-white shadow-lg'
-                            : 'border-slate-700/80 hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: pal.color }}
-                        title={pal.label}
+            {activeTab === 'clothes' && (
+              <>
+                <OptionGroup label="Top">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {(Object.keys(OUTFIT_TOP_META) as OutfitTop[]).map(top => (
+                      <OptionTile
+                        key={top}
+                        icon={OUTFIT_TOP_META[top].icon}
+                        label={OUTFIT_TOP_META[top].name}
+                        selected={character.outfitTop === top}
+                        onClick={() => update({ outfitTop: top })}
                       />
                     ))}
                   </div>
-                </div>
-
-                {/* Bottom Clothing */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Bottoms / Trousers
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {(Object.keys(OUTFIT_BOTTOM_META) as OutfitBottom[]).map((bot) => {
-                      const meta = OUTFIT_BOTTOM_META[bot];
-                      const isSelected = character.outfitBottom === bot;
-                      return (
-                        <button
-                          key={bot}
-                          type="button"
-                          onClick={() => updateField('outfitBottom', bot)}
-                          className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/25 border-indigo-500 text-white shadow-md'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                          }`}
-                        >
-                          <span className="text-xl mb-1">{meta.icon}</span>
-                          <span className="text-xs font-bold">{meta.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Bottom Color */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Bottoms Color
-                  </label>
-                  <div className="flex flex-wrap gap-2.5">
-                    {BOTTOM_COLOR_PALETTE.map((pal) => (
-                      <button
-                        key={pal.id}
-                        type="button"
-                        onClick={() => updateField('bottomColor', pal.color)}
-                        className={`w-9 h-9 rounded-full border-2 transition-transform cursor-pointer relative ${
-                          character.bottomColor.toLowerCase() === pal.color.toLowerCase()
-                            ? 'scale-110 border-white shadow-lg'
-                            : 'border-slate-700/80 hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: pal.color }}
-                        title={pal.label}
+                  <Swatches palette={TOP_COLOR_PALETTE} value={character.topColor} onPick={topColor => update({ topColor })} className="mt-3" />
+                </OptionGroup>
+                <OptionGroup label="Bottoms">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {(Object.keys(OUTFIT_BOTTOM_META) as OutfitBottom[]).map(bottom => (
+                      <OptionTile
+                        key={bottom}
+                        icon={OUTFIT_BOTTOM_META[bottom].icon}
+                        label={OUTFIT_BOTTOM_META[bottom].name}
+                        selected={character.outfitBottom === bottom}
+                        onClick={() => update({ outfitBottom: bottom })}
                       />
                     ))}
                   </div>
-                </div>
-
-                {/* Shoes */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Footwear
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {(['sneakers', 'boots', 'loafers', 'running'] as Shoes[]).map((shoe) => {
-                      const isSelected = character.shoes === shoe;
-                      const icons = { sneakers: '👟', boots: '🥾', loafers: '👞', running: '👟' };
-                      return (
-                        <button
-                          key={shoe}
-                          type="button"
-                          onClick={() => updateField('shoes', shoe)}
-                          className={`p-2.5 rounded-xl border flex flex-col items-center text-center capitalize text-xs font-bold transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/25 border-indigo-500 text-white'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          <span className="text-xl mb-1">{icons[shoe]}</span>
-                          <span>{shoe}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Shoes Color */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Shoe Color
-                  </label>
-                  <div className="flex flex-wrap gap-2.5">
-                    {SHOE_COLOR_PALETTE.map((pal) => (
-                      <button
-                        key={pal.id}
-                        type="button"
-                        onClick={() => updateField('shoesColor', pal.color)}
-                        className={`w-9 h-9 rounded-full border-2 transition-transform cursor-pointer relative ${
-                          character.shoesColor.toLowerCase() === pal.color.toLowerCase()
-                            ? 'scale-110 border-indigo-400 shadow-lg'
-                            : 'border-slate-700/80 hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: pal.color }}
-                        title={pal.label}
-                      />
+                  <Swatches palette={BOTTOM_COLOR_PALETTE} value={character.bottomColor} onPick={bottomColor => update({ bottomColor })} className="mt-3" />
+                </OptionGroup>
+                <OptionGroup label="Shoes">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {SHOES.map(s => (
+                      <OptionTile key={s.id} icon={s.icon} label={s.label} selected={character.shoes === s.id} onClick={() => update({ shoes: s.id })} />
                     ))}
                   </div>
-                </div>
-              </div>
+                  <Swatches palette={SHOE_COLOR_PALETTE} value={character.shoesColor} onPick={shoesColor => update({ shoesColor })} className="mt-3" />
+                </OptionGroup>
+              </>
             )}
 
-            {/* ==================== TAB: ACCESSORIES & GEAR ==================== */}
             {activeTab === 'accessories' && (
-              <div className="space-y-6">
-                {/* Eyewear */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Eyewear &amp; Glasses
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {(Object.keys(ACCESSORY_META.eyewear) as Eyewear[]).map((eye) => {
-                      const meta = ACCESSORY_META.eyewear[eye];
-                      const isSelected = character.eyewear === eye;
-                      return (
-                        <button
-                          key={eye}
-                          type="button"
-                          onClick={() => updateField('eyewear', eye)}
-                          className={`p-3 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/25 border-indigo-500 text-white shadow-md'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                          }`}
-                        >
-                          <span className="text-2xl mb-1">{meta.icon}</span>
-                          <span className="text-xs font-bold">{meta.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Headwear */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Headwear &amp; Focus Gear
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {(Object.keys(ACCESSORY_META.headwear) as Headwear[]).map((hw) => {
-                      const meta = ACCESSORY_META.headwear[hw];
-                      const isSelected = character.headwear === hw;
-                      return (
-                        <button
-                          key={hw}
-                          type="button"
-                          onClick={() => updateField('headwear', hw)}
-                          className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-600/25 border-indigo-500 text-white shadow-md'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                          }`}
-                        >
-                          <span className="text-xl mb-1">{meta.icon}</span>
-                          <span className="text-xs font-bold">{meta.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Gear Color */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Accessory Accent Color
-                  </label>
-                  <div className="flex flex-wrap gap-2.5">
-                    {['#4f46e5', '#06b6d4', '#ec4899', '#10b981', '#f59e0b', '#0f172a', '#e2e8f0'].map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => {
-                          updateField('headwearColor', color);
-                          updateField('eyewearColor', color);
-                        }}
-                        className={`w-9 h-9 rounded-full border-2 transition-transform cursor-pointer relative ${
-                          character.headwearColor.toLowerCase() === color.toLowerCase()
-                            ? 'scale-110 border-white shadow-lg'
-                            : 'border-slate-700/80 hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: color }}
+              <>
+                <OptionGroup label="Glasses">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {(Object.keys(ACCESSORY_META.eyewear) as Eyewear[]).map(eye => (
+                      <OptionTile
+                        key={eye}
+                        icon={ACCESSORY_META.eyewear[eye].icon}
+                        label={ACCESSORY_META.eyewear[eye].name}
+                        selected={character.eyewear === eye}
+                        onClick={() => update({ eyewear: eye })}
                       />
                     ))}
                   </div>
-                </div>
-              </div>
+                </OptionGroup>
+                <OptionGroup label="Headwear">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {(Object.keys(ACCESSORY_META.headwear) as Headwear[]).map(hw => (
+                      <OptionTile
+                        key={hw}
+                        icon={ACCESSORY_META.headwear[hw].icon}
+                        label={ACCESSORY_META.headwear[hw].name}
+                        selected={character.headwear === hw}
+                        onClick={() => update({ headwear: hw })}
+                      />
+                    ))}
+                  </div>
+                </OptionGroup>
+                <OptionGroup label="Accent colour">
+                  <Swatches
+                    palette={ACCENT_COLORS.map(color => ({ id: color, label: color, color }))}
+                    value={character.headwearColor}
+                    onPick={color => update({ headwearColor: color, eyewearColor: color })}
+                  />
+                </OptionGroup>
+              </>
             )}
 
-            {/* ==================== TAB: PRESETS & STYLES ==================== */}
-            {activeTab === 'presets' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Curated Student Styles</span>
-                  <button
-                    type="button"
-                    onClick={handleRandomize}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600/30 text-xs font-bold transition-all cursor-pointer"
-                  >
-                    <Shuffle className="w-3.5 h-3.5" />
-                    <span>Randomize 🎲</span>
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {[
-                    { id: 'scholar', title: 'Honor Roll Scholar', desc: 'Oxford button-down, chinos, side-part, wireframes', icon: '📖' },
-                    { id: 'tech', title: 'Tech Polymath', desc: 'Cyber tee, headphones, spiky cyan locks, sneakers', icon: '💻' },
-                    { id: 'athlete', title: 'Varsity Champion', desc: 'Varsity jacket, joggers, cap, high ponytail', icon: '🏆' },
-                    { id: 'cozy', title: 'Late-Night Coder', desc: 'Oversized hoodie, pleated skirt, beanie, bob-cut', icon: '☕' },
-                    { id: 'creative', title: 'Studio Researcher', desc: 'Warm cable sweater, curly afro, round glasses', icon: '🎨' },
-                  ].map((p) => (
+            {activeTab === 'styles' && (
+              <>
+                <p className="text-[13px] text-ink-muted">A style changes clothes, hair and accessories. Your figure and skin tone stay as they are.</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {STYLE_PRESETS.map(p => (
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => handlePreset(p.id as any)}
-                      className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-850 text-left transition-all group flex items-start gap-3 cursor-pointer"
+                      onClick={() => update(characterService.presetLook(p.id))}
+                      className="flex items-start gap-3 rounded-2xl border border-line bg-canvas p-3.5 text-left transition-colors hover:border-line-strong hover:bg-surface-hover cursor-pointer"
                     >
-                      <span className="text-2xl p-2 rounded-xl bg-slate-800/80 shrink-0 group-hover:scale-110 transition-transform">{p.icon}</span>
-                      <div className="space-y-0.5">
-                        <div className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">{p.title}</div>
-                        <div className="text-xs text-slate-400 leading-relaxed">{p.desc}</div>
-                      </div>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-hover text-xl" aria-hidden="true">
+                        {p.icon}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[14px] font-medium text-ink">{p.title}</span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-ink-subtle">{p.desc}</span>
+                      </span>
                     </button>
                   ))}
                 </div>
-              </div>
+              </>
             )}
           </div>
 
-          {/* Bottom Action Footer */}
-          <div className="p-4 border-t border-slate-800/80 bg-[#0c1222] flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={handleRandomize}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-700/80 text-xs font-bold transition-all cursor-pointer"
-            >
-              <Shuffle className="w-4 h-4 text-indigo-400" />
-              <span className="hidden sm:inline">Randomize</span>
-            </button>
-
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-line bg-canvas-raised px-5 py-3.5 sm:px-6">
+            <Button variant="ghost" icon={Shuffle} onClick={() => update(characterService.randomLook())}>
+              Surprise me
+            </Button>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2.5 rounded-xl border border-slate-700/60 text-slate-300 hover:text-white text-xs font-bold transition-all cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <Check className="w-4 h-4" />
-                <span>{hasChanges ? 'Save Changes' : 'Save Character'}</span>
-              </button>
+              <Button onClick={onClose}>Cancel</Button>
+              <Button variant="primary" icon={Check} onClick={save} disabled={!hasChanges}>
+                Save
+              </Button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogPanel>
+    </Dialog>
   );
 };
+
+const OptionGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <section>
+    <h3 className="mb-2 text-[13px] font-medium text-ink">{label}</h3>
+    {children}
+  </section>
+);
+
+const OptionTile: React.FC<{ label: string; icon?: string; selected: boolean; onClick: () => void }> = ({ label, icon, selected, onClick }) => (
+  <button
+    type="button"
+    aria-pressed={selected}
+    onClick={onClick}
+    className={cn(
+      'flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-center transition-colors cursor-pointer',
+      selected ? 'border-brand bg-brand-soft text-ink' : 'border-line bg-canvas text-ink-muted hover:border-line-strong hover:text-ink',
+    )}
+  >
+    {icon && (
+      <span className="text-xl leading-none" aria-hidden="true">
+        {icon}
+      </span>
+    )}
+    <span className="line-clamp-1 text-xs font-medium">{label}</span>
+  </button>
+);
+
+const Swatches: React.FC<{
+  palette: { id: string; label: string; color: string }[];
+  value: string | undefined;
+  onPick: (color: string) => void;
+  className?: string;
+}> = ({ palette, value, onPick, className }) => (
+  <div className={cn('flex flex-wrap gap-2', className)}>
+    {palette.map(p => {
+      const selected = sameColor(value, p.color);
+      return (
+        <button
+          key={p.id}
+          type="button"
+          aria-pressed={selected}
+          aria-label={p.label}
+          title={p.label}
+          onClick={() => onPick(p.color)}
+          className={cn(
+            'relative h-8 w-8 rounded-full border border-black/15 transition-transform cursor-pointer',
+            selected ? 'ring-2 ring-brand ring-offset-2 ring-offset-[var(--surface-solid)]' : 'hover:scale-105',
+          )}
+          style={{ backgroundColor: p.color }}
+        />
+      );
+    })}
+  </div>
+);
