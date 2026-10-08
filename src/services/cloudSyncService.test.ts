@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { CloudSyncService, type CloudSyncPayload } from './cloudSyncService';
 import { characterService } from './characterService';
 import { StorageService } from './storageService';
 import { STARTING_COINS } from './economy/wallet';
+import type { StudySession, UserStats } from '../types';
 
 describe('CloudSyncService', () => {
   beforeEach(() => {
@@ -105,5 +106,120 @@ describe('CloudSyncService', () => {
     const stats = StorageService.getStats();
     expect(stats.xp).toBe(950);
     expect(stats.sessionsCompleted).toBe(12);
+  });
+
+  describe('auto-sync', () => {
+    const deckFromOtherDevice: StudySession = {
+      id: 'deck-from-laptop',
+      title: 'Cell biology',
+      category: 'Biology',
+      description: '',
+      concepts: [],
+      currentConceptIndex: 0,
+      currentPhase: 'summary',
+      elapsedSeconds: 0,
+      createdAt: '2026-10-01T09:00:00.000Z',
+    };
+
+    /** The server answers with its copy of the data: here, stats and a deck saved on another device. */
+    const serverCopy = (): CloudSyncPayload => ({
+      version: 2,
+      syncedAt: Date.now(),
+      userId: null,
+      stats: { xp: 5 } as UserStats,
+      sessions: [deckFromOtherDevice],
+      checksum: 'server',
+    });
+
+    let fetchMock: Mock<typeof fetch>;
+    let answerHeldRequest = () => {};
+
+    /** Leaves the next request unanswered, like a slow server, until answerHeldRequest() is called. */
+    const holdNextRequest = () => {
+      fetchMock.mockImplementationOnce(
+        () => new Promise<Response>(resolve => {
+          answerHeldRequest = () => resolve(Response.json(serverCopy()));
+        }),
+      );
+    };
+
+    /** Several auto-sync delays: enough for a sync, and any syncs it sets off, to run. */
+    const waitAWhile = () => vi.advanceTimersByTimeAsync(10_000);
+
+    const xpSentIn = (request: number) => JSON.parse(fetchMock.mock.calls[request][1]?.body as string).stats.xp;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.stubGlobal('navigator', { onLine: true }); // Node's navigator has no onLine, which reads as offline
+      fetchMock = vi.fn<typeof fetch>(async () => Response.json(serverCopy()));
+      vi.stubGlobal('fetch', fetchMock);
+      CloudSyncService.saveConfig({
+        enabled: true,
+        cloudToken: 'STUDIFY-SYNC-TEST-1234',
+        endpointUrl: 'https://sync.example.com/api',
+      });
+    });
+
+    afterEach(async () => {
+      // A request left unanswered would keep its sync running into the next test.
+      answerHeldRequest();
+      await vi.advanceTimersByTimeAsync(0);
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    });
+
+    it('sends one request for one local change, though merging the reply writes to storage', async () => {
+      StorageService.addXP(10);
+      await waitAWhile();
+
+      // The sync went through and merged the server's deck in...
+      expect(CloudSyncService.getConfig().status).toBe('synced');
+      expect(StorageService.getSessions().map(s => s.id)).toContain('deck-from-laptop');
+      // ...and those writes didn't set off more syncs.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends one request for several writes in a row', async () => {
+      StorageService.addXP(10);
+      StorageService.addXP(10);
+      StorageService.addXP(10);
+      await waitAWhile();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(xpSentIn(0)).toBe(30);
+    });
+
+    it('syncs once more for a change made while a request was out', async () => {
+      holdNextRequest();
+      StorageService.addXP(10);
+      await vi.runOnlyPendingTimersAsync();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      StorageService.addXP(10); // the user keeps studying while the server works
+      answerHeldRequest();
+      await waitAWhile();
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(xpSentIn(1)).toBe(20);
+    });
+
+    it('waits for a slow request before syncing what changed meanwhile, once', async () => {
+      holdNextRequest();
+      StorageService.addXP(10);
+      await vi.runOnlyPendingTimersAsync();
+
+      // Two changes whose auto-syncs come due while the first request is still out.
+      StorageService.addXP(10);
+      await vi.runOnlyPendingTimersAsync();
+      StorageService.addXP(10);
+      await vi.runOnlyPendingTimersAsync();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      answerHeldRequest();
+      await waitAWhile();
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(xpSentIn(1)).toBe(30);
+    });
   });
 });
