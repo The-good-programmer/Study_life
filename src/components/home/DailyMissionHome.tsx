@@ -598,9 +598,15 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                 <span className="text-[34px] font-semibold leading-none tracking-tight tabular-nums text-ink">{wallet.toLocaleString()}</span>
               </div>
               <p className="mt-2 text-[13px] text-ink-subtle">
-                Today <span className="font-medium tabular-nums text-success">+{ledger.totalEarnings.toLocaleString()}</span>
-                {' · '}
-                <span className="font-medium tabular-nums text-ink-muted">−{ledger.totalExpenses.toLocaleString()}</span> spent
+                {ledger.totalEarnings === 0 && ledger.totalExpenses === 0 ? (
+                  'Nothing earned or spent yet today'
+                ) : (
+                  <>
+                    Today <span className="font-medium tabular-nums text-success">+{ledger.totalEarnings.toLocaleString()}</span>
+                    {' · '}
+                    <span className="font-medium tabular-nums text-ink-muted">−{ledger.totalExpenses.toLocaleString()}</span> spent
+                  </>
+                )}
                 {multiplier !== 1 && (
                   <>
                     {' · '}
