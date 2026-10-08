@@ -5,8 +5,12 @@
 import crypto from 'node:crypto';
 import { db } from '../db.js';
 import { generateSalt, hashPassword, verifyPassword, createToken, getAuthUser, verifyGoogleIdToken, verifyGoogleAccessToken } from '../auth.js';
+import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from '../loginLimiter.js';
 
 const INVALID_LOGIN = 'Invalid email or password.';
+const LOGIN_BLOCKED = 'Too many failed sign-in attempts for this account. Please wait 15 minutes and try again.';
+// Caps the input PBKDF2 has to hash, so a huge password cannot tie up the server.
+const MAX_PASSWORD_LENGTH = 256;
 
 export async function handleAuthRoutes(req, res, pathname, body) {
   // 1. REGISTER
@@ -28,6 +32,11 @@ export async function handleAuthRoutes(req, res, pathname, body) {
     if (!password || password.length < 6) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: 'Password must be at least 6 characters long.' }));
+    }
+
+    if (password.length > MAX_PASSWORD_LENGTH) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: `Password must be at most ${MAX_PASSWORD_LENGTH} characters long.` }));
     }
 
     const checkStmt = db.prepare('SELECT id FROM users WHERE email = ?');
@@ -91,17 +100,31 @@ export async function handleAuthRoutes(req, res, pathname, body) {
       return res.end(JSON.stringify({ error: 'Please provide both email and password.' }));
     }
 
+    if (isLoginBlocked(cleanEmail)) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: LOGIN_BLOCKED }));
+    }
+
     const findStmt = db.prepare('SELECT * FROM users WHERE email = ?');
     const userRow = findStmt.get(cleanEmail);
 
     // Same response for unknown email, Google-only account and wrong password,
     // so the endpoint does not reveal which emails are registered.
     if (!userRow || !verifyPassword(password, userRow)) {
+      recordLoginFailure(cleanEmail);
       res.writeHead(401, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: INVALID_LOGIN }));
     }
 
+    clearLoginFailures(cleanEmail);
+
     const now = new Date().toISOString();
+    if (!userRow.password_hash.startsWith('pbkdf2$')) {
+      // Upgrade a legacy SHA-256 hash to PBKDF2 now that we know the password.
+      const salt = generateSalt();
+      db.prepare('UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?')
+        .run(hashPassword(password, salt), salt, userRow.id);
+    }
     db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(now, userRow.id);
 
     const user = {

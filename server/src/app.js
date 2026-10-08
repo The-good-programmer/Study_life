@@ -35,6 +35,14 @@ function setCorsHeaders(req, res, allowedOrigins) {
   }
 }
 
+// Basic hardening for API responses. The browser app's own CSP lives in its HTML.
+function setSecurityHeaders(res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Cache-Control', 'no-store');
+}
+
 function sendJson(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   return res.end(JSON.stringify(payload));
@@ -75,6 +83,7 @@ export function createApp({ ai = defaultAi } = {}) {
   return async function handleRequest(req, res) {
     const startTime = Date.now();
     setCorsHeaders(req, res, allowedOrigins);
+    setSecurityHeaders(res);
 
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
