@@ -15,6 +15,7 @@ const STORAGE_KEYS = {
   GUEST_PROFILE: 'studify_guest_education_profile_v1',
   FOLDERS: 'studify_folders_v1',
   EARNINGS: 'studify_earnings_v1',
+  COMPLETIONS: 'studify_paid_completions_v1',
 };
 
 /** Study data stored per profile (guest or account): what a reset or account deletion removes. */
@@ -28,6 +29,7 @@ const PROFILE_DATA_KEYS = [
   STORAGE_KEYS.EARNINGS,
   STORAGE_KEYS.DIAGRAMS,
   STORAGE_KEYS.FOLDERS,
+  STORAGE_KEYS.COMPLETIONS,
 ];
 
 const LEVEL_TITLES = [
@@ -435,6 +437,24 @@ export class StorageService {
 
   public static getTargetRetention(): number {
     return this.getStats().targetRetention || 0.90;
+  }
+
+  /**
+   * Marks a finished session (see completionKey) as recorded and paid. True the first
+   * time for a given key, false after, so reopening a summary never pays twice.
+   */
+  public static claimCompletion(key: string): boolean {
+    const storageKey = this.getKey(STORAGE_KEYS.COMPLETIONS);
+    let claimed: string[] = [];
+    try {
+      const parsed = JSON.parse(this.readRaw(storageKey) || '[]');
+      if (Array.isArray(parsed)) claimed = parsed;
+    } catch {
+      claimed = [];
+    }
+    if (claimed.includes(key)) return false;
+    this.safeSetItem(storageKey, JSON.stringify([key, ...claimed].slice(0, 500)));
+    return true;
   }
 
   public static recordCompletedSession() {

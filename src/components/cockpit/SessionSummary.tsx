@@ -22,6 +22,7 @@ import { grantReward } from '../../services/economy/rewardService';
 import { haptics } from '../../services/hapticsService';
 import { Button, Card, CoinIcon } from '../ui/primitives';
 import { groupNextReviews } from './sessionSchedule';
+import { completionKey } from './sessionPass';
 import type { ReviewGroup } from './sessionSchedule';
 
 interface SessionSummaryProps {
@@ -148,30 +149,33 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
     return () => clearTimeout(coinTimer);
   }, []);
 
-  // Record the session and pay the study wage exactly once. The ref guard keeps
-  // React StrictMode's double-run from recording or paying twice.
+  // Record the session and pay the study wage exactly once per finished pass. The claim
+  // stops a reopened summary from paying again; the ref guard covers StrictMode's double-run.
   const recordedRef = useRef(false);
+  const completion = completionKey(session);
   useEffect(() => {
     if (recordedRef.current) return;
     recordedRef.current = true;
 
-    StorageService.recordCompletedSession();
-    StorageService.recordStudyMinutes(minutes);
+    if (StorageService.claimCompletion(completion)) {
+      StorageService.recordCompletedSession();
+      StorageService.recordStudyMinutes(minutes);
 
-    const grant = grantReward(
-      { kind: 'sprint', cards: totalCards, minutes },
-      { label: `Sprint: ${session.title ? session.title.slice(0, 24) : 'Active Recall'}` },
-    );
-    // Displays the result of the one-time award above; it cannot be derived during render.
-    // oxlint-disable-next-line react/set-state-in-effect
-    setWageEarned(grant.wage ? { ...grant.wage, walletBalance: lifeSimService.getWalletBalance() } : null);
-    setWageCapped(grant.capped && !grant.wage);
+      const grant = grantReward(
+        { kind: 'sprint', cards: totalCards, minutes },
+        { label: `Sprint: ${session.title ? session.title.slice(0, 24) : 'Active Recall'}` },
+      );
+      // Displays the result of the one-time award above; it cannot be derived during render.
+      // oxlint-disable-next-line react/set-state-in-effect
+      setWageEarned(grant.wage ? { ...grant.wage, walletBalance: lifeSimService.getWalletBalance() } : null);
+      setWageCapped(grant.capped && !grant.wage);
+    }
     setStreak(StorageService.getStats().currentStreak);
 
     // When the scheduler will bring this session's cards back.
     const sessionCardIds = new Set(session.concepts.flatMap(c => c.retrievalCards.map(card => card.id)));
     setNextReviews(groupNextReviews(StorageService.getAllCards().filter(card => sessionCardIds.has(card.id))));
-  }, [minutes, totalCards, session.title, session.concepts]);
+  }, [completion, minutes, totalCards, session.title, session.concepts]);
 
   const handlePrint = () => {
     ExportService.printStudySheet(session);

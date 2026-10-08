@@ -7,6 +7,7 @@ import { FeynmanPhase } from './FeynmanPhase';
 import { RetrievalPhase } from './RetrievalPhase';
 import { RestBreakPhase } from './RestBreakPhase';
 import { SessionSummary } from './SessionSummary';
+import { nextPass } from './sessionPass';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
 import type { SoundType } from '../../services/soundEngine';
@@ -22,6 +23,15 @@ interface StudyPilotProps {
 }
 
 type AmbientTheme = 'obsidian' | 'library' | 'indigo-flow' | 'nordic-frost';
+
+/**
+ * What to save for a session. A finished one is saved as its next pass, so reopening the
+ * deck starts studying again instead of showing (and paying for) the old summary.
+ */
+const toStored = (session: StudySession): StudySession => (session.currentPhase === 'summary' ? nextPass(session) : session);
+
+/** When a pass finishes; it names the completion its summary pays for. */
+const timestamp = () => new Date().toISOString();
 
 export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, onOpenDashboard }) => {
   const [session, setSession] = useState<StudySession>(() => {
@@ -77,9 +87,23 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
     sessionRef.current = session;
   }, [session]);
 
+  /**
+   * Changes the session, its ref and its saved copy together. The timer's cleanup saves
+   * from the ref, and would otherwise write the previous step over the one just saved.
+   */
+  const updateSession = (change: (prev: StudySession) => StudySession) => {
+    setSession(prev => {
+      const updated = change(prev);
+      sessionRef.current = updated;
+      StorageService.saveSession(toStored(updated));
+      return updated;
+    });
+  };
+
   // Live session timer: update in-memory elapsedSeconds every 1s, and persist every 30s + on unmount
   useEffect(() => {
-    if (session.currentPhase === 'summary') return;
+    // No clock on the summary, but leaving it still saves the session as its next pass.
+    if (session.currentPhase === 'summary') return () => StorageService.saveSession(toStored(sessionRef.current));
     let tickCount = 0;
     const interval = setInterval(() => {
       tickCount += 1;
@@ -88,7 +112,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
         const updated = { ...prev, elapsedSeconds: nextSeconds };
         sessionRef.current = updated;
         if (tickCount % 30 === 0) {
-          StorageService.saveSession(updated);
+          StorageService.saveSession(toStored(updated));
         }
         return updated;
       });
@@ -96,9 +120,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
 
     return () => {
       clearInterval(interval);
-      if (sessionRef.current) {
-        StorageService.saveSession(sessionRef.current);
-      }
+      StorageService.saveSession(toStored(sessionRef.current));
     };
   }, [session.currentPhase]);
 
@@ -134,34 +156,19 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
   const currentConcept = session.concepts[session.currentConceptIndex] || session.concepts[0];
 
   const setPhase = (phase: StudyPhase) => {
-    setSession(prev => {
-      const updated = { ...prev, currentPhase: phase };
-      StorageService.saveSession(updated);
-      return updated;
-    });
+    updateSession(prev => ({ ...prev, currentPhase: phase }));
   };
 
   const handleNextConceptOrSummary = () => {
     if (session.currentConceptIndex + 1 < session.concepts.length) {
-      setSession(prev => {
-        const updated: StudySession = {
-          ...prev,
-          currentConceptIndex: prev.currentConceptIndex + 1,
-          currentPhase: prev.casualFlashcardMode ? 'retrieval' : 'priming',
-        };
-        StorageService.saveSession(updated);
-        return updated;
-      });
+      updateSession(prev => ({
+        ...prev,
+        currentConceptIndex: prev.currentConceptIndex + 1,
+        currentPhase: prev.casualFlashcardMode ? 'retrieval' : 'priming',
+      }));
     } else {
-      setSession(prev => {
-        const updated: StudySession = {
-          ...prev,
-          currentPhase: 'summary',
-          completedAt: new Date().toISOString(),
-        };
-        StorageService.saveSession(updated);
-        return updated;
-      });
+      const completedAt = timestamp();
+      updateSession(prev => ({ ...prev, currentPhase: 'summary', completedAt }));
     }
   };
 
@@ -195,15 +202,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
         <DiagnosticPhase
           session={session}
           onComplete={(report) => {
-            setSession(prev => {
-              const updated: StudySession = {
-                ...prev,
-                diagnosticReport: report,
-                currentPhase: 'priming' as StudyPhase,
-              };
-              StorageService.saveSession(updated);
-              return updated;
-            });
+            updateSession(prev => ({ ...prev, diagnosticReport: report, currentPhase: 'priming' }));
           }}
           onSkip={() => setPhase('priming')}
         />
@@ -259,14 +258,12 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
       {session.currentPhase === 'summary' && (
         <SessionSummary
           session={session}
-          onRestart={() => setSession(prev => ({
-            ...prev,
-            currentConceptIndex: 0,
-            currentPhase: prev.casualFlashcardMode ? 'retrieval' : 'diagnostic'
-          }))}
+          onRestart={() =>
+            updateSession(prev => ({ ...nextPass(prev), currentPhase: prev.casualFlashcardMode ? 'retrieval' : 'diagnostic' }))
+          }
           onHome={onExit}
           onOpenDashboard={onOpenDashboard}
-          onStartSession={(rescue) => setSession(rescue)}
+          onStartSession={(rescue) => updateSession(() => rescue)}
         />
       )}
     </>
@@ -455,11 +452,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
                     pages: extracted.pages,
                     pdfDataUrl: extracted.pdfDataUrl,
                   };
-                  setSession(prev => {
-                    const next = { ...prev, sourceDocument: updatedDoc };
-                    StorageService.saveSession(next);
-                    return next;
-                  });
+                  updateSession(prev => ({ ...prev, sourceDocument: updatedDoc }));
                 }}
               />
             </div>
