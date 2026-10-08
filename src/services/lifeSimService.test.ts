@@ -1,6 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { lifeSimService } from './lifeSimService';
 import { characterService } from './characterService';
+import { StorageService } from './storageService';
+
+/** Meets the studio's requirements (25 reviews, 120 tokens) and moves in. */
+const moveIntoStudio = () => {
+  StorageService.saveCards([{ id: 'reviewed', conceptId: 'k', question: 'Q', answer: 'A', stability: 9, difficulty: 5, reps: 25, lapses: 0 }]);
+  characterService.addCoins(100);
+  const result = lifeSimService.upgradeHousing('studio');
+  expect(result.success).toBe(true);
+};
 
 describe('lifeSimService', () => {
   beforeEach(() => {
@@ -9,6 +18,10 @@ describe('lifeSimService', () => {
     // Reset coins
     const char = characterService.getCharacter();
     characterService.addCoins(100 - (char.coins || 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('initializes a fresh daily ledger for today with 0 expenses and 0 earnings', () => {
@@ -76,15 +89,39 @@ describe('lifeSimService', () => {
     expect(ledger.totalExpenses).toBe(25);
   });
 
-  it('allows renting housing and pays first day rent', () => {
+  it("pays a home's bonus only on days its rent is paid", () => {
+    vi.setSystemTime(new Date('2026-10-08T09:00:00.000Z'));
+    lifeSimService.resetForTesting();
+    moveIntoStudio();
+    // The renovation day counts as paid.
+    expect(lifeSimService.getActiveMultiplier()).toBe(1.15);
+
+    vi.setSystemTime(new Date('2026-10-09T09:00:00.000Z'));
+    expect(lifeSimService.isRentPaidToday()).toBe(false);
+    expect(lifeSimService.getActiveMultiplier()).toBe(1);
+    expect(lifeSimService.awardStudyWage('Reviews', 20).totalAmount).toBe(20);
+
+    const before = lifeSimService.getWalletBalance();
+    expect(lifeSimService.payDailyRent().success).toBe(true);
+    expect(lifeSimService.getWalletBalance()).toBe(before - 18);
+    expect(lifeSimService.getPayBoosts().map(boost => boost.id)).toEqual(['home']);
+    expect(lifeSimService.awardStudyWage('Reviews', 20).totalAmount).toBe(23);
+  });
+
+  it('has no rent in the dorm, which has no pay bonus', () => {
+    const result = lifeSimService.payDailyRent();
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('no rent');
+    expect(lifeSimService.getActiveMultiplier()).toBe(1);
+  });
+
+  it('upgrades one level at a time, so no renovation is skipped', () => {
+    StorageService.saveCards([{ id: 'reviewed', conceptId: 'k', question: 'Q', answer: 'A', stability: 9, difficulty: 5, reps: 200, lapses: 0 }]);
+    characterService.addCoins(1000);
+    const result = lifeSimService.upgradeHousing('penthouse');
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('level 2 first');
     expect(lifeSimService.getHousing().id).toBe('dorm');
-    // Rent studio (costs 30 coins)
-    const initialCoins = lifeSimService.getWalletBalance();
-    const res = lifeSimService.rentHousing('studio');
-    expect(res.success).toBe(true);
-    expect(lifeSimService.getHousing().id).toBe('studio');
-    expect(lifeSimService.getDailyLedger().rentPaidToday).toBe(true);
-    expect(lifeSimService.getWalletBalance()).toBe(initialCoins - 18);
   });
 
   it('allows buying student gear and stacks wage multipliers', () => {
@@ -98,7 +135,7 @@ describe('lifeSimService', () => {
     expect(lifeSimService.getWalletBalance()).toBe(initialCoins - 45);
 
     // Baseline dorm is 1.0, gear adds 0.10 => 1.10
-    expect(lifeSimService.getActiveMultiplier('coin_multiplier')).toBe(1.10);
+    expect(lifeSimService.getActiveMultiplier()).toBe(1.10);
   });
 
   it('calculates academic role properly', () => {
@@ -108,6 +145,10 @@ describe('lifeSimService', () => {
   });
 
   it('prevents paying rent twice in one day', () => {
+    vi.setSystemTime(new Date('2026-10-08T09:00:00.000Z'));
+    lifeSimService.resetForTesting();
+    moveIntoStudio();
+    vi.setSystemTime(new Date('2026-10-09T09:00:00.000Z'));
     const res1 = lifeSimService.payDailyRent();
     expect(res1.success).toBe(true);
     expect(lifeSimService.getDailyLedger().rentPaidToday).toBe(true);
@@ -190,18 +231,14 @@ describe('lifeSimService', () => {
     expect(evaluation.jurorFeedback.length).toBeGreaterThan(0);
   });
 
-  it('executes real-life interactive actions like brewing espresso', () => {
-    const brewRes = lifeSimService.performInteractiveAction('brew_coffee');
-    expect(brewRes.success).toBe(true);
-    expect(brewRes.buffApplied).toBe(true);
-    expect(brewRes.message).toContain('artisan coffee');
-
-    const buffs = lifeSimService.getActiveBuffs();
-    expect(buffs.some(b => b.buffType === 'study_wage_boost')).toBe(true);
-
-    const napRes = lifeSimService.performInteractiveAction('nap_rest');
-    expect(napRes.success).toBe(true);
-    expect(napRes.message).toContain('ultradian');
+  it('replaces a meal boost with the next one instead of stacking them', () => {
+    lifeSimService.buyMeal('pancakes');
+    lifeSimService.buyMeal('cold_brew');
+    const boosts = lifeSimService.getPayBoosts();
+    expect(boosts).toHaveLength(1);
+    expect(boosts[0].bonus).toBeCloseTo(0.25);
+    expect(boosts[0].endsAt).toBeDefined();
+    expect(lifeSimService.getActiveMultiplier()).toBe(1.25);
   });
 
   it('resets back to starter dorm life properly', () => {

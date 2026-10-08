@@ -9,48 +9,50 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import confetti from 'canvas-confetti';
 import {
-  Home,
-  ShoppingBag,
-  Star,
-  Coffee,
-  Wind,
-  Play,
-  X,
-  Volume2,
-  VolumeX,
-  Award,
-  Maximize2,
-  Minimize2,
-  Coins,
-  Compass,
-  Eye,
-  Layers,
-  Sun,
-  Moon,
-  Camera,
-  Grid,
-  TrendingUp,
-  Sliders,
-  Tag,
-  Download,
-  PanelTop,
-  Footprints,
-  RotateCw,
-  Sparkles,
-  ChevronUp,
+  Armchair,
+  Box,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2,
-  RotateCcw,
+  ChevronUp,
+  Compass,
+  Download,
+  Focus,
+  Footprints,
+  Grid3x3,
+  Layers,
+  Lock,
+  Maximize2,
   Menu,
-  ArrowLeft,
-  AlertCircle,
+  Minimize2,
+  Moon,
+  PanelLeftClose,
+  PanelTop,
+  Play,
+  Repeat,
+  RotateCw,
+  Star,
+  Sun,
+  Tag,
+  Trees,
+  Utensils,
+  Volume2,
+  VolumeX,
+  X,
 } from 'lucide-react';
-import { lifeSimService, HOME_ROOMS, FURNITURE_CATALOG, HOUSING_CATALOG, LIFESTYLE_TIERS } from '../../services/lifeSimService';
+import type { LucideIcon } from 'lucide-react';
+import { lifeSimService, HOME_ROOMS, FURNITURE_CATALOG, HOUSING_CATALOG } from '../../services/lifeSimService';
 import { type HomeRoomId, type DesignSlotType, type RoomDesignEvaluation, type HousingTier } from '../../types/lifeSim';
+import type { StudySession } from '../../types';
 import { soundEngine, type SoundType } from '../../services/soundEngine';
 import { StorageService } from '../../services/storageService';
+import { cn } from '../../utils/cn';
+import { Badge, Button, IconButton, Kbd, Tokens } from '../ui/primitives';
+import { CafeDialog } from './CafeDialog';
+import { HomeDialog } from './HomeDialog';
+import { MoneyDialog } from './MoneyDialog';
+import { RoomRatingDialog } from './RoomRatingDialog';
+import { formatBonus, formatMultiplier } from './campusFormat';
 import {
   buildHouse,
   createMaterialLibrary,
@@ -68,22 +70,73 @@ import { buildRoomFurniture, type FurnitureItemMeta } from './three/furniture';
 import { skyGradient } from './three/textures';
 import { buildCharacter3D, type CharacterModelInstance } from '../character/three/characterBuilder3d';
 import { characterService } from '../../services/characterService';
-import { CharacterCustomizerModal } from '../character/CharacterCustomizerModal';
 
 export interface HomeDesign3DProps {
-  onStartSession?: (session?: any) => void;
-  onOpenDeckStation?: (session?: any) => void;
+  onStartSession?: (session: StudySession) => void;
   onOpenStarterCatalog?: () => void;
-  onOpenDashboard?: () => void;
-  onOpenCafeteria?: () => void;
-  onOpenHousing?: () => void;
   onToggleMobileSidebar?: () => void;
-  onNavigateHome?: () => void;
   className?: string;
 }
 
 type CameraMode = 'dollhouse' | 'exterior' | 'blueprint' | 'room_focus' | 'walk';
 type WallsMode = 'cut' | 'full';
+
+/** Floating panels over the 3D scene. */
+const PANEL =
+  'border border-line-strong bg-surface-solid/90 shadow-[0_12px_32px_-16px_rgb(0_0_0/0.55)] backdrop-blur-xl';
+
+const VIEWS: { mode: CameraMode; label: string; hint: string; icon: LucideIcon }[] = [
+  { mode: 'dollhouse', label: 'Dollhouse', hint: 'Every room from above, front walls cut away', icon: Box },
+  { mode: 'exterior', label: 'Outside', hint: 'The house from the street', icon: Trees },
+  { mode: 'blueprint', label: 'Plan', hint: 'Straight down, like a floor plan', icon: Grid3x3 },
+  { mode: 'room_focus', label: 'Room', hint: 'Close up on the selected room', icon: Focus },
+  { mode: 'walk', label: 'Walk', hint: 'Walk through it with WASD or the arrow keys', icon: Footprints },
+];
+
+const PANEL_TABS = [
+  { id: 'furniture', label: 'Furniture' },
+  { id: 'finishes', label: 'Finishes' },
+  { id: 'outdoors', label: 'Outdoors' },
+] as const;
+
+const ROOM_LABELS: Record<HomeRoomId, string> = {
+  study: 'Study',
+  bedroom: 'Bedroom',
+  living: 'Living room',
+  kitchen: 'Kitchen',
+  balcony: 'Balcony',
+};
+
+const SLOT_LABELS: Record<DesignSlotType, string> = {
+  desk: 'Desk',
+  chair: 'Chair',
+  bed: 'Bed',
+  sofa: 'Sofa',
+  lighting: 'Lighting',
+  plant: 'Plant',
+  rug: 'Rug',
+  wall_art: 'Wall art',
+  station: 'Station',
+  shelf: 'Shelf',
+};
+
+/** The background sounds the speaker button steps through. */
+const SOUND_CYCLE: SoundType[] = ['off', 'rain', 'ambient-drone', 'binaural-40hz'];
+const SOUND_LABELS: Partial<Record<SoundType, string>> = {
+  rain: 'rain',
+  'ambient-drone': 'ambient pad',
+  'binaural-40hz': '40 Hz tone',
+  'binaural-alpha-10hz': 'alpha waves',
+  'brown-noise': 'brown noise',
+  'pink-noise': 'pink noise',
+};
+
+const SITE_FEATURES = [
+  { icon: '🚗', title: 'Carport and driveway', desc: 'A timber pergola over a paved drive' },
+  { icon: '🏊', title: 'Pool', desc: 'A 6 × 4.5 m pool with a stone deck' },
+  { icon: '🪴', title: 'Terrace', desc: 'A timber deck with a glass balustrade' },
+  { icon: '🌸', title: 'Garden', desc: 'Cherry blossoms, cypress and hedges' },
+];
 
 const FINISH_STORAGE_KEY = 'studify_home3d_finishes_v1';
 const ROTATION_STORAGE_KEY = 'studify_home3d_rotations_v1';
@@ -174,13 +227,8 @@ const cameraPreset = (
 
 export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
   onStartSession,
-  onOpenDeckStation: _onOpenDeckStation,
   onOpenStarterCatalog,
-  onOpenDashboard: _onOpenDashboard,
-  onOpenCafeteria,
-  onOpenHousing,
   onToggleMobileSidebar,
-  onNavigateHome,
   className = '',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -196,7 +244,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
   const [showLabels, setShowLabels] = useState(true);
   const [sunTime, setSunTime] = useState<number>(14);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => (typeof window !== 'undefined' ? window.innerWidth > 768 : true));
-  const [sidebarTab, setSidebarTab] = useState<'furniture' | 'materials' | 'landscape'>('furniture');
+  const [sidebarTab, setSidebarTab] = useState<(typeof PANEL_TABS)[number]['id']>('furniture');
 
   // Finishes (persisted)
   const [wallTexture, setWallTexture] = useState<WallFinishId>(() => readFinishes().wall);
@@ -219,9 +267,8 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
   const walkAnglesRef = useRef<{ yaw: number; pitch: number }>({ yaw: Math.PI, pitch: 0 });
   const activeRoomNameRef = useRef<string>('Study Sanctuary');
   const charInstanceRef = useRef<CharacterModelInstance | null>(null);
-  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
 
-  // Synchronize 3D character customizations live
+  // Synchronize 3D character customizations live (the avatar editor opens from the sidebar)
   useEffect(() => {
     const unsub = characterService.subscribe((updated) => {
       if (charInstanceRef.current) {
@@ -238,11 +285,12 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
   const [currentSound, setCurrentSound] = useState<SoundType>(soundEngine.getCurrentSound());
   const [furnitureVersion, setFurnitureVersion] = useState(0);
   const [evaluation, setEvaluation] = useState<RoomDesignEvaluation>(() => lifeSimService.calculateRoomDesignScore(selectedRoomId));
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [isHomeOpen, setIsHomeOpen] = useState(false);
+  const [isCafeOpen, setIsCafeOpen] = useState(false);
+  const [isMoneyOpen, setIsMoneyOpen] = useState(false);
   const [housingProperty, setHousingProperty] = useState(() => lifeSimService.getHousing());
 
-  const currentRole = lifeSimService.getAcademicRole();
-  const activeMultiplier = lifeSimService.getActiveMultiplier('coin_multiplier');
+  const activeMultiplier = lifeSimService.getActiveMultiplier();
 
   // Reviews can't happen while this screen is open, so read the total once on mount.
   const [totalCardsReviewed] = useState(() => {
@@ -322,19 +370,14 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
   }, []);
 
   const handlePayRentDirect = useCallback(() => {
-    const ledger = lifeSimService.getDailyLedger();
     const housing = lifeSimService.getHousing();
-    if (ledger.rentPaidToday) {
-      showToast(`Rent is already paid for today (🪙${housing.rentPerDay})`);
-      return;
-    }
     const res = lifeSimService.payDailyRent();
     if (res.success) {
-      showToast(`Rent paid for today! (🪙${housing.rentPerDay})`);
+      showToast(`Rent paid. Your ${formatBonus(housing.wageMultiplier - 1)} home bonus is on until the day ends.`);
       setDailyLedger(lifeSimService.getDailyLedger());
       setWalletCoins(lifeSimService.getWalletBalance());
     } else {
-      showToast(res.error || 'Could not pay rent');
+      showToast(res.error || 'Could not pay the rent just now.');
     }
   }, [showToast]);
 
@@ -575,8 +618,8 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
       const id = pickRoom(e);
       if (id) {
         if (!lifeSimService.isRoomUnlocked(id)) {
-          showToast(`🔒 ${lifeSimService.getRoom(id).name} is not yet built! Study and renovate your home to construct this wing.`);
-          setIsUpgradeModalOpen(true);
+          // A locked wing opens the home upgrades, which say what it takes to add it.
+          setIsHomeOpen(true);
         } else {
           setSelectedRoomId(id);
         }
@@ -1092,7 +1135,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
       localStorage.setItem(ROTATION_STORAGE_KEY, JSON.stringify(updated));
     } catch {}
     soundEngine.playTapPop();
-    showToast(`Rotated ${selectedFurniture.label} 90°`);
+    showToast(`Turned the ${selectedFurniture.label.toLowerCase()} a quarter turn`);
   };
 
   const handleDpadPress = (code: string, active: boolean) => {
@@ -1113,119 +1156,150 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     showToast('Render exported as PNG');
   };
 
-  const handleTriggerAction = (type: string) => {
-    const res = lifeSimService.performInteractiveAction(type);
-    if (res.success) {
-      if (type === 'brew_coffee') {
-        try {
-          confetti({ particleCount: 35, spread: 60, origin: { y: 0.6 }, colors: ['#f59e0b', '#d97706', '#fbbf24'] });
-        } catch {
-          /* confetti optional */
-        }
-      }
-      showToast(res.message);
-    }
-  };
-
   const currentRoom = useMemo(() => lifeSimService.getRoom(selectedRoomId), [selectedRoomId]);
   const effectiveSlotFilter =
     selectedSlotFilter !== 'all' && !currentRoom.slots.includes(selectedSlotFilter) ? 'all' : selectedSlotFilter;
-  const hoveredName = hoveredRoom ? HOME_ROOMS.find((r) => r.id === hoveredRoom)?.name : null;
-  const totalInteriorArea = (['study', 'bedroom', 'living', 'kitchen'] as HomeRoomId[]).reduce((s, id) => s + roomArea(id), 0);
+  const hoveredName = hoveredRoom ? ROOM_LABELS[hoveredRoom] : null;
+  const roomUnlocked = lifeSimService.isRoomUnlocked(selectedRoomId);
+  const rentDue = housingProperty.rentPerDay > 0 && !dailyLedger.rentPaidToday;
+  const isWalking = cameraMode === 'walk';
 
-  const toolBtn = (active: boolean) =>
-    `px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-      active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
-    }`;
+  const handleStudy = () => {
+    if (!primaryDeck) {
+      onOpenStarterCatalog?.();
+      return;
+    }
+    onStartSession?.(
+      dueCards.length > 0
+        ? { ...primaryDeck, currentPhase: 'retrieval', casualFlashcardMode: true }
+        : { ...primaryDeck, currentPhase: 'priming', casualFlashcardMode: false },
+    );
+  };
+
+  const cycleSound = () => {
+    const next = SOUND_CYCLE[(SOUND_CYCLE.indexOf(currentSound) + 1) % SOUND_CYCLE.length] ?? 'off';
+    if (next === 'off') soundEngine.stop();
+    else soundEngine.play(next);
+    setCurrentSound(next);
+  };
+
+  const placeOrBuy = (item: (typeof FURNITURE_CATALOG)[number]) => {
+    const isEquipped = equippedItems[item.category]?.id === item.id;
+    if (isEquipped) return;
+    if (ownedIds.includes(item.id)) {
+      lifeSimService.equipFurniture(item.id, selectedRoomId);
+      setEquippedItems(lifeSimService.getEquippedFurniture(selectedRoomId));
+      setFurnitureVersion((v) => v + 1);
+      showToast(`Placed the ${item.name}`);
+      return;
+    }
+    const result = lifeSimService.buyFurniture(item.id, selectedRoomId);
+    if (!result.success) {
+      showToast(result.error || 'Could not buy that piece');
+      return;
+    }
+    try {
+      confetti({ particleCount: 30, spread: 50 });
+    } catch {
+      /* optional */
+    }
+    setEquippedItems(lifeSimService.getEquippedFurniture(selectedRoomId));
+    setFurnitureVersion((v) => v + 1);
+    showToast(`Bought and placed the ${item.name}`);
+  };
+
+  const selectionBar = selectedFurniture && !isWalking && (
+    <div className="flex items-center gap-1">
+      <span className="min-w-0 flex-1 pl-1">
+        <span className="block truncate text-[13px] font-medium text-ink">{selectedFurniture.label}</span>
+        <span className="block truncate text-xs text-ink-subtle">{selectedFurniture.brandStyle}</span>
+      </span>
+      <Button size="sm" variant="ghost" icon={RotateCw} onClick={handleRotateSelectedFurniture}>
+        Rotate
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        icon={Repeat}
+        onClick={() => {
+          setSelectedSlotFilter(selectedFurniture.slotType);
+          setSidebarTab('furniture');
+          setIsSidebarOpen(true);
+        }}
+      >
+        Swap
+      </Button>
+      <IconButton icon={X} label="Deselect" onClick={() => setSelectedFurniture(null)} className="h-8 w-8" />
+    </div>
+  );
 
   return (
-    <div className={`relative w-full h-full flex-1 overflow-hidden select-none animate-fadeIn ${className}`}>
+    <div className={cn('relative h-full w-full flex-1 select-none overflow-hidden animate-fadeIn', className)}>
+      {/* ===================== 3D VIEWPORT ===================== */}
+      <div className="absolute inset-0 overflow-hidden bg-[#dfeaf3]">
+        <div ref={containerRef} className="absolute inset-0 cursor-grab active:cursor-grabbing" />
+      </div>
+
       {toastMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-slate-900/95 border border-white/10 text-slate-100 text-xs sm:text-sm font-medium shadow-2xl backdrop-blur-xl">
+        <div
+          role="status"
+          className={cn(PANEL, 'absolute left-1/2 top-[112px] z-50 max-w-[calc(100%-24px)] -translate-x-1/2 rounded-xl px-4 py-2.5 text-[13px] text-ink animate-rise sm:top-[64px]')}
+        >
           {toastMessage}
         </div>
       )}
 
-      {/* ===================== TOP FLOATING HUD ===================== */}
+      {/* Hovered room (mouse only) */}
+      {hoveredName && hoveredRoom !== selectedRoomId && !selectedFurniture && !isWalking && (
+        <div className={cn(PANEL, 'pointer-events-none absolute bottom-[84px] left-1/2 z-20 hidden -translate-x-1/2 rounded-lg px-3 py-1.5 text-xs text-ink sm:block')}>
+          {hoveredName} · click to select
+        </div>
+      )}
+
+      {/* ===================== TOP BAR ===================== */}
       <div
-        className={`absolute top-3 left-3 right-3 z-30 flex flex-wrap items-center justify-between gap-2 p-2 rounded-2xl bg-slate-950/80 hover:bg-slate-950/95 border border-white/[0.1] backdrop-blur-xl shadow-2xl transition-all duration-300 pointer-events-auto ${
-          isZenMode ? 'opacity-0 pointer-events-none hover:opacity-100 hover:pointer-events-auto' : ''
-        }`}
+        className={cn(
+          'pointer-events-none absolute inset-x-3 top-3 z-30 flex flex-wrap items-start justify-between gap-2 transition-opacity',
+          isZenMode && 'opacity-0',
+        )}
       >
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Mobile Navigation Drawer Trigger */}
+        <div className={cn('flex items-center gap-2', !isZenMode && 'pointer-events-auto')}>
           {onToggleMobileSidebar && (
             <button
               type="button"
               onClick={onToggleMobileSidebar}
-              className="md:hidden p-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white transition-all cursor-pointer"
-              title="Open Navigation"
+              aria-label="Open menu"
+              className={cn(PANEL, 'flex h-10 w-10 items-center justify-center rounded-xl text-ink-muted hover:text-ink md:hidden cursor-pointer')}
             >
-              <Menu className="w-4 h-4" />
+              <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
             </button>
           )}
-
-          {/* Home Button */}
-          {onNavigateHome && (
-            <button
-              type="button"
-              onClick={onNavigateHome}
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-all cursor-pointer"
-              title="Return to Today's Mission"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">Home</span>
-            </button>
-          )}
-
-          {/* Camera Modes */}
-          <div className="flex items-center gap-0.5 bg-slate-900/90 p-0.5 rounded-xl border border-white/[0.06]">
-            <button type="button" onClick={() => setMode('dollhouse')} className={toolBtn(cameraMode === 'dollhouse')} title="3D cutaway of all rooms">
-              <Home className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Dollhouse</span>
-            </button>
-            <button type="button" onClick={() => setMode('exterior')} className={toolBtn(cameraMode === 'exterior')} title="Street-level exterior">
-              <Eye className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Exterior</span>
-            </button>
-            <button type="button" onClick={() => setMode('blueprint')} className={toolBtn(cameraMode === 'blueprint')} title="Top-down architectural view">
-              <Grid className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Top-Down</span>
-            </button>
-            <button type="button" onClick={() => setMode('room_focus')} className={toolBtn(cameraMode === 'room_focus')} title="Frame the selected room">
-              <Camera className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Room</span>
-            </button>
-            <button type="button" onClick={() => setMode('walk')} className={toolBtn(cameraMode === 'walk')} title="First-person walk tour (WASD / touch)">
-              <Footprints className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">Walk</span>
-            </button>
+          <div role="radiogroup" aria-label="View" className={cn(PANEL, 'flex rounded-xl p-1')}>
+            {VIEWS.map(({ mode, label, hint, icon: Icon }) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={cameraMode === mode}
+                aria-label={label}
+                title={hint}
+                onClick={() => setMode(mode)}
+                className={cn(
+                  'flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors cursor-pointer',
+                  cameraMode === mode ? 'bg-ink text-canvas' : 'text-ink-muted hover:bg-surface-hover hover:text-ink',
+                )}
+              >
+                <Icon className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden xl:inline">{label}</span>
+              </button>
+            ))}
           </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="flex items-center gap-0.5 bg-slate-900/90 p-0.5 rounded-xl border border-white/[0.06]">
-            <button type="button" onClick={() => setShowRoof((v) => !v)} className={toolBtn(showRoof)} title="Show / hide roof">
-              <Layers className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Roof</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setWallsMode((v) => (v === 'cut' ? 'full' : 'cut'))}
-              className={toolBtn(wallsMode === 'full')}
-              title="Full-height or cutaway front walls"
-            >
-              <PanelTop className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{wallsMode === 'cut' ? 'Walls cut' : 'Walls full'}</span>
-            </button>
-            <button type="button" onClick={() => setShowLabels((v) => !v)} className={toolBtn(showLabels)} title="Room names & areas">
-              <Tag className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Labels</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-white/[0.06] text-xs">
-            {sunTime < 7 || sunTime > 19 ? <Moon className="w-3.5 h-3.5 text-sky-300" /> : <Sun className="w-3.5 h-3.5 text-amber-400" />}
+          <label className={cn(PANEL, 'hidden h-10 items-center gap-2 rounded-xl px-3 lg:flex')} title="Time of day">
+            {sunTime < 7 || sunTime > 19 ? (
+              <Moon className="h-4 w-4 text-brand-text" aria-hidden="true" />
+            ) : (
+              <Sun className="h-4 w-4 text-gold" aria-hidden="true" />
+            )}
             <input
               type="range"
               min="6"
@@ -1233,859 +1307,467 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
               step="0.5"
               value={sunTime}
               onChange={(e) => setSunTime(parseFloat(e.target.value))}
-              className="w-16 sm:w-20 accent-amber-400 cursor-pointer"
+              className="w-24 cursor-pointer accent-[var(--brand)]"
               aria-label="Time of day"
             />
-            <span className="font-mono text-slate-300 text-[11px] w-9">
+            <span className="w-10 text-xs tabular-nums text-ink-muted">
               {String(Math.floor(sunTime)).padStart(2, '0')}:{sunTime % 1 ? '30' : '00'}
             </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              const next: SoundType = currentSound === 'off' ? 'rain' : currentSound === 'rain' ? 'ambient-drone' : currentSound === 'ambient-drone' ? 'binaural-40hz' : 'off';
-              soundEngine.play(next);
-              setCurrentSound(next);
-            }}
-            className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.06] text-slate-300 hover:text-white transition-all cursor-pointer flex items-center gap-1 text-xs"
-            title={`Ambient soundscape: ${currentSound}`}
-          >
-            {currentSound !== 'off' ? <Volume2 className="w-3.5 h-3.5 text-cyan-400" /> : <VolumeX className="w-3.5 h-3.5" />}
-          </button>
+          </label>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* 3D Character Customizer Button */}
+        <div className={cn('flex items-center gap-2', !isZenMode && 'pointer-events-auto')}>
           <button
             type="button"
-            onClick={() => setIsCustomizerOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 text-xs font-bold transition-all cursor-pointer shadow-md shadow-indigo-600/20 active:scale-95"
-            title="Customize your 3D Student Character"
+            onClick={() => setIsMoneyOpen(true)}
+            title="Today's money"
+            className={cn(PANEL, 'flex h-10 items-center gap-2 rounded-xl px-3 text-[13px] transition-colors hover:bg-surface-hover cursor-pointer')}
           >
-            <Sliders className="w-3.5 h-3.5 text-indigo-300" />
-            <span className="hidden sm:inline">My 3D Character</span>
+            <Tokens amount={walletCoins} className="text-ink" />
+            <span className="h-4 w-px bg-line-strong" aria-hidden="true" />
+            <span className="tabular-nums text-ink-muted">
+              <span className="hidden sm:inline">Pay </span>
+              <span className="sr-only sm:hidden">Pay </span>
+              {formatMultiplier(activeMultiplier)}
+            </span>
           </button>
-
-          {/* Housing Renovation & Tier Badge */}
+          {rentDue && (
+            <Button
+              variant="gold"
+              onClick={handlePayRentDirect}
+              title={`Turns on your ${formatBonus(housingProperty.wageMultiplier - 1)} home bonus for today`}
+              className="h-10"
+            >
+              Pay rent <Tokens amount={housingProperty.rentPerDay} />
+            </Button>
+          )}
           <button
             type="button"
-            onClick={() => setIsUpgradeModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/15 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-400/40 text-amber-200 text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-95"
-            title="House Level & Renovation Upgrades"
+            onClick={() => setIsHomeOpen(true)}
+            title="Your home and upgrades"
+            className={cn(PANEL, 'flex h-10 items-center gap-2 rounded-xl px-3 text-[13px] font-medium text-ink transition-colors hover:bg-surface-hover cursor-pointer')}
           >
-            <span>{housingProperty.icon}</span>
-            <span>{housingProperty.name.split(' ')[0]} (Lvl {housingProperty.level})</span>
-            <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-          </button>
-
-          {/* Daily Rent Status Pill */}
-          <button
-            type="button"
-            onClick={handlePayRentDirect}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
-              dailyLedger.rentPaidToday
-                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                : 'bg-amber-500/20 border-amber-500/40 text-amber-200 hover:bg-amber-500/30 active:scale-95'
-            }`}
-            title={dailyLedger.rentPaidToday ? `Rent is paid for today (🪙${housingProperty.rentPerDay})` : `Click to pay daily rent (🪙${housingProperty.rentPerDay})`}
-          >
-            {dailyLedger.rentPaidToday ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <AlertCircle className="w-3.5 h-3.5 text-amber-400" />}
-            <span className="hidden md:inline">{dailyLedger.rentPaidToday ? 'Rent Paid' : `Pay Rent (🪙${housingProperty.rentPerDay})`}</span>
-          </button>
-
-          <div
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-white/[0.06] text-amber-300 text-xs font-semibold"
-            title={`${currentRole.title} • ${LIFESTYLE_TIERS[lifeSimService.getLifestyleTier()].title}`}
-          >
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>{activeMultiplier}x wage</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setIsEvaluationOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.06] text-amber-300 text-xs font-semibold transition-all cursor-pointer"
-            title="Design rating"
-          >
-            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-            <span>{evaluation.starRating.toFixed(2)}</span>
-          </button>
-
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-white/[0.06] text-amber-300 font-mono text-xs font-semibold">
-            <Coins className="w-3.5 h-3.5 text-amber-400" />
-            <span>{walletCoins}</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleExport}
-            className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.06] text-slate-300 hover:text-white transition-all cursor-pointer"
-            title="Export render (PNG)"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsZenMode((v) => !v)}
-            className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.06] text-slate-300 hover:text-white transition-all cursor-pointer"
-            title="Toggle Zen full view"
-          >
-            {isZenMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            <span aria-hidden="true">{housingProperty.icon}</span>
+            <span className="hidden sm:inline">Level {housingProperty.level}</span>
+            <span className="sr-only sm:hidden">Your home, level {housingProperty.level}</span>
           </button>
         </div>
       </div>
 
-      {/* ===================== 3D VIEWPORT (FULL-PAGE CANVAS) ===================== */}
-      <div className="absolute inset-0 w-full h-full bg-[#dfeaf3] overflow-hidden">
-        <div ref={containerRef} className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing" />
-
-        {/* Compass (rotates with the camera) */}
+      {/* ===================== VIEW TOOLS ===================== */}
+      <div
+        className={cn(
+          'absolute right-3 top-[112px] z-30 flex flex-col items-center gap-2 transition-opacity sm:top-[64px]',
+          isZenMode ? 'pointer-events-none opacity-0' : 'pointer-events-auto',
+        )}
+      >
         <button
           type="button"
           onClick={() => setMode('dollhouse')}
-          className="absolute top-16 right-4 z-20 w-11 h-11 rounded-full bg-slate-950/85 hover:bg-slate-900 border border-white/10 backdrop-blur-xl shadow-xl flex items-center justify-center cursor-pointer pointer-events-auto transition-transform active:scale-95"
-          title="Reset view (Dollhouse)"
+          aria-label="Reset the view"
+          title="Reset the view"
+          className={cn(PANEL, 'flex h-11 w-11 items-center justify-center rounded-full transition-transform active:scale-95 cursor-pointer')}
         >
-          <div ref={compassRef} className="relative w-8 h-8 flex items-center justify-center transition-none">
-            <Compass className="w-6 h-6 text-slate-300" />
-            <span className="absolute -top-1 text-[9px] font-bold text-red-500">N</span>
+          <div ref={compassRef} className="relative flex h-8 w-8 items-center justify-center transition-none">
+            <Compass className="h-6 w-6 text-ink-muted" aria-hidden="true" />
+            <span className="absolute -top-1 text-[9px] font-bold text-danger">N</span>
           </div>
         </button>
+        <div className={cn(PANEL, 'flex flex-col gap-0.5 rounded-xl p-1')}>
+          <IconButton icon={Layers} label="Roof" active={showRoof} aria-pressed={showRoof} onClick={() => setShowRoof((v) => !v)} />
+          <IconButton
+            icon={PanelTop}
+            label="Full front walls"
+            active={wallsMode === 'full'}
+            aria-pressed={wallsMode === 'full'}
+            onClick={() => setWallsMode((v) => (v === 'cut' ? 'full' : 'cut'))}
+          />
+          <IconButton icon={Tag} label="Room names" active={showLabels} aria-pressed={showLabels} onClick={() => setShowLabels((v) => !v)} />
+          <IconButton
+            icon={currentSound === 'off' ? VolumeX : Volume2}
+            label={currentSound === 'off' ? 'Background sound: off' : `Background sound: ${SOUND_LABELS[currentSound] ?? 'on'}`}
+            active={currentSound !== 'off'}
+            onClick={cycleSound}
+          />
+          <IconButton icon={Download} label="Save a picture" onClick={handleExport} />
+          <IconButton icon={Maximize2} label="Hide the controls" onClick={() => setIsZenMode(true)} />
+        </div>
+      </div>
 
-        {/* Hovered room tip */}
-        {hoveredName && hoveredRoom !== selectedRoomId && !selectedFurniture && cameraMode !== 'walk' && (
-          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-xl bg-slate-900/90 text-white border border-white/10 text-xs font-semibold shadow-2xl backdrop-blur-xl">
-            {hoveredName} — click to select
-          </div>
-        )}
-
-        {/* Selected Furniture Quick Action Floating Pill */}
-        {selectedFurniture && cameraMode !== 'walk' && (
-          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-slate-950/90 border border-amber-500/40 backdrop-blur-xl shadow-2xl text-white text-xs animate-fadeIn pointer-events-auto">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              <div className="flex flex-col">
-                <span className="font-semibold text-white tracking-wide text-xs">{selectedFurniture.label}</span>
-                <span className="text-[10px] text-amber-300/80">{selectedFurniture.brandStyle} style</span>
+      {/* ===================== FURNISH PANEL ===================== */}
+      {!isWalking && (
+        <aside
+          aria-label="Furnish"
+          className={cn(
+            'absolute left-3 top-[112px] z-20 flex transition-opacity sm:top-[64px]',
+            isSidebarOpen ? 'bottom-[132px] w-[calc(100%-80px)] max-w-[340px] lg:bottom-[76px]' : '',
+            isZenMode ? 'pointer-events-none opacity-0' : 'pointer-events-auto',
+          )}
+        >
+          {isSidebarOpen ? (
+            <div className={cn(PANEL, 'flex h-full w-full flex-col overflow-hidden rounded-2xl')}>
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line py-2 pl-4 pr-2">
+                <h2 className="text-[13px] font-semibold text-ink">Furnish</h2>
+                <IconButton icon={PanelLeftClose} label="Hide the panel" onClick={() => setIsSidebarOpen(false)} className="h-8 w-8" />
               </div>
-            </div>
-            <div className="h-6 w-[1px] bg-white/10 mx-1" />
-            <button
-              type="button"
-              onClick={handleRotateSelectedFurniture}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-[11px] transition-all cursor-pointer border border-amber-500/30 active:scale-95"
-              title="Rotate 90 degrees"
-            >
-              <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-              <span>Rotate 90°</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedSlotFilter(selectedFurniture.slotType);
-                setIsSidebarOpen(true);
-                setSidebarTab('furniture');
-              }}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.14] text-slate-200 font-semibold text-[11px] transition-all cursor-pointer border border-white/10 active:scale-95"
-              title="Browse catalog styles for this slot"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-              <span>Style</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedFurniture(null)}
-              className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer transition-colors"
-              title="Deselect"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-
-        {/* Walk Mode HUD Overlay */}
-        {cameraMode === 'walk' && (
-          <>
-            {/* Top Walk Mode Location & Exit Bar */}
-            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2 rounded-2xl bg-slate-950/90 border border-emerald-500/40 backdrop-blur-xl shadow-2xl text-white pointer-events-auto">
-              <div className="flex items-center gap-2">
-                <Footprints className="w-4 h-4 text-emerald-400 animate-bounce" />
-                <span className="font-semibold text-xs tracking-wide text-white">
-                  Walking: <span className="text-emerald-400">{walkCurrentRoom}</span>
-                </span>
-              </div>
-              <div className="h-4 w-[1px] bg-white/20" />
-              <button
-                type="button"
-                onClick={() => setMode('dollhouse')}
-                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-semibold text-slate-200 hover:text-white transition-all cursor-pointer"
-              >
-                Exit Tour (Esc)
-              </button>
-            </div>
-
-            {/* Desktop Controls Hint (bottom left) */}
-            <div className="hidden sm:flex absolute bottom-20 left-4 z-20 items-center gap-2 px-3 py-2 rounded-xl bg-slate-950/80 border border-white/10 backdrop-blur-md text-[11px] text-slate-300">
-              <span className="font-mono px-1.5 py-0.5 rounded bg-white/10 text-amber-300 font-bold">W A S D</span>
-              <span>or Arrows to move · Drag mouse to look</span>
-            </div>
-
-            {/* Mobile Touch Virtual D-Pad (bottom left on small screens) */}
-            <div className="sm:hidden absolute bottom-20 left-4 z-30 flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-slate-950/85 border border-white/10 backdrop-blur-xl shadow-2xl touch-none">
-              <button
-                type="button"
-                onTouchStart={() => handleDpadPress('KeyW', true)}
-                onTouchEnd={() => handleDpadPress('KeyW', false)}
-                onMouseDown={() => handleDpadPress('KeyW', true)}
-                onMouseUp={() => handleDpadPress('KeyW', false)}
-                className="w-10 h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 flex items-center justify-center text-white cursor-pointer"
-              >
-                <ChevronUp className="w-5 h-5" />
-              </button>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onTouchStart={() => handleDpadPress('KeyA', true)}
-                  onTouchEnd={() => handleDpadPress('KeyA', false)}
-                  onMouseDown={() => handleDpadPress('KeyA', true)}
-                  onMouseUp={() => handleDpadPress('KeyA', false)}
-                  className="w-10 h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 flex items-center justify-center text-white cursor-pointer"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  type="button"
-                  onTouchStart={() => handleDpadPress('KeyS', true)}
-                  onTouchEnd={() => handleDpadPress('KeyS', false)}
-                  onMouseDown={() => handleDpadPress('KeyS', true)}
-                  onMouseUp={() => handleDpadPress('KeyS', false)}
-                  className="w-10 h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 flex items-center justify-center text-white cursor-pointer"
-                >
-                  <ChevronDown className="w-5 h-5" />
-                </button>
-                <button
-                  type="button"
-                  onTouchStart={() => handleDpadPress('KeyD', true)}
-                  onTouchEnd={() => handleDpadPress('KeyD', false)}
-                  onMouseDown={() => handleDpadPress('KeyD', true)}
-                  onMouseUp={() => handleDpadPress('KeyD', false)}
-                  className="w-10 h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 flex items-center justify-center text-white cursor-pointer"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Catalog sidebar */}
-        <div className={`absolute top-16 left-3 bottom-16 z-30 transition-all duration-300 flex ${isSidebarOpen ? 'w-80 sm:w-88' : 'w-10'} pointer-events-auto ${isZenMode ? 'opacity-0 pointer-events-none' : ''}`}>
-          <div className="w-full h-full rounded-2xl bg-slate-950/90 border border-white/[0.08] backdrop-blur-xl shadow-2xl flex flex-col overflow-hidden text-slate-200">
-            <div className="p-2.5 border-b border-white/[0.06] flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setIsSidebarOpen((v) => !v)}
-                className="p-1 rounded-md hover:bg-white/[0.08] text-slate-400 hover:text-white cursor-pointer"
-                title="Toggle catalog"
-              >
-                <Sliders className="w-4 h-4" />
-              </button>
-              {isSidebarOpen && <span className="text-xs font-semibold text-white tracking-wide">Design Catalog</span>}
-            </div>
-
-            {isSidebarOpen && (
-              <>
-                <div className="flex items-center border-b border-white/[0.06] text-xs">
-                  {(['furniture', 'materials', 'landscape'] as const).map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setSidebarTab(tab)}
-                      className={`flex-1 py-2 font-semibold capitalize transition-colors cursor-pointer ${
-                        sidebarTab === tab ? 'text-white border-b-2 border-amber-400' : 'text-slate-500 hover:text-slate-300'
-                      }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
-
-                {sidebarTab === 'furniture' && (
-                  <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-none">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                        <ShoppingBag className="w-3 h-3 text-amber-400" />
-                        {currentRoom.name}
-                      </span>
-                      <span className="text-[10px] text-amber-300 font-mono">🪙 {walletCoins}</span>
-                    </div>
-
-                    {!lifeSimService.isRoomUnlocked(selectedRoomId) ? (
-                      <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center space-y-2.5 my-3">
-                        <span className="text-2xl block">🔒</span>
-                        <h4 className="text-xs font-semibold text-white">{currentRoom.name} is Locked</h4>
-                        <p className="text-[11px] text-slate-400 leading-snug">
-                          Renovate and upgrade your residence to unlock and furnish this room.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setIsUpgradeModalOpen(true)}
-                          className="w-full py-2 rounded-lg bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer hover:brightness-110 active:scale-95 flex items-center justify-center gap-1.5"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>View Renovation Upgrades</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-[10px] text-slate-500 leading-snug">Equipped pieces restyle the 3D room in their design aesthetic.</p>
-
-                        <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[10px]">
-                          {(['all', ...currentRoom.slots] as (DesignSlotType | 'all')[]).map((slot) => (
-                            <button
-                              key={slot}
-                              type="button"
-                              onClick={() => setSelectedSlotFilter(slot)}
-                              className={`px-2 py-0.5 rounded-md font-semibold whitespace-nowrap cursor-pointer transition-colors ${
-                                effectiveSlotFilter === slot ? 'bg-amber-400 text-slate-950' : 'bg-white/[0.05] text-slate-400 hover:text-white'
-                              }`}
-                            >
-                              {slot === 'all' ? 'All' : slot.replace('_', ' ')}
-                            </button>
-                          ))}
-                        </div>
-
-                    {FURNITURE_CATALOG.filter(
-                      (f) => f.roomCompatibility.includes(selectedRoomId) && (effectiveSlotFilter === 'all' || f.category === effectiveSlotFilter),
-                    ).map((item) => {
-                      const isOwned = ownedIds.includes(item.id);
-                      const isEquipped = equippedItems[item.category]?.id === item.id;
-                      const canAfford = walletCoins >= item.cost;
-                      return (
-                        <div
-                          key={item.id}
-                          className={`p-2.5 rounded-lg border transition-all flex items-center justify-between gap-2 ${
-                            isEquipped ? 'bg-amber-500/10 border-amber-500/40' : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/[0.06]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="text-xl w-9 h-9 rounded-md bg-white/[0.05] flex items-center justify-center shrink-0">{item.emoji}</span>
-                            <div className="min-w-0">
-                              <h5 className="text-xs font-semibold text-white truncate">{item.name}</h5>
-                              <div className="text-[10px] text-slate-500 truncate">
-                                {item.brandStyle} · +{item.focusBonus} focus · +{item.comfortBonus} comfort
-                              </div>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (isEquipped) {
-                                showToast(`${item.name} is already placed in the ${currentRoom.name}`);
-                              } else if (isOwned) {
-                                lifeSimService.equipFurniture(item.id, selectedRoomId);
-                                setEquippedItems(lifeSimService.getEquippedFurniture(selectedRoomId));
-                                setFurnitureVersion((v) => v + 1);
-                                showToast(`Placed ${item.name} in the ${currentRoom.name}`);
-                              } else if (canAfford) {
-                                const res = lifeSimService.buyFurniture(item.id, selectedRoomId);
-                                if (res.success) {
-                                  try {
-                                    confetti({ particleCount: 30, spread: 50 });
-                                  } catch {
-                                    /* optional */
-                                  }
-                                  setEquippedItems(lifeSimService.getEquippedFurniture(selectedRoomId));
-                                  setFurnitureVersion((v) => v + 1);
-                                  showToast(`Purchased and placed ${item.name}`);
-                                } else {
-                                  showToast(res.error || 'Could not purchase this item');
-                                }
-                              } else {
-                                showToast(`Needs 🪙${item.cost} tokens`);
-                              }
-                            }}
-                            className={`px-2.5 py-1 rounded-md text-[10px] font-semibold shrink-0 cursor-pointer ${
-                              isEquipped
-                                ? 'bg-amber-500/20 text-amber-300'
-                                : isOwned
-                                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                                  : canAfford
-                                    ? 'bg-amber-400 hover:bg-amber-300 text-slate-950'
-                                    : 'bg-white/[0.05] text-slate-500 cursor-not-allowed'
-                            }`}
-                          >
-                            {isEquipped ? 'Placed' : isOwned ? 'Place' : `🪙 ${item.cost}`}
-                          </button>
-                        </div>
-                      );
-                    })}
-                    </>
+              {selectionBar && <div className="shrink-0 border-b border-line bg-surface-hover/60 p-1.5">{selectionBar}</div>}
+              <div role="tablist" aria-label="Furnish" className="flex shrink-0 gap-4 border-b border-line px-4 pt-2">
+                {PANEL_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={sidebarTab === tab.id}
+                    onClick={() => setSidebarTab(tab.id)}
+                    className={cn(
+                      'border-b-2 pb-2 text-[13px] font-medium transition-colors cursor-pointer',
+                      sidebarTab === tab.id ? 'border-ink text-ink' : 'border-transparent text-ink-subtle hover:text-ink',
                     )}
-                  </div>
-                )}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
 
-                {sidebarTab === 'materials' && (
-                  <div className="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-none text-xs">
-                    {[
-                      { title: 'Interior walls', list: WALL_FINISHES, value: wallTexture, set: (id: string) => setWallTexture(id as WallFinishId) },
-                      { title: 'Flooring (living areas)', list: FLOOR_FINISHES, value: floorTexture, set: (id: string) => setFloorTexture(id as FloorFinishId) },
-                    ].map((group) => (
-                      <div key={group.title}>
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block mb-2">{group.title}</span>
-                        <div className="grid grid-cols-2 gap-2">
-                          {group.list.map((m) => (
-                            <button
-                              key={m.id}
-                              type="button"
-                              onClick={() => {
-                                group.set(m.id);
-                                soundEngine.playTapPop();
-                              }}
-                              className={`p-2 rounded-lg border flex flex-col items-start gap-1.5 cursor-pointer transition-all ${
-                                group.value === m.id ? 'border-amber-400 bg-amber-500/10 text-white' : 'border-white/[0.08] hover:bg-white/[0.05] text-slate-300'
-                              }`}
+              {sidebarTab === 'furniture' && (
+                <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                  <div className="flex items-baseline justify-between gap-2 px-1">
+                    <p className="truncate text-[13px] font-medium text-ink">{ROOM_LABELS[selectedRoomId]}</p>
+                    <Tokens amount={walletCoins} className="shrink-0 text-xs text-ink-muted" iconClassName="h-3 w-3" />
+                  </div>
+
+                  {!roomUnlocked ? (
+                    <div className="mt-3 rounded-2xl border border-dashed border-line-strong px-4 py-6 text-center">
+                      <Lock className="mx-auto h-5 w-5 text-ink-subtle" aria-hidden="true" />
+                      <p className="mt-2 text-[13px] font-medium text-ink">Comes with a bigger home</p>
+                      <p className="mt-1 text-xs leading-relaxed text-ink-subtle">Upgrade your home to add this room and furnish it.</p>
+                      <Button size="sm" className="mt-3" onClick={() => setIsHomeOpen(true)}>
+                        See home upgrades
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="mt-0.5 px-1 text-xs text-ink-subtle">Each piece changes the 3D room and adds to its rating.</p>
+                      <div role="group" aria-label="Spot" className="-mx-1 mt-2.5 flex gap-1 overflow-x-auto px-1 pb-1 no-scrollbar">
+                        {(['all', ...currentRoom.slots] as (DesignSlotType | 'all')[]).map((slot) => (
+                          <button
+                            key={slot}
+                            type="button"
+                            aria-pressed={effectiveSlotFilter === slot}
+                            onClick={() => setSelectedSlotFilter(slot)}
+                            className={cn(
+                              'h-7 shrink-0 rounded-lg px-2.5 text-xs font-medium transition-colors cursor-pointer',
+                              effectiveSlotFilter === slot ? 'bg-ink text-canvas' : 'text-ink-muted hover:bg-surface-hover hover:text-ink',
+                            )}
+                          >
+                            {slot === 'all' ? 'All' : SLOT_LABELS[slot]}
+                          </button>
+                        ))}
+                      </div>
+
+                      <ul className="mt-2 space-y-1.5">
+                        {FURNITURE_CATALOG.filter(
+                          (f) => f.roomCompatibility.includes(selectedRoomId) && (effectiveSlotFilter === 'all' || f.category === effectiveSlotFilter),
+                        ).map((item) => {
+                          const isOwned = ownedIds.includes(item.id);
+                          const isEquipped = equippedItems[item.category]?.id === item.id;
+                          const short = item.cost - walletCoins;
+                          return (
+                            <li
+                              key={item.id}
+                              className={cn(
+                                'flex items-center gap-2.5 rounded-xl border p-2',
+                                isEquipped ? 'border-brand/40 bg-brand-soft' : 'border-line bg-canvas',
+                              )}
                             >
-                              <span className="w-full h-8 rounded-md border border-white/10" style={{ backgroundColor: m.color }} />
-                              <span className="text-[11px] font-medium leading-tight text-left">{m.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                    <p className="text-[10px] text-slate-500 leading-snug">The kitchen keeps its ceramic tile floor. Finishes are saved on this device.</p>
-                  </div>
-                )}
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-lg" aria-hidden="true">
+                                {item.emoji}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[13px] font-medium text-ink">{item.name}</span>
+                                <span className="block truncate text-xs text-ink-subtle">
+                                  {item.brandStyle} · +{item.focusBonus} focus · +{item.comfortBonus} comfort
+                                </span>
+                              </span>
+                              {isEquipped ? (
+                                <Badge tone="brand">Placed</Badge>
+                              ) : isOwned ? (
+                                <Button size="sm" onClick={() => placeOrBuy(item)} aria-label={`Place the ${item.name}`}>
+                                  Place
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="gold"
+                                  disabled={short > 0}
+                                  title={short > 0 ? `You need ${short} more tokens` : undefined}
+                                  onClick={() => placeOrBuy(item)}
+                                  aria-label={`Buy the ${item.name} for ${item.cost} tokens`}
+                                >
+                                  <Tokens amount={item.cost} />
+                                </Button>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
 
-                {sidebarTab === 'landscape' && (
-                  <div className="flex-1 overflow-y-auto p-3 space-y-2 text-xs scrollbar-none">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block mb-1">Site features</span>
-                    {[
-                      { icon: '🚗', title: 'Carport & driveway', desc: 'Slatted timber pergola over a paved drive' },
-                      { icon: '🏊', title: 'In-ground pool', desc: '6 × 4.5 m basin with stone deck and umbrella' },
-                      { icon: '🪴', title: 'Terrace', desc: 'Timber deck with frameless glass balustrade' },
-                      { icon: '🌸', title: 'Planting', desc: 'Cherry blossoms, cypress screen, perimeter hedges' },
-                    ].map((f) => (
-                      <div key={f.title} className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center gap-2.5">
-                        <span className="text-lg">{f.icon}</span>
-                        <div>
-                          <div className="font-semibold text-white">{f.title}</div>
-                          <p className="text-[10px] text-slate-500">{f.desc}</p>
-                        </div>
+              {sidebarTab === 'finishes' && (
+                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+                  {[
+                    { title: 'Walls', list: WALL_FINISHES, value: wallTexture, set: (id: string) => setWallTexture(id as WallFinishId) },
+                    { title: 'Floors', list: FLOOR_FINISHES, value: floorTexture, set: (id: string) => setFloorTexture(id as FloorFinishId) },
+                  ].map((group) => (
+                    <div key={group.title} role="radiogroup" aria-label={group.title}>
+                      <p className="text-xs font-medium text-ink-muted">{group.title}</p>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        {group.list.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={group.value === m.id}
+                            onClick={() => {
+                              group.set(m.id);
+                              soundEngine.playTapPop();
+                            }}
+                            className={cn(
+                              'flex flex-col items-start gap-1.5 rounded-xl border p-2 text-left transition-colors cursor-pointer',
+                              group.value === m.id ? 'border-brand bg-brand-soft' : 'border-line bg-canvas hover:border-line-strong',
+                            )}
+                          >
+                            <span className="h-8 w-full rounded-lg border border-black/10" style={{ backgroundColor: m.color }} />
+                            <span className="text-xs font-medium leading-tight text-ink">{m.label}</span>
+                          </button>
+                        ))}
                       </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setMode('exterior')}
-                      className="w-full mt-1 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-white font-semibold cursor-pointer"
-                    >
-                      View exterior
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+                    </div>
+                  ))}
+                  <p className="text-xs leading-relaxed text-ink-subtle">The kitchen keeps its tile floor. Finishes are free, and saved on this device.</p>
+                </div>
+              )}
 
-        {/* Room selector */}
-        <div className={`absolute bottom-3 right-3 z-30 flex items-center gap-1 p-1 rounded-xl bg-slate-950/85 border border-white/[0.1] backdrop-blur-xl shadow-2xl pointer-events-auto transition-all ${isZenMode ? 'opacity-0 pointer-events-none hover:opacity-100 hover:pointer-events-auto' : ''}`}>
-          {HOME_ROOMS.map((r) => {
-            const isUnlocked = lifeSimService.isRoomUnlocked(r.id);
-            return (
+              {sidebarTab === 'outdoors' && (
+                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+                  {housingProperty.id !== 'penthouse' && (
+                    <p className="rounded-xl bg-surface-hover px-3.5 py-3 text-xs leading-relaxed text-ink-muted">
+                      The grounds below come with the {HOUSING_CATALOG[HOUSING_CATALOG.length - 1].name}, the level{' '}
+                      {HOUSING_CATALOG.length} home.
+                    </p>
+                  )}
+                  <ul className="space-y-1.5">
+                    {SITE_FEATURES.map((f) => (
+                      <li key={f.title} className="flex items-center gap-3 rounded-xl border border-line bg-canvas p-2.5">
+                        <span className="text-lg" aria-hidden="true">
+                          {f.icon}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-[13px] font-medium text-ink">{f.title}</span>
+                          <span className="block text-xs text-ink-subtle">{f.desc}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={() => (housingProperty.id === 'penthouse' ? setMode('exterior') : setIsHomeOpen(true))}
+                  >
+                    {housingProperty.id === 'penthouse' ? 'View outside' : 'See home upgrades'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-start gap-2">
               <button
-                key={r.id}
                 type="button"
-                onClick={() => {
-                  if (!isUnlocked) {
-                    showToast(`🔒 ${r.name} is locked! Upgrade your house to unlock.`);
-                    setIsUpgradeModalOpen(true);
-                    return;
-                  }
-                  setSelectedRoomId(r.id);
-                  setCameraMode('room_focus');
-                  setShowRoof(false);
-                  setWallsMode('cut');
-                  soundEngine.playTapPop();
-                }}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  selectedRoomId === r.id
-                    ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20'
-                    : isUnlocked
-                      ? 'text-slate-300 hover:text-white hover:bg-white/[0.08]'
-                      : 'text-slate-500 hover:text-slate-300 bg-white/[0.02]'
-                }`}
-                title={isUnlocked ? r.name : `${r.name} (Locked - Click to Upgrade)`}
+                onClick={() => setIsSidebarOpen(true)}
+                className={cn(PANEL, 'flex h-10 items-center gap-2 rounded-xl px-3 text-[13px] font-medium text-ink transition-colors hover:bg-surface-hover cursor-pointer')}
               >
-                <span>{isUnlocked ? r.icon : '🔒'}</span>
-                <span className="hidden md:inline">{r.name.split(' ')[0]}</span>
+                <Armchair className="h-4 w-4 text-ink-muted" aria-hidden="true" />
+                Furnish
               </button>
-            );
-          })}
-        </div>
-      </div>
+              {selectionBar && <div className={cn(PANEL, 'w-[300px] max-w-[calc(100vw-96px)] rounded-2xl p-1.5 animate-rise')}>{selectionBar}</div>}
+            </div>
+          )}
+        </aside>
+      )}
 
-      {/* ===================== ROOM ACTIONS FLOATING DOCK ===================== */}
-      <div
-        className={`absolute bottom-3 left-3 z-30 p-2 sm:p-2.5 rounded-2xl bg-slate-950/85 hover:bg-slate-950/95 border border-white/[0.1] backdrop-blur-xl shadow-2xl flex flex-wrap items-center gap-2.5 text-xs pointer-events-auto transition-all max-w-[calc(100%-120px)] sm:max-w-none ${
-          isZenMode ? 'opacity-0 pointer-events-none hover:opacity-100 hover:pointer-events-auto' : ''
-        }`}
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-lg shrink-0">
-            {currentRoom.icon}
-          </div>
-          <div className="hidden sm:block">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-white text-xs">{currentRoom.name}</span>
-              <span className="text-[10px] text-slate-500">
-                {roomArea(selectedRoomId).toFixed(1)} m² · house {totalInteriorArea} m²
+      {/* ===================== WALK MODE ===================== */}
+      {isWalking && (
+        <>
+          <div className={cn(PANEL, 'pointer-events-auto absolute left-1/2 top-[112px] z-40 flex -translate-x-1/2 items-center gap-3 rounded-2xl py-1.5 pl-4 pr-1.5 sm:top-[64px]')}>
+            <span className="flex items-center gap-2 text-[13px] text-ink">
+              <Footprints className="h-4 w-4 text-success" aria-hidden="true" />
+              <span>
+                Walking · <span className="font-medium">{walkCurrentRoom}</span>
               </span>
-            </div>
-            <div className="flex items-center gap-2 text-[10px] text-slate-400">
-              <span className="text-sky-300">+{evaluation.totalFocusBonus} focus</span>
-              <span>·</span>
-              <span className="text-emerald-300">+{evaluation.totalComfortBonus} comfort</span>
-              <span>·</span>
-              <span className="text-amber-300">{activeMultiplier}x wage</span>
+            </span>
+            <Button size="sm" onClick={() => setMode('dollhouse')}>
+              Stop <Kbd className="ml-0.5">Esc</Kbd>
+            </Button>
+          </div>
+          <p className={cn(PANEL, 'pointer-events-none absolute bottom-[84px] left-3 z-20 hidden items-center gap-2 rounded-xl px-3 py-2 text-xs text-ink-muted sm:flex')}>
+            <Kbd>W</Kbd>
+            <Kbd>A</Kbd>
+            <Kbd>S</Kbd>
+            <Kbd>D</Kbd>
+            or arrow keys to move · drag to look around
+          </p>
+          <div className={cn(PANEL, 'absolute bottom-[76px] left-3 z-30 flex touch-none flex-col items-center gap-1.5 rounded-2xl p-2 sm:hidden')}>
+            <DpadButton icon={ChevronUp} label="Forward" code="KeyW" onPress={handleDpadPress} />
+            <div className="flex items-center gap-1.5">
+              <DpadButton icon={ChevronLeft} label="Left" code="KeyA" onPress={handleDpadPress} />
+              <DpadButton icon={ChevronDown} label="Back" code="KeyS" onPress={handleDpadPress} />
+              <DpadButton icon={ChevronRight} label="Right" code="KeyD" onPress={handleDpadPress} />
             </div>
           </div>
-        </div>
+        </>
+      )}
 
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setIsUpgradeModalOpen(true)}
-            className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-200 font-semibold cursor-pointer flex items-center gap-1.5"
-            title="House Renovation & Progression"
-          >
-            <span>{housingProperty.icon}</span>
-            <span>Renovate (Lvl {housingProperty.level})</span>
-          </button>
-          {onOpenHousing && (
+      {/* ===================== ROOMS ===================== */}
+      <nav
+        aria-label="Rooms"
+        className={cn(
+          PANEL,
+          'absolute bottom-[72px] right-3 z-30 flex gap-0.5 rounded-xl p-1 transition-opacity lg:bottom-3',
+          isZenMode ? 'pointer-events-none opacity-0' : 'pointer-events-auto',
+        )}
+      >
+        {HOME_ROOMS.map((r) => {
+          const isUnlocked = lifeSimService.isRoomUnlocked(r.id);
+          const isSelected = selectedRoomId === r.id;
+          return (
             <button
+              key={r.id}
               type="button"
-              onClick={onOpenHousing}
-              className="px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-slate-200 font-semibold cursor-pointer flex items-center gap-1.5"
+              aria-pressed={isSelected}
+              aria-label={isUnlocked ? ROOM_LABELS[r.id] : `${ROOM_LABELS[r.id]}, comes with a bigger home`}
+              title={isUnlocked ? ROOM_LABELS[r.id] : `${ROOM_LABELS[r.id]} comes with a bigger home`}
+              onClick={() => {
+                if (!isUnlocked) {
+                  setIsHomeOpen(true);
+                  return;
+                }
+                setSelectedRoomId(r.id);
+                setCameraMode('room_focus');
+                setShowRoof(false);
+                setWallsMode('cut');
+                soundEngine.playTapPop();
+              }}
+              className={cn(
+                'flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors cursor-pointer',
+                isSelected ? 'bg-brand text-brand-ink' : isUnlocked ? 'text-ink-muted hover:bg-surface-hover hover:text-ink' : 'text-ink-subtle hover:bg-surface-hover',
+              )}
             >
-              <span>{housingProperty.icon}</span>
-              <span>Ledger</span>
+              {isUnlocked ? <span aria-hidden="true">{r.icon}</span> : <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
+              <span className="hidden 2xl:inline">{ROOM_LABELS[r.id]}</span>
             </button>
-          )}
-          {onOpenCafeteria && (
-            <button
-              type="button"
-              onClick={onOpenCafeteria}
-              className="px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-slate-200 font-semibold cursor-pointer"
-            >
-              🍽️ Café
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => handleTriggerAction('brew_coffee')}
-            className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-200 font-semibold cursor-pointer flex items-center gap-1.5"
-            title="Brew espresso (+15% wage boost for 35m)"
-          >
-            <Coffee className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Espresso</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTriggerAction('nap_rest')}
-            className="px-2.5 py-1.5 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/30 text-teal-200 font-semibold cursor-pointer flex items-center gap-1.5"
-            title="Restorative power nap"
-          >
-            <Wind className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Nap</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (primaryDeck && onStartSession) onStartSession(primaryDeck);
-              else if (onOpenStarterCatalog) onOpenStarterCatalog();
-            }}
-            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 text-white font-semibold cursor-pointer shadow-md shadow-indigo-600/25 flex items-center gap-1.5 active:scale-95"
-          >
-            <Play className="w-3.5 h-3.5 fill-white" />
-            <span>Study ({dueCards.length} due)</span>
-          </button>
-        </div>
-      </div>
+          );
+        })}
+      </nav>
 
-      {/* Zen Mode Quick Exit Button */}
-      {isZenMode && (
+      {/* ===================== DOCK ===================== */}
+      <div
+        className={cn(
+          PANEL,
+          'absolute bottom-3 left-3 right-3 z-30 flex items-center justify-between gap-3 rounded-2xl p-1.5 transition-opacity sm:right-auto',
+          isZenMode ? 'pointer-events-none opacity-0' : 'pointer-events-auto',
+        )}
+      >
         <button
           type="button"
-          onClick={() => setIsZenMode(false)}
-          className="absolute top-4 right-4 z-40 px-3.5 py-1.5 rounded-full bg-slate-950/90 hover:bg-slate-900 border border-amber-500/40 text-amber-200 text-xs font-semibold backdrop-blur-xl transition-all flex items-center gap-1.5 shadow-2xl cursor-pointer pointer-events-auto animate-pulse"
-          title="Exit Zen Mode"
+          onClick={() => setIsEvaluationOpen(true)}
+          className="flex min-w-0 items-center gap-2.5 rounded-xl px-2 py-1 text-left transition-colors hover:bg-surface-hover cursor-pointer"
+          aria-label={`${ROOM_LABELS[selectedRoomId]}, rated ${evaluation.starRating.toFixed(2)} of 5. See how the rating adds up`}
         >
-          <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
-          <span>Exit Zen View</span>
+          <span className="text-xl" aria-hidden="true">
+            {currentRoom.icon}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] font-medium text-ink">{ROOM_LABELS[selectedRoomId]}</span>
+            <span className="flex items-center gap-1 text-xs tabular-nums text-ink-subtle">
+              <Star className="h-3 w-3 fill-gold text-gold" aria-hidden="true" />
+              {evaluation.starRating.toFixed(2)}
+              <span className="hidden whitespace-nowrap sm:inline"> · {roomArea(selectedRoomId).toFixed(0)} m²</span>
+            </span>
+          </span>
         </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button size="sm" icon={Utensils} onClick={() => setIsCafeOpen(true)}>
+            Café
+          </Button>
+          <Button size="sm" variant="primary" icon={Play} onClick={handleStudy}>
+            {!primaryDeck ? 'Find a deck' : dueCards.length > 0 ? `Study · ${dueCards.length} due` : 'Study'}
+          </Button>
+        </div>
+      </div>
+
+      {isZenMode && (
+        <Button className={cn(PANEL, 'absolute right-3 top-3 z-40')} icon={Minimize2} onClick={() => setIsZenMode(false)}>
+          Show controls
+        </Button>
       )}
 
-      {/* ===================== DESIGN RATING MODAL ===================== */}
+      {/* ===================== DIALOGS ===================== */}
+      {isCafeOpen && <CafeDialog onClose={() => setIsCafeOpen(false)} />}
+      {isMoneyOpen && (
+        <MoneyDialog
+          onClose={() => setIsMoneyOpen(false)}
+          onOpenCafe={() => {
+            setIsMoneyOpen(false);
+            setIsCafeOpen(true);
+          }}
+        />
+      )}
+      {isHomeOpen && (
+        <HomeDialog
+          reviews={totalCardsReviewed}
+          onClose={() => setIsHomeOpen(false)}
+          onUpgraded={(home) => {
+            try {
+              confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 } });
+            } catch {
+              /* optional */
+            }
+            setHousingProperty(lifeSimService.getHousing());
+            setFurnitureVersion((v) => v + 1);
+            setIsHomeOpen(false);
+            showToast(`Welcome to the ${home.name}. New rooms are ready to furnish.`);
+          }}
+        />
+      )}
       {isEvaluationOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="relative w-full max-w-md bg-slate-900 border border-white/[0.1] rounded-2xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
-              <div className="flex items-center gap-2">
-                <Award className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-semibold text-white">Design rating · {currentRoom.name}</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEvaluationOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.08] cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-4 rounded-xl bg-white/[0.04] border border-white/[0.08] text-center">
-              <div className="text-3xl font-bold text-white">{evaluation.starRating.toFixed(2)} / 5.00</div>
-              <p className="text-xs text-amber-300 font-medium mt-1">{evaluation.harmonyTitle}</p>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div className="p-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06]">
-                <span className="text-[10px] text-slate-400 block">Focus</span>
-                <span className="text-sm font-semibold text-sky-300 font-mono">+{evaluation.totalFocusBonus}</span>
-              </div>
-              <div className="p-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06]">
-                <span className="text-[10px] text-slate-400 block">Comfort</span>
-                <span className="text-sm font-semibold text-emerald-300 font-mono">+{evaluation.totalComfortBonus}</span>
-              </div>
-              <div className="p-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06]">
-                <span className="text-[10px] text-slate-400 block">Value</span>
-                <span className="text-sm font-semibold text-amber-300 font-mono">🪙 {evaluation.totalValue}</span>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {evaluation.jurorFeedback.map((fb, idx) => (
-                <div key={idx} className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs text-slate-300">
-                  {fb}
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsEvaluationOpen(false)}
-              className="w-full py-2.5 rounded-lg bg-white text-slate-900 font-semibold text-xs cursor-pointer hover:bg-slate-100"
-            >
-              Back to planner
-            </button>
-          </div>
-        </div>
+        <RoomRatingDialog roomName={ROOM_LABELS[selectedRoomId]} evaluation={evaluation} onClose={() => setIsEvaluationOpen(false)} />
       )}
-
-      {/* ===================== HOUSE RENOVATION & LIFE STAGES MODAL ===================== */}
-      {isUpgradeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
-          <div className="relative w-full max-w-2xl bg-slate-950 border border-white/[0.12] rounded-3xl p-6 sm:p-7 shadow-2xl space-y-6 text-slate-100 my-8">
-            {/* Header */}
-            <div className="flex items-start justify-between border-b border-white/[0.08] pb-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2.5">
-                  <span className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/30 text-2xl">
-                    {housingProperty.icon}
-                  </span>
-                  <div>
-                    <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-                      House Renovation & Life Stages
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400 text-slate-950">
-                        Level {housingProperty.level}
-                      </span>
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      Study flashcards, master concepts, and earn AxonCoins to renovate and expand your home.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsUpgradeModalOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Current Stats Ribbon */}
-            <div className="grid grid-cols-3 gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] text-xs">
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider">Current Residence</span>
-                <span className="font-semibold text-white truncate">{housingProperty.name}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider">Cards Reviewed</span>
-                <span className="font-semibold text-sky-400 font-mono text-sm">{totalCardsReviewed} cards</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 uppercase tracking-wider">Unified Wallet</span>
-                <span className="font-semibold text-amber-400 font-mono text-sm flex items-center gap-1">
-                  <Coins className="w-3.5 h-3.5" />
-                  🪙{walletCoins}
-                </span>
-              </div>
-            </div>
-
-            {/* Tiers List */}
-            <div className="space-y-3.5 max-h-[50vh] overflow-y-auto pr-1 scrollbar-none">
-              {HOUSING_CATALOG.map((tier) => {
-                const isCurrent = tier.id === housingProperty.id;
-                const isUnlocked = tier.level <= housingProperty.level;
-                const isNext = tier.level === housingProperty.level + 1;
-                const hasCards = totalCardsReviewed >= tier.minCardsReviewed;
-                const hasCoins = walletCoins >= tier.upgradeCost;
-                const canUpgrade = isNext && hasCards && hasCoins;
-
-                return (
-                  <div
-                    key={tier.id}
-                    className={`p-4 rounded-2xl border transition-all ${
-                      isCurrent
-                        ? 'bg-amber-500/10 border-amber-500/40 shadow-lg shadow-amber-500/5'
-                        : isUnlocked
-                          ? 'bg-white/[0.02] border-white/[0.06] opacity-75'
-                          : isNext
-                            ? 'bg-slate-900/90 border-sky-500/40 shadow-xl ring-1 ring-sky-500/20'
-                            : 'bg-white/[0.01] border-white/[0.04] opacity-50'
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-start gap-3 min-w-0">
-                        <span className="text-2xl p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.08] shrink-0">
-                          {tier.icon}
-                        </span>
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-bold text-white">{tier.name}</h4>
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/[0.08] text-slate-300">
-                              Lvl {tier.level}
-                            </span>
-                            {isCurrent && (
-                              <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                Current
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-400">{tier.subtitle}</p>
-                          <p className="text-[11px] text-amber-300/90 font-medium">{tier.perkDescription}</p>
-
-                          {/* Unlocked Rooms Badges */}
-                          <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                            <span className="text-[10px] text-slate-500">Unlocks:</span>
-                            {tier.unlockedRooms.map((rId) => {
-                              const r = HOME_ROOMS.find((rm) => rm.id === rId);
-                              return (
-                                <span
-                                  key={rId}
-                                  className="px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/[0.08] text-[10px] text-slate-300 flex items-center gap-1"
-                                >
-                                  <span>{r?.icon}</span>
-                                  <span>{r?.name.split(' ')[0]}</span>
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Upgrade Action Section */}
-                      <div className="shrink-0 flex flex-col sm:items-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.06]">
-                        {isCurrent ? (
-                          <div className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5">
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>Occupied</span>
-                          </div>
-                        ) : isUnlocked ? (
-                          <div className="px-3.5 py-1.5 rounded-xl bg-white/[0.05] text-slate-400 text-xs font-semibold">
-                            Completed
-                          </div>
-                        ) : (
-                          <div className="space-y-1.5 w-full sm:w-auto">
-                            {/* Requirement Indicators */}
-                            <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                              <span className={hasCards ? 'text-emerald-400' : 'text-slate-400'}>
-                                {hasCards ? '✓' : '•'} {totalCardsReviewed}/{tier.minCardsReviewed} cards
-                              </span>
-                              <span>·</span>
-                              <span className={hasCoins ? 'text-amber-400' : 'text-slate-400'}>
-                                {hasCoins ? '✓' : '•'} 🪙{tier.upgradeCost}
-                              </span>
-                            </div>
-
-                            <button
-                              type="button"
-                              disabled={!canUpgrade}
-                              onClick={() => {
-                                const res = lifeSimService.upgradeHousing(tier.id);
-                                if (res.success) {
-                                  try {
-                                    confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 } });
-                                  } catch {}
-                                  showToast(`🎉 Congratulations! You upgraded to ${tier.name}!`);
-                                  setHousingProperty(lifeSimService.getHousing());
-                                  setFurnitureVersion((v) => v + 1);
-                                  setIsUpgradeModalOpen(false);
-                                } else {
-                                  showToast(res.error || 'Failed to upgrade');
-                                }
-                              }}
-                              className={`w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                canUpgrade
-                                  ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-bold hover:brightness-110 shadow-lg shadow-amber-500/25 active:scale-95'
-                                  : 'bg-white/[0.05] text-slate-500 cursor-not-allowed border border-white/[0.05]'
-                              }`}
-                            >
-                              <Sparkles className="w-3.5 h-3.5" />
-                              <span>Renovate (🪙{tier.upgradeCost})</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Footer: Start Over / Reset Option */}
-            <div className="flex items-center justify-between border-t border-white/[0.08] pt-4 text-xs">
-              <span className="text-slate-500">Want to test starting from a basic dorm room again?</span>
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.confirm('Reset life to Campus Starter Dorm? Your house will return to Level 1 with just a study desk, chair, and twin bed.')) {
-                    lifeSimService.resetToStarterLife();
-                    setSelectedRoomId('study');
-                    setHousingProperty(lifeSimService.getHousing());
-                    setFurnitureVersion((v) => v + 1);
-                    showToast('Returned to Campus Starter Dorm! Start studying to renovate.');
-                    setIsUpgradeModalOpen(false);
-                  }
-                }}
-                className="px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-red-500/15 text-slate-400 hover:text-red-300 border border-white/[0.06] hover:border-red-500/30 transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset to Starter Life</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3D Character Customizer Suite */}
-      <CharacterCustomizerModal
-        isOpen={isCustomizerOpen}
-        onClose={() => setIsCustomizerOpen(false)}
-      />
     </div>
   );
 };
+
+/** A walk-mode arrow for touch screens; holds the key down while pressed. */
+const DpadButton: React.FC<{
+  icon: LucideIcon;
+  label: string;
+  code: string;
+  onPress: (code: string, active: boolean) => void;
+}> = ({ icon: Icon, label, code, onPress }) => (
+  <button
+    type="button"
+    aria-label={label}
+    onTouchStart={() => onPress(code, true)}
+    onTouchEnd={() => onPress(code, false)}
+    onMouseDown={() => onPress(code, true)}
+    onMouseUp={() => onPress(code, false)}
+    onMouseLeave={() => onPress(code, false)}
+    className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-hover text-ink active:bg-brand-soft cursor-pointer"
+  >
+    <Icon className="h-5 w-5" aria-hidden="true" />
+  </button>
+);
 
 export default HomeDesign3D;

@@ -358,20 +358,8 @@ export function App() {
             {view === 'sanctuary' && (
               <StudyEstateCampus
                 onStartSession={handleStartSession}
-                onOpenDeckStation={handleOpenDeckStation}
-                onStartMatch={handleStartMatch}
-                onStartAudioBriefing={handleStartAudioBriefing}
-                onOpenExam={() => handleNavigate('exam')}
-                onOpenInterleaving={() => handleNavigate('interleave')}
-                onOpenDeckStudio={() => {
-                  setEditingSession(null);
-                  setDeckStudioTab('create');
-                  setIsDeckStudioOpen(true);
-                }}
                 onOpenStarterCatalog={() => setIsStarterCatalogOpen(true)}
-                onOpenDashboard={() => handleNavigate('dashboard')}
                 onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
-                onNavigateHome={() => handleNavigate('home')}
               />
             )}
             {view === 'folders' && (

@@ -32,6 +32,16 @@ export interface ActiveBuff {
   expiresAt: string; // ISO string
 }
 
+/** One thing raising pay right now. The pay multiplier is 1 plus the sum of the bonuses. */
+export interface PayBoost {
+  id: string;
+  label: string;
+  /** e.g. 0.15 for +15% */
+  bonus: number;
+  /** When a timed boost (a meal) runs out, as an ISO string. */
+  endsAt?: string;
+}
+
 export interface LedgerExpense {
   id: string;
   mealId: string;
@@ -157,7 +167,7 @@ export interface RoomFurnitureItem {
   focusBonus: number; // +X Focus Points
   comfortBonus: number; // +X Comfort Index
   designValue: number; // Room valuation in tokens
-  wageMultiplier: number; // e.g. 0.05 for +5%
+  wageMultiplier: number; // Not applied to pay: furniture only raises the room's rating
   emoji: string;
   description: string;
   colorHex?: string;
@@ -195,4 +205,17 @@ export interface RoomDesignEvaluation {
   harmonyTitle: string;
   jurorFeedback: string[];
   lastEvaluatedAt: string;
+  /** The parts the rating adds up from (before it is kept between 3 and 5). */
+  breakdown: {
+    base: number;
+    filledSlots: number;
+    totalSlots: number;
+    /** Up to 0.9, for spots with a piece in them. */
+    completeness: number;
+    /** Up to 0.65, from what the pieces are worth. */
+    value: number;
+    /** 0.35 once three pieces share a style. */
+    harmony: number;
+    matchedStyle: string | null;
+  };
 }

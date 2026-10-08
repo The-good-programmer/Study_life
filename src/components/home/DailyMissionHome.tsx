@@ -33,6 +33,7 @@ import { soundEngine } from '../../services/soundEngine';
 import { haptics } from '../../services/hapticsService';
 import { estimateReward, earningsForDay } from '../../services/economy/rewardService';
 import { buildMatchTiles } from '../game/matchTiles';
+import { formatBonus } from '../lifesim/campusFormat';
 import type { EarningsByKind } from '../../services/economy/rewardService';
 import { REWARD_LABELS } from '../../services/economy/rewardLabels';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
@@ -206,6 +207,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   const totalCards = useMemo(() => savedSessions.reduce((sum, s) => sum + cardCount(s), 0), [savedSessions]);
 
   const housing = lifeSimService.getHousing();
+  const homeBonus = housing.wageMultiplier - 1;
   const rentPaid = Boolean(ledger.rentPaidToday);
   const canPayRent = wallet >= housing.rentPerDay;
 
@@ -616,23 +618,36 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-medium text-ink">{housing.name}</p>
                   <p className="text-xs text-ink-subtle">
-                    Rent <Tokens amount={housing.rentPerDay} iconClassName="h-3 w-3" className="text-ink-muted" /> a day
+                    {homeBonus > 0 ? (
+                      <>
+                        Rent <Tokens amount={housing.rentPerDay} iconClassName="h-3 w-3" className="text-ink-muted" /> a day ·{' '}
+                        {formatBonus(homeBonus)} pay on days it's paid
+                      </>
+                    ) : (
+                      'No rent, and no pay bonus'
+                    )}
                   </p>
                 </div>
-                {rentPaid ? (
-                  <Badge tone="success">
-                    <Check className="h-3 w-3" aria-hidden="true" />
-                    Paid
-                  </Badge>
-                ) : (
-                  <Button variant="gold" size="sm" onClick={payRent} disabled={!canPayRent}>
-                    Pay rent
-                  </Button>
-                )}
+                {homeBonus > 0 &&
+                  (rentPaid ? (
+                    <Badge tone="success">
+                      <Check className="h-3 w-3" aria-hidden="true" />
+                      Paid
+                    </Badge>
+                  ) : (
+                    <Button variant="gold" size="sm" onClick={payRent} disabled={!canPayRent}>
+                      Pay rent
+                    </Button>
+                  ))}
               </div>
-              {!rentPaid && !canPayRent && (
-                <p className="mt-2.5 text-xs leading-relaxed text-danger">
-                  You need {housing.rentPerDay - wallet} more tokens for today's rent. A short review session covers it.
+              {homeBonus > 0 && !rentPaid && !canPayRent && (
+                <p className="mt-2.5 text-xs leading-relaxed text-ink-muted">
+                  You need {housing.rentPerDay - wallet} more tokens to turn on today's bonus. A short review session covers it.
+                </p>
+              )}
+              {homeBonus === 0 && (
+                <p className="mt-2.5 text-xs leading-relaxed text-ink-subtle">
+                  Bigger homes raise your pay on days you pay their rent. Upgrade yours in Campus.
                 </p>
               )}
               {rentError && canPayRent && <p className="mt-2.5 text-xs text-danger">{rentError}</p>}

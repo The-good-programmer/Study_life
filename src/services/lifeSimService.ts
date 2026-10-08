@@ -15,6 +15,7 @@ import {
   type RoomFurnitureItem,
   type HomeRoomDefinition,
   type EquippedFurnitureState,
+  type PayBoost,
   type RoomDesignEvaluation
 } from '../types/lifeSim';
 import { characterService } from './characterService';
@@ -27,12 +28,13 @@ export const HOUSING_CATALOG: HousingProperty[] = [
     level: 1,
     name: 'Campus Starter Dorm',
     subtitle: 'Spartan single room with a bare study desk and student bed',
-    rentPerDay: 5,
+    // Rent pays for a home's pay bonus, and the dorm has none, so it is free.
+    rentPerDay: 0,
     upgradeCost: 0,
     minCardsReviewed: 0,
     minNetWorth: 0,
     wageMultiplier: 1.0,
-    perkDescription: 'Starting baseline: simple study room to start your academic life',
+    perkDescription: 'No rent and no pay bonus: a study room to start in',
     unlockedRooms: ['study'],
     decor: ['Campus Twin Bed', 'Basic Oak Desk', 'Student Wooden Chair'],
     icon: '📦',
@@ -47,7 +49,7 @@ export const HOUSING_CATALOG: HousingProperty[] = [
     minCardsReviewed: 25,
     minNetWorth: 50,
     wageMultiplier: 1.15,
-    perkDescription: '+15% Study Wage boost · Unlocks Living Room Lounge Wing',
+    perkDescription: '+15% pay on days the rent is paid · adds the living room',
     unlockedRooms: ['study', 'living'],
     decor: ['Italian Leather Sofa', 'Hi-Fi Turntable & Vinyl Console', 'Floor Arc Lamp'],
     icon: '🛋️',
@@ -62,7 +64,7 @@ export const HOUSING_CATALOG: HousingProperty[] = [
     minCardsReviewed: 75,
     minNetWorth: 150,
     wageMultiplier: 1.25,
-    perkDescription: '+25% Study Wage boost · Unlocks Master Bedroom & Gourmet Kitchen',
+    perkDescription: '+25% pay on days the rent is paid · adds the bedroom and kitchen',
     unlockedRooms: ['study', 'living', 'bedroom', 'kitchen'],
     decor: ['Bouclé Cloud Bed', 'Espresso Bar', 'Kitchen Island & Stools'],
     icon: '☕',
@@ -77,7 +79,7 @@ export const HOUSING_CATALOG: HousingProperty[] = [
     minCardsReviewed: 150,
     minNetWorth: 300,
     wageMultiplier: 1.40,
-    perkDescription: '+40% Study Wage boost · Unlocks Skyline Balcony, Pool, Carport & Villa Grounds',
+    perkDescription: '+40% pay on days the rent is paid · adds the balcony, pool and grounds',
     unlockedRooms: ['study', 'kitchen', 'bedroom', 'living', 'balcony'],
     decor: ['Panoramic Balcony & Loungers', 'In-ground Pool Basin', 'Timber Pergola Carport'],
     icon: '🏛️',
@@ -1623,34 +1625,38 @@ class LifeSimService {
     });
   }
 
-  public getDailyLedger(): DailyLedger {
-    // Check for midnight rollover
+  /**
+   * Starts a fresh ledger once the day has changed (in UTC, like the rest of the app's days),
+   * so rent, meals and earnings never carry over from yesterday.
+   */
+  private rollOverIfNewDay(): void {
     const today = this.getTodayDateString();
-    if (this.currentLedger.date !== today) {
-      this.archiveLedger(this.currentLedger);
-      const prevHousing = this.currentLedger.housingTier || 'dorm';
-      const prevGear = this.currentLedger.ownedGear || [];
-      const prevRole = this.currentLedger.academicRoleId || 'role_freshman';
-      this.currentLedger = {
-        date: today,
-        breakfastId: null,
-        lunchId: null,
-        dinnerId: null,
-        drinkId: null,
-        eatenMeals: {},
-        totalExpenses: 0,
-        totalEarnings: 0,
-        netBalance: 0,
-        housingTier: prevHousing,
-        rentPaidToday: false,
-        ownedGear: prevGear,
-        academicRoleId: prevRole,
-        expenses: [],
-        wages: [],
-      };
-      this.saveLedger(this.currentLedger);
-      this.notify();
-    }
+    if (this.currentLedger.date === today) return;
+    this.archiveLedger(this.currentLedger);
+    this.currentLedger = {
+      date: today,
+      breakfastId: null,
+      lunchId: null,
+      dinnerId: null,
+      drinkId: null,
+      eatenMeals: {},
+      totalExpenses: 0,
+      totalEarnings: 0,
+      netBalance: 0,
+      housingTier: this.currentLedger.housingTier || 'dorm',
+      rentPaidToday: false,
+      ownedGear: this.currentLedger.ownedGear || [],
+      academicRoleId: this.currentLedger.academicRoleId || 'role_freshman',
+      expenses: [],
+      wages: [],
+    };
+    this.saveLedger(this.currentLedger);
+    // Deferred: this can run while a component renders, and listeners set state.
+    queueMicrotask(() => this.notify());
+  }
+
+  public getDailyLedger(): DailyLedger {
+    this.rollOverIfNewDay();
     return { ...this.currentLedger };
   }
 
@@ -1707,38 +1713,60 @@ class LifeSimService {
     return unlocked;
   }
 
-  public getActiveMultiplier(type: 'coin_multiplier' | 'study_wage_boost' = 'coin_multiplier'): number {
-    this.cleanExpiredBuffs();
-    const housing = this.getHousing();
-    let multiplier = housing.wageMultiplier;
+  /** Whether today's rent is paid, which is what turns on the home's pay bonus. */
+  public isRentPaidToday(): boolean {
+    this.rollOverIfNewDay();
+    return Boolean(this.currentLedger.rentPaidToday);
+  }
 
-    // Add gear bonuses
-    for (const gId of this.currentLedger.ownedGear || []) {
-      const gear = STUDENT_GEAR_CATALOG.find(g => g.id === gId);
-      if (gear) {
-        multiplier += gear.bonusMultiplier;
-      }
+  /** Everything raising pay right now. The pay multiplier is 1 plus their bonuses. */
+  public getPayBoosts(): PayBoost[] {
+    this.rollOverIfNewDay();
+    this.cleanExpiredBuffs();
+    const boosts: PayBoost[] = [];
+
+    // A home's bonus is what its rent pays for, so it counts only on days the rent is paid.
+    const housing = this.getHousing();
+    if (housing.wageMultiplier > 1 && this.currentLedger.rentPaidToday) {
+      boosts.push({ id: 'home', label: `${housing.name} (rent paid)`, bonus: housing.wageMultiplier - 1 });
     }
 
-    // Check tier bonus
-    const tier = this.getLifestyleTier();
-    if (tier === 'scholar' && type === 'coin_multiplier') {
-      multiplier += 0.10; // +10% Dean's List perk
+    for (const gearId of this.currentLedger.ownedGear || []) {
+      const gear = STUDENT_GEAR_CATALOG.find(g => g.id === gearId);
+      if (gear) boosts.push({ id: gear.id, label: gear.name, bonus: gear.bonusMultiplier });
+    }
+
+    if (this.getLifestyleTier() === 'scholar') {
+      boosts.push({
+        id: 'scholar',
+        label: `A strong day: ${LIFESTYLE_TIERS.scholar.minNetBalance}+ more earned than spent`,
+        bonus: 0.1,
+      });
     }
 
     for (const buff of this.activeBuffs) {
-      if (buff.buffType === type && buff.buffValue > 1.0) {
-        multiplier += (buff.buffValue - 1.0);
+      if (buff.buffType === 'coin_multiplier' && buff.buffValue > 1) {
+        boosts.push({ id: buff.id, label: buff.name, bonus: buff.buffValue - 1, endsAt: buff.expiresAt });
       }
     }
-    return Number(multiplier.toFixed(2));
+    return boosts;
+  }
+
+  /** What every token earned is multiplied by right now. */
+  public getActiveMultiplier(): number {
+    const total = this.getPayBoosts().reduce((sum, boost) => sum + boost.bonus, 1);
+    return Number(total.toFixed(2));
   }
 
   public payDailyRent(): { success: boolean; error?: string } {
+    this.rollOverIfNewDay();
     if (this.currentLedger.rentPaidToday) {
       return { success: false, error: "Today's rent has already been paid!" };
     }
     const housing = this.getHousing();
+    if (housing.rentPerDay <= 0) {
+      return { success: false, error: 'This home has no rent.' };
+    }
     const balance = this.getWalletBalance();
     if (balance < housing.rentPerDay) {
       return {
@@ -1769,46 +1797,9 @@ class LifeSimService {
     return { success: true };
   }
 
-  public rentHousing(housingId: HousingTier): { success: boolean; error?: string } {
-    const prop = HOUSING_CATALOG.find(h => h.id === housingId);
-    if (!prop) {
-      return { success: false, error: 'Housing property not found' };
-    }
-    if (this.currentLedger.housingTier === housingId) {
-      return { success: false, error: 'You are already residing here!' };
-    }
-    const balance = this.getWalletBalance();
-    if (balance < prop.rentPerDay) {
-      return {
-        success: false,
-        error: `Cannot afford daily rent (🪙${prop.rentPerDay}). Complete study sessions to earn tokens!`,
-      };
-    }
-    const spent = characterService.spendCoins(prop.rentPerDay);
-    if (!spent) {
-      return { success: false, error: 'Failed to deduct rent tokens' };
-    }
-    this.currentLedger.housingTier = housingId;
-    this.currentLedger.rentPaidToday = true;
-    const expenseEntry: LedgerExpense = {
-      id: `rent_${Date.now()}`,
-      mealId: prop.id,
-      name: `${prop.name} First Day Rent`,
-      emoji: prop.icon,
-      cost: prop.rentPerDay,
-      category: 'housing',
-      purchasedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-    this.currentLedger.expenses.unshift(expenseEntry);
-    this.currentLedger.totalExpenses += prop.rentPerDay;
-    this.currentLedger.netBalance = this.currentLedger.totalEarnings - this.currentLedger.totalExpenses;
-    this.saveLedger(this.currentLedger);
-    this.notify();
-    try { soundEngine.playCoinCascade(); } catch {}
-    return { success: true };
-  }
-
+  /** Moves up to a bigger home: needs the study milestone and the renovation cost. Homes are never rented outright. */
   public upgradeHousing(targetTier: HousingTier): { success: boolean; error?: string; property?: HousingProperty } {
+    this.rollOverIfNewDay();
     const target = HOUSING_CATALOG.find(h => h.id === targetTier);
     if (!target) {
       return { success: false, error: 'Housing property not found' };
@@ -1819,6 +1810,10 @@ class LifeSimService {
     }
     if (target.level < current.level) {
       return { success: false, error: 'Cannot downgrade your renovated residence!' };
+    }
+    // One level at a time, so every renovation on the way is paid for.
+    if (target.level > current.level + 1) {
+      return { success: false, error: `Upgrade to level ${current.level + 1} first.` };
     }
 
     // Check study requirement (cards reviewed)
@@ -1884,6 +1879,7 @@ class LifeSimService {
   }
 
   public buyGear(gearId: string): { success: boolean; error?: string; item?: StudentGearItem } {
+    this.rollOverIfNewDay();
     const item = STUDENT_GEAR_CATALOG.find(g => g.id === gearId);
     if (!item) {
       return { success: false, error: 'Gear item not found' };
@@ -1925,6 +1921,7 @@ class LifeSimService {
   }
 
   public getLifestyleTier(): LifestyleTier {
+    this.rollOverIfNewDay();
     const net = this.currentLedger.netBalance;
     if (net >= LIFESTYLE_TIERS.scholar.minNetBalance) {
       return 'scholar';
@@ -1936,6 +1933,7 @@ class LifeSimService {
   }
 
   public buyMeal(mealId: string): { success: boolean; error?: string; meal?: MealItem } {
+    this.rollOverIfNewDay();
     const meal = CAFETERIA_MENU.find(m => m.id === mealId);
     if (!meal) {
       return { success: false, error: 'Meal item not found' };
@@ -2015,69 +2013,14 @@ class LifeSimService {
     return { success: true, meal };
   }
 
-  public eatMeal(category: 'breakfast' | 'lunch' | 'dinner' | 'drink'): {
-    success: boolean;
-    message: string;
-    meal?: MealItem;
-  } {
-    let mealId: string | null = null;
-    if (category === 'breakfast') mealId = this.currentLedger.breakfastId;
-    else if (category === 'lunch') mealId = this.currentLedger.lunchId;
-    else if (category === 'dinner') mealId = this.currentLedger.dinnerId;
-    else if (category === 'drink') mealId = this.currentLedger.drinkId || null;
-
-    if (!mealId) {
-      return { success: false, message: 'No meal ordered for this plate yet!' };
-    }
-
-    const meal = CAFETERIA_MENU.find(m => m.id === mealId);
-    if (!meal) {
-      return { success: false, message: 'Meal not found' };
-    }
-
-    if (!this.currentLedger.eatenMeals) {
-      this.currentLedger.eatenMeals = {};
-    }
-    this.currentLedger.eatenMeals[category] = true;
-    this.saveLedger(this.currentLedger);
-
-    // Refresh / reapply active buff
-    if (meal.buffType !== 'none' && meal.buffDurationMinutes > 0) {
-      const now = new Date();
-      const expiresAt = new Date(now.getTime() + meal.buffDurationMinutes * 60 * 1000).toISOString();
-      this.activeBuffs = this.activeBuffs.filter(b => b.buffType !== meal.buffType);
-      this.activeBuffs.push({
-        id: `buff_${Date.now()}`,
-        mealId: meal.id,
-        name: meal.name,
-        emoji: meal.emoji,
-        buffType: meal.buffType,
-        buffValue: meal.buffValue,
-        startedAt: now.toISOString(),
-        expiresAt,
-      });
-      this.saveBuffs();
-    }
-
-    try {
-      soundEngine.playCompletionChime();
-    } catch {}
-
-    this.notify();
-    return {
-      success: true,
-      message: `Enjoyed ${meal.name}! ${meal.buffDescription}`,
-      meal
-    };
-  }
-
   public awardStudyWage(activity: string, rawAmount: number): {
     rawAmount: number;
     buffBonus: number;
     totalAmount: number;
     activity: string;
   } {
-    const multiplier = this.getActiveMultiplier('coin_multiplier');
+    this.rollOverIfNewDay();
+    const multiplier = this.getActiveMultiplier();
     const totalAmount = Math.max(1, Math.round(rawAmount * multiplier));
     const buffBonus = Math.max(0, totalAmount - rawAmount);
 
@@ -2180,6 +2123,7 @@ class LifeSimService {
     furnitureId: string, 
     autoEquipRoom?: HomeRoomId
   ): { success: boolean; error?: string; item?: RoomFurnitureItem } {
+    this.rollOverIfNewDay();
     const item = FURNITURE_CATALOG.find(f => f.id === furnitureId);
     if (!item) {
       return { success: false, error: 'Furniture item not found' };
@@ -2336,10 +2280,7 @@ class LifeSimService {
       feedback.push(`Deep restorative comfort (+${totalComfortBonus} Comfort pts) to minimize cognitive fatigue.`);
     }
 
-    if (totalWageMultiplier > 0) {
-      feedback.push(`Designer furniture boosts active study wages by +${Math.round(totalWageMultiplier * 100)}%!`);
-    }
-
+    // Furniture is decor: it raises the room's rating, not pay (see getPayBoosts).
     return {
       starRating: calculatedRating,
       totalValue,
@@ -2349,90 +2290,16 @@ class LifeSimService {
       harmonyTitle: `${topStyle} Synergy`,
       jurorFeedback: feedback,
       lastEvaluatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      breakdown: {
+        base: baseStars,
+        filledSlots: equippedCount,
+        totalSlots: slots.length,
+        completeness: completenessStars,
+        value: valueStars,
+        harmony: harmonyBonus,
+        matchedStyle: harmonyBonus > 0 ? topStyle : null,
+      },
     };
-  }
-
-  public performInteractiveAction(actionType: string): { 
-    success: boolean; 
-    message: string; 
-    buffApplied?: boolean; 
-  } {
-    if (actionType === 'brew_coffee') {
-      // Re-apply 35 min coffee boost
-      const now = new Date();
-      const expiresAt = new Date(now.getTime() + 35 * 60 * 1000).toISOString();
-      this.activeBuffs = this.activeBuffs.filter(b => b.buffType !== 'study_wage_boost');
-      this.activeBuffs.push({
-        id: `buff_coffee_${Date.now()}`,
-        mealId: 'station_coffee',
-        name: 'Fresh Artisan Brew',
-        emoji: '☕',
-        buffType: 'study_wage_boost',
-        buffValue: 1.15,
-        startedAt: now.toISOString(),
-        expiresAt,
-      });
-      this.saveBuffs();
-
-      try {
-        soundEngine.playCompletionChime();
-        characterService.feed('berry');
-      } catch {}
-
-      this.notify();
-      return {
-        success: true,
-        message: 'Fresh artisan coffee extracted! ☕ +15% Study Wage active for 35 minutes.',
-        buffApplied: true,
-      };
-    }
-
-    if (actionType === 'nap_rest') {
-      try {
-        soundEngine.playCompletionChime();
-        characterService.pet();
-      } catch {}
-
-      this.notify();
-      return {
-        success: true,
-        message: 'Restorative ultradian rest taken! 🛏️ Mental fatigue cleared & synaptic focus restored.',
-      };
-    }
-
-    if (actionType === 'play_music') {
-      const current = soundEngine.getCurrentSound();
-      if (current === 'off') {
-        soundEngine.play('binaural-alpha-10hz');
-        return {
-          success: true,
-          message: '🎶 Dropped needle on analog Lo-Fi Alpha 10Hz beats.',
-        };
-      } else {
-        soundEngine.stop();
-        return {
-          success: true,
-          message: 'Turntable stopped. Quiet study mode restored.',
-        };
-      }
-    }
-
-    if (actionType === 'toggle_light') {
-      try { soundEngine.playTapPop(); } catch {}
-      return {
-        success: true,
-        message: '💡 Switched ambient room lighting tone.',
-      };
-    }
-
-    if (actionType === 'study') {
-      return {
-        success: true,
-        message: 'Workstation primed! Starting active retrieval sprint.',
-      };
-    }
-
-    return { success: true, message: 'Interacted with item.' };
   }
 
   public resetToStarterLife() {
