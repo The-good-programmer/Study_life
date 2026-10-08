@@ -274,6 +274,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
         }}
         onStartSession={onStartSession}
         onOpenDeckStation={onOpenDeckStation}
+        onOpenHardCards={() => setActiveView('leeches')}
       />
     );
   }
