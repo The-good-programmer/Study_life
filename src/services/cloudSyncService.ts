@@ -5,6 +5,7 @@
  */
 
 import { StorageService } from './storageService';
+import { appearanceOf, characterService } from './characterService';
 import type { StudySession, UserStats } from '../types';
 
 export interface CloudSyncConfig {
@@ -23,8 +24,8 @@ export interface CloudSyncPayload {
   userId: string | null;
   stats: UserStats;
   sessions: StudySession[];
+  /** How the avatar looks (see appearanceOf). The wallet and level are never synced. */
   characterState?: Record<string, unknown>;
-  axolotlState?: Record<string, unknown>;
   checksum: string;
 }
 
@@ -98,19 +99,10 @@ export class CloudSyncService {
     const sessions = StorageService.getSessions();
     const activeUserId = StorageService.getActiveUserId();
 
-    let characterState: Record<string, unknown> | undefined;
-    try {
-      const charRaw = localStorage.getItem('studify_user_character_v1');
-      if (charRaw) characterState = JSON.parse(charRaw);
-    } catch {}
+    // Only how the avatar looks is synced; the wallet changes only by earning and spending on this device.
+    const characterState: Record<string, unknown> = appearanceOf(characterService.getCharacter());
 
-    let axolotlState: Record<string, unknown> | undefined;
-    try {
-      const axRaw = localStorage.getItem('studify_axolotl_sanctuary_v1') || localStorage.getItem('axon_axolotl_state');
-      if (axRaw) axolotlState = JSON.parse(axRaw);
-    } catch {}
-
-    const payloadRaw = JSON.stringify({ stats, sessions, characterState, axolotlState });
+    const payloadRaw = JSON.stringify({ stats, sessions, characterState });
     // Simple fast DJB2-based hash for checksum
     let hash = 5381;
     for (let i = 0; i < payloadRaw.length; i++) {
@@ -125,7 +117,6 @@ export class CloudSyncService {
       stats,
       sessions,
       characterState,
-      axolotlState,
       checksum,
     };
   }
@@ -265,18 +256,11 @@ export class CloudSyncService {
       StorageService.saveStats(mergedStats);
     }
 
-    // Merge 3D student character state if present in remote payload
-    if (remote.characterState) {
-      try {
-        localStorage.setItem('studify_user_character_v1', JSON.stringify(remote.characterState));
-      } catch {}
-    }
-
-    // Merge axolotl habitat state if present in remote payload (legacy fallback)
-    if (remote.axolotlState) {
-      try {
-        localStorage.setItem('studify_axolotl_sanctuary_v1', JSON.stringify(remote.axolotlState));
-      } catch {}
+    // Only the avatar's look comes from the sync server. Its address is set by the user, so
+    // anything that moves tokens (coins, level, XP) from there would let a server mint them.
+    if (remote.characterState && typeof remote.characterState === 'object') {
+      const look = appearanceOf(remote.characterState);
+      if (Object.keys(look).length > 0) characterService.updateCustomization(look);
     }
   }
 

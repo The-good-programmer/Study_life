@@ -602,7 +602,7 @@ const SyncSection: React.FC<{ onStatsReset: () => void }> = ({ onStatsReset }) =
     <div>
       <SettingGroup
         title="Sync between devices"
-        description="Your study data is saved in this browser. To use Studify on more than one device, connect a sync server you run, such as a Cloudflare Worker."
+        description="Your study data is saved in this browser. To use Studify on more than one device, connect a sync server you run, such as a Cloudflare Worker. Decks, reviews and your avatar's look sync; tokens and your campus home stay on each device."
         aside={
           <Switch label="Sync this device" checked={config.enabled} onChange={handleToggle} />
         }

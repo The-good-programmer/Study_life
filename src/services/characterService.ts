@@ -91,6 +91,31 @@ const STYLE_PRESETS: Record<StylePresetId, Partial<CharacterCustomization>> = {
   },
 };
 
+const LOOK_KEYS = [
+  'gender', 'bodyType', 'skinTone', 'hairStyle', 'hairColor', 'facialHair', 'facialHairColor', 'eyeColor',
+  'eyewear', 'eyewearColor', 'headwear', 'headwearColor', 'outfitTop', 'topColor', 'topSecondaryColor',
+  'outfitBottom', 'bottomColor', 'shoes', 'shoesColor',
+] as const satisfies readonly (keyof CharacterCustomization)[];
+
+/**
+ * How an avatar looks (name, figure, hair, clothes) and nothing that is earned: no tokens,
+ * level or stats. It also reads avatars from outside the app (cloud sync), so anything
+ * that isn't a plain style id or hex color is left out.
+ */
+export const appearanceOf = (
+  source: Partial<Record<keyof CharacterCustomization, unknown>>,
+): Partial<CharacterCustomization> => {
+  const look: Record<string, string> = {};
+  for (const key of LOOK_KEYS) {
+    const value = source[key];
+    const pattern = key === 'skinTone' || key.endsWith('Color') ? /^#[0-9a-f]{3,8}$/i : /^[a-z-]{1,24}$/;
+    if (typeof value === 'string' && pattern.test(value)) look[key] = value;
+  }
+  const name = typeof source.name === 'string' ? source.name.trim().slice(0, 24) : '';
+  if (name) look.name = name;
+  return look as Partial<CharacterCustomization>;
+};
+
 class CharacterService {
   private character: CharacterCustomization;
   private listeners: Set<CharacterListener> = new Set();

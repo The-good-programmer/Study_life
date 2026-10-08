@@ -1,10 +1,17 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { CloudSyncService } from './cloudSyncService';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { CloudSyncService, type CloudSyncPayload } from './cloudSyncService';
+import { characterService } from './characterService';
+import { StorageService } from './storageService';
+import { STARTING_COINS } from './economy/wallet';
 
 describe('CloudSyncService', () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem('studify_life_data_split_v1', '1');
+    // Reloads the guest's avatar and wallet from the now empty storage.
+    StorageService.setActiveUserId(null);
   });
+  afterEach(() => StorageService.setActiveUserId(null));
 
   it('generates a valid formatted cryptographic sync token', () => {
     const token = CloudSyncService.generateSyncToken();
@@ -42,23 +49,25 @@ describe('CloudSyncService', () => {
     expect(retrieved.endpointUrl).toBe('https://example.com/sync');
   });
 
-  it('includes 3D character and legacy state in createSyncPayload', () => {
-    const mockCharacter = {
-      name: 'Dr. Turing',
-      hairStyle: 'quiff',
-      hairColor: '#4b2e1e',
-      gender: 'male',
-      coins: 450,
-    };
-    localStorage.setItem('studify_user_character_v1', JSON.stringify(mockCharacter));
+  it('sends how the avatar looks, but not the wallet or level', () => {
+    characterService.updateCustomization({ name: 'Dr. Turing', hairColor: '#4b2e1e', hairStyle: 'side-part' });
+    characterService.addCoins(300);
 
     const payload = CloudSyncService.createSyncPayload();
-    expect(payload.characterState).toEqual(mockCharacter);
+    expect(payload.characterState).toMatchObject({ name: 'Dr. Turing', hairColor: '#4b2e1e', hairStyle: 'side-part' });
+    expect(payload.characterState).not.toHaveProperty('coins');
+    expect(payload.characterState).not.toHaveProperty('level');
     expect(payload.version).toBe(2);
     expect(payload.checksum).toBeDefined();
   });
 
-  it('restores axolotl sanctuary state and merges stats properly in mergeRemoteData', () => {
+  it("sends the signed-in account's avatar", () => {
+    StorageService.setActiveUserId('usr_sync');
+    characterService.updateCustomization({ name: 'Grace' });
+    expect(CloudSyncService.createSyncPayload().characterState).toMatchObject({ name: 'Grace' });
+  });
+
+  it('takes only the avatar look from the server, never tokens or level', () => {
     const remotePayload = {
       version: 2,
       syncedAt: Date.now(),
@@ -68,33 +77,33 @@ describe('CloudSyncService', () => {
       stats: {
         totalStudyMinutes: 120,
         currentStreak: 7,
-        longestStreak: 10,
         conceptsMastered: 15,
         sessionsCompleted: 12,
         xp: 950,
         todayMinutes: 20,
-        lastStudyDate: new Date().toISOString(),
       },
       characterState: {
         name: 'Ada Lovelace',
-        coins: 888,
-        hairStyle: 'twin-braids',
-      },
-      axolotlState: {
-        level: 8,
-        xp: 750,
-        decorations: ['golden_coral'],
+        hairColor: '#123456',
+        hairStyle: '<img src=x>',
+        coins: 888888,
+        level: 50,
+        unlockedItems: ['crown'],
       },
     };
 
-    CloudSyncService.mergeRemoteData(remotePayload as any);
+    CloudSyncService.mergeRemoteData(remotePayload as unknown as CloudSyncPayload);
 
-    const charStored = JSON.parse(localStorage.getItem('studify_user_character_v1') || '{}');
-    expect(charStored.name).toBe('Ada Lovelace');
-    expect(charStored.coins).toBe(888);
+    const character = characterService.getCharacter();
+    expect(character.name).toBe('Ada Lovelace');
+    expect(character.hairColor).toBe('#123456');
+    expect(character.hairStyle).not.toBe('<img src=x>');
+    expect(character.coins).toBe(STARTING_COINS);
+    expect(character.level).toBe(1);
+    expect(character.unlockedItems).not.toContain('crown');
 
-    const axolotlStored = JSON.parse(localStorage.getItem('studify_axolotl_sanctuary_v1') || '{}');
-    expect(axolotlStored.level).toBe(8);
-    expect(axolotlStored.decorations).toEqual(['golden_coral']);
+    const stats = StorageService.getStats();
+    expect(stats.xp).toBe(950);
+    expect(stats.sessionsCompleted).toBe(12);
   });
 });
