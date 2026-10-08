@@ -1,12 +1,12 @@
 # Render Blueprint for the Studify API (use: New > Blueprint, then fill in the secrets Render asks for).
-# The website itself is built separately (VITE_API_BASE_URL must point at this service's /api).
+# It deploys from the repository root, because the server shares code with the website (the payout rules
+# in shared/). The website itself is built separately: VITE_API_BASE_URL must point at this service's /api.
 services:
   - type: web
     name: studify-api
     runtime: node
-    rootDir: server
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: npm install --prefix server
+    startCommand: npm start --prefix server
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:

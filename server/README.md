@@ -73,7 +73,9 @@ Old local data in `server/data/studify.sqlite` (from the SQLite version) is not 
    reach the pooler. Before real users arrive, use a paid Supabase plan (free projects pause when idle and don't
    promise backups).
 2. **Service:** in Render, create a new **Web Service** from this repository (or use `render.yaml` as a Blueprint).
-   Root directory `server`, build command `npm install`, start command `npm start`, health check path `/api/health`.
+   Leave **Root Directory empty** (the server shares code with the website, which lives outside `server/`).
+   Build command `npm install --prefix server`, start command `npm start --prefix server`, health check path
+   `/api/health`.
 3. **Environment variables** (Render, Environment tab; never put them in code):
 
    | Variable | Value |
