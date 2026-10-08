@@ -909,53 +909,63 @@ export class StorageService {
     }
   }
 
-  public static saveSession(session: StudySession) {
-    // If the session has a heavy base64 PDF payload, offload it to IndexedDB
-    if (session.sourceDocument?.pdfDataUrl && session.sourceDocument.pdfDataUrl.length > 20000) {
-      IndexedDbService.setItem(`pdf_${session.id}`, session.sourceDocument.pdfDataUrl).catch(() => {});
+  /**
+   * Readies decks to be stored. Their cards join the review queue first; the queue keeps each card's
+   * furthest progress. Each deck is then stored with that progress: a deck held in memory during a
+   * study session still has its cards as they were when it was loaded, and saving it must not roll
+   * back the reviews since. The copy is also lightweight: a heavy base64 PDF payload moves to
+   * IndexedDB, so it doesn't blow the 5MB limit.
+   */
+  private static prepareDecksToStore(decks: StudySession[]): StudySession[] {
+    const deckCards = decks.flatMap(s => s.concepts?.flatMap(c => c.retrievalCards || []) || []);
+    if (deckCards.length > 0) {
+      this.syncSessionCardsToGlobalQueue(deckCards);
     }
+    const savedCards = this.savedCardsById();
+    return decks.map(deck => {
+      const pdfDataUrl = deck.sourceDocument?.pdfDataUrl;
+      const offloadPdf = !!pdfDataUrl && pdfDataUrl.length > 20000;
+      if (offloadPdf) {
+        IndexedDbService.setItem(`pdf_${deck.id}`, pdfDataUrl).catch(() => {});
+      }
+      return {
+        ...deckWithSavedProgress(deck, savedCards),
+        sourceDocument: deck.sourceDocument ? {
+          ...deck.sourceDocument,
+          pdfDataUrl: offloadPdf ? '[indexeddb]' : pdfDataUrl,
+        } : undefined,
+      };
+    });
+  }
 
-    // Sync the deck's cards into the review queue first; the queue keeps each card's furthest progress.
-    const sessionCards = session.concepts?.flatMap(c => c.retrievalCards || []) || [];
-    if (sessionCards.length > 0) {
-      this.syncSessionCardsToGlobalQueue(sessionCards);
-    }
-
-    // Store the deck with that progress. A deck held in memory during a study session still has
-    // its cards as they were when it was loaded, and saving it must not roll back the reviews since.
-    // The copy is also lightweight, so a PDF payload doesn't blow the 5MB limit.
-    const lightweightSession: StudySession = {
-      ...deckWithSavedProgress(session, this.savedCardsById()),
-      sourceDocument: session.sourceDocument ? {
-        ...session.sourceDocument,
-        pdfDataUrl: session.sourceDocument.pdfDataUrl && session.sourceDocument.pdfDataUrl.length > 20000
-          ? '[indexeddb]'
-          : session.sourceDocument.pdfDataUrl
-      } : undefined
-    };
-
-    const sessions = this.getSessions();
-    const idx = sessions.findIndex(s => s.id === session.id);
-    // Cards taken out of a deck while editing it must leave the review queue too.
-    const removedCardIds = idx >= 0 ? this.cardIdsOf(sessions[idx]).filter(id => !this.cardIdsOf(session).includes(id)) : [];
-    if (idx >= 0) {
-      sessions[idx] = lightweightSession;
-    } else {
-      sessions.unshift(lightweightSession);
-    }
-    this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions.slice(0, 30)));
-    this.removeCardsNoLongerInAnyDeck(removedCardIds, sessions);
-
+  /**
+   * Writes the whole deck list, then takes cards that were in a deck and are in none now out of the
+   * review queue, so they don't keep coming due. No deck is ever dropped to save space: a list too
+   * big for localStorage spills to IndexedDB (see safeSetItem).
+   */
+  private static writeSessions(sessions: StudySession[], previous: StudySession[]): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions));
+    this.removeCardsNoLongerInAnyDeck(previous.flatMap(s => this.cardIdsOf(s)), sessions);
     this.notifyMutation();
   }
 
-  public static saveSessions(sessions: StudySession[]): void {
-    this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions.slice(0, 50)));
-    const allCards = sessions.flatMap(s => s.concepts?.flatMap(c => c.retrievalCards || []) || []);
-    if (allCards.length > 0) {
-      this.syncSessionCardsToGlobalQueue(allCards);
+  /** Saves a deck. An edited deck keeps its place in the list; a new one goes first. */
+  public static saveSession(session: StudySession) {
+    const [stored] = this.prepareDecksToStore([session]);
+    const sessions = this.getSessions();
+    const next = [...sessions];
+    const idx = next.findIndex(s => s.id === session.id);
+    if (idx >= 0) {
+      next[idx] = stored;
+    } else {
+      next.unshift(stored);
     }
-    this.notifyMutation();
+    this.writeSessions(next, sessions);
+  }
+
+  /** Replaces the deck list, storing each deck the way saveSession does. */
+  public static saveSessions(sessions: StudySession[]): void {
+    this.writeSessions(this.prepareDecksToStore(sessions), this.getSessions());
   }
 
   public static async loadPDFDataUrl(sessionId: string): Promise<string | null> {
