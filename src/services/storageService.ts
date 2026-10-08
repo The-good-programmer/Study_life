@@ -517,6 +517,8 @@ export class StorageService {
     }
     this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(cards));
     this.syncCardToSessions(card);
+    // A review changes what's due; counts shown elsewhere (the sidebar) refresh on this.
+    this.notifyMutation();
   }
 
   public static saveCards(newCards: RetrievalCard[]) {
@@ -545,6 +547,7 @@ export class StorageService {
     if (sessionUpdated) {
       this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions));
     }
+    this.notifyMutation();
   }
 
   /**
@@ -592,6 +595,7 @@ export class StorageService {
     if (sessionUpdated) {
       this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions));
     }
+    this.notifyMutation();
   }
 
   public static toggleCardStar(cardId: string): boolean {
@@ -636,6 +640,7 @@ export class StorageService {
     if (sessionUpdated) {
       this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(sessions));
     }
+    this.notifyMutation();
     return newStatus;
   }
 

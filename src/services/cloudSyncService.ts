@@ -304,11 +304,15 @@ export class CloudSyncService {
       return;
     }
 
-    // Debounced async sync
-    setTimeout(() => {
+    // Debounced: a burst of changes (a run of reviews) syncs once, 1.5 s after the last one.
+    if (this.autoSyncTimer) clearTimeout(this.autoSyncTimer);
+    this.autoSyncTimer = setTimeout(() => {
+      this.autoSyncTimer = null;
       this.syncNow().catch(() => {});
     }, 1500);
   }
+
+  private static autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Subscribe to cloud sync config and status changes

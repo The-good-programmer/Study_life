@@ -654,6 +654,16 @@ describe('StorageService review progress', () => {
     expect(StorageService.getAllCards().find(c => c.id === 'a')).toMatchObject({ reps: 3, stability: 12 });
   });
 
+  it('tells listeners when a review is saved, so due counts elsewhere can refresh', () => {
+    StorageService.saveSession(deckWith('deck', ['a']));
+    const listener = vi.fn();
+    const unsubscribe = StorageService.addMutationListener(listener);
+    StorageService.saveCard(reviewed('a'));
+    StorageService.toggleCardStar('a');
+    unsubscribe();
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
   it('gives an older copy of a card, or of a deck, the saved progress and keeps its content', () => {
     StorageService.saveSession(deckWith('deck', ['a', 'b']));
     const olderDeck = StorageService.getSessions().find(s => s.id === 'deck')!;

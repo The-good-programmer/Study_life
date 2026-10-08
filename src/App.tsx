@@ -101,6 +101,20 @@ export function App() {
     return unsubscribe;
   }, []);
 
+  // Reviews, deck edits and stats changes update what the shell shows (the sidebar's due
+  // count is read during render). Deferred: storage can change while another component renders.
+  const [, setDataVersion] = useState(0);
+  useEffect(
+    () =>
+      StorageService.addMutationListener(() => {
+        queueMicrotask(() => {
+          setDataVersion(v => v + 1);
+          setStats(StorageService.getStats());
+        });
+      }),
+    [],
+  );
+
   // Google One Tap automatic prompt / auto-login on startup
   useEffect(() => {
     if (!currentUser && GoogleAuthService.isGoogleConfigured()) {
