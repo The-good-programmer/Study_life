@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { configDefaults } from 'vitest/config'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -12,6 +13,8 @@ export default defineConfig({
     port: 5173,
     host: true,
     allowedHosts: true,
+    // Worktrees under .claude/ are other checkouts; their edits shouldn't reload this app.
+    watch: { ignored: ['**/.claude/**'] },
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
@@ -66,8 +69,9 @@ export default defineConfig({
       },
     },
   },
-  // @ts-expect-error vitest config
   test: {
     setupFiles: ['./src/test-setup.ts'],
+    // Worktrees under .claude/ are other checkouts of this repo; their tests aren't this one's.
+    exclude: [...configDefaults.exclude, '.claude/**'],
   },
 })
