@@ -89,9 +89,24 @@ class SpeechService {
     }
   }
 
+  /** Whether this browser can read text aloud. */
+  public isSupported(): boolean {
+    return this.synth !== null;
+  }
+
+  public isPaused(): boolean {
+    return this.synth?.paused ?? false;
+  }
+
   public stop() {
     this.clearKeepAlive();
     if (!this.synth) return;
+    // Some browsers fire "end" on a cancelled utterance; detach first so its onDone
+    // (an auto-advance, say) doesn't run when it was stopped on purpose.
+    if (this.currentUtterance) {
+      this.currentUtterance.onend = null;
+      this.currentUtterance.onerror = null;
+    }
     try {
       this.synth.cancel();
     } catch {

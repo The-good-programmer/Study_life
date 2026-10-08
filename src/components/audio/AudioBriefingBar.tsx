@@ -1,16 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Play, 
-  Pause, 
-  SkipBack, 
-  SkipForward, 
-  Volume2, 
-  VolumeX, 
-  X, 
-  Headphones
-} from 'lucide-react';
-import type { StudySession } from '../../types';
+import React, { useEffect, useState } from 'react';
+import { Headphones, Pause, Play, SkipBack, SkipForward, X } from 'lucide-react';
+import type { ConceptCheckpoint, StudySession } from '../../types';
 import { speechService } from '../../services/speechService';
+import { cn } from '../../utils/cn';
+import { IconButton } from '../ui/primitives';
 
 interface AudioBriefingBarProps {
   session: StudySession;
@@ -18,204 +11,140 @@ interface AudioBriefingBarProps {
   onClose?: () => void;
 }
 
-export const AudioBriefingBar: React.FC<AudioBriefingBarProps> = ({
-  session,
-  initialConceptIndex = 0,
-  onClose,
-}) => {
-  const [conceptIndex, setConceptIndex] = useState(initialConceptIndex);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState<number>(1.0);
-  const [isMuted, setIsMuted] = useState(false);
+const SPEEDS = [1, 1.25, 1.5, 0.75];
 
+/** What is read aloud for one concept; sections without content are left out. */
+const speechFor = (concept: ConceptCheckpoint, index: number, total: number): string =>
+  [
+    `Concept ${index + 1} of ${total}: ${concept.title}.`,
+    concept.mentalModel && `The big idea. ${concept.mentalModel}`,
+    concept.coreTakeaways?.length ? `Key points. ${concept.coreTakeaways.join('. ')}.` : '',
+    concept.keyTerms?.length ? `Key terms. ${concept.keyTerms.map(t => `${t.term}: ${t.definition}`).join('. ')}.` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+/** A player that reads the deck aloud, concept by concept, with the browser's own voice. */
+export const AudioBriefingBar: React.FC<AudioBriefingBarProps> = ({ session, initialConceptIndex = 0, onClose }) => {
   const concepts = session.concepts;
-  const currentConcept = concepts[conceptIndex] || concepts[0];
+  const [index, setIndex] = useState(Math.min(initialConceptIndex, Math.max(0, concepts.length - 1)));
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [speed, setSpeed] = useState(() => speechService.getRate());
+  const supported = speechService.isSupported();
+  const concept = concepts[index];
 
   useEffect(() => {
-    const unsub = speechService.subscribe((isSpeaking) => {
-      setIsPlaying(isSpeaking);
-    });
+    const unsubscribe = speechService.subscribe(setIsPlaying);
     return () => {
-      unsub();
+      unsubscribe();
       speechService.stop();
     };
   }, []);
 
-  const buildConceptSpeechText = (conceptIdx: number): string => {
-    const c = concepts[conceptIdx];
-    if (!c) return '';
-    const parts = [
-      `Concept ${c.order}: ${c.title}.`,
-      `Core Mental Model: ${c.mentalModel}.`,
-      `Key Takeaways: ${c.coreTakeaways.join('. ')}.`,
-      `Key Definitions: ${c.keyTerms.map(k => `${k.term}, defined as ${k.definition}`).join('. ')}.`
-    ];
-    return parts.join(' ');
-  };
-
-  const handlePlayCurrent = (idx: number = conceptIndex) => {
-    const text = buildConceptSpeechText(idx);
-    speechService.setRate(speed);
-    speechService.speak(text, () => {
-      // Auto-advance to next concept when done!
-      if (idx < concepts.length - 1) {
-        setConceptIndex(idx + 1);
-        handlePlayCurrent(idx + 1);
-      } else {
-        setIsPlaying(false);
-      }
+  /** Reads one concept, then moves on to the next until the deck ends. */
+  const playFrom = (start: number) => {
+    const target = concepts[start];
+    if (!target) return;
+    setIndex(start);
+    setIsPaused(false);
+    speechService.speak(speechFor(target, start, concepts.length), () => {
+      if (start + 1 < concepts.length) playFrom(start + 1);
     });
-    setIsPlaying(true);
   };
 
-  const handleTogglePlay = () => {
+  const togglePlay = () => {
     if (isPlaying) {
-      speechService.stop();
-      setIsPlaying(false);
+      speechService.pause();
+      setIsPaused(true);
+    } else if (isPaused && speechService.isPaused()) {
+      speechService.resume();
+      setIsPaused(false);
     } else {
-      handlePlayCurrent(conceptIndex);
+      playFrom(index);
     }
   };
 
-  const handleNextConcept = () => {
-    if (conceptIndex < concepts.length - 1) {
-      const nextIdx = conceptIndex + 1;
-      setConceptIndex(nextIdx);
-      if (isPlaying) {
-        handlePlayCurrent(nextIdx);
-      }
-    }
+  const jump = (to: number) => {
+    if (to < 0 || to >= concepts.length) return;
+    if (isPlaying || isPaused) playFrom(to);
+    else setIndex(to);
   };
 
-  const handlePrevConcept = () => {
-    if (conceptIndex > 0) {
-      const prevIdx = conceptIndex - 1;
-      setConceptIndex(prevIdx);
-      if (isPlaying) {
-        handlePlayCurrent(prevIdx);
-      }
-    }
+  const cycleSpeed = () => {
+    const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] ?? 1;
+    setSpeed(next);
+    speechService.setRate(next);
+    // The browser can't change the speed of words already queued, so restart this concept.
+    if (isPlaying || isPaused) playFrom(index);
   };
 
-  const handleCycleSpeed = () => {
-    const speeds = [1.0, 1.25, 1.5, 0.75];
-    const nextIdx = (speeds.indexOf(speed) + 1) % speeds.length;
-    const nextSpeed = speeds[nextIdx];
-    setSpeed(nextSpeed);
-    speechService.setRate(nextSpeed);
-    if (isPlaying) {
-      // Restart current track with new speed
-      handlePlayCurrent(conceptIndex);
-    }
-  };
-
-  const handleToggleMute = () => {
-    if (isMuted) {
-      setIsMuted(false);
-      handlePlayCurrent(conceptIndex);
-    } else {
-      setIsMuted(true);
-      speechService.stop();
-      setIsPlaying(false);
-    }
+  const close = () => {
+    speechService.stop();
+    onClose?.();
   };
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4 animate-slide-up">
-      <div className="p-3.5 sm:px-5 rounded-2xl bg-slate-950/90 border border-indigo-500/30 backdrop-blur-xl shadow-2xl shadow-indigo-950/40 text-slate-100 flex items-center justify-between gap-3">
-        {/* Left: Indicator & Track Info */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="relative w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-indigo-600/30">
-            <Headphones className="w-4 h-4" />
-            {isPlaying && (
-              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping" />
-            )}
-          </div>
-
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider font-mono">
-                Audio Overview • {conceptIndex + 1}/{concepts.length}
-              </span>
-              {isPlaying && (
-                <div className="flex items-end gap-0.5 h-3 w-3.5">
-                  <span className="w-0.5 bg-indigo-400 rounded-full animate-eq-1" />
-                  <span className="w-0.5 bg-indigo-300 rounded-full animate-eq-2" />
-                  <span className="w-0.5 bg-indigo-400 rounded-full animate-eq-3" />
-                  <span className="w-0.5 bg-purple-300 rounded-full animate-eq-4" />
-                </div>
-              )}
-            </div>
-
-            <h4 className="text-xs font-bold text-white truncate font-display">
-              {currentConcept?.title || session.title}
-            </h4>
-          </div>
-        </div>
-
-        {/* Center: Playback Controls */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={handlePrevConcept}
-            disabled={conceptIndex === 0}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
-            title="Previous Concept"
-          >
-            <SkipBack className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={handleTogglePlay}
-            className="p-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white shadow-md shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-            title={isPlaying ? 'Pause Audio Overview' : 'Play Audio Overview'}
-          >
-            {isPlaying ? (
-              <Pause className="w-4 h-4 fill-white" />
-            ) : (
-              <Play className="w-4 h-4 fill-white ml-0.5" />
-            )}
-          </button>
-
-          <button
-            onClick={handleNextConcept}
-            disabled={conceptIndex === concepts.length - 1}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
-            title="Next Concept"
-          >
-            <SkipForward className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Right: Speed, Mute & Close */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={handleCycleSpeed}
-            className="px-2 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-[11px] font-mono font-bold text-indigo-300 transition-colors cursor-pointer"
-            title="Toggle playback speed"
-          >
-            {speed}x
-          </button>
-
-          <button
-            onClick={handleToggleMute}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
-            title={isMuted ? 'Unmute' : 'Mute'}
-          >
-            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-          </button>
-
-          {onClose && (
-            <button
-              onClick={() => {
-                speechService.stop();
-                onClose();
-              }}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-white transition-colors ml-1 cursor-pointer"
-              title="Close Audio Overview"
-            >
-              <X className="w-4 h-4" />
-            </button>
+    <div
+      role="region"
+      aria-label="Audio briefing"
+      className="pointer-events-none fixed inset-x-0 bottom-20 z-40 flex justify-center px-3 animate-rise md:bottom-5 md:justify-end md:px-6"
+    >
+      <div className="pointer-events-auto flex w-full max-w-xl items-center gap-3 rounded-2xl border border-line-strong bg-surface-solid/95 p-2 pr-2.5 shadow-[0_16px_40px_-18px_rgb(0_0_0/0.6)] backdrop-blur-xl">
+        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand-text" aria-hidden="true">
+          {isPlaying ? (
+            <span className="flex h-4 items-end gap-0.5">
+              <span className="w-0.5 rounded-full bg-current animate-eq-1" />
+              <span className="w-0.5 rounded-full bg-current animate-eq-2" />
+              <span className="w-0.5 rounded-full bg-current animate-eq-3" />
+              <span className="w-0.5 rounded-full bg-current animate-eq-4" />
+            </span>
+          ) : (
+            <Headphones className="h-[18px] w-[18px]" />
           )}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs text-ink-subtle">
+            {supported ? (
+              <>
+                {session.title} · {index + 1} of {concepts.length}
+              </>
+            ) : (
+              "This browser can't read aloud. Try Chrome, Edge or Safari."
+            )}
+          </p>
+          <p className="truncate text-[13px] font-medium text-ink">{concept?.title ?? session.title}</p>
+          <div className="mt-1.5 flex gap-0.5" aria-hidden="true">
+            {concepts.map((c, i) => (
+              <span key={c.id} className={cn('h-1 flex-1 rounded-full', i < index ? 'bg-brand' : i === index ? 'bg-brand/60' : 'bg-surface-hover')} />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-0.5">
+          <span className="hidden sm:flex">
+            <IconButton icon={SkipBack} label="Previous concept" onClick={() => jump(index - 1)} disabled={index === 0} className="disabled:opacity-40" />
+          </span>
+          <button
+            type="button"
+            onClick={togglePlay}
+            disabled={!supported || !concept}
+            aria-label={isPlaying ? 'Pause' : isPaused ? 'Resume' : 'Play'}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-brand-ink transition-colors hover:bg-brand-hover disabled:opacity-50 cursor-pointer"
+          >
+            {isPlaying ? <Pause className="h-4 w-4 fill-current" aria-hidden="true" /> : <Play className="ml-0.5 h-4 w-4 fill-current" aria-hidden="true" />}
+          </button>
+          <IconButton icon={SkipForward} label="Next concept" onClick={() => jump(index + 1)} disabled={index >= concepts.length - 1} className="disabled:opacity-40" />
+          <button
+            type="button"
+            onClick={cycleSpeed}
+            aria-label={`Speed ${speed} times. Change speed`}
+            className="h-9 rounded-lg px-2 text-xs font-medium tabular-nums text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer"
+          >
+            {speed}×
+          </button>
+          {onClose && <IconButton icon={X} label="Close the briefing" onClick={close} />}
         </div>
       </div>
     </div>
