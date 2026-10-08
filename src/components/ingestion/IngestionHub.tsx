@@ -412,7 +412,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                   <GraduationCap className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden="true" />
                   {effectiveProfile ? (
                     <span className="truncate">
-                      {EducationCatalog.getCountry(effectiveProfile.country).flag} {effectiveProfile.grade}, age {effectiveProfile.age}
+                      {effectiveProfile.grade}, age {effectiveProfile.age}, {EducationCatalog.getCountry(effectiveProfile.country).name}
                     </span>
                   ) : (
                     <span className="truncate">No grade set yet</span>
@@ -1068,9 +1068,9 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
           initialProfile={effectiveProfile}
           onClose={profileModal.close}
           onSave={profileModal.save}
-          title={effectiveProfile ? "Update Educational Calibration" : "Calibrate Your Grade & Curriculum"}
-          description={effectiveProfile ? "Modify your grade, country, or age so Gemini adjusts studying complexity accordingly." : "Tell Gemini your country and grade so the study plan, mental models, and flashcards perfectly match your curriculum."}
-          actionLabel={profileModal.willGenerate ? "Save & Generate Study Plan ✨" : "Save Learning Profile"}
+          title={effectiveProfile ? 'Your level' : 'Set your level'}
+          description="Decks are written for your level: the right depth, words and examples for your grade and country."
+          actionLabel={profileModal.willGenerate ? 'Save and create the deck' : 'Save'}
         />
       )}
 
