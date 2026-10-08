@@ -665,6 +665,28 @@ describe('StorageService library size', () => {
     expect(deckIds()).toHaveLength(51);
     expect(orphanedCardIds()).toEqual([]);
   });
+
+  it('replaces the decks and their cards when a backup is restored', () => {
+    StorageService.saveSession(deck(1));
+    const backup = StorageService.exportAllDataAsJSON();
+    StorageService.saveSession(deck(2));
+
+    expect(StorageService.importDataFromJSON(backup).success).toBe(true);
+    expect(deckIds()).toEqual(['deck-1']);
+    expect(orphanedCardIds()).toEqual([]);
+    expect(StorageService.getAllCards().map(c => c.id)).toEqual(['card-1']);
+  });
+
+  it("keeps a backup's cards that belong to no deck, in a deck of their own", () => {
+    // A backup taken while cards were orphaned (by the old 30-deck limit, say) still has them.
+    const reviewed = { ...card('loose'), reps: 4, stability: 20 };
+    const backup = JSON.stringify({ version: 2, cards: [card('card-1'), reviewed], sessions: [deck(1)], folders: [] });
+
+    expect(StorageService.importDataFromJSON(backup).success).toBe(true);
+    expect(orphanedCardIds()).toEqual([]);
+    expect(deckIds()).toHaveLength(2);
+    expect(StorageService.getAllCards().find(c => c.id === 'loose')).toMatchObject({ question: 'Q loose', reps: 4, stability: 20 });
+  });
 });
 
 describe('StorageService review progress', () => {

@@ -1086,6 +1086,35 @@ export class StorageService {
     }
   }
 
+  /** A deck holding cards that belong to no deck, or null when there are none. */
+  private static deckForLooseCards(cards: RetrievalCard[]): StudySession | null {
+    if (cards.length === 0) return null;
+    const id = `restored-${Date.now()}`;
+    const conceptId = `${id}-cards`;
+    return {
+      id,
+      title: 'Restored cards',
+      category: 'Restored',
+      description: 'Cards from a backup that were not in any deck.',
+      concepts: [{
+        id: conceptId,
+        order: 0,
+        title: 'Restored cards',
+        estimatedMinutes: 0,
+        mentalModel: '',
+        coreTakeaways: [],
+        keyTerms: [],
+        feynmanPrompt: '',
+        sampleMasteryExplanation: '',
+        retrievalCards: cards.map(c => ({ ...c, conceptId })),
+      }],
+      currentConceptIndex: 0,
+      currentPhase: 'retrieval',
+      elapsedSeconds: 0,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
   /**
    * Exports all student data to JSON
    */
@@ -1102,7 +1131,10 @@ export class StorageService {
   }
 
   /**
-   * Restores student data from JSON backup
+   * Restores student data from JSON backup. A backup with decks replaces the decks and the review
+   * queue: the current decks' cards leave the queue, so none keeps coming due without a deck. A
+   * backup card that belongs to none of its decks (orphaned when the backup was taken) is kept, in
+   * a deck of its own, so it can be studied and deleted like any other.
    */
   public static importDataFromJSON(jsonString: string): { success: boolean; message: string } {
     try {
@@ -1111,9 +1143,21 @@ export class StorageService {
         return { success: false, message: 'Invalid backup format.' };
       }
       if (data.stats) this.saveStats(data.stats);
-      if (data.cards && Array.isArray(data.cards)) this.saveCards(data.cards);
-      if (data.sessions && Array.isArray(data.sessions)) {
-        this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(data.sessions));
+      const replacesDecks = Array.isArray(data.sessions);
+      const decks: StudySession[] = replacesDecks ? data.sessions : this.getSessions();
+      const backupCards: RetrievalCard[] = Array.isArray(data.cards) ? data.cards : [];
+      const inDecks = new Set(decks.flatMap(s => this.cardIdsOf(s)));
+      const looseDeck = this.deckForLooseCards(backupCards.filter(c => !inDecks.has(c.id)));
+      const rehomed = new Map(looseDeck?.concepts[0].retrievalCards.map(c => [c.id, c]));
+      const restoredCards = backupCards.map(c => rehomed.get(c.id) ?? c);
+      if (replacesDecks) {
+        // Replace the queue before the decks, so the decks are stored with the backup's progress.
+        this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(restoredCards));
+      } else if (restoredCards.length > 0) {
+        this.saveCards(restoredCards);
+      }
+      if (replacesDecks || looseDeck) {
+        this.saveSessions(looseDeck ? [...decks, looseDeck] : decks);
       }
       if (data.folders && Array.isArray(data.folders)) {
         this.saveFolders(data.folders);
