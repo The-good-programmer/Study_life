@@ -75,4 +75,30 @@ export const MIGRATIONS = [
       );
     `,
   },
+  {
+    // Supabase publishes the public schema through its own web API (PostgREST), readable with the project's
+    // public key. Row-level security with no policies turns that off for every table: only this server, which
+    // connects as the table owner, can read or write them.
+    id: '002_lock_down_tables',
+    sql: `
+      ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE study_sessions ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE user_stats ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE shared_decks ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE deck_likes ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE ai_usage ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE schema_migrations ENABLE ROW LEVEL SECURITY;
+
+      -- Belt and braces on Supabase (these roles don't exist elsewhere).
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+          REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon;
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          REVOKE ALL ON ALL TABLES IN SCHEMA public FROM authenticated;
+        END IF;
+      END $$;
+    `,
+  },
 ];

@@ -257,11 +257,18 @@ describe('CORS', () => {
 describe('database', () => {
   it('applies its migrations once and reports healthy', async () => {
     const applied = await db.all('SELECT id FROM schema_migrations');
-    expect(applied.map((row) => row.id)).toEqual(['001_initial']);
+    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables']);
 
     const health = await api('/api/health');
     expect(health.status).toBe(200);
     expect(health.data).toMatchObject({ status: 'ok', db: 'connected' });
+  });
+
+  it('locks every table against the Supabase public web API', async () => {
+    const open = await db.all(
+      "SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r' AND NOT relrowsecurity",
+    );
+    expect(open).toEqual([]);
   });
 
   it('rolls a transaction back when it fails part-way', async () => {
