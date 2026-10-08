@@ -1,409 +1,264 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  AlertTriangle, 
-  Check, 
-  Split, 
-  RotateCw, 
-  ArrowLeft, 
-  Wand2, 
-  CheckCircle2,
-  Bug
-} from 'lucide-react';
-import type { LeechAnalysis, MnemonicRewiringOption, RetrievalCard } from '../../types';
+import React, { useEffect, useState } from 'react';
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Lightbulb, Split } from 'lucide-react';
+import type { LeechAnalysis, LeechRootCause, MnemonicRewiringOption, RetrievalCard } from '../../types';
 import { FSRSService } from '../../services/fsrsService';
 import { StorageService } from '../../services/storageService';
-import { grantReward } from '../../services/economy/rewardService';
+import { estimateReward, grantReward } from '../../services/economy/rewardService';
+import { lifeSimService } from '../../services/lifeSimService';
 import { AIService } from '../../services/aiService';
 import { soundEngine } from '../../services/soundEngine';
+import { fillCloze, hasCloze } from '../../utils/cloze';
+import { cn } from '../../utils/cn';
 import { MathRenderer } from '../common/MathRenderer';
-import { UserAvatarBadge } from '../character/UserAvatarBadge';
-import { fillCloze } from '../../utils/cloze';
+import { Badge, Button, Tokens } from '../ui/primitives';
 
 interface LeechHunterLabProps {
   onBack: () => void;
   onCardCured?: () => void;
 }
 
+const ROOT_CAUSES: Record<LeechRootCause, string> = {
+  interference: 'Mixed up with a similar card',
+  'abstract-disconnect': 'Too abstract to picture',
+  'overloaded-card': 'Too much on one card',
+  'arbitrary-ordering': 'An order with nothing to hang it on',
+};
+
+/** Ids for the cards a hard card is split into. */
+const splitIdStamp = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+const payFor = (method: 'mnemonic' | 'split') => {
+  const { xp, tokens } = estimateReward({ kind: 'leech-cure', method });
+  return { xp, tokens: Math.round(tokens * lifeSimService.getActiveMultiplier()) };
+};
+
+/** Hard cards: the ones you keep forgetting, with a hook or a split to fix each. */
 export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCured }) => {
   const [allCards, setAllCards] = useState<RetrievalCard[]>(() => StorageService.getAllCards());
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(() => {
-    const initialCards = StorageService.getAllCards();
-    const initialLeeches = FSRSService.findLeeches(initialCards);
-    return initialLeeches[0]?.id || null;
-  });
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<LeechAnalysis | null>(null);
-  const [curedNotice, setCuredNotice] = useState<string | null>(null);
+  const [failedFor, setFailedFor] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  // Compute leeches based on FSRS lapse / difficulty criteria
   const leeches = FSRSService.findLeeches(allCards);
   const selectedCard = leeches.find(c => c.id === selectedCardId) || leeches[0] || null;
+  const isAnalyzing = !!selectedCard && analysis?.cardId !== selectedCard.id && failedFor !== selectedCard.id;
 
-  // Purely derived analyzing state avoids cascading effect renders
-  const isAnalyzing = Boolean(selectedCard && (!analysis || analysis.cardId !== selectedCard.id));
-
-  // Run diagnosis whenever selected card changes
   useEffect(() => {
     if (!selectedCard) return;
-
     let isMounted = true;
     AIService.diagnoseAndRewireLeech(selectedCard)
       .then(res => {
-        if (isMounted) {
-          setAnalysis(res);
-        }
+        if (isMounted) setAnalysis(res);
       })
       .catch(err => {
-        console.error('Leech diagnosis failed:', err);
+        console.error('Hard-card diagnosis failed:', err);
+        if (isMounted) setFailedFor(selectedCard.id);
       });
-
     return () => {
       isMounted = false;
     };
   }, [selectedCard]);
 
-  // Apply Mnemonic Anchor (Strategy 1 or 2)
-  const handleApplyMnemonic = (option: MnemonicRewiringOption) => {
+  const finishCure = (message: string) => {
+    setAllCards(StorageService.getAllCards());
+    soundEngine.playCompletionChime();
+    setNotice(message);
+    setSelectedCardId(null);
+    onCardCured?.();
+  };
+
+  const handleApplyHook = (option: MnemonicRewiringOption) => {
     if (!selectedCard) return;
-
-    const curedCard = FSRSService.rewireCard(selectedCard, `${option.strategyTitle}: ${option.mnemonicText}`);
-    StorageService.saveCard(curedCard);
-
-    // Refresh cards
-    const updatedCards = StorageService.getAllCards();
-    setAllCards(updatedCards);
-    grantReward({ kind: 'leech-cure', method: 'mnemonic' }, { label: 'Mnemonic Leech Cure' });
-    soundEngine.playCompletionChime();
-
-    setCuredNotice(`Cured! Mnemonic anchor attached. Synaptic stability restored.`);
-    setTimeout(() => setCuredNotice(null), 3500);
-
-    if (onCardCured) onCardCured();
+    StorageService.saveCard(FSRSService.rewireCard(selectedCard, `${option.strategyTitle}: ${option.mnemonicText}`));
+    const grant = grantReward({ kind: 'leech-cure', method: 'mnemonic' }, { label: 'Fixed a hard card' });
+    finishCure(`Hook added. You will see the card again soon, with the hook as its hint.${grant.xp ? ` +${grant.xp} XP.` : ''}`);
   };
 
-  // Decompose into Atomic Cloze Cards (Strategy 3)
-  const handleDecomposeAtomic = (option: MnemonicRewiringOption) => {
-    if (!selectedCard || !option.atomicCards || option.atomicCards.length === 0) return;
-
-    // Create new atomic cards
-    const newCards: RetrievalCard[] = option.atomicCards.map((ac, idx) => ({
-      id: `atomic-${Date.now()}-${idx}`,
-      conceptId: selectedCard.conceptId,
-      cardType: 'cloze',
-      question: ac.question,
-      answer: ac.answer,
-      clozeTemplate: ac.clozeTemplate,
-      stability: 3.0,
-      difficulty: 4.0,
-      reps: 0,
-      lapses: 0,
-      hint: `Derived from atomic decomposition of complex concept.`,
-    }));
-
-    // Permanently remove original leech card and persist new atomic cards
-    StorageService.deleteCard(selectedCard.id);
-    StorageService.saveCards(newCards);
-    const updatedCards = StorageService.getAllCards();
-    setAllCards(updatedCards);
-
-    grantReward({ kind: 'leech-cure', method: 'split' }, { label: 'Atomic Leech Decomposition' });
-    soundEngine.playCompletionChime();
-
-    setCuredNotice(`Decomposed into ${newCards.length} atomic cloze cards! Minimum Information Principle applied.`);
-    setTimeout(() => setCuredNotice(null), 3500);
-
-    if (onCardCured) onCardCured();
-  };
-
-  // Simulate High-Yield Leech Bottleneck for demo/testing
-  const handleSimulateLeech = () => {
-    const testLeech: RetrievalCard = {
-      id: `sim-leech-${Date.now()}`,
-      conceptId: 'sim-concept',
-      cardType: 'standard',
-      question: 'Which arteriole carries blood into the renal glomerulus, and which one carries blood away?',
-      answer: 'Afferent arteriole carries blood in; Efferent arteriole carries blood out.',
-      explanation: 'Afferent arrives (A = Arrive), Efferent exits (E = Exit). Pressure gradient regulates glomerular filtration rate.',
-      stability: 0.9,
-      difficulty: 8.8,
-      reps: 7,
-      lapses: 5,
-    };
-
-    StorageService.saveCard(testLeech);
-    const updated = StorageService.getAllCards();
-    setAllCards(updated);
-    setSelectedCardId(testLeech.id);
-    soundEngine.playSocraticChallengeChime();
-    setCuredNotice('Simulated high-lapse renal physiology leech generated!');
-    setTimeout(() => setCuredNotice(null), 3000);
+  const handleSplit = (option: MnemonicRewiringOption) => {
+    if (!selectedCard || !option.atomicCards?.length) return;
+    const stamp = splitIdStamp();
+    const newCards: RetrievalCard[] = option.atomicCards.map((atomic, index) => {
+      const text = atomic.clozeTemplate || atomic.question;
+      const isCloze = hasCloze(text);
+      return {
+        id: `atomic-${stamp}-${index}`,
+        conceptId: selectedCard.conceptId,
+        cardType: isCloze ? 'cloze' : 'standard',
+        question: isCloze ? text : atomic.question,
+        answer: atomic.answer,
+        clozeTemplate: isCloze ? text : undefined,
+        stability: 1,
+        difficulty: 5,
+        reps: 0,
+        lapses: 0,
+      };
+    });
+    // The new cards take the hard card's place in its deck.
+    StorageService.replaceCard(selectedCard.id, newCards);
+    const grant = grantReward({ kind: 'leech-cure', method: 'split' }, { label: 'Split a hard card' });
+    finishCure(`Split into ${newCards.length} simpler cards, now in the same deck.${grant.xp ? ` +${grant.xp} XP.` : ''}`);
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 py-4 animate-fadeIn">
-      
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/[0.08] transition-all"
-            title="Return to Retention Dashboard"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight font-display">
-                FSRS Leech Hunter & Mnemonic Rewiring Lab
-              </h2>
-              <span className="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[11px] font-mono uppercase font-bold">
-                Synaptic Bottlenecks
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 font-sans">
-              Algorithmic diagnosis of chronic card failure (SuperMemo / FSRS Leech Theory).
-            </p>
-          </div>
+    <div className="mx-auto w-full max-w-6xl space-y-6 animate-fadeIn">
+      <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={onBack} className="-ml-2">
+        Insights
+      </Button>
+
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold tracking-tight text-ink sm:text-[30px]">Hard cards</h1>
+          <p className="mt-1 max-w-2xl text-[15px] text-ink-muted">
+            Cards you keep forgetting. Give each one a memory hook, or split it into simpler cards.
+          </p>
         </div>
+        {leeches.length > 0 && <Badge tone="danger">{leeches.length} to fix</Badge>}
+      </header>
 
-        <div className="flex items-center gap-2">
-          {leeches.length === 0 && (
-            <button
-              onClick={handleSimulateLeech}
-              className="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
-              title="Generate a sample medical leech card to test the rewiring lab"
-            >
-              <Bug className="w-3.5 h-3.5" />
-              <span>Simulate Sample Leech</span>
-            </button>
+      {notice && (
+        <div className="flex items-start gap-2.5 rounded-2xl bg-success-soft px-4 py-3 text-[13px] text-success animate-fadeIn" role="status">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>{notice}</span>
+        </div>
+      )}
+
+      {leeches.length === 0 ? (
+        <section className="rounded-3xl border border-line bg-surface px-6 py-14 text-center">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-success-soft text-success">
+            <Check className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <h2 className="mt-4 text-lg font-semibold text-ink">No hard cards right now</h2>
+          <p className="mx-auto mt-1 max-w-md text-[13px] leading-relaxed text-ink-subtle">
+            A card lands here after you forget it three times, or when it stays difficult over several reviews.
+          </p>
+          <Button className="mt-5" icon={ArrowLeft} onClick={onBack}>
+            Back to Insights
+          </Button>
+        </section>
+      ) : (
+        <div className="grid items-start gap-5 lg:grid-cols-[320px_1fr]">
+          <ul className="space-y-1.5 lg:sticky lg:top-20" aria-label="Hard cards">
+            {leeches.map(card => {
+              const isSelected = card.id === selectedCard?.id;
+              return (
+                <li key={card.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCardId(card.id)}
+                    aria-pressed={isSelected}
+                    className={cn(
+                      'w-full rounded-2xl border px-4 py-3 text-left transition-colors cursor-pointer',
+                      isSelected ? 'border-brand bg-brand-soft' : 'border-line bg-surface hover:border-line-strong hover:bg-surface-hover',
+                    )}
+                  >
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-danger">
+                      <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                      Forgotten {card.lapses} {card.lapses === 1 ? 'time' : 'times'}
+                    </span>
+                    <span className="mt-1 line-clamp-2 block text-[13px] font-medium leading-snug text-ink">
+                      <MathRenderer text={fillCloze(card.question)} />
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-ink-subtle">{card.answer}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          {selectedCard && (
+            <section className="space-y-5 rounded-3xl border border-line bg-surface p-5 sm:p-6">
+              <div>
+                <p className="text-xs text-ink-subtle">
+                  Reviewed {selectedCard.reps} {selectedCard.reps === 1 ? 'time' : 'times'} · difficulty {selectedCard.difficulty.toFixed(1)} of 10
+                </p>
+                <h2 className="mt-1.5 text-lg font-medium leading-relaxed text-ink">
+                  <MathRenderer text={fillCloze(selectedCard.question)} />
+                </h2>
+                <p className="mt-3 rounded-xl bg-success-soft px-3.5 py-2.5 text-[13px] text-ink">
+                  <span className="font-medium text-success">Answer: </span>
+                  <MathRenderer text={selectedCard.answer} />
+                </p>
+              </div>
+
+              {isAnalyzing ? (
+                <div className="space-y-2" aria-busy="true" aria-label="Looking for a fix">
+                  <div className="h-20 animate-pulse rounded-2xl bg-surface-hover" />
+                  <div className="h-28 animate-pulse rounded-2xl bg-surface-hover" />
+                </div>
+              ) : failedFor === selectedCard.id ? (
+                <p className="rounded-2xl bg-danger-soft px-4 py-3 text-[13px] text-danger" role="alert">
+                  Could not work out a fix just now. Check your connection or AI key in Settings, then pick the card again.
+                </p>
+              ) : analysis ? (
+                <div className="space-y-5 animate-fadeIn">
+                  <div className="rounded-2xl border border-gold/30 bg-gold-soft px-4 py-3.5">
+                    <p className="text-xs font-medium text-gold">Why it keeps slipping · {ROOT_CAUSES[analysis.rootCause] ?? analysis.rootCause}</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{analysis.diagnosisTitle}</p>
+                    <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">{analysis.diagnosticExplanation}</p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-[15px] font-semibold text-ink">Ways to fix it</h3>
+                    <div className="mt-3 space-y-3">
+                      {analysis.rewiringOptions.map(option => (
+                        <RemedyCard
+                          key={option.id}
+                          option={option}
+                          onApply={() => (option.strategy === 'atomic-split' ? handleSplit(option) : handleApplyHook(option))}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </section>
           )}
+        </div>
+      )}
+    </div>
+  );
+};
 
-          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-white/[0.08] text-xs font-mono font-bold text-slate-300">
-            {leeches.length} {leeches.length === 1 ? 'Leech' : 'Leeches'} Detected
-          </div>
+const RemedyCard: React.FC<{ option: MnemonicRewiringOption; onApply: () => void }> = ({ option, onApply }) => {
+  const isSplit = option.strategy === 'atomic-split' && !!option.atomicCards?.length;
+  const [pay] = useState(() => payFor(isSplit ? 'split' : 'mnemonic'));
+  return (
+    <article className="rounded-2xl border border-line bg-canvas p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+            {isSplit ? <Split className="h-4 w-4 text-brand-text" aria-hidden="true" /> : <Lightbulb className="h-4 w-4 text-gold" aria-hidden="true" />}
+            {option.strategyTitle}
+          </p>
+          {option.badge && <p className="mt-0.5 text-xs text-ink-subtle">{option.badge}</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          {(pay.tokens > 0 || pay.xp > 0) && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-ink-subtle">
+              {pay.tokens > 0 && <Tokens amount={pay.tokens} signed />}
+              {pay.xp > 0 && <span className="tabular-nums">+{pay.xp} XP</span>}
+            </span>
+          )}
+          <Button size="sm" variant="primary" icon={isSplit ? Split : Check} onClick={onApply}>
+            {isSplit ? `Split into ${option.atomicCards!.length} cards` : 'Use this hook'}
+          </Button>
         </div>
       </div>
 
-      {/* Cured Notice Alert */}
-      {curedNotice && (
-        <div className="p-3.5 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-fadeIn shadow-lg shadow-emerald-900/20">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{curedNotice}</span>
-        </div>
+      <p className="mt-3 text-[13px] leading-relaxed text-ink">{option.mnemonicText}</p>
+      {option.visualImagery && <p className="mt-1.5 text-[13px] leading-relaxed text-ink-subtle">Picture it: {option.visualImagery}</p>}
+
+      {isSplit && (
+        <ul className="mt-3 space-y-1.5">
+          {option.atomicCards!.map((atomic, index) => (
+            <li key={index} className="rounded-xl border border-line bg-surface px-3 py-2 text-[13px]">
+              <span className="text-ink">{fillCloze(atomic.clozeTemplate || atomic.question)}</span>
+              <span className="mt-0.5 block text-xs text-ink-subtle">Answer: {atomic.answer}</span>
+            </li>
+          ))}
+        </ul>
       )}
-
-      {/* Main Grid: Leech Queue & Rewiring Studio */}
-      {leeches.length === 0 ? (
-        <div className="p-10 text-center rounded-3xl glass-panel space-y-4 max-w-lg mx-auto border border-emerald-500/20">
-          <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
-            <div className="absolute -inset-2 rounded-3xl bg-emerald-500/20 blur-md animate-pulse" />
-            <div className="relative w-full h-full rounded-2xl overflow-hidden border border-emerald-500/30 p-0.5 bg-slate-950 flex items-center justify-center">
-              <UserAvatarBadge size="lg" showBorder={false} />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-lg font-bold text-white font-display">
-              Zero Synaptic Leeches Detected!
-            </h3>
-            <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
-              Your memory stability graph has been thoroughly analyzed. Every flashcard demonstrates healthy retention—no memory bottlenecks!
-            </p>
-          </div>
-          <button
-            onClick={handleSimulateLeech}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all hover:scale-105 cursor-pointer"
-          >
-            Spawn Sample High-Yield Leech to Test Rewiring
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Left Column: Leech Roster */}
-          <div className="lg:col-span-4 space-y-2.5">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider font-display px-1">
-              <span>Unstable Flashcards</span>
-              <span className="text-[11px] font-mono text-rose-400 font-bold">{leeches.length} Critical</span>
-            </div>
-
-            <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
-              {leeches.map((card) => {
-                const isSelected = card.id === selectedCard?.id;
-                return (
-                  <div
-                    key={card.id}
-                    onClick={() => {
-                      if (card.id !== selectedCardId) {
-                        setSelectedCardId(card.id);
-                        setAnalysis(null);
-                      }
-                    }}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-2 text-left ${
-                      isSelected
-                        ? 'bg-rose-950/40 border-rose-500/60 shadow-xl shadow-rose-950/30 ring-2 ring-rose-500/20'
-                        : 'bg-slate-900/70 border-white/[0.08] hover:border-white/[0.2] hover:bg-slate-850'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-[11px] font-mono">
-                      <span className="text-rose-400 font-bold flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" />
-                        {card.lapses} Lapses
-                      </span>
-                      <span className="text-slate-400">
-                        Stab: {card.stability}d
-                      </span>
-                    </div>
-
-                    <div className="text-xs text-white font-medium line-clamp-2 leading-snug">
-                      <MathRenderer text={fillCloze(card.question)} />
-                    </div>
-
-                    <div className="text-[11px] text-slate-400 truncate">
-                      Ans: <span className="text-slate-300 font-semibold">{card.answer}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right Column: Diagnostic Autopsy & Mnemonic Rewiring Studio */}
-          <div className="lg:col-span-8 space-y-5">
-            {selectedCard && (
-              <div className="p-6 sm:p-7 rounded-3xl glass-panel space-y-6 border-rose-500/30">
-                
-                {/* Selected Card Overview */}
-                <div className="space-y-2 pb-5 border-b border-white/[0.08]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-rose-300 font-bold bg-rose-500/20 px-2.5 py-0.5 rounded-full border border-rose-500/30">
-                      Cognitive Autopsy in Progress
-                    </span>
-                    <span className="text-xs font-mono text-slate-400">
-                      Difficulty: {selectedCard.difficulty}/10 • Reps: {selectedCard.reps}
-                    </span>
-                  </div>
-
-                  <h3 className="text-base sm:text-lg font-bold text-white leading-relaxed font-display">
-                    <MathRenderer text={fillCloze(selectedCard.question)} />
-                  </h3>
-
-                  <div className="p-3 rounded-xl bg-slate-950/70 border border-white/[0.06] text-xs text-slate-300 flex items-start gap-2">
-                    <span className="text-emerald-400 font-bold font-mono shrink-0">Answer:</span>
-                    <span><MathRenderer text={selectedCard.answer} /></span>
-                  </div>
-                </div>
-
-                {/* Cognitive Diagnosis */}
-                {isAnalyzing ? (
-                  <div className="p-8 text-center space-y-3">
-                    <RotateCw className="w-6 h-6 animate-spin text-purple-400 mx-auto" />
-                    <p className="text-xs text-slate-400 font-mono">
-                      Running root-cause cognitive diagnostic & generating sensory mnemonics...
-                    </p>
-                  </div>
-                ) : analysis ? (
-                  <div className="space-y-5 animate-fadeIn">
-                    
-                    {/* Root Cause Banner */}
-                    <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/30 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-amber-300 font-display flex items-center gap-1.5">
-                          <AlertTriangle className="w-4 h-4 text-amber-400" />
-                          <span>Diagnosis: {analysis.diagnosisTitle}</span>
-                        </span>
-                        <span className="text-[11px] font-mono text-amber-400 uppercase font-bold">
-                          {analysis.rootCause}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-300 leading-relaxed font-sans">
-                        {analysis.diagnosticExplanation}
-                      </p>
-                    </div>
-
-                    {/* Rewiring Solutions Header */}
-                    <div className="flex items-center gap-2 pt-1">
-                      <Wand2 className="w-4 h-4 text-indigo-400" />
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider font-display">
-                        Cognitive Rewiring Remedies
-                      </h4>
-                    </div>
-
-                    {/* 3 Remedy Options */}
-                    <div className="grid grid-cols-1 gap-4">
-                      {analysis.rewiringOptions.map((opt) => (
-                        <div
-                          key={opt.id}
-                          className="p-5 rounded-2xl bg-slate-900/80 border border-white/[0.08] hover:border-indigo-500/40 transition-all space-y-3"
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-white/[0.06]">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-white font-display">
-                                {opt.strategyTitle}
-                              </span>
-                              <span className="text-[11px] font-mono uppercase font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                                {opt.badge}
-                              </span>
-                            </div>
-
-                            {opt.strategy === 'atomic-split' ? (
-                              <button
-                                onClick={() => handleDecomposeAtomic(opt)}
-                                className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-purple-600/25 shrink-0 self-start sm:self-auto"
-                              >
-                                <Split className="w-3.5 h-3.5" />
-                                <span>Decompose into 2 Cards (+30 🪙 Wage)</span>
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleApplyMnemonic(opt)}
-                                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/25 shrink-0 self-start sm:self-auto"
-                              >
-                                <Check className="w-3.5 h-3.5" />
-                                <span>Apply Mnemonic Cure (+25 🪙 Wage)</span>
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Mnemonic Details */}
-                          <div className="space-y-2 text-xs">
-                            <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 font-sans leading-relaxed">
-                              <strong className="text-indigo-300 block mb-0.5 font-display">Anchor:</strong>
-                              {opt.mnemonicText}
-                            </div>
-
-                            <div className="text-slate-400 italic">
-                              <strong className="text-slate-300 not-italic">Visual Imagery:</strong> "{opt.visualImagery}"
-                            </div>
-
-                            {/* Preview Atomic Cards if strategy is atomic-split */}
-                            {opt.atomicCards && opt.atomicCards.length > 0 && (
-                              <div className="space-y-1.5 pt-2">
-                                <span className="text-[11px] font-bold text-purple-300 uppercase tracking-wide block">
-                                  Atomic Decomposition Preview:
-                                </span>
-                                {opt.atomicCards.map((ac, idx) => (
-                                  <div key={idx} className="p-2.5 rounded-xl bg-slate-950/70 border border-white/[0.06] text-[11px] space-y-0.5">
-                                    <div className="text-slate-200 font-medium">Card {idx + 1}: {fillCloze(ac.question)}</div>
-                                    <div className="text-emerald-400 font-mono">Answer: {ac.answer}</div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                  </div>
-                ) : null}
-
-              </div>
-            )}
-          </div>
-
-        </div>
-      )}
-
-    </div>
+    </article>
   );
 };

@@ -529,6 +529,30 @@ export class StorageService {
   /**
    * Permanently deletes a card from both the global card queue and any parent sessions
    */
+  /**
+   * Swaps one card for others inside its deck, in the same place (e.g. a hard card
+   * split into simpler ones). The new cards join the review queue and the old one
+   * leaves it. A card that belongs to no deck is simply replaced in the queue.
+   */
+  public static replaceCard(cardId: string, replacements: RetrievalCard[]): void {
+    const owner = this.getSessions().find(s => s.concepts.some(c => c.retrievalCards.some(rc => rc.id === cardId)));
+    if (!owner) {
+      this.deleteCard(cardId);
+      if (replacements.length > 0) this.saveCards(replacements);
+      return;
+    }
+    this.saveSession({
+      ...owner,
+      concepts: owner.concepts.map(concept => {
+        const index = concept.retrievalCards.findIndex(rc => rc.id === cardId);
+        if (index < 0) return concept;
+        const next = [...concept.retrievalCards];
+        next.splice(index, 1, ...replacements.map(card => ({ ...card, conceptId: concept.id })));
+        return { ...concept, retrievalCards: next };
+      }),
+    });
+  }
+
   public static deleteCard(cardId: string) {
     const cards = this.getAllCards().filter(c => c.id !== cardId);
     this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(cards));

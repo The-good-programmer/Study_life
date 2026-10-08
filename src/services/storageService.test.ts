@@ -612,6 +612,14 @@ describe('StorageService deck edits', () => {
     expect(queueIds()).toEqual(['a', 'c']);
   });
 
+  it('replaces a card inside its deck, so the new cards are studied and the old one is gone', () => {
+    StorageService.saveSession(deckWith('deck', ['a', 'hard', 'c']));
+    StorageService.replaceCard('hard', [card('hard-1'), card('hard-2')]);
+    const deck = StorageService.getSessions().find(s => s.id === 'deck')!;
+    expect(deck.concepts[0].retrievalCards.map(c => c.id)).toEqual(['a', 'hard-1', 'hard-2', 'c']);
+    expect(queueIds()).toEqual(['a', 'c', 'hard-1', 'hard-2']);
+  });
+
   it('keeps a card that another deck still uses', () => {
     StorageService.saveSession(deckWith('one', ['a', 'shared']));
     StorageService.saveSession(deckWith('two', ['shared']));
