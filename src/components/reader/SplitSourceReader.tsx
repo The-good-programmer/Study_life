@@ -1,24 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  FileText, 
-  ChevronLeft, 
-  ChevronRight, 
-  ZoomIn, 
-  ZoomOut, 
-  Search, 
-  X, 
-  Bookmark, 
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  FileText,
   Maximize2,
   Minimize2,
+  Quote,
   RefreshCw,
-  Layers,
+  Search,
   Upload,
-  Copy,
-  Check,
-  ExternalLink
+  X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import type { SourceDocument } from '../../types';
 import { PDFService } from '../../services/pdfService';
+import { cn } from '../../utils/cn';
+import { Button, IconButton } from '../ui/primitives';
+import { escapeRegex, quotePatterns } from './quotePatterns';
 
 interface SplitSourceReaderProps {
   sourceDocument?: SourceDocument;
@@ -31,6 +32,8 @@ interface SplitSourceReaderProps {
   className?: string;
 }
 
+
+/** The deck's source PDF beside the study session, opened at the page a concept came from. */
 export const SplitSourceReader: React.FC<SplitSourceReaderProps> = ({
   sourceDocument,
   targetPage = 1,
@@ -45,508 +48,368 @@ export const SplitSourceReader: React.FC<SplitSourceReaderProps> = ({
 
   const [currentPage, setCurrentPage] = useState<number>(() => Math.max(1, targetPage));
   const [prevTargetPage, setPrevTargetPage] = useState(targetPage);
-
   if (targetPage !== prevTargetPage) {
     setPrevTargetPage(targetPage);
     setCurrentPage(Math.max(1, Math.min(totalPages, targetPage)));
   }
 
-  const [zoomLevel, setZoomLevel] = useState<number>(1.0);
-  const [viewMode, setViewMode] = useState<'canvas' | 'text'>(() => sourceDocument?.pdfDataUrl ? 'canvas' : 'text');
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [viewMode, setViewMode] = useState<'canvas' | 'text'>(() => (sourceDocument?.pdfDataUrl ? 'canvas' : 'text'));
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [hasCopied, setHasCopied] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textContainerRef = useRef<HTMLDivElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCopySnippet = () => {
+  const goToPage = (page: number) => {
+    const clamped = Math.max(1, Math.min(totalPages, page));
+    setCurrentPage(clamped);
+    onPageChange?.(clamped);
+  };
+
+  const copyQuote = async () => {
     if (!activeAnchorSnippet) return;
-    navigator.clipboard.writeText(activeAnchorSnippet);
-    setHasCopied(true);
-    setTimeout(() => setHasCopied(false), 2000);
-  };
-
-  const handleLocateSnippet = () => {
-    setViewMode('text');
-    setTimeout(() => {
-      const el = textContainerRef.current?.querySelector('.ground-truth-anchor');
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 120);
-  };
-
-  // Auto-scroll to anchor snippet when in text mode
-  useEffect(() => {
-    if (activeAnchorSnippet && viewMode === 'text') {
-      const timer = setTimeout(() => {
-        const el = textContainerRef.current?.querySelector('.ground-truth-anchor');
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 150);
-      return () => clearTimeout(timer);
+    try {
+      await navigator.clipboard.writeText(activeAnchorSnippet);
+      setCopyState('copied');
+    } catch {
+      setCopyState('failed');
     }
+    setTimeout(() => setCopyState('idle'), 2000);
+  };
+
+  /** Scrolls the reader (and only the reader: scrollIntoView would move the whole page) to the quote. */
+  const scrollToQuote = () => {
+    const container = textContainerRef.current;
+    const el = container?.querySelector<HTMLElement>('[data-quote]');
+    if (!container || !el) return;
+    const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+    container.scrollTo({ top: Math.max(0, top - container.clientHeight / 3), behavior: 'smooth' });
+  };
+
+  // In the text view, bring the concept's quote into view.
+  useEffect(() => {
+    if (!activeAnchorSnippet || viewMode !== 'text') return;
+    const timer = setTimeout(scrollToQuote, 150);
+    return () => clearTimeout(timer);
   }, [activeAnchorSnippet, viewMode, currentPage]);
 
-  // When currentPage changes, notify parent
-  const handleGoToPage = (newPage: number) => {
-    const clamped = Math.max(1, Math.min(totalPages, newPage));
-    setCurrentPage(clamped);
-    if (onPageChange) onPageChange(clamped);
-  };
-
-  // Render PDF to Canvas via PDFService when in 'canvas' mode
+  // Escape leaves the enlarged view.
   useEffect(() => {
-    if (viewMode !== 'canvas' || !sourceDocument?.pdfDataUrl || !canvasRef.current) {
-      return;
-    }
+    if (!isExpanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setIsExpanded(false);
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [isExpanded]);
 
+  // Draw the PDF page in the page view.
+  useEffect(() => {
+    if (viewMode !== 'canvas' || !sourceDocument?.pdfDataUrl || !canvasRef.current) return;
     let isMounted = true;
+    // Loading state for the render that starts below; it cannot be derived during render.
+    // oxlint-disable-next-line react/set-state-in-effect
     setIsRendering(true);
     setRenderError(null);
-
     const targetWidth = Math.round((isExpanded ? 900 : 640) * zoomLevel);
-
-    PDFService.renderPageToCanvas(
-      sourceDocument.pdfDataUrl,
-      currentPage,
-      canvasRef.current,
-      targetWidth
-    )
+    PDFService.renderPageToCanvas(sourceDocument.pdfDataUrl, currentPage, canvasRef.current, targetWidth)
       .then(() => {
         if (isMounted) setIsRendering(false);
       })
-      .catch((err) => {
+      .catch(err => {
         console.warn('Canvas rendering error:', err);
         if (isMounted) {
           setIsRendering(false);
-          setRenderError('Could not render PDF canvas directly; switched to high-accuracy text reader.');
+          setRenderError("This page couldn't be drawn, so it's shown as text.");
           setViewMode('text');
         }
       });
-
     return () => {
       isMounted = false;
     };
   }, [currentPage, viewMode, sourceDocument?.pdfDataUrl, zoomLevel, isExpanded]);
 
-  // Handle PDF file upload if deck has no source
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0 || !onAttachSource) return;
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !onAttachSource) return;
     setIsUploading(true);
+    setUploadError(null);
     try {
-      await onAttachSource(e.target.files[0]);
+      await onAttachSource(file);
     } catch (err) {
       console.error(err);
+      setUploadError("Couldn't read that PDF. Try another file.");
     } finally {
       setIsUploading(false);
     }
   };
 
-  // Current page text from structured pages
-  const activePageObj = sourceDocument?.pages?.find(p => p.pageNumber === currentPage);
-  const rawPageText = activePageObj?.text || (sourceDocument?.pages && sourceDocument.pages[currentPage - 1]?.text) || '';
+  const pageText =
+    sourceDocument?.pages?.find(p => p.pageNumber === currentPage)?.text || sourceDocument?.pages?.[currentPage - 1]?.text || '';
 
-  // Highlight keywords and search term in text view
-  const renderHighlightedContent = (text: string) => {
-    if (!text.trim()) {
-      return <p className="italic text-slate-500">No readable text found on page {currentPage}.</p>;
+  const quoteParts = (activeAnchorSnippet ? quotePatterns(activeAnchorSnippet) : []).filter(p => new RegExp(p, 'iu').test(pageText));
+  const quoteOnPage = quoteParts.length > 0;
+
+  const renderPageText = () => {
+    if (!pageText.trim()) {
+      return <p className="text-[13px] text-ink-subtle">No readable text on page {currentPage}.</p>;
     }
-
-    const cleanSnippet = (activeAnchorSnippet || '')
-      .replace(/^\.\.\.|\.\.\.$/g, '')
-      .replace(/[^\w\s-]/g, ' ')
-      .trim();
-    const snippetKeyPhrases = cleanSnippet.length > 10
-      ? cleanSnippet.split(/\s+/).filter(w => w.length > 3).slice(0, 10)
-      : [];
-
-    const termsToHighlight = [
-      ...highlightTerms.map(t => t.trim()).filter(t => t.length > 2),
-      ...snippetKeyPhrases,
-      ...(searchQuery.trim().length > 1 ? [searchQuery.trim()] : []),
+    const patterns = [
+      ...quoteParts,
+      ...highlightTerms.map(t => t.trim()).filter(t => t.length > 2).map(escapeRegex),
+      ...(searchQuery.trim().length > 1 ? [escapeRegex(searchQuery.trim())] : []),
     ];
-
-    if (termsToHighlight.length === 0) {
-      return (
-        <div className="space-y-4 text-xs sm:text-sm text-slate-300 leading-relaxed font-serif selection:bg-indigo-500/30">
-          {text.split('\n\n').map((paragraph, i) => (
-            <p key={i} className="indent-4">{paragraph}</p>
-          ))}
-        </div>
-      );
-    }
-
-    // Escape regex characters
-    const escaped = termsToHighlight.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-    const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
-
-    const paragraphs = text.split('\n\n');
+    const regex = patterns.length ? new RegExp(`(${patterns.join('|')})`, 'giu') : null;
+    const isQuote = (part: string) => quoteParts.some(p => new RegExp(`^(?:${p})$`, 'iu').test(part));
+    const isSearchHit = (part: string) => searchQuery.trim().length > 1 && part.toLowerCase() === searchQuery.trim().toLowerCase();
 
     return (
-      <div className="space-y-4 text-xs sm:text-sm text-slate-300 leading-relaxed font-serif selection:bg-indigo-500/30">
-        {paragraphs.map((para, pIdx) => {
-          const parts = para.split(regex);
-          return (
-            <p key={pIdx} className="indent-4 leading-relaxed">
-              {parts.map((part, partIdx) => {
-                const isMatch = termsToHighlight.some(t => t.toLowerCase() === part.toLowerCase());
-                if (isMatch) {
-                  const isSearchHit = searchQuery && part.toLowerCase() === searchQuery.toLowerCase();
-                  const isGroundTruth = snippetKeyPhrases.some(sk => sk.toLowerCase() === part.toLowerCase());
+      <div className="space-y-4 font-serif text-[15px] leading-relaxed text-ink">
+        {pageText.split('\n\n').map((paragraph, i) => (
+          <p key={i}>
+            {regex
+              ? paragraph.split(regex).map((part, j) => {
+                  if (j % 2 === 0) return <React.Fragment key={j}>{part}</React.Fragment>;
+                  if (isQuote(part)) {
+                    return (
+                      <mark key={j} data-quote className="rounded bg-success-soft px-0.5 text-ink ring-1 ring-success/40">
+                        {part}
+                      </mark>
+                    );
+                  }
                   return (
-                    <mark
-                      key={partIdx}
-                      className={`px-1 py-0.5 rounded font-bold font-sans transition-colors ${
-                        isSearchHit
-                          ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-300 shadow-sm'
-                          : isGroundTruth
-                          ? 'ground-truth-anchor bg-emerald-500/25 text-emerald-200 border border-emerald-400/40 ring-1 ring-emerald-400/30 shadow-sm'
-                          : 'bg-indigo-500/30 text-indigo-200 border border-indigo-400/40'
-                      }`}
-                    >
+                    <mark key={j} className={cn('rounded px-0.5 text-ink', isSearchHit(part) ? 'bg-gold/40' : 'bg-brand-soft')}>
                       {part}
                     </mark>
                   );
-                }
-                return <span key={partIdx}>{part}</span>;
-              })}
-            </p>
-          );
-        })}
+                })
+              : paragraph}
+          </p>
+        ))}
       </div>
     );
   };
 
   return (
-    <div 
-      className={`flex flex-col h-full rounded-3xl glass-panel border border-white/[0.12] bg-[#0b0f19]/95 backdrop-blur-xl shadow-2xl overflow-hidden text-slate-200 transition-all ${
-        isExpanded ? 'fixed inset-4 z-50' : 'relative'
-      } ${className}`}
+    <div
+      className={cn(
+        'flex h-full flex-col overflow-hidden rounded-3xl border border-line-strong bg-surface-solid text-ink shadow-[0_24px_60px_-28px_rgb(0_0_0/0.7)]',
+        isExpanded ? 'fixed inset-3 z-50 sm:inset-6' : 'relative',
+        className,
+      )}
     >
-      {/* Top Header Bar */}
-      <div className="p-3.5 sm:p-4 border-b border-white/[0.08] flex items-center justify-between gap-3 bg-slate-950/70 select-none">
-        
-        {/* Document Identifier */}
-        <div className="flex items-center gap-2.5 truncate">
-          <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
-            <FileText className="w-4 h-4" />
-          </div>
-          <div className="truncate">
-            <div className="flex items-center gap-2">
-              <h3 className="text-xs sm:text-sm font-bold text-white truncate font-display">
-                {sourceDocument?.name || 'Primary Source Document'}
-              </h3>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                Ground Truth
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 truncate">
-              {totalPages} pages total • Synced with active study concept
+      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 select-none">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand-text">
+            <FileText className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="truncate text-[13px] font-semibold text-ink">{sourceDocument?.name || 'Source'}</h3>
+            <p className="truncate text-xs text-ink-subtle">
+              {sourceDocument ? `${totalPages} ${totalPages === 1 ? 'page' : 'pages'} · what this deck was made from` : 'No source attached'}
             </p>
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          
-          {/* View Mode Switcher (if pdf canvas available) */}
+        <div className="flex shrink-0 items-center gap-1">
           {sourceDocument?.pdfDataUrl && (
-            <div className="flex bg-slate-900/90 p-0.5 rounded-xl border border-white/[0.08] text-[11px] font-semibold">
-              <button
-                type="button"
-                onClick={() => setViewMode('canvas')}
-                className={`px-2.5 py-1 rounded-lg transition-all ${
-                  viewMode === 'canvas' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Canvas
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('text')}
-                className={`px-2.5 py-1 rounded-lg transition-all ${
-                  viewMode === 'text' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Text
-              </button>
+            <div role="radiogroup" aria-label="View" className="mr-1 hidden rounded-lg border border-line bg-canvas p-0.5 sm:flex">
+              {(['canvas', 'text'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={viewMode === mode}
+                  onClick={() => setViewMode(mode)}
+                  className={cn(
+                    'h-7 rounded-md px-2.5 text-xs font-medium transition-colors cursor-pointer',
+                    viewMode === mode ? 'bg-surface-hover text-ink' : 'text-ink-subtle hover:text-ink',
+                  )}
+                >
+                  {mode === 'canvas' ? 'Page' : 'Text'}
+                </button>
+              ))}
             </div>
           )}
-
-          {/* Search Toggle */}
-          <button
-            type="button"
-            onClick={() => setIsSearching(!isSearching)}
-            className={`p-1.5 rounded-xl border transition-colors ${
-              isSearching 
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
-                : 'bg-slate-900 border-white/[0.08] text-slate-400 hover:text-white'
-            }`}
-            title="Search in document"
-          >
-            <Search className="w-4 h-4" />
-          </button>
-
-          {/* Zoom In/Out (Canvas view) */}
-          {viewMode === 'canvas' && (
-            <div className="hidden sm:flex items-center gap-1 bg-slate-900/90 border border-white/[0.08] p-0.5 rounded-xl">
-              <button
-                type="button"
-                onClick={() => setZoomLevel(prev => Math.max(0.7, prev - 0.15))}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06]"
-                title="Zoom Out"
-              >
-                <ZoomOut className="w-3.5 h-3.5" />
-              </button>
-              <span className="text-[11px] font-mono px-1 font-bold text-slate-300">
-                {Math.round(zoomLevel * 100)}%
-              </span>
-              <button
-                type="button"
-                onClick={() => setZoomLevel(prev => Math.min(2.0, prev + 0.15))}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06]"
-                title="Zoom In"
-              >
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
-            </div>
+          {sourceDocument && (
+            <IconButton icon={Search} label="Find on this page" active={isSearching} aria-pressed={isSearching} onClick={() => setIsSearching(v => !v)} />
           )}
-
-          {/* Expand / Minimize Fullscreen Toggle */}
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1.5 rounded-xl bg-slate-900 border border-white/[0.08] text-slate-400 hover:text-white transition-colors"
-            title={isExpanded ? 'Restore Split View' : 'Expand Document View'}
-          >
-            {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-
-          {/* Close Panel Button */}
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-xl bg-slate-900 hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors"
-            title="Close Source Reader"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          {viewMode === 'canvas' && sourceDocument?.pdfDataUrl && (
+            <span className="hidden items-center sm:flex">
+              <IconButton icon={ZoomOut} label="Zoom out" onClick={() => setZoomLevel(z => Math.max(0.7, z - 0.15))} disabled={zoomLevel <= 0.7} />
+              <span className="w-10 text-center text-xs tabular-nums text-ink-subtle">{Math.round(zoomLevel * 100)}%</span>
+              <IconButton icon={ZoomIn} label="Zoom in" onClick={() => setZoomLevel(z => Math.min(2, z + 0.15))} disabled={zoomLevel >= 2} />
+            </span>
+          )}
+          <IconButton
+            icon={isExpanded ? Minimize2 : Maximize2}
+            label={isExpanded ? 'Back to side by side' : 'Enlarge'}
+            aria-pressed={isExpanded}
+            onClick={() => setIsExpanded(v => !v)}
+          />
+          <IconButton icon={X} label="Close the source" onClick={onClose} />
         </div>
-
       </div>
 
-      {/* Expandable Search Input Bar */}
-      {isSearching && (
-        <div className="p-2.5 bg-slate-950 border-b border-white/[0.08] flex items-center gap-2 animate-fadeIn">
-          <Search className="w-4 h-4 text-amber-400 shrink-0 ml-1" />
+      {isSearching && sourceDocument && (
+        <div className="flex items-center gap-2 border-b border-line bg-canvas px-4 py-2 animate-fadeIn">
+          <Search className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden="true" />
           <input
-            type="text"
+            type="search"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Type keyword to highlight across current page..."
-            className="flex-1 bg-transparent text-xs text-white placeholder-slate-500 outline-none"
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Highlight a word on this page"
+            aria-label="Highlight a word on this page"
+            className="h-8 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-subtle focus:outline-none"
             autoFocus
           />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded bg-white/[0.08]"
-            >
-              Clear
-            </button>
-          )}
+          {viewMode === 'canvas' && <span className="hidden text-xs text-ink-subtle sm:inline">Highlights show in the text view</span>}
         </div>
       )}
 
-      {/* Active Concept Grounding Anchor Banner */}
-      {activeAnchorSnippet && (
-        <div className="px-4 py-3 bg-gradient-to-r from-emerald-950/70 via-indigo-950/70 to-slate-950 border-b border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-indigo-200">
-          <div className="flex items-start gap-2.5 min-w-0 flex-1">
-            <Bookmark className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0 space-y-0.5">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-emerald-300 uppercase text-[11px] tracking-wider font-display">
-                  Ground Truth Evidence (Page {currentPage}):
-                </span>
-                <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Grounding Verified
-                </span>
-              </div>
-              <p className="italic text-slate-200 text-xs font-serif leading-relaxed line-clamp-2">
-                "{activeAnchorSnippet}"
-              </p>
+      {activeAnchorSnippet && sourceDocument && (
+        <div className="border-b border-line bg-canvas px-4 py-3">
+          <div className="flex items-start gap-2.5">
+            <Quote className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-ink-subtle">Where this concept comes from, page {targetPage}</p>
+              <p className="mt-0.5 line-clamp-2 font-serif text-[13px] leading-relaxed text-ink">“{activeAnchorSnippet}”</p>
+              {viewMode === 'text' && !quoteOnPage && currentPage === targetPage && (
+                <p className="mt-1 text-xs text-ink-subtle">This exact wording isn't in the page's text; the PDF may lay it out differently.</p>
+              )}
             </div>
           </div>
-
-          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-            {viewMode === 'canvas' && (
-              <button
-                type="button"
-                onClick={handleLocateSnippet}
-                className="px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.1] text-[11px] font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
-                title="Switch to Text Reader to highlight and locate snippet"
-              >
-                <ExternalLink className="w-3 h-3 text-indigo-400" />
-                <span>Locate in Text</span>
-              </button>
+          <div className="mt-2 flex flex-wrap justify-end gap-1.5">
+            {currentPage !== targetPage && (
+              <Button size="sm" variant="ghost" onClick={() => goToPage(targetPage)}>
+                Back to page {targetPage}
+              </Button>
             )}
-            <button
-              type="button"
-              onClick={handleCopySnippet}
-              className="px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/[0.1] text-[11px] font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
-              title="Copy ground truth citation snippet to clipboard"
-            >
-              {hasCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
-              <span>{hasCopied ? 'Copied Quote!' : 'Copy Citation'}</span>
-            </button>
+            {viewMode === 'canvas' && (
+              <Button size="sm" variant="ghost" icon={Search} onClick={() => setViewMode('text')}>
+                Find in text
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" icon={copyState === 'copied' ? Check : Copy} onClick={() => void copyQuote()}>
+              {copyState === 'copied' ? 'Copied' : copyState === 'failed' ? "Couldn't copy" : 'Copy quote'}
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Main Document Reading Surface */}
-      <div 
-        ref={textContainerRef}
-        className="flex-1 overflow-y-auto p-4 sm:p-6 relative bg-slate-950/40 select-text"
-      >
-        {/* State A: No Source Document Attached */}
+      <div ref={textContainerRef} className="relative min-h-0 flex-1 overflow-y-auto bg-canvas p-4 select-text sm:p-6">
         {!sourceDocument ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-              <Layers className="w-7 h-7" />
-            </div>
-            <div className="max-w-sm space-y-1">
-              <h4 className="text-sm font-bold text-white font-display">No Source Document Attached</h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                This study session was created manually or from quick notes. Attach the original PDF lecture notes to enable side-by-side verification.
-              </p>
-            </div>
-
+          <div className="flex h-full flex-col items-center justify-center p-6 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand-text">
+              <FileText className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <h4 className="mt-4 text-[15px] font-semibold text-ink">No source attached</h4>
+            <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-ink-subtle">
+              This deck wasn't made from a PDF. Attach the original notes to read them beside your cards.
+            </p>
             {onAttachSource && (
-              <div>
-                <input
-                  ref={uploadInputRef}
-                  type="file"
-                  accept="application/pdf"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <button
-                  type="button"
+              <>
+                <input ref={uploadInputRef} type="file" accept="application/pdf" onChange={handleFileUpload} className="hidden" />
+                <Button
+                  variant="primary"
+                  className="mt-5"
+                  icon={isUploading ? RefreshCw : Upload}
                   disabled={isUploading}
                   onClick={() => uploadInputRef.current?.click()}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/25 disabled:opacity-50"
                 >
-                  {isUploading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                  <span>{isUploading ? 'Parsing PDF...' : 'Attach Lecture PDF'}</span>
-                </button>
-              </div>
+                  {isUploading ? 'Reading the PDF…' : 'Attach a PDF'}
+                </Button>
+                {uploadError && (
+                  <p className="mt-3 text-xs text-danger" role="alert">
+                    {uploadError}
+                  </p>
+                )}
+              </>
             )}
           </div>
         ) : viewMode === 'canvas' && sourceDocument.pdfDataUrl ? (
-          /* State B: PDF.js Canvas Rendering */
-          <div className="flex flex-col items-center justify-center min-h-full">
+          <div className="flex min-h-full flex-col items-center">
             {isRendering && (
-              <div className="py-8 flex items-center gap-2 text-xs text-indigo-300 font-mono">
-                <RefreshCw className="w-4 h-4 animate-spin text-indigo-400" />
-                <span>Rendering vector PDF page {currentPage}...</span>
-              </div>
+              <p className="flex items-center gap-2 py-3 text-xs text-ink-subtle" role="status">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                Drawing page {currentPage}…
+              </p>
             )}
-            
-            <div className="p-2 sm:p-4 rounded-2xl bg-white shadow-2xl border border-slate-700/50 max-w-full overflow-x-auto flex justify-center">
-              <canvas 
-                ref={canvasRef} 
-                className="max-w-full h-auto rounded-lg shadow-inner"
-              />
+            <div className="flex max-w-full justify-center overflow-x-auto rounded-xl bg-white p-2 shadow-[0_12px_40px_-20px_rgb(0_0_0/0.6)] sm:p-3">
+              <canvas ref={canvasRef} className="h-auto max-w-full" aria-label={`Page ${currentPage} of ${sourceDocument.name}`} />
             </div>
           </div>
         ) : (
-          /* State C: Structured Academic Text Reader with Keyword Highlighting */
-          <div className="max-w-2xl mx-auto py-2">
-            
-            {renderError && (
-              <div className="p-3 mb-4 rounded-xl bg-amber-950/50 border border-amber-500/40 text-amber-200 text-xs">
-                {renderError}
-              </div>
-            )}
-
-            {/* Academic Paper Card View */}
-            <article className="p-6 sm:p-8 rounded-2xl bg-slate-900/60 border border-white/[0.08] shadow-xl space-y-6">
-              
-              {/* Paper Header */}
-              <div className="border-b border-white/[0.08] pb-4 flex items-center justify-between text-xs text-slate-400 font-mono">
-                <span className="font-bold text-indigo-300 font-display">
-                  {sourceDocument.name}
-                </span>
-                <span>Page {currentPage} of {totalPages}</span>
-              </div>
-
-              {/* Rendered Text with Highlighting */}
-              <div className="min-h-[280px]">
-                {renderHighlightedContent(rawPageText)}
-              </div>
-
-              {/* Page Footer */}
-              <div className="border-t border-white/[0.06] pt-3 flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                <span>Studify Coordinate Deep-Linking</span>
-                <span>Ground Truth Verified</span>
-              </div>
-
-            </article>
-          </div>
+          <article className="mx-auto max-w-2xl">
+            {renderError && <p className="mb-4 rounded-xl bg-gold-soft px-3.5 py-2.5 text-[13px] text-ink">{renderError}</p>}
+            <p className="mb-4 text-xs text-ink-subtle">
+              Page {currentPage} of {totalPages}
+            </p>
+            {renderPageText()}
+          </article>
         )}
       </div>
 
-      {/* Bottom Page Navigation Bar */}
       {sourceDocument && totalPages > 1 && (
-        <div className="p-3 bg-slate-950/90 border-t border-white/[0.08] flex items-center justify-between select-none">
-          
-          <button
-            type="button"
-            disabled={currentPage <= 1}
-            onClick={() => handleGoToPage(currentPage - 1)}
-            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1 transition-all border border-white/[0.06]"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            <span>Prev Page</span>
-          </button>
-
-          <div className="flex items-center gap-2 text-xs font-bold">
-            <span className="text-slate-400 font-medium">Page</span>
-            <input
-              type="number"
-              min={1}
-              max={totalPages}
-              value={currentPage}
-              onChange={(e) => {
-                const val = parseInt(e.target.value, 10);
-                if (!isNaN(val)) handleGoToPage(val);
-              }}
-              className="w-12 text-center py-1 px-1.5 rounded-lg bg-slate-900 border border-white/[0.1] text-white font-mono text-xs outline-none focus:border-indigo-500"
-            />
-            <span className="text-slate-400 font-medium">of {totalPages}</span>
-          </div>
-
-          <button
-            type="button"
-            disabled={currentPage >= totalPages}
-            onClick={() => handleGoToPage(currentPage + 1)}
-            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1 transition-all border border-white/[0.06]"
-          >
-            <span>Next Page</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-
+        <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2.5 select-none">
+          <Button size="sm" variant="ghost" icon={ChevronLeft} disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)}>
+            Previous
+          </Button>
+          <PageInput page={currentPage} total={totalPages} onGo={goToPage} />
+          <Button size="sm" variant="ghost" trailingIcon={ChevronRight} disabled={currentPage >= totalPages} onClick={() => goToPage(currentPage + 1)}>
+            Next
+          </Button>
         </div>
       )}
-
     </div>
+  );
+};
+
+/** Type a page number; it jumps on Enter or when you leave the box, not on every keystroke. */
+const PageInput: React.FC<{ page: number; total: number; onGo: (page: number) => void }> = ({ page, total, onGo }) => {
+  const [text, setText] = useState(String(page));
+  const [shown, setShown] = useState(page);
+  if (shown !== page) {
+    setShown(page);
+    setText(String(page));
+  }
+  const commit = () => {
+    const value = parseInt(text, 10);
+    if (Number.isNaN(value)) setText(String(page));
+    else onGo(value);
+  };
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-ink-subtle">
+      Page
+      <input
+        type="number"
+        inputMode="numeric"
+        min={1}
+        max={total}
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+          }
+        }}
+        className="h-8 w-12 rounded-lg border border-line-strong bg-canvas text-center text-xs tabular-nums text-ink focus:border-brand focus:outline-none"
+      />
+      of {total}
+    </label>
   );
 };
