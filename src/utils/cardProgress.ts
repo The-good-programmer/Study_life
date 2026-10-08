@@ -1,5 +1,9 @@
 import type { RetrievalCard, StudySession } from '../types';
 
+/** The ids of every card in a deck. */
+export const deckCardIds = (session: StudySession): string[] =>
+  (session.concepts || []).flatMap(concept => (concept.retrievalCards || []).map(card => card.id));
+
 /** A card counts as mastered once it is expected to stay remembered for three weeks. */
 export const MASTERED_STABILITY_DAYS = 21;
 

@@ -100,12 +100,24 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
     });
   };
 
+  /** Notes a card rated in this pass, for the summary's pay. Saved with the next step or tick. */
+  const recordRating = (cardId: string) => {
+    setSession(prev => {
+      if (prev.passRatedCardIds?.includes(cardId)) return prev;
+      const updated = { ...prev, passRatedCardIds: [...(prev.passRatedCardIds ?? []), cardId] };
+      sessionRef.current = updated;
+      return updated;
+    });
+  };
+
   // Live session timer: update in-memory elapsedSeconds every 1s, and persist every 30s + on unmount
   useEffect(() => {
     // No clock on the summary, but leaving it still saves the session as its next pass.
     if (session.currentPhase === 'summary') return () => StorageService.saveSession(toStored(sessionRef.current));
     let tickCount = 0;
     const interval = setInterval(() => {
+      // Time with the tab hidden isn't study time, so the clock stops.
+      if (document.visibilityState === 'hidden') return;
       tickCount += 1;
       setSession(prev => {
         const nextSeconds = prev.elapsedSeconds + 1;
@@ -237,6 +249,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
           concept={currentConcept}
           allConcepts={session.concepts}
           conceptIndex={session.currentConceptIndex}
+          onCardRated={recordRating}
           onComplete={() => {
             if (session.casualFlashcardMode) {
               handleNextConceptOrSummary();
@@ -314,15 +327,17 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
               {phases.map((p, idx) => {
                 const isActive = idx === activePhaseIndex;
                 const isPassed = idx < activePhaseIndex;
+                // Steps already done can be revisited; later ones open only by doing this one.
                 return (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => setPhase(p.id)}
+                    disabled={!isPassed}
                     aria-current={isActive ? 'step' : undefined}
                     title={p.description}
-                    className={`inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors cursor-pointer ${
-                      isActive ? 'bg-surface-hover text-ink shadow-sm' : isPassed ? 'text-ink-muted hover:text-ink' : 'text-ink-subtle hover:text-ink-muted'
+                    className={`inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors ${
+                      isActive ? 'bg-surface-hover text-ink shadow-sm' : isPassed ? 'cursor-pointer text-ink-muted hover:text-ink' : 'text-ink-subtle'
                     }`}
                   >
                     {isPassed ? (

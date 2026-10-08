@@ -44,6 +44,7 @@ import { FOLDER_COLORS } from '../studio/folderOptions';
 import { MoveToFolderModal } from '../studio/MoveToFolderModal';
 import { Badge, Button, Card, CoinIcon, IconButton, ProgressBar, ProgressRing, SectionHeader, Tokens } from '../ui/primitives';
 import { cn } from '../../utils/cn';
+import { deckCardIds } from '../../utils/cardProgress';
 
 // The customizer pulls in three.js; load it only when the user opens it.
 const CharacterCustomizerModal = lazy(() =>
@@ -193,7 +194,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   const estimatedMinutes = Math.max(1, Math.round((primaryCards * SECONDS_PER_CARD) / 60));
   const multiplier = lifeSimService.getActiveMultiplier();
   const estimatedTokens = primarySession
-    ? Math.round(estimateReward({ kind: 'sprint', cards: primaryCards, minutes: estimatedMinutes }).tokens * multiplier)
+    ? Math.round(estimateReward({ kind: 'sprint', cardIds: deckCardIds(primarySession), minutes: estimatedMinutes }).tokens * multiplier)
     : 0;
 
   const goalPercent = Math.min(100, Math.round((reviewedToday / DAILY_REVIEW_GOAL) * 100));
@@ -693,7 +694,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
               </ul>
             )}
             <p className="border-t border-line pt-3 text-xs leading-relaxed text-ink-subtle">
-              Pay follows learning: every review pays the same, exams pay for correct answers, and each activity has a daily limit.
+              Pay follows learning: every review pays the same, exams pay for correct answers, each card pays once a day per activity, and each activity has a daily limit.
             </p>
           </Card>
 

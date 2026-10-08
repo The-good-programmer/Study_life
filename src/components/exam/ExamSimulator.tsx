@@ -103,7 +103,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   const [expandedResultIdx, setExpandedResultIdx] = useState<number | null>(null);
   const [copiedShare, setCopiedShare] = useState(false);
   const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
-  const [examPay, setExamPay] = useState<{ tokens: number; capped: boolean } | null>(null);
+  const [examPay, setExamPay] = useState<{ tokens: number; capped: boolean; repeats: number } | null>(null);
 
   // Pool questions based on configuration
   const handleStartExam = () => {
@@ -216,10 +216,10 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
       StorageService.saveExamReport(report);
       const pay = grantReward(
-        { kind: 'exam', weightedScore: report.confidenceWeightedScore },
+        { kind: 'exam', answers: report.questionResults.map(r => ({ cardId: r.card.id, points: r.pointsEarned })) },
         { label: `Mock exam: ${report.deckTitle.slice(0, 20)} (${report.rawAccuracyPercent}%)` },
       );
-      setExamPay({ tokens: pay.wage?.totalAmount ?? 0, capped: pay.capped });
+      setExamPay({ tokens: pay.wage?.totalAmount ?? 0, capped: pay.capped, repeats: pay.repeatCards });
       soundEngine.playCompletionChime();
 
       try {
@@ -768,10 +768,14 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             <p className="mt-2 flex items-center gap-1.5 text-[13px] text-ink-subtle">
               <CoinIcon className="h-4 w-4" />
               {examPay && examPay.tokens > 0
-                ? <>You earned <span className="font-medium tabular-nums text-gold">{examPay.tokens}</span> tokens{examPay.capped ? ' (daily limit applied)' : ''}.</>
-                : finalReport.confidenceWeightedScore <= 0
-                  ? 'No tokens this time: pay starts once your score is above zero.'
-                  : 'No tokens: you have reached today’s exam pay limit.'}
+                ? <>You earned <span className="font-medium tabular-nums text-gold">{examPay.tokens}</span> tokens{examPay.capped ? ' (daily limit applied)' : ''}{examPay.repeats > 0 ? `. ${examPay.repeats} ${examPay.repeats === 1 ? 'question was' : 'questions were'} already counted today` : ''}.</>
+                : examPay && examPay.repeats > 0 && examPay.repeats === finalReport.totalQuestions
+                  ? 'No tokens: you already answered these questions today, and each card pays once a day.'
+                  : finalReport.confidenceWeightedScore <= 0
+                    ? 'No tokens this time: pay starts once your score is above zero.'
+                    : examPay?.capped
+                      ? 'No tokens: you have reached today’s exam pay limit.'
+                      : 'No tokens: the questions not yet counted today scored zero or below.'}
             </p>
           </div>
           <Button

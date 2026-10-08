@@ -24,7 +24,7 @@ import { ExportService } from '../../services/exportService';
 import { soundEngine } from '../../services/soundEngine';
 import { lifeSimService } from '../../services/lifeSimService';
 import { estimateReward } from '../../services/economy/rewardService';
-import { cardStatusOf, isCardDue, type CardStatus } from '../../utils/cardProgress';
+import { cardStatusOf, deckCardIds, isCardDue, type CardStatus } from '../../utils/cardProgress';
 import { maskCloze } from '../../utils/cloze';
 import { cn } from '../../utils/cn';
 import { CARD_TYPE_LABELS, getEffectiveCardType } from '../cockpit/retrievalLogic';
@@ -118,8 +118,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
   // What a full guided session pays today, after daily caps and the housing bonus.
   const [guidedPay] = useState(() => {
     if (!session) return 0;
-    const cardCount = session.concepts.reduce((sum, concept) => sum + concept.retrievalCards.length, 0);
-    const { tokens } = estimateReward({ kind: 'sprint', cards: cardCount, minutes: totalMinutesOf(session) });
+    const { tokens } = estimateReward({ kind: 'sprint', cardIds: deckCardIds(session), minutes: totalMinutesOf(session) });
     return Math.round(tokens * lifeSimService.getActiveMultiplier());
   });
 

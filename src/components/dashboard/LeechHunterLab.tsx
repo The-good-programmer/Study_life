@@ -27,8 +27,8 @@ const ROOT_CAUSES: Record<LeechRootCause, string> = {
 /** Ids for the cards a hard card is split into. */
 const splitIdStamp = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
-const payFor = (method: 'mnemonic' | 'split') => {
-  const { xp, tokens } = estimateReward({ kind: 'leech-cure', method });
+const payFor = (method: 'mnemonic' | 'split', cardId: string) => {
+  const { xp, tokens } = estimateReward({ kind: 'leech-cure', method, cardId });
   return { xp, tokens: Math.round(tokens * lifeSimService.getActiveMultiplier()) };
 };
 
@@ -71,7 +71,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
   const handleApplyHook = (option: MnemonicRewiringOption) => {
     if (!selectedCard) return;
     StorageService.saveCard(FSRSService.rewireCard(selectedCard, `${option.strategyTitle}: ${option.mnemonicText}`));
-    const grant = grantReward({ kind: 'leech-cure', method: 'mnemonic' }, { label: 'Fixed a hard card' });
+    const grant = grantReward({ kind: 'leech-cure', method: 'mnemonic', cardId: selectedCard.id }, { label: 'Fixed a hard card' });
     finishCure(`Hook added. You will see the card again soon, with the hook as its hint.${grant.xp ? ` +${grant.xp} XP.` : ''}`);
   };
 
@@ -96,7 +96,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
     });
     // The new cards take the hard card's place in its deck.
     StorageService.replaceCard(selectedCard.id, newCards);
-    const grant = grantReward({ kind: 'leech-cure', method: 'split' }, { label: 'Split a hard card' });
+    const grant = grantReward({ kind: 'leech-cure', method: 'split', cardId: selectedCard.id }, { label: 'Split a hard card' });
     finishCure(`Split into ${newCards.length} simpler cards, now in the same deck.${grant.xp ? ` +${grant.xp} XP.` : ''}`);
   };
 
@@ -205,6 +205,7 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
                         <RemedyCard
                           key={option.id}
                           option={option}
+                          cardId={analysis.cardId}
                           onApply={() => (option.strategy === 'atomic-split' ? handleSplit(option) : handleApplyHook(option))}
                         />
                       ))}
@@ -220,9 +221,9 @@ export const LeechHunterLab: React.FC<LeechHunterLabProps> = ({ onBack, onCardCu
   );
 };
 
-const RemedyCard: React.FC<{ option: MnemonicRewiringOption; onApply: () => void }> = ({ option, onApply }) => {
+const RemedyCard: React.FC<{ option: MnemonicRewiringOption; cardId: string; onApply: () => void }> = ({ option, cardId, onApply }) => {
   const isSplit = option.strategy === 'atomic-split' && !!option.atomicCards?.length;
-  const [pay] = useState(() => payFor(isSplit ? 'split' : 'mnemonic'));
+  const [pay] = useState(() => payFor(isSplit ? 'split' : 'mnemonic', cardId));
   return (
     <article className="rounded-2xl border border-line bg-canvas p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">

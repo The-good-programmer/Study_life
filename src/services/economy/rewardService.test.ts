@@ -31,11 +31,42 @@ describe('grantReward', () => {
   });
 
   it('pays nothing and logs nothing for an event worth nothing', () => {
-    const result = grantReward({ kind: 'exam', weightedScore: -35 }, { now: NOON });
-    expect(result).toMatchObject({ xp: 0, tokens: 0, wage: null });
+    const result = grantReward({ kind: 'exam', answers: [] }, { now: NOON });
+    expect(result).toMatchObject({ xp: 0, tokens: 0, wage: null, repeatCards: 0 });
     expect(awardWage).not.toHaveBeenCalled();
     expect(StorageService.getStats().xp).toBe(0);
     expect(StorageService.getEarnings()).toEqual([]);
+  });
+
+  it('pays each card once a day for each kind', () => {
+    const sprint = { kind: 'sprint', cardIds: ['a', 'b', 'c'], minutes: 3 } as const;
+    expect(grantReward({ ...sprint, cardIds: [...sprint.cardIds] }, { now: NOON })).toMatchObject({ tokens: 24, repeatCards: 0 });
+
+    // A second pass over the same cards pays nothing; one new card pays for itself and its share of the time.
+    expect(grantReward({ ...sprint, cardIds: [...sprint.cardIds] }, { now: NOON })).toMatchObject({ tokens: 0, repeatCards: 3, wage: null });
+    expect(grantReward({ kind: 'sprint', cardIds: ['a', 'b', 'c', 'd'], minutes: 4 }, { now: NOON })).toMatchObject({ tokens: 8, repeatCards: 3 });
+
+    // Other kinds of activity are separate, and the next day starts over.
+    expect(grantReward({ kind: 'interleave-session', cardIds: ['a', 'b', 'c'], shifts: 2 }, { now: NOON }).tokens).toBe(14);
+    expect(grantReward({ ...sprint, cardIds: [...sprint.cardIds] }, { now: new Date(2026, 2, 5, 9) }).tokens).toBe(24);
+  });
+
+  it('records an exam\'s cards even when it paid nothing, so a retake pays nothing for them', () => {
+    const wrong = grantReward({ kind: 'exam', answers: [{ cardId: 'a', points: -15 }, { cardId: 'b', points: 0 }] }, { now: NOON });
+    expect(wrong).toMatchObject({ xp: 0, tokens: 0 });
+    expect(StorageService.getEarnings()).toEqual([expect.objectContaining({ kind: 'exam', rawTokens: 0, cardIds: ['a', 'b'] })]);
+
+    const retake = grantReward({ kind: 'exam', answers: [{ cardId: 'a', points: 20 }, { cardId: 'b', points: 20 }] }, { now: NOON });
+    expect(retake).toMatchObject({ xp: 0, tokens: 0, repeatCards: 2 });
+    expect(awardWage).not.toHaveBeenCalled();
+  });
+
+  it('keeps card ids only on today\'s entries', () => {
+    grantReward({ kind: 'leech-cure', method: 'mnemonic', cardId: 'old' }, { now: new Date(2026, 2, 3, 12) });
+    grantReward({ kind: 'leech-cure', method: 'mnemonic', cardId: 'new' }, { now: NOON });
+    const [yesterday, today] = StorageService.getEarnings();
+    expect(yesterday.cardIds).toBeUndefined();
+    expect(today.cardIds).toEqual(['new']);
   });
 
   it('skips the wage call when only XP is earned', () => {
@@ -123,6 +154,12 @@ describe('estimateReward', () => {
     grantReward({ kind: 'rest' }, { now: NOON });
     expect(estimateReward({ kind: 'rest' }, NOON).tokens).toBe(3);
   });
+
+  it('leaves out cards already paid for today', () => {
+    grantReward({ kind: 'sprint', cardIds: ['a', 'b'], minutes: 2 }, { now: NOON });
+    expect(estimateReward({ kind: 'sprint', cardIds: ['a', 'b'], minutes: 2 }, NOON).tokens).toBe(0);
+    expect(estimateReward({ kind: 'sprint', cardIds: ['a', 'b', 'c', 'd'], minutes: 2 }, NOON).tokens).toBe(13);
+  });
 });
 
 describe('earningsForDay', () => {
@@ -150,6 +187,11 @@ describe('earningsForDay', () => {
   });
 
   it('is empty when nothing was earned', () => {
+    expect(earningsForDay(NOON)).toEqual([]);
+  });
+
+  it('leaves out entries that only record cards and paid nothing', () => {
+    grantReward({ kind: 'exam', answers: [{ cardId: 'a', points: -15 }] }, { now: NOON });
     expect(earningsForDay(NOON)).toEqual([]);
   });
 });

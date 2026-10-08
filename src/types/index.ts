@@ -142,6 +142,8 @@ export interface StudySession {
   elapsedSeconds: number;
   createdAt: string;
   completedAt?: string;
+  /** Cards rated in the current pass; its summary pays for these. */
+  passRatedCardIds?: string[];
   sourceDocument?: SourceDocument;
   casualFlashcardMode?: boolean;
   diagnosticReport?: DiagnosticReport;
@@ -467,4 +469,6 @@ export interface EarningEntry {
   /** What was actually paid after daily caps (tokens exclude any buff multiplier). */
   paidXp: number;
   paidTokens: number;
+  /** Cards this paid for (today's entries only): each card pays once a day for each kind. */
+  cardIds?: string[];
 }

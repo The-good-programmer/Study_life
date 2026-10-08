@@ -90,7 +90,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
   }
   const [results, setResults] = useState<TrialResult[]>([]);
   const [finalReport, setFinalReport] = useState<InterleavingSessionReport | null>(null);
-  const [sessionPay, setSessionPay] = useState<{ tokens: number; xp: number; capped: boolean } | null>(null);
+  const [sessionPay, setSessionPay] = useState<{ tokens: number; xp: number; capped: boolean; repeats: number } | null>(null);
 
   // Live timer tick during card presentation
   useEffect(() => {
@@ -297,10 +297,15 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
     }));
 
     const sessionReward = grantReward(
-      { kind: 'interleave-session', cards: total, shifts: shiftTrials.length },
+      { kind: 'interleave-session', cardIds: allTrials.map(t => t.card.id), shifts: shiftTrials.length },
       { label: `Mixed decks (${total} cards)` },
     );
-    setSessionPay({ tokens: sessionReward.wage?.totalAmount ?? 0, xp: sessionReward.xp, capped: sessionReward.capped });
+    setSessionPay({
+      tokens: sessionReward.wage?.totalAmount ?? 0,
+      xp: sessionReward.xp,
+      capped: sessionReward.capped,
+      repeats: sessionReward.repeatCards,
+    });
 
     const report: InterleavingSessionReport = {
       id: `interleave-rpt-${Math.random().toString(36).slice(2, 9)}`,
@@ -613,7 +618,9 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
             <p className="text-right text-[13px] text-ink-subtle">
               +{sessionPay.xp} XP{sessionPay.capped ? ', daily limit applied' : ''}
               <br />
-              plus XP for every card
+              {sessionPay.repeats > 0
+                ? `${sessionPay.repeats} ${sessionPay.repeats === 1 ? 'card was' : 'cards were'} already paid today`
+                : 'plus XP for every card'}
             </p>
           </Card>
         )}

@@ -25,6 +25,7 @@ import { AuthService } from '../../services/authService';
 import { soundEngine } from '../../services/soundEngine';
 import { lifeSimService } from '../../services/lifeSimService';
 import { estimateReward } from '../../services/economy/rewardService';
+import { deckCardIds } from '../../utils/cardProgress';
 import { maskCloze } from '../../utils/cloze';
 import { cn } from '../../utils/cn';
 import { CARD_TYPE_LABELS, getEffectiveCardType } from '../cockpit/retrievalLogic';
@@ -151,7 +152,7 @@ export const StarterCatalogModal: React.FC<StarterCatalogModalProps> = ({
       CURATED_STARTER_DECKS.map(deck => [
         deck.id,
         Math.round(
-          estimateReward({ kind: 'sprint', cards: deck.cardCount, minutes: deck.estimatedMinutes }).tokens * multiplier,
+          estimateReward({ kind: 'sprint', cardIds: deckCardIds(deck.session), minutes: deck.estimatedMinutes }).tokens * multiplier,
         ),
       ]),
     );

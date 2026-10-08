@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import {
   Layers,
@@ -19,10 +19,11 @@ import { UserAvatarBadge } from '../character/UserAvatarBadge';
 import { SynapticFlexModal } from '../mascot/SynapticFlexModal';
 import { lifeSimService } from '../../services/lifeSimService';
 import { grantReward } from '../../services/economy/rewardService';
+import { payableMinutes } from '../../services/economy/rewardRules';
 import { haptics } from '../../services/hapticsService';
 import { Button, Card, CoinIcon } from '../ui/primitives';
 import { groupNextReviews } from './sessionSchedule';
-import { completionKey } from './sessionPass';
+import { completionKey, estimatedMinutesOf, ratedInPass } from './sessionPass';
 import type { ReviewGroup } from './sessionSchedule';
 
 interface SessionSummaryProps {
@@ -92,7 +93,9 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
   onStartSession,
 }) => {
   const minutes = Math.max(1, Math.round(session.elapsedSeconds / 60));
-  const totalCards = session.concepts.reduce((acc, c) => acc + c.retrievalCards.length, 0);
+  // What the session pays for: the cards rated in this pass, and its time up to 1.5x the deck's estimate.
+  const ratedCardIds = useMemo(() => ratedInPass(session), [session]);
+  const paidMinutes = payableMinutes(minutes, estimatedMinutesOf(session));
   const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
   const [rescueSaved, setRescueSaved] = useState(false);
   const [isFlexModalOpen, setIsFlexModalOpen] = useState(false);
@@ -123,7 +126,11 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
     activity: string;
     walletBalance: number;
   } | null>(null);
-  const [wageCapped, setWageCapped] = useState(false);
+  /** Why the session paid nothing, or how many of its cards were already paid for today. */
+  const [payNote, setPayNote] = useState<{ reason: 'capped' | 'repeated' | 'no-cards' | null; repeatCards: number }>({
+    reason: null,
+    repeatCards: 0,
+  });
   const [streak, setStreak] = useState(() => StorageService.getStats().currentStreak);
   const [nextReviews, setNextReviews] = useState<ReviewGroup[]>([]);
 
@@ -162,20 +169,29 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
       StorageService.recordStudyMinutes(minutes);
 
       const grant = grantReward(
-        { kind: 'sprint', cards: totalCards, minutes },
+        { kind: 'sprint', cardIds: ratedCardIds, minutes: paidMinutes },
         { label: `Sprint: ${session.title ? session.title.slice(0, 24) : 'Active Recall'}` },
       );
       // Displays the result of the one-time award above; it cannot be derived during render.
       // oxlint-disable-next-line react/set-state-in-effect
       setWageEarned(grant.wage ? { ...grant.wage, walletBalance: lifeSimService.getWalletBalance() } : null);
-      setWageCapped(grant.capped && !grant.wage);
+      const reason = grant.wage
+        ? null
+        : ratedCardIds.length === 0
+          ? 'no-cards'
+          : grant.repeatCards === ratedCardIds.length
+            ? 'repeated'
+            : grant.capped
+              ? 'capped'
+              : null;
+      setPayNote({ reason, repeatCards: grant.repeatCards });
     }
     setStreak(StorageService.getStats().currentStreak);
 
     // When the scheduler will bring this session's cards back.
     const sessionCardIds = new Set(session.concepts.flatMap(c => c.retrievalCards.map(card => card.id)));
     setNextReviews(groupNextReviews(StorageService.getAllCards().filter(card => sessionCardIds.has(card.id))));
-  }, [completion, minutes, totalCards, session.title, session.concepts]);
+  }, [completion, minutes, paidMinutes, ratedCardIds, session.title, session.concepts]);
 
   const handlePrint = () => {
     ExportService.printStudySheet(session);
@@ -226,17 +242,31 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               Includes <span className="font-medium text-success">+{wageEarned.buffBonus}</span> from your meal bonus.
             </p>
           )}
+          {payNote.repeatCards > 0 && (
+            <p className="text-[13px] text-ink-muted">
+              {payNote.repeatCards} {payNote.repeatCards === 1 ? 'card was' : 'cards were'} already paid for today, so only the
+              others count. Each card pays once a day.
+            </p>
+          )}
           <p className="border-t border-line pt-3 text-[13px] text-ink-subtle">Spend it on meals and rent on campus, or save toward a bigger room.</p>
         </Card>
-      ) : wageCapped ? (
+      ) : payNote.reason === 'capped' ? (
         <Card className="text-[14px] leading-relaxed text-ink-muted">
           You have reached today's limit for session pay. Your reviews still count toward your memory and XP, and the limit resets tomorrow.
+        </Card>
+      ) : payNote.reason === 'repeated' ? (
+        <Card className="text-[14px] leading-relaxed text-ink-muted">
+          These cards were already paid for today. Going over them again still strengthens your memory, and they pay again tomorrow.
+        </Card>
+      ) : payNote.reason === 'no-cards' ? (
+        <Card className="text-[14px] leading-relaxed text-ink-muted">
+          Session pay comes from the flashcards you rate, and none were rated this time.
         </Card>
       ) : null}
 
       <div className="grid grid-cols-3 gap-3">
         <SummaryStat label="Time" value={`${minutes} min`} />
-        <SummaryStat label="Cards" value={totalCards.toLocaleString()} />
+        <SummaryStat label="Cards rated" value={ratedCardIds.length.toLocaleString()} />
         <SummaryStat label="Streak" value={`${streak} ${streak === 1 ? 'day' : 'days'}`} />
       </div>
 

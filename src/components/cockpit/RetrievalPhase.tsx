@@ -39,6 +39,8 @@ import {
 interface RetrievalPhaseProps {
   concept: ConceptCheckpoint;
   onComplete: () => void;
+  /** Called with each card rated; the session pays for the cards rated in a pass. */
+  onCardRated?: (cardId: string) => void;
   onInspectSource?: (pageNumber?: number, snippet?: string) => void;
   allConcepts?: ConceptCheckpoint[];
   conceptIndex?: number;
@@ -47,6 +49,7 @@ interface RetrievalPhaseProps {
 export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({ 
   concept, 
   onComplete,
+  onCardRated,
   onInspectSource,
   allConcepts,
   conceptIndex,
@@ -151,6 +154,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     // Schedule from the saved progress: this copy is older if the card was already reviewed this session.
     const { updatedCard } = FSRSService.schedule(StorageService.withLatestProgress(currentCard), rating);
     StorageService.saveCard(updatedCard);
+    onCardRated?.(currentCard.id);
 
     // Reward XP
     grantReward({ kind: 'review', rating }, { weekly: true, label: 'Flashcard review' });
@@ -191,7 +195,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
       StorageService.recordMasteredConcept();
       onComplete();
     }
-  }, [currentCard, currentIndex, cards.length, onComplete]);
+  }, [currentCard, currentIndex, cards.length, onComplete, onCardRated]);
 
   const handleSelectOption = useCallback((option: string) => {
     if (selectedOption !== null || !currentCard) return;
