@@ -1,6 +1,6 @@
 import type { EarningEntry, ExamReport, InterleavingSessionReport, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
 import { deckWithSavedProgress, withSavedProgress } from '../utils/cardProgress';
-import { transferableGuestCoins } from './economy/wallet';
+import { STARTING_COINS, guestEarningsAllowance, transferableGuestCoins } from './economy/wallet';
 import { IndexedDbService } from './indexedDbService';
 
 const STORAGE_KEYS = {
@@ -73,6 +73,16 @@ const LEVEL_TITLES = [
   'Neuroplastic Prodigy',
   'Cognitive Sovereign'
 ];
+
+/** An earnings log as saved, or empty when missing or unreadable. */
+const parseEarnings = (raw: string | null): EarningEntry[] => {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
 
 export class StorageService {
   private static activeUserId: string | null = (() => {
@@ -1257,6 +1267,12 @@ export class StorageService {
     const guestDiagramsRaw = this.readRaw(STORAGE_KEYS.DIAGRAMS);
     const guestFoldersRaw = this.readRaw(STORAGE_KEYS.FOLDERS);
     const guestEarningsRaw = this.readRaw(STORAGE_KEYS.EARNINGS);
+    // What the guest's earnings come to under the account's own daily caps. Worked out
+    // before the logs are merged below (see transferableGuestCoins).
+    const guestAllowance = guestEarningsAllowance(
+      parseEarnings(this.readRaw(`${STORAGE_KEYS.EARNINGS}_${userId}`)),
+      parseEarnings(guestEarningsRaw),
+    );
 
     let migratedDecks = 0;
     let migratedCards = 0;
@@ -1525,7 +1541,7 @@ export class StorageService {
     // 10. Life-sim data: the wallet, home and avatar. Only when the guest copy is cleared,
     // so tokens move rather than being duplicated.
     if (clearGuest) {
-      this.moveGuestLifeData(userId);
+      this.moveGuestLifeData(userId, guestAllowance);
     }
 
     // 11. Clear Guest Data to prevent ghost state or duplicate migrations
@@ -1539,29 +1555,28 @@ export class StorageService {
 
   /**
    * Moves the guest's life-sim data into an account, then removes the guest's copy.
-   * An account without its own takes the guest's as is. One that has its own keeps it,
-   * and gains the guest's tokens beyond the starting gift (see transferableGuestCoins)
-   * and any furniture the guest bought.
+   * An account with no life-sim data on this device takes the guest's as it is. One that
+   * has its own keeps it, and gains only the tokens the guest earned, within the account's
+   * daily caps (see transferableGuestCoins). The guest's purchases stay behind: every new
+   * guest gets the starting gift, so carrying over what it bought (furniture, a streak
+   * freeze) would hand the account a free gift each time it signs out and back in.
    */
-  private static moveGuestLifeData(userId: string): void {
+  private static moveGuestLifeData(userId: string, guestAllowance: number): void {
     this.splitDeviceLifeDataOnce();
+    const ownKey = (base: string) => `${base}_${userId}`;
+    const accountHasLifeData = Object.values(LIFE_KEYS).some(base => localStorage.getItem(ownKey(base)) !== null);
     for (const base of Object.values(LIFE_KEYS)) {
       try {
         const guestRaw = localStorage.getItem(base);
         if (guestRaw === null) continue;
-        const ownKey = `${base}_${userId}`;
-        const ownRaw = localStorage.getItem(ownKey);
-        if (ownRaw === null) {
-          localStorage.setItem(ownKey, guestRaw);
+        if (!accountHasLifeData) {
+          localStorage.setItem(ownKey(base), guestRaw);
         } else if (base === LIFE_KEYS.CHARACTER) {
-          const own = JSON.parse(ownRaw);
-          const guest = JSON.parse(guestRaw);
-          const extra = transferableGuestCoins(Number(guest.coins) || 0);
-          if (extra > 0) localStorage.setItem(ownKey, JSON.stringify({ ...own, coins: (Number(own.coins) || 0) + extra }));
-        } else if (base === LIFE_KEYS.OWNED_FURNITURE) {
-          const own: string[] = JSON.parse(ownRaw);
-          const guest: string[] = JSON.parse(guestRaw);
-          localStorage.setItem(ownKey, JSON.stringify(Array.from(new Set([...own, ...guest]))));
+          const extra = transferableGuestCoins(Number(JSON.parse(guestRaw).coins) || 0, guestAllowance);
+          if (extra > 0) {
+            const own = JSON.parse(localStorage.getItem(ownKey(base)) ?? '{}');
+            localStorage.setItem(ownKey(base), JSON.stringify({ ...own, coins: Number(own.coins ?? STARTING_COINS) + extra }));
+          }
         }
         localStorage.removeItem(base);
       } catch {

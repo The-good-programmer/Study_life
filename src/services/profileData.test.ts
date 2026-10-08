@@ -3,6 +3,7 @@ import { LIFE_KEYS, StorageService } from './storageService';
 import { characterService } from './characterService';
 import { lifeSimService } from './lifeSimService';
 import { STARTING_COINS } from './economy/wallet';
+import { grantReward } from './economy/rewardService';
 
 const coins = () => characterService.getCharacter().coins;
 
@@ -92,21 +93,53 @@ describe('guest progress carried into an account', () => {
     expect(coins()).toBe(STARTING_COINS);
   });
 
-  it('adds only what the guest earned beyond the starting gift to an existing wallet', () => {
+  it('adds what the guest earned, beyond the starting gift, to an existing wallet', () => {
     StorageService.setActiveUserId('usr_old');
     characterService.addCoins(20);
     StorageService.setActiveUserId(null);
-    characterService.addCoins(60);
+    grantReward({ kind: 'match-clear' }); // the guest earns 20
 
     StorageService.migrateGuestDataToUser('usr_old');
     StorageService.setActiveUserId('usr_old');
-    expect(coins()).toBe(STARTING_COINS + 20 + 60);
+    expect(coins()).toBe(STARTING_COINS + 20 + 20);
 
     // Signing out and back in again brings nothing new: the fresh guest's gift stays behind.
     StorageService.setActiveUserId(null);
     StorageService.migrateGuestDataToUser('usr_old');
     StorageService.setActiveUserId('usr_old');
-    expect(coins()).toBe(STARTING_COINS + 20 + 60);
+    expect(coins()).toBe(STARTING_COINS + 20 + 20);
+  });
+
+  it("counts the guest's earnings against the account's daily limits", () => {
+    StorageService.setActiveUserId('usr_old');
+    grantReward({ kind: 'match-clear' });
+    grantReward({ kind: 'match-clear' }); // the account reaches today's speed-match cap
+    const before = coins();
+
+    StorageService.setActiveUserId(null);
+    expect(grantReward({ kind: 'match-clear' }).tokens).toBe(20); // a guest has caps of its own
+
+    StorageService.migrateGuestDataToUser('usr_old');
+    StorageService.setActiveUserId('usr_old');
+    // Past the cap a match pays a quarter, so the account gains 5 of the guest's 20.
+    expect(coins()).toBe(before + 5);
+  });
+
+  it('leaves what the guest bought behind when the account has its own home', () => {
+    StorageService.setActiveUserId('usr_old');
+    characterService.addCoins(5);
+    StorageService.setActiveUserId(null);
+
+    // Spent from the starting gift every new guest gets.
+    const furniture = lifeSimService.getFurnitureCatalog().find(item => item.cost > 0 && item.cost <= 100)!;
+    expect(lifeSimService.buyStreakFreeze().success).toBe(true);
+    expect(lifeSimService.buyFurniture(furniture.id).success).toBe(true);
+
+    StorageService.migrateGuestDataToUser('usr_old');
+    StorageService.setActiveUserId('usr_old');
+    expect(StorageService.hasSynapticFreeze()).toBe(false);
+    expect(lifeSimService.isFurnitureOwned(furniture.id)).toBe(false);
+    expect(coins()).toBe(STARTING_COINS + 5);
   });
 });
 
