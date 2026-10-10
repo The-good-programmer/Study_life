@@ -315,9 +315,9 @@ export interface StarterDeckMetadata {
   cardCount: number;
   conceptCount: number;
   hasImageOcclusion: boolean;
-  hasSourcePdf: boolean;
+  /** The deck carries the notes its cards were written from, readable beside the cards. */
+  hasSourceNotes: boolean;
   tags: string[];
-  verifiedBy: string;
   targetAudience: string;
   summary: string;
   session: StudySession;

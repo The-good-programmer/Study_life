@@ -16,8 +16,8 @@ import {
   Trash2, 
   Download, 
   Zap, 
-  ShieldCheck, 
-  Clock, 
+  Users,
+  Clock,
   BookmarkCheck, 
   Check, 
   Maximize2,
@@ -963,10 +963,10 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                         Occlusion
                       </Badge>
                     )}
-                    {deck.hasSourcePdf && (
+                    {deck.hasSourceNotes && (
                       <Badge tone="brand">
                         <FileText className="h-3 w-3" aria-hidden="true" />
-                        PDF source
+                        Source notes
                       </Badge>
                     )}
                   </div>
@@ -981,8 +981,8 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                   </button>
 
                   <p className="mt-3 flex items-center gap-1.5 text-xs text-ink-subtle">
-                    <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
-                    <span className="truncate">{deck.verifiedBy}</span>
+                    <Users className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{deck.targetAudience}</span>
                   </p>
 
                   <div className="mt-auto flex items-center justify-between pt-4 text-[13px] text-ink-subtle">

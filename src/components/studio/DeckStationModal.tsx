@@ -192,7 +192,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                 {session.sourceDocument && (
                   <Badge>
                     <FileText className="h-3 w-3" aria-hidden="true" />
-                    Source PDF
+                    Source
                   </Badge>
                 )}
               </div>

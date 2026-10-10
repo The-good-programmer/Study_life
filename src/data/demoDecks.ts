@@ -1,30 +1,35 @@
 import type { StudySession } from '../types';
+import { SYNAPSE_DIAGRAM, diagramCards } from './diagrams';
+import { quickCards } from './quickCards';
+
+// Source notes written for Studify; they are not excerpts of any published book.
+const MEMORY_NOTES = 'Studify notes: The science of memory';
 
 export const DEMO_STUDY_SESSIONS: StudySession[] = [
   {
     id: 'demo-memory-neuroscience',
-    title: 'The Neuroscience of Memory & Spaced Retrieval',
+    title: 'How Memory Works: Retrieval, Spacing & Scheduling',
     category: 'Cognitive Psychology',
-    description: 'Master how the hippocampus consolidates short-term traces into neocortical long-term memories via active retrieval and synaptic plasticity.',
+    description: 'How memories are formed and consolidated, why testing yourself beats re-reading, why spacing works, and how the FSRS scheduler decides when you see a card.',
     currentConceptIndex: 0,
     currentPhase: 'priming',
     elapsedSeconds: 0,
     createdAt: new Date().toISOString(),
     sourceDocument: {
-      name: 'Principles_of_Cognitive_Neuroscience_Ch7.pdf',
+      name: MEMORY_NOTES,
       totalPages: 3,
       pages: [
         {
           pageNumber: 1,
-          text: 'SECTION 1: THE NEUROBIOLOGY OF CONSOLIDATION AND SYNAPTIC TAGGING\n\nMemories are initially encoded as fragile neurochemical patterns within the hippocampus, specifically traversing the dentate gyrus and CA3/CA1 subfields. Under conventional study conditions, students frequently experience the "Fluency Illusion" (Bjork et al., 2013). Because printed texts provide immediate perceptual cues, reading feels effortless, leading subjects to misattribute cognitive ease to durable memory storage.\n\nEmpirical research across cognitive psychology has demonstrated that Long-Term Potentiation (LTP) and synaptic tagging and capture require deliberate retrieval strain. Frey and Morris (1997) established that synaptic stimulation creates a temporary molecular "tag" at stimulated dendritic spines. When retrieval failure is followed by corrective feedback, significant concentrations of Brain-Derived Neurotrophic Factor (BDNF) are released, allowing tagged synapses to capture plasticity-related proteins and achieve permanent consolidation.\n\nDuring subsequent slow-wave sleep (NREM stage 3/4), sharp-wave ripples from the hippocampus trigger synchronized cortical slow oscillations, systematically migrating synaptic weights from the temporary hippocampal buffer into distributed neocortical networks. Without active retrieval, synaptic tags decay within hours.'
+          text: 'SECTION 1: ENCODING, CONSOLIDATION AND THE TESTING EFFECT\n\nNew declarative memories depend on the hippocampus; patient H.M., whose hippocampi were removed in 1953, could no longer form lasting new memories of facts and events. At the cellular level, learning is thought to rely on synaptic plasticity such as long-term potentiation (LTP), a lasting strengthening of synapses after patterned activity. Frey and Morris (1997) proposed synaptic tagging and capture: activity leaves a temporary tag at a synapse, which can later capture the proteins needed to make the change last.\n\nMemories are stabilized over time (consolidation). During slow-wave sleep, hippocampal sharp-wave ripples coincide with cortical slow oscillations and sleep spindles, and this coordination is thought to help shift memories into neocortical networks.\n\nRe-reading creates a fluency illusion: the material feels familiar, which is easily mistaken for being able to recall it (Bjork, Dunlosky & Kornell, 2013). Retrieval practice avoids this. In Roediger and Karpicke (2006), students who studied a passage once and then took recall tests remembered more a week later than students who re-read it, even though re-reading did slightly better on a test five minutes later.'
         },
         {
           pageNumber: 2,
-          text: 'SECTION 2: DESIRABLE DIFFICULTY AND OPTIMAL SPACING INTERVALS\n\nRobert Bjork\'s Principle of Desirable Difficulty posits that conditions that make learning feel harder and slower in the short term actually optimize long-term retention and semantic transfer. Human memory is governed by two functionally independent metrics: Storage Strength (how deeply encoded and structurally represented a trace is) and Retrieval Strength (the current ease of accessing that trace at a given moment in time).\n\nWhen a student reviews material immediately after correct recall, Retrieval Strength is 100%, meaning the retrieval attempt requires minimal metabolic effort. Consequently, the brain registers no evolutionary or neurochemical necessity to elevate Storage Strength. Maximum memory stabilization occurs when retrieval is practiced at the critical juncture where Retrieval Strength has decayed significantly but remains reconstructible.'
+          text: 'SECTION 2: DESIRABLE DIFFICULTY AND OPTIMAL SPACING INTERVALS\n\nRobert Bjork\'s Principle of Desirable Difficulty posits that conditions that make learning feel harder and slower in the short term actually optimize long-term retention and semantic transfer. Human memory is governed by two functionally independent metrics: Storage Strength (how deeply encoded and structurally represented a trace is) and Retrieval Strength (the current ease of accessing that trace at a given moment in time).\n\nReviewing right after a correct recall, when Retrieval Strength is still high, adds little Storage Strength. Retrieval that takes effort, after some forgetting but while the memory can still be recovered, strengthens it more. This is why spaced practice beats massed practice (Cepeda et al., 2006), and why the best gap between sessions grows with how long the material needs to be remembered (Cepeda et al., 2008). Interleaving, mixing different problem types in one session, is another desirable difficulty: in Rohrer and Taylor (2007), students who practised mixed problems did far better on a delayed test than students who practised one type at a time.'
         },
         {
           pageNumber: 3,
-          text: 'SECTION 3: FREE SPACED REPETITION SCHEDULER (FSRS) AND MATHEMATICAL RETRIEVAL\n\nThe Free Spaced Repetition Scheduler (FSRS) models the probability of recall R(t) as a power-law decay curve parameterized by Stability S and Item Difficulty D. By calculating the exact day when R(t) hits 90%, FSRS optimizes study efficiency, preventing over-testing and reducing cumulative repetition workload by 30-40% relative to legacy Leitner and SM-2 algorithms.'
+          text: 'SECTION 3: FREE SPACED REPETITION SCHEDULER (FSRS) AND MATHEMATICAL RETRIEVAL\n\nThe Free Spaced Repetition Scheduler (FSRS) describes each memory with three numbers: Difficulty (D), Stability (S) and Retrievability (R). Retrievability is the probability of recalling the card right now; it falls over time along a power-law forgetting curve. Stability is the number of days it takes R to fall from 100% to 90%. FSRS schedules the next review for the day R is predicted to drop to your desired retention (90% by default). A higher desired retention means shorter intervals and more reviews. A successful recall raises stability, so the next interval is longer; pressing Again counts as a lapse and lowers it. FSRS fits its parameters to real review histories, and in public benchmarks on Anki data it predicts recall more accurately than the older SM-2 algorithm.'
         }
       ]
     },
@@ -32,18 +37,18 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
       {
         id: 'c1-consolidation',
         order: 1,
-        title: 'Hippocampal Consolidation & Synaptic Tagging',
+        title: 'Encoding, Consolidation & the Testing Effect',
         estimatedMinutes: 12,
-        mentalModel: 'Think of the hippocampus as a high-speed temporary RAM buffer, and the neocortex as the permanent SSD. Long-term memory formation is the slow background file transfer between them, triggered when synapses are chemically tagged during intense retrieval practice.',
+        mentalModel: 'Think of the hippocampus as a fast temporary buffer and the neocortex as long-term storage. Consolidation, much of it during sleep, is the slow transfer between them; testing yourself is how you check, and strengthen, what made it across.',
         sourceAnchor: {
           pageNumber: 1,
-          snippet: 'Memories are initially encoded as fragile neurochemical patterns within the hippocampus... synaptic stimulation creates a temporary molecular "tag"...',
-          sourceName: 'Principles_of_Cognitive_Neuroscience_Ch7.pdf'
+          snippet: 'New declarative memories depend on the hippocampus...',
+          sourceName: MEMORY_NOTES
         },
         coreTakeaways: [
-          'Memories are initially fragile neural networks dependent on hippocampal CA1/CA3 circuits.',
-          'Systemic consolidation transfers synaptic weights to distributed neocortical areas during deep NREM slow-wave sleep.',
-          'Passive re-reading fails to tag synapses; retrieval failure followed by feedback produces the highest neurochemical release of BDNF (Brain-Derived Neurotrophic Factor).'
+          'Forming new memories of facts and events depends on the hippocampus.',
+          'Consolidation stabilizes memories over time; slow-wave sleep is thought to help move them into the neocortex.',
+          'Testing yourself beats re-reading for long-term retention (the testing effect), even though re-reading feels more effective.'
         ],
         keyTerms: [
           { term: 'Long-Term Potentiation (LTP)', definition: 'A persistent strengthening of synapses based on recent patterns of activity, increasing dendritic spine density.' },
@@ -51,7 +56,7 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
           { term: 'Synaptic Tagging & Capture', definition: 'The hypothesis that active neural firing tags a synapse, allowing it to capture plasticity-related proteins to stabilize connections.' }
         ],
         feynmanPrompt: 'Explain how your brain turns a temporary fact into permanent knowledge to a high schooler. Specifically explain why re-reading your notes feels easy but doesn\'t work, while testing yourself feels hard but locks it in.',
-        sampleMasteryExplanation: 'When you first learn something, your hippocampus holds it like a temporary sticky note. Re-reading feels fluent because your eyes recognize the shapes, tricking you into feeling mastery without firing deep neural circuits. When you force yourself to retrieve the answer without looking, your brain struggles. That struggle triggers chemical tags at your synapses. During sleep, your brain uses those tags to permanently wire the memory into the cortex.',
+        sampleMasteryExplanation: 'When you first learn something, your hippocampus holds it like a temporary sticky note. Re-reading feels fluent because your eyes recognize the shapes, tricking you into feeling mastery without firing deep neural circuits. When you force yourself to retrieve the answer without looking, your brain struggles. That effortful retrieval makes the memory easier to retrieve next time, and while you sleep your brain keeps stabilizing what you learned.',
         retrievalCards: [
           {
             id: 'rc-101',
@@ -60,11 +65,11 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
             question: 'What is the "Fluency Illusion" (or illusion of competence) caused by passive re-reading?',
             answer: 'Passive recognition feels easy because the material is in front of you, giving the false sensation that you have mastered and encoded the concept into long-term memory.',
             hint: 'Think about the difference between recognizing a face vs recalling a phone number from scratch.',
-            explanation: 'Cognitive psychologists found that fluency during study negatively correlates with delayed test performance because it bypasses elaborative retrieval.',
+            explanation: 'How easy material feels while you study is a poor guide to how well you will recall it later (Bjork, Dunlosky & Kornell, 2013).',
             sourceAnchor: {
               pageNumber: 1,
-              snippet: 'Under conventional study conditions, students frequently experience the "Fluency Illusion"...',
-              sourceName: 'Principles_of_Cognitive_Neuroscience_Ch7.pdf'
+              snippet: 'Re-reading creates a fluency illusion...',
+              sourceName: MEMORY_NOTES
             },
             stability: 1,
             difficulty: 4,
@@ -75,15 +80,15 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
             id: 'rc-102',
             conceptId: 'c1-consolidation',
             cardType: 'cloze',
-            question: 'Systemic memory consolidation transfers synaptic weights from the temporary hippocampal buffer to the {{neocortex}} during slow-wave sleep.',
-            clozeTemplate: 'Systemic memory consolidation transfers synaptic weights from the temporary hippocampal buffer to the {{neocortex}} during slow-wave sleep.',
+            question: 'During slow-wave sleep, consolidation is thought to help shift memories from the hippocampus into the {{neocortex}}.',
+            clozeTemplate: 'During slow-wave sleep, consolidation is thought to help shift memories from the hippocampus into the {{neocortex}}.',
             answer: 'neocortex',
             hint: 'The outer cerebral mantle responsible for long-term distributed semantic storage.',
-            explanation: 'Slow oscillations in the neocortex coordinate with hippocampal sharp-wave ripples to reorganize and stabilize memory storage.',
+            explanation: 'Hippocampal sharp-wave ripples coincide with cortical slow oscillations and spindles during slow-wave sleep.',
             sourceAnchor: {
               pageNumber: 1,
-              snippet: 'systematically migrating synaptic weights from the temporary hippocampal buffer into distributed neocortical networks...',
-              sourceName: 'Principles_of_Cognitive_Neuroscience_Ch7.pdf'
+              snippet: 'this coordination is thought to help shift memories into neocortical networks.',
+              sourceName: MEMORY_NOTES
             },
             stability: 1,
             difficulty: 4,
@@ -94,26 +99,38 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
             id: 'rc-103',
             conceptId: 'c1-consolidation',
             cardType: 'multiple-choice',
-            question: 'Which neurotrophic factor is synthesized and released in high concentrations after an active retrieval struggle followed by corrective feedback?',
+            question: 'In Roediger and Karpicke (2006), which group remembered more a week later?',
             options: [
-              'BDNF (Brain-Derived Neurotrophic Factor)',
-              'Cortisol (Stress Hormone)',
-              'Acetylcholinesterase',
-              'Melatonin'
+              'Students who took recall tests after one reading',
+              'Students who re-read the passage several times',
+              'Students who highlighted the passage',
+              'Both groups remembered the same amount'
             ],
-            answer: 'BDNF (Brain-Derived Neurotrophic Factor)',
-            hint: 'A key neurotrophin that stimulates synaptic plasticity, dendritic branching, and neurogenesis.',
-            explanation: 'BDNF promotes long-term potentiation (LTP) and synaptic tagging, converting temporary cellular signals into structural dendritic changes.',
+            answer: 'Students who took recall tests after one reading',
+            hint: 'Re-reading only won on the test given five minutes later.',
+            explanation: 'Retrieval practice produced better retention after a week, even though re-reading felt more effective and did slightly better on an immediate test.',
             sourceAnchor: {
               pageNumber: 1,
-              snippet: 'significant concentrations of Brain-Derived Neurotrophic Factor (BDNF) are released...',
-              sourceName: 'Principles_of_Cognitive_Neuroscience_Ch7.pdf'
+              snippet: 'In Roediger and Karpicke (2006), students who studied a passage once and then took recall tests remembered more a week later...',
+              sourceName: MEMORY_NOTES
             },
             stability: 1,
             difficulty: 3,
             reps: 0,
             lapses: 0,
-          }
+          },
+          ...quickCards({ conceptId: 'c1-consolidation', idPrefix: 'rc-1x', sourceName: MEMORY_NOTES }, [
+            { page: 1, q: 'Which brain structure is essential for forming new memories of facts and events?', a: 'The hippocampus', options: ['The hippocampus', 'The cerebellum', 'The amygdala', 'The visual cortex'], why: 'Patient H.M. could not form lasting new declarative memories after both hippocampi were removed.' },
+            { page: 1, q: 'What is long-term potentiation (LTP)?', a: 'A lasting strengthening of synapses after patterned activity, thought to underlie learning.' },
+            { page: 1, q: 'Synaptic tagging and capture was proposed by {{Frey and Morris}} in 1997.' },
+            { page: 1, q: 'Why does re-reading feel more effective than it is?', a: 'Familiar material feels fluent, and that ease is mistaken for being able to recall it.' },
+          ]),
+          ...diagramCards(SYNAPSE_DIAGRAM, {
+            conceptId: 'c1-consolidation',
+            idPrefix: 'rc-syn',
+            question: 'Name the covered part of the synapse.',
+            sourceAnchor: { pageNumber: 1, sourceName: MEMORY_NOTES },
+          }),
         ]
       },
       {
@@ -121,16 +138,16 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
         order: 2,
         title: 'Desirable Difficulty & Optimal Spacing Intervals',
         estimatedMinutes: 10,
-        mentalModel: 'Memory is like a muscle recovering from resistance training. Reviewing too soon gives zero stimulus because the weight is too light. Reviewing right as the memory begins to fade requires maximum cognitive effort, which forces the largest leap in retention stability.',
+        mentalModel: 'Memory is a bit like training a muscle. Reviewing too soon is a weight that is too light; reviewing once the memory has started to fade, but can still be recalled, takes effort and builds more.',
         sourceAnchor: {
           pageNumber: 2,
           snippet: 'Robert Bjork\'s Principle of Desirable Difficulty posits that conditions that make learning feel harder... optimize long-term retention...',
-          sourceName: 'Principles_of_Cognitive_Neuroscience_Ch7.pdf'
+          sourceName: MEMORY_NOTES
         },
         coreTakeaways: [
           'Bjork\'s Principle of Desirable Difficulty: Conditions that make learning feel harder and slower in the short term actually optimize long-term retention and transfer.',
           'Memory has two components: Storage Strength (how deeply ingrained it is) and Retrieval Strength (how easily accessible it is right now).',
-          'Spaced intervals must expand geometrically (1 day -> 3 days -> 7 days -> 21 days) to match the exponential decay of the forgetting curve.'
+          'Gaps between reviews should grow as a memory gets more stable; a scheduler sets each gap from your own answers rather than a fixed sequence.'
         ],
         keyTerms: [
           { term: 'Storage Strength', definition: 'A theoretical measure of how permanent a memory trace is; once formed, it never truly decreases, only becomes harder to retrieve.' },
@@ -145,20 +162,62 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
             conceptId: 'c2-fsrs-spacing',
             cardType: 'standard',
             question: 'Why is studying immediately after you already got an answer right largely wasted cognitive effort?',
-            answer: 'Because Retrieval Strength is at 100%, requiring near-zero cognitive effort. Without "desirable difficulty", the brain receives no neurochemical signal to increase Storage Strength.',
+            answer: 'Retrieval Strength is still high, so recalling takes almost no effort and adds little Storage Strength. Reviews help most once the memory has faded a little but can still be recovered.',
             hint: 'Relate this to lifting a 1-pound weight right after a heavy set.',
-            explanation: 'Robert Bjork demonstrated that maximum storage gain occurs when retrieval strength is low but still recoverable.',
+            explanation: 'In Bjork’s new theory of disuse, the gain in storage strength from a retrieval is larger when retrieval strength is lower.',
             sourceAnchor: {
               pageNumber: 2,
-              snippet: 'When a student reviews material immediately after correct recall, Retrieval Strength is 100%...',
-              sourceName: 'Principles_of_Cognitive_Neuroscience_Ch7.pdf'
+              snippet: 'Reviewing right after a correct recall, when Retrieval Strength is still high, adds little Storage Strength.',
+              sourceName: MEMORY_NOTES
             },
             stability: 1,
             difficulty: 4,
             reps: 0,
             lapses: 0,
-          }
+          },
+          ...quickCards({ conceptId: 'c2-fsrs-spacing', idPrefix: 'rc-2x', sourceName: MEMORY_NOTES }, [
+            { page: 2, q: 'In Bjork’s theory, {{storage strength}} is how well a memory is learned, and {{retrieval strength}} is how easily it can be recalled right now.' },
+            { page: 2, q: 'What is the spacing effect?', a: 'Spreading study over several sessions gives better long-term retention than the same study time in one block.' },
+            { page: 2, q: 'How does the best gap between study sessions relate to how long you need to remember something?', a: 'The longer you need to remember it, the longer the best gap (Cepeda et al., 2008).' },
+            { page: 2, q: 'What is interleaving?', a: 'Mixing different problem types or topics within one practice session instead of practising one type at a time.' },
+            { page: 2, q: 'What did Rohrer and Taylor (2007) find about interleaved practice?', a: 'Students who practised mixed problem types did far better on a delayed test than students who practised one type at a time.' },
+            { page: 2, q: 'Which is a desirable difficulty?', a: 'Spacing reviews out over days', options: ['Spacing reviews out over days', 'Re-reading notes until they feel familiar', 'Highlighting key sentences', 'Studying everything the night before'] },
+          ])
         ]
+      },
+      {
+        id: 'c3-fsrs-scheduler',
+        order: 3,
+        title: 'How the Scheduler Decides (FSRS)',
+        estimatedMinutes: 8,
+        mentalModel: 'Every card carries a forecast: how likely you are to recall it today. FSRS brings the card back on the day that forecast drops to your target, usually 90%.',
+        sourceAnchor: {
+          pageNumber: 3,
+          snippet: 'FSRS schedules the next review for the day R is predicted to drop to your desired retention (90% by default).',
+          sourceName: MEMORY_NOTES
+        },
+        coreTakeaways: [
+          'FSRS tracks Difficulty, Stability and Retrievability for every card.',
+          'Stability is the number of days for recall probability to fall from 100% to 90%.',
+          'Higher desired retention means shorter intervals and more reviews.'
+        ],
+        keyTerms: [
+          { term: 'Retrievability', definition: 'The predicted probability of recalling a card right now.' },
+          { term: 'Stability', definition: 'Days for retrievability to fall from 100% to 90%.' },
+          { term: 'Desired retention', definition: 'The recall probability at which a card is scheduled for review.' }
+        ],
+        feynmanPrompt: 'Explain to a friend why raising desired retention from 90% to 97% makes their daily review pile much bigger.',
+        sampleMasteryExplanation: 'The scheduler brings a card back when your chance of recalling it falls to the target. At 90% it can wait until you have forgotten a little; at 97% it has to bring the card back much sooner, before almost any forgetting. Shorter gaps mean every card comes back more often, so the daily pile grows.',
+        retrievalCards: quickCards({ conceptId: 'c3-fsrs-scheduler', idPrefix: 'rc-3x', sourceName: MEMORY_NOTES }, [
+          { page: 3, q: 'What three numbers does FSRS keep for each card?', a: 'Difficulty, Stability and Retrievability.' },
+          { page: 3, q: 'In FSRS, {{retrievability}} is the probability of recalling a card right now.' },
+          { page: 3, q: 'How does FSRS define stability?', a: 'The number of days it takes recall probability to fall from 100% to 90%.' },
+          { page: 3, q: 'When does FSRS schedule a card’s next review?', a: 'On the day its recall probability is predicted to fall to your desired retention (90% by default).' },
+          { page: 3, q: 'What happens to your workload if you raise desired retention?', a: 'It goes up: intervals get shorter and reviews more frequent', options: ['It goes up: intervals get shorter and reviews more frequent', 'It goes down: intervals get longer', 'Nothing changes', 'Only new cards are affected'] },
+          { page: 3, q: 'What does pressing Again do to a card in FSRS?', a: 'Counts a lapse and lowers its stability, so it comes back sooner.' },
+          { page: 3, q: 'What shape is the FSRS forgetting curve?', a: 'A power-law decay of recall probability over time.' },
+          { page: 3, q: 'FSRS’s default desired retention is {{90%}}.' },
+        ])
       }
     ]
   },
@@ -172,7 +231,7 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
     elapsedSeconds: 0,
     createdAt: new Date().toISOString(),
     sourceDocument: {
-      name: 'Lehninger_Principles_of_Biochemistry_Ch19.pdf',
+      name: 'Studify notes: Cellular respiration',
       totalPages: 2,
       pages: [
         {
@@ -195,7 +254,7 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
         sourceAnchor: {
           pageNumber: 1,
           snippet: 'This asymmetrical translocation of protons establishes an electrochemical gradient... creating the Proton-Motive Force (PMF).',
-          sourceName: 'Lehninger_Principles_of_Biochemistry_Ch19.pdf'
+          sourceName: 'Studify notes: Cellular respiration'
         },
         coreTakeaways: [
           'High-energy electrons from NADH and FADH2 pass through protein complexes in the inner mitochondrial membrane.',
@@ -220,7 +279,7 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
             sourceAnchor: {
               pageNumber: 1,
               snippet: 'an electrochemical gradient consisting of two distinct forces: 1) chemical pH difference and 2) transmembrane electrical potential...',
-              sourceName: 'Lehninger_Principles_of_Biochemistry_Ch19.pdf'
+              sourceName: 'Studify notes: Cellular respiration'
             },
             stability: 1,
             difficulty: 4,
@@ -239,7 +298,7 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
             sourceAnchor: {
               pageNumber: 2,
               snippet: 're-enter the mitochondrial matrix through ATP Synthase (Complex V)... generates rotational mechanical torque...',
-              sourceName: 'Lehninger_Principles_of_Biochemistry_Ch19.pdf'
+              sourceName: 'Studify notes: Cellular respiration'
             },
             stability: 1,
             difficulty: 3,
@@ -263,7 +322,7 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
             sourceAnchor: {
               pageNumber: 1,
               snippet: 'vector pumping of protons (H+) from the mitochondrial matrix into the intermembrane space...',
-              sourceName: 'Lehninger_Principles_of_Biochemistry_Ch19.pdf'
+              sourceName: 'Studify notes: Cellular respiration'
             },
             stability: 1,
             difficulty: 4,
@@ -284,7 +343,7 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
     elapsedSeconds: 0,
     createdAt: new Date().toISOString(),
     sourceDocument: {
-      name: 'Computer_Systems_A_Programmers_Perspective_Ch6.pdf',
+      name: 'Studify notes: The memory hierarchy',
       totalPages: 2,
       pages: [
         {
@@ -307,7 +366,7 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
         sourceAnchor: {
           pageNumber: 1,
           snippet: 'Modern microprocessors can execute billions of instructions per second... Von Neumann Bottleneck... Locality of Reference...',
-          sourceName: 'Computer_Systems_A_Programmers_Perspective_Ch6.pdf'
+          sourceName: 'Studify notes: The memory hierarchy'
         },
         coreTakeaways: [
           'The CPU clock executes billions of cycles per second, but fetching an instruction from DRAM takes hundreds of cycles (the Von Neumann Bottleneck).',
@@ -332,7 +391,7 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
             sourceAnchor: {
               pageNumber: 2,
               snippet: 'Whenever a cache miss occurs, the memory controller fetches a fixed-size block known as a Cache Line (universally 64 bytes)...',
-              sourceName: 'Computer_Systems_A_Programmers_Perspective_Ch6.pdf'
+              sourceName: 'Studify notes: The memory hierarchy'
             },
             stability: 1,
             difficulty: 4,
@@ -351,7 +410,7 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
             sourceAnchor: {
               pageNumber: 1,
               snippet: 'programs tend to reuse data and instructions they have used recently (Temporal Locality)...',
-              sourceName: 'Computer_Systems_A_Programmers_Perspective_Ch6.pdf'
+              sourceName: 'Studify notes: The memory hierarchy'
             },
             stability: 1,
             difficulty: 3,
@@ -375,7 +434,7 @@ export const DEMO_STUDY_SESSIONS: StudySession[] = [
             sourceAnchor: {
               pageNumber: 2,
               snippet: 'A row-wise loop exhibits Stride-1 access... Conversely, traversing column-wise jumps memory addresses... causing a cache miss...',
-              sourceName: 'Computer_Systems_A_Programmers_Perspective_Ch6.pdf'
+              sourceName: 'Studify notes: The memory hierarchy'
             },
             stability: 1,
             difficulty: 4,
