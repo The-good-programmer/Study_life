@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Layers, Award, LineChart, Building2 } from 'lucide-react';
+import { Home, Layers, Award, LineChart, Shuffle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
@@ -16,10 +16,10 @@ const TABS: { view: View; label: string; icon: LucideIcon }[] = [
   { view: 'studio', label: 'Library', icon: Layers },
   { view: 'exam', label: 'Exam', icon: Award },
   { view: 'dashboard', label: 'Insights', icon: LineChart },
-  { view: 'sanctuary', label: 'Campus', icon: Building2 },
+  { view: 'interleave', label: 'Mix', icon: Shuffle },
 ];
 
-/** Bottom tab bar for phones; the sidebar takes over from the md breakpoint. */
+/** Bottom tab bar for phones; the sidebar takes over from the md breakpoint. Extras such as Campus live in the menu. */
 export const MobileTabBar: React.FC<MobileTabBarProps> = ({ activeView, onNavigate, dueCardsCount }) => (
   <nav
     aria-label="Primary"
