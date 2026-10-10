@@ -41,8 +41,8 @@ function signGoogleToken(claims, { key = privateKey, kid = KID } = {}) {
   return `${header}.${payload}.${b64url(signature)}`;
 }
 
-async function api(path, { method = 'GET', token, body } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+async function api(path, { method = 'GET', token, body, headers: extraHeaders } = {}) {
+  const headers = { 'Content-Type': 'application/json', ...extraHeaders };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${baseUrl}${path}`, {
     method,
@@ -93,12 +93,12 @@ beforeAll(async () => {
   server = http.createServer(createApp({ ai: fakeAi }));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
-});
+}, 60_000); // Starting the embedded database can take a while when the whole suite runs in parallel.
 
 afterAll(async () => {
-  auth.setGoogleKeyFetcher(null);
-  auth.setGoogleAccessTokenFetchers(null);
-  await new Promise((resolve) => server.close(resolve));
+  auth?.setGoogleKeyFetcher(null);
+  auth?.setGoogleAccessTokenFetchers(null);
+  if (server) await new Promise((resolve) => server.close(resolve));
 });
 
 describe('Google sign-in', () => {
@@ -257,7 +257,7 @@ describe('CORS', () => {
 describe('database', () => {
   it('applies its migrations once and reports healthy', async () => {
     const applied = await db.all('SELECT id FROM schema_migrations');
-    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables']);
+    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports']);
 
     const health = await api('/api/health');
     expect(health.status).toBe(200);
@@ -477,5 +477,139 @@ describe('CORS in production', () => {
 
     expect(await allowedOrigin(unset, 'http://localhost:5173')).toBeNull();
     expect(await allowedOrigin(configured, 'https://app.example.com')).toBe('https://app.example.com');
+  });
+});
+
+describe('AI proxy request checks', () => {
+  it("takes only the app's own schemas, text and images, and refusals don't use up the quota", async () => {
+    const { STUDY_SESSION_GENERATION_SCHEMA } = await import('./aiSchemas.js');
+    const user = await register('guard@example.com');
+    const call = (body) => api('/api/ai/generate', { method: 'POST', token: user.token, body });
+
+    expect((await call({ contents: 'hi', responseSchema: { type: 'OBJECT', properties: { anything: { type: 'STRING' } } } })).status).toBe(400);
+    expect((await call({ contents: 'x'.repeat(200_001) })).status).toBe(400);
+    expect((await call({ contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'application/pdf', data: 'AAAA' } }] }] })).status).toBe(400);
+    expect((await call({ contents: [{ role: 'user', parts: [{ fileData: { fileUri: 'gs://bucket/file' } }] }] })).status).toBe(400);
+    expect((await call({ contents: 'hi', responseMimeType: 'text/x-python' })).status).toBe(400);
+
+    // The quota is 2 in these tests, so both of these going through shows the refusals above were free.
+    expect((await call({ contents: 'Make a deck', responseMimeType: 'application/json', responseSchema: STUDY_SESSION_GENERATION_SCHEMA })).status).toBe(200);
+    expect((await call({ contents: [{ role: 'user', parts: [{ text: 'Grade this' }, { inlineData: { mimeType: 'image/png', data: 'iVBORw0KGgo=' } }] }] })).status).toBe(200);
+  });
+
+  it('takes no response schema on the stream', async () => {
+    const { FEYNMAN_EVALUATION_SCHEMA } = await import('./aiSchemas.js');
+    const user = await register('stream-guard@example.com');
+    const res = await api('/api/ai/stream', { method: 'POST', token: user.token, body: { contents: 'hi', responseSchema: FEYNMAN_EVALUATION_SCHEMA } });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('shared AI limits beyond one account', () => {
+  const withEnv = async (vars, fn) => {
+    const previous = Object.fromEntries(Object.keys(vars).map((key) => [key, process.env[key]]));
+    Object.assign(process.env, vars);
+    try {
+      await fn();
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  };
+  const ask = (user, ip) =>
+    api('/api/ai/generate', { method: 'POST', token: user.token, body: { contents: 'hi' }, headers: { 'X-Forwarded-For': ip } });
+
+  it('shares one daily limit between accounts on the same network', async () => {
+    await withEnv({ AI_IP_DAILY_QUOTA: '3' }, async () => {
+      const first = await register('net-a@example.com');
+      const second = await register('net-b@example.com');
+      expect((await ask(first, '203.0.113.7')).status).toBe(200);
+      expect((await ask(first, '203.0.113.7')).status).toBe(200);
+      expect((await ask(second, '203.0.113.7')).status).toBe(200);
+      const blocked = await ask(second, '203.0.113.7');
+      expect(blocked.status).toBe(429);
+      expect(blocked.data.error).toMatch(/this network/);
+      // Another network is unaffected, and the refused request did not count against the account.
+      expect((await ask(second, '198.51.100.4')).status).toBe(200);
+    });
+  });
+
+  it('stops at the service-wide daily limit', async () => {
+    const day = new Date().toISOString().slice(0, 10);
+    const used = (await db.one("SELECT count FROM ai_usage_pools WHERE pool = 'all' AND day = $1", [day]))?.count ?? 0;
+    await withEnv({ AI_GLOBAL_DAILY_QUOTA: String(used + 1) }, async () => {
+      const user = await register('global@example.com');
+      expect((await ask(user, '192.0.2.1')).status).toBe(200);
+      const blocked = await ask(user, '192.0.2.1');
+      expect(blocked.status).toBe(429);
+      expect(blocked.data.error).toMatch(/shared AI service/);
+    });
+  });
+});
+
+describe('cloud sync limits', () => {
+  it('refuses a push that would take an account past its deck limit, and saves none of it', async () => {
+    const user = await register('hoarder@example.com');
+    const sessions = Array.from({ length: 2001 }, (_, i) => ({ id: `hoard-${i}`, title: 'T' }));
+    const refused = await api('/api/sync/push', { method: 'POST', token: user.token, body: { sessions } });
+    expect(refused.status).toBe(413);
+    expect((await api('/api/sync/pull', { token: user.token })).data.sessions).toEqual([]);
+
+    const saved = await api('/api/sync/push', { method: 'POST', token: user.token, body: { sessions: sessions.slice(0, 10) } });
+    expect(saved.status).toBe(200);
+  });
+});
+
+describe('community deck moderation', () => {
+  const publish = (user, title = 'A deck') =>
+    api('/api/decks/share', { method: 'POST', token: user.token, body: { title, session: { concepts: [] } } });
+
+  it('hides a deck once three different people report it', async () => {
+    const author = await register('mod-author@example.com');
+    const shared = await publish(author, 'Spam deck');
+    const readers = [await register('r1@example.com'), await register('r2@example.com'), await register('r3@example.com')];
+    const report = (user, reason = 'Spam') =>
+      api(`/api/decks/${shared.data.deckId}/report`, { method: 'POST', token: user.token, body: { reason } });
+
+    expect((await api(`/api/decks/${shared.data.deckId}/report`, { method: 'POST', body: { reason: 'Spam' } })).status).toBe(401);
+    expect((await report(author)).status).toBe(400);
+    expect((await report(readers[0], '')).status).toBe(400);
+    expect((await report(readers[0])).status).toBe(200);
+    expect((await report(readers[0])).status).toBe(200); // the same person twice still counts once
+    expect((await report(readers[1])).status).toBe(200);
+    expect((await api(`/api/decks/${shared.data.slug}`)).status).toBe(200);
+
+    expect((await report(readers[2])).status).toBe(200);
+    expect((await api(`/api/decks/${shared.data.slug}`)).status).toBe(404);
+    expect((await api('/api/decks/public?q=Spam%20deck')).data.decks).toEqual([]);
+    expect((await api(`/api/decks/${shared.data.deckId}/like`, { method: 'POST', token: readers[0].token })).status).toBe(404);
+  });
+
+  it('lets only the author delete a deck', async () => {
+    const author = await register('deck-owner@example.com');
+    const other = await register('deck-stranger@example.com');
+    const shared = await publish(author);
+    const remove = (token) => api(`/api/decks/${shared.data.deckId}`, { method: 'DELETE', token });
+
+    expect((await remove(undefined)).status).toBe(401);
+    expect((await remove(other.token)).status).toBe(404);
+    expect((await remove(author.token)).status).toBe(200);
+    expect((await api(`/api/decks/${shared.data.slug}`)).status).toBe(404);
+  });
+
+  it('limits deck size and how many decks one account publishes a day', async () => {
+    const author = await register('prolific@example.com');
+    expect((await publish(author, 'x'.repeat(121))).status).toBe(400);
+    const big = await api('/api/decks/share', {
+      method: 'POST',
+      token: author.token,
+      body: { title: 'Huge', session: { notes: 'x'.repeat(2 * 1024 * 1024) } },
+    });
+    expect(big.status).toBe(413);
+
+    for (let i = 0; i < 20; i++) expect((await publish(author, `Deck ${i}`)).status).toBe(201);
+    expect((await publish(author, 'One too many')).status).toBe(429);
   });
 });

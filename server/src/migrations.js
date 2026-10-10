@@ -101,4 +101,40 @@ export const MIGRATIONS = [
       END $$;
     `,
   },
+  {
+    // Shared AI limits beyond the per-account one: per network ('ip:<address>') and for the whole service ('all').
+    // Shared decks can be reported by readers and are hidden once enough different people report them.
+    id: '003_ai_pools_and_deck_reports',
+    sql: `
+      CREATE TABLE ai_usage_pools (
+        pool TEXT NOT NULL,
+        day TEXT NOT NULL,
+        count INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (pool, day)
+      );
+
+      ALTER TABLE shared_decks ADD COLUMN hidden_at TIMESTAMPTZ;
+      CREATE INDEX idx_shared_decks_author ON shared_decks (author_id);
+
+      CREATE TABLE deck_reports (
+        deck_id TEXT NOT NULL REFERENCES shared_decks(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reason TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (deck_id, user_id)
+      );
+
+      ALTER TABLE ai_usage_pools ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE deck_reports ENABLE ROW LEVEL SECURITY;
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+          REVOKE ALL ON ai_usage_pools, deck_reports FROM anon;
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          REVOKE ALL ON ai_usage_pools, deck_reports FROM authenticated;
+        END IF;
+      END $$;
+    `,
+  },
 ];

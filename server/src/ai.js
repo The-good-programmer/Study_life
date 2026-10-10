@@ -5,6 +5,7 @@
 
 import { GoogleGenAI } from '@google/genai';
 import { db } from './db.js';
+import { STUDY_ONLY_INSTRUCTION } from './aiGuard.js';
 
 const apiKey = process.env.GEMINI_API_KEY || '';
 let aiClient = null;
@@ -20,11 +21,11 @@ if (apiKey && apiKey.trim()) {
   console.warn('[AI Gateway] GEMINI_API_KEY is not set in server environment. Set GEMINI_API_KEY in server/.env to enable proxy AI generations.');
 }
 
+// Flash models only: a fallback to a Pro model would multiply the cost of every request that reaches it.
 const MODEL_CANDIDATES = [
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
   'gemini-2.0-flash',
-  'gemini-2.5-pro',
 ];
 
 function supportsThinking(model) {
@@ -59,20 +60,50 @@ setInterval(() => {
   }
 }, RATE_WINDOW_MS).unref();
 
+class QuotaExceeded extends Error {
+  constructor(scope) {
+    super(scope);
+    this.scope = scope;
+  }
+}
+
 /**
- * Persistent per-user daily quota. Returns true and records one request when the user is under quota;
- * false otherwise. One atomic statement, so simultaneous requests can't slip past the limit.
+ * Persistent daily quotas: per account, per network (so a stack of throwaway accounts from one place shares a
+ * limit) and for the whole service (a ceiling on the Gemini bill). Records one request and returns null when all
+ * three have room; otherwise records nothing and returns which one is spent: 'user', 'ip' or 'all'.
  */
-export async function consumeDailyQuota(userId) {
-  const limit = Number(process.env.AI_DAILY_QUOTA) || 200;
+export async function consumeDailyQuota(userId, ip = 'unknown') {
+  const limits = {
+    user: Number(process.env.AI_DAILY_QUOTA) || 200,
+    ip: Number(process.env.AI_IP_DAILY_QUOTA) || 400,
+    all: Number(process.env.AI_GLOBAL_DAILY_QUOTA) || 5000,
+  };
   const day = new Date().toISOString().slice(0, 10);
-  const changed = await db.run(
-    `INSERT INTO ai_usage (user_id, day, count) VALUES ($1, $2, 1)
-     ON CONFLICT (user_id, day) DO UPDATE SET count = ai_usage.count + 1
-     WHERE ai_usage.count < $3`,
-    [userId, day, limit],
-  );
-  return changed > 0;
+  try {
+    await db.tx(async (t) => {
+      const user = await t.run(
+        `INSERT INTO ai_usage (user_id, day, count) VALUES ($1, $2, 1)
+         ON CONFLICT (user_id, day) DO UPDATE SET count = ai_usage.count + 1
+         WHERE ai_usage.count < $3`,
+        [userId, day, limits.user],
+      );
+      if (!user) throw new QuotaExceeded('user');
+      for (const [scope, pool] of [['ip', `ip:${ip}`], ['all', 'all']]) {
+        const changed = await t.run(
+          `INSERT INTO ai_usage_pools (pool, day, count) VALUES ($1, $2, 1)
+           ON CONFLICT (pool, day) DO UPDATE SET count = ai_usage_pools.count + 1
+           WHERE ai_usage_pools.count < $3`,
+          [pool, day, limits[scope]],
+        );
+        if (!changed) throw new QuotaExceeded(scope);
+      }
+    });
+    return null;
+  } catch (err) {
+    if (!(err instanceof QuotaExceeded)) throw err;
+    if (err.scope === 'all') console.warn(`[AI Gateway] The service-wide daily limit (${limits.all}) is spent. Raise AI_GLOBAL_DAILY_QUOTA to allow more.`);
+    return err.scope;
+  }
 }
 
 export async function generateContent({ contents, responseMimeType, enableThinking, responseSchema }) {
@@ -84,7 +115,7 @@ export async function generateContent({ contents, responseMimeType, enableThinki
 
   for (const model of MODEL_CANDIDATES) {
     const buildConfig = (includeThinking) => {
-      const config = {};
+      const config = { systemInstruction: STUDY_ONLY_INSTRUCTION };
       if (responseSchema) {
         config.responseSchema = responseSchema;
         config.responseMimeType = 'application/json';
@@ -107,7 +138,7 @@ export async function generateContent({ contents, responseMimeType, enableThinki
       const response = await aiClient.models.generateContent({
         model,
         contents,
-        config: Object.keys(config).length > 0 ? config : undefined,
+        config,
       });
       return response.text || '';
     } catch (err) {
@@ -120,7 +151,7 @@ export async function generateContent({ contents, responseMimeType, enableThinki
           const response = await aiClient.models.generateContent({
             model,
             contents,
-            config: Object.keys(fallbackConfig).length > 0 ? fallbackConfig : undefined,
+            config: fallbackConfig,
           });
           return response.text || '';
         } catch (retryErr) {
@@ -144,7 +175,7 @@ export async function* generateContentStream({ contents, responseMimeType, enabl
 
   for (const model of MODEL_CANDIDATES) {
     const buildConfig = (includeThinking) => {
-      const config = {};
+      const config = { systemInstruction: STUDY_ONLY_INSTRUCTION };
       if (responseMimeType) {
         config.responseMimeType = responseMimeType;
       }
@@ -163,7 +194,7 @@ export async function* generateContentStream({ contents, responseMimeType, enabl
       const responseStream = await aiClient.models.generateContentStream({
         model,
         contents,
-        config: Object.keys(config).length > 0 ? config : undefined,
+        config,
       });
 
       for await (const chunk of responseStream) {
@@ -181,7 +212,7 @@ export async function* generateContentStream({ contents, responseMimeType, enabl
           const responseStream = await aiClient.models.generateContentStream({
             model,
             contents,
-            config: Object.keys(fallbackConfig).length > 0 ? fallbackConfig : undefined,
+            config: fallbackConfig,
           });
 
           for await (const chunk of responseStream) {
