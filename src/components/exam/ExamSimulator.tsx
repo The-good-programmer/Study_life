@@ -541,31 +541,34 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           </h3>
 
           {effectiveCardType === 'image-occlusion' && currentItem.card.imageUrl && (
-            <div className="relative flex w-full select-none items-center justify-center overflow-hidden rounded-2xl border border-line bg-canvas p-2">
-              <img
-                src={currentItem.card.imageUrl}
-                alt="Diagram with hidden labels"
-                className="pointer-events-none h-auto max-h-[360px] w-full rounded-xl object-contain"
-              />
-              {(currentItem.card.masks || []).map((mask) => {
-                const isTarget = mask.id === currentItem.card.activeMaskId;
-                const isRevealed = isTarget && isAnswerSubmitted;
-                if (currentItem.card.occlusionMode === 'hide-one-reveal-one' && !isTarget) return null;
-                const box = { left: `${mask.x}%`, top: `${mask.y}%`, width: `${mask.width}%`, height: `${mask.height}%` };
-                return isTarget ? (
-                  <div
-                    key={mask.id}
-                    className={`absolute flex items-center justify-center rounded-lg p-1 text-[11px] font-semibold shadow-lg ${
-                      isRevealed ? 'bg-success text-success-ink' : 'animate-pulse bg-gold text-[#2a1d00] ring-2 ring-gold/40'
-                    }`}
-                    style={box}
-                  >
-                    <span className="truncate px-1">{isRevealed ? mask.label || currentItem.card.answer : '?'}</span>
-                  </div>
-                ) : (
-                  <div key={mask.id} className="pointer-events-none absolute rounded-lg border border-line-strong bg-surface-solid" style={box} />
-                );
-              })}
+            <div className="flex w-full select-none items-center justify-center overflow-hidden rounded-2xl border border-line bg-canvas p-2">
+              {/* Sized to the image itself, so mask percentages land on the same spot of the diagram at any width. */}
+              <div className="relative min-w-0 max-w-full">
+                <img
+                  src={currentItem.card.imageUrl}
+                  alt="Diagram with hidden labels"
+                  className="pointer-events-none block h-auto max-h-[360px] w-auto max-w-full rounded-xl"
+                />
+                {(currentItem.card.masks || []).map((mask) => {
+                  const isTarget = mask.id === currentItem.card.activeMaskId;
+                  const isRevealed = isTarget && isAnswerSubmitted;
+                  if (currentItem.card.occlusionMode === 'hide-one-reveal-one' && !isTarget) return null;
+                  const box = { left: `${mask.x}%`, top: `${mask.y}%`, width: `${mask.width}%`, height: `${mask.height}%` };
+                  return isTarget ? (
+                    <div
+                      key={mask.id}
+                      className={`absolute flex items-center justify-center rounded-lg p-1 text-[11px] font-semibold shadow-lg ${
+                        isRevealed ? 'bg-success text-success-ink' : 'bg-gold text-[#2a1d00] ring-2 ring-gold/40'
+                      }`}
+                      style={box}
+                    >
+                      <span className="truncate px-1">{isRevealed ? mask.label || currentItem.card.answer : '?'}</span>
+                    </div>
+                  ) : (
+                    <div key={mask.id} className="pointer-events-none absolute rounded-lg border border-line-strong bg-surface-solid" style={box} />
+                  );
+                })}
+              </div>
             </div>
           )}
 

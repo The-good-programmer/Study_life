@@ -495,71 +495,73 @@ export const ImageOcclusionStudio: React.FC<ImageOcclusionStudioProps> = ({
           </div>
           <div className="overflow-hidden rounded-2xl border border-line bg-canvas p-2">
             <div
-              ref={containerRef}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
               className={cn(
-                'relative flex min-h-[320px] w-full touch-none select-none items-center justify-center overflow-hidden rounded-xl bg-[#0b0c11]',
+                'flex min-h-[320px] w-full touch-none select-none items-center justify-center overflow-hidden rounded-xl bg-[#0b0c11]',
                 isPreviewActive ? 'cursor-default' : 'cursor-crosshair',
               )}
             >
-              <img src={imageSrc} alt={deckTitle || 'Diagram'} className="pointer-events-none h-auto max-h-[560px] w-full object-contain" />
+              {/* Masks are stored as percentages of this box, which is exactly the image, so they line up wherever the card is shown. */}
+              <div ref={containerRef} className="relative min-w-0 max-w-full">
+                <img src={imageSrc} alt={deckTitle || 'Diagram'} className="pointer-events-none block h-auto max-h-[560px] w-auto max-w-full" />
 
-              {masks.map((mask, idx) => {
-                const isSelected = mask.id === selectedMaskId;
-                const box = { left: `${mask.x}%`, top: `${mask.y}%`, width: `${mask.width}%`, height: `${mask.height}%` };
+                {masks.map((mask, idx) => {
+                  const isSelected = mask.id === selectedMaskId;
+                  const box = { left: `${mask.x}%`, top: `${mask.y}%`, width: `${mask.width}%`, height: `${mask.height}%` };
 
-                if (isPreviewActive) {
-                  if (occlusionMode === 'hide-one-reveal-one' && !isSelected) return null;
-                  if (isSelected) {
-                    return (
-                      <button
-                        key={mask.id}
-                        type="button"
-                        onClick={() => setPreviewRevealed(!previewRevealed)}
-                        className={cn(
-                          'absolute flex items-center justify-center rounded-md border-2 p-1 text-[11px] font-semibold transition-colors cursor-pointer',
-                          previewRevealed ? 'border-success bg-success-soft text-ink backdrop-blur' : 'border-gold bg-gold-soft text-ink backdrop-blur',
-                        )}
-                        style={box}
-                      >
-                        <span className="truncate px-1">{previewRevealed ? mask.label : '?'}</span>
-                      </button>
-                    );
+                  if (isPreviewActive) {
+                    if (occlusionMode === 'hide-one-reveal-one' && !isSelected) return null;
+                    if (isSelected) {
+                      return (
+                        <button
+                          key={mask.id}
+                          type="button"
+                          onClick={() => setPreviewRevealed(!previewRevealed)}
+                          className={cn(
+                            'absolute flex items-center justify-center rounded-md border-2 p-1 text-[11px] font-semibold transition-colors cursor-pointer',
+                            previewRevealed ? 'border-success bg-success-soft text-ink backdrop-blur' : 'border-gold bg-gold text-[#2a1d00]',
+                          )}
+                          style={box}
+                        >
+                          <span className="truncate px-1">{previewRevealed ? mask.label : '?'}</span>
+                        </button>
+                      );
+                    }
+                    return <div key={mask.id} className="absolute rounded-md border border-line-strong bg-surface-solid" style={box} />;
                   }
-                  return <div key={mask.id} className="absolute rounded-md border border-line-strong bg-surface-solid" style={box} />;
-                }
 
-                return (
+                  return (
+                    <div
+                      key={mask.id}
+                      data-mask-id={mask.id}
+                      className={cn(
+                        'absolute flex items-center rounded-md p-1 transition-colors cursor-pointer',
+                        isSelected ? 'z-20 border-2 border-white bg-brand text-brand-ink shadow-lg' : 'z-10 border border-brand/70 bg-brand/80 text-brand-ink hover:bg-brand',
+                      )}
+                      style={box}
+                    >
+                      <span className="pointer-events-none select-none truncate px-1 text-[11px] font-semibold">
+                        {idx + 1}. {mask.label || 'Unnamed'}
+                      </span>
+                    </div>
+                  );
+                })}
+
+                {isDrawing && drawStart && drawCurrent && (
                   <div
-                    key={mask.id}
-                    data-mask-id={mask.id}
-                    className={cn(
-                      'absolute flex items-center rounded-md p-1 transition-colors cursor-pointer',
-                      isSelected ? 'z-20 border-2 border-white bg-brand text-brand-ink shadow-lg' : 'z-10 border border-brand/70 bg-brand/80 text-brand-ink hover:bg-brand',
-                    )}
-                    style={box}
-                  >
-                    <span className="pointer-events-none select-none truncate px-1 text-[11px] font-semibold">
-                      {idx + 1}. {mask.label || 'Unnamed'}
-                    </span>
-                  </div>
-                );
-              })}
-
-              {isDrawing && drawStart && drawCurrent && (
-                <div
-                  className="pointer-events-none absolute z-30 rounded-md border-2 border-dashed border-white bg-brand/30"
-                  style={{
-                    left: `${Math.min(drawStart.x, drawCurrent.x)}%`,
-                    top: `${Math.min(drawStart.y, drawCurrent.y)}%`,
-                    width: `${Math.abs(drawCurrent.x - drawStart.x)}%`,
-                    height: `${Math.abs(drawCurrent.y - drawStart.y)}%`,
-                  }}
-                />
-              )}
+                    className="pointer-events-none absolute z-30 rounded-md border-2 border-dashed border-white bg-brand/30"
+                    style={{
+                      left: `${Math.min(drawStart.x, drawCurrent.x)}%`,
+                      top: `${Math.min(drawStart.y, drawCurrent.y)}%`,
+                      width: `${Math.abs(drawCurrent.x - drawStart.x)}%`,
+                      height: `${Math.abs(drawCurrent.y - drawStart.y)}%`,
+                    }}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </section>
