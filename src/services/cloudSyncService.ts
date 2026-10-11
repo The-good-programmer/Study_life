@@ -31,9 +31,19 @@ export interface CloudSyncPayload {
 
 const CONFIG_KEY = 'studify_cloud_sync_config_v1';
 const PENDING_QUEUE_KEY = 'studify_cloud_sync_pending_queue';
+/** How long auto-sync waits after the last local change before it syncs. */
+const AUTO_SYNC_DELAY_MS = 1500;
 
 export class CloudSyncService {
   private static listeners: Set<(config: CloudSyncConfig) => void> = new Set();
+  /** The scheduled auto-sync. Each local change pushes it back. */
+  private static autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Auto-syncs run one at a time; this is set while one is out. */
+  private static autoSyncInFlight = false;
+  /** An auto-sync came due while another was out, so one more runs when that finishes. */
+  private static changedDuringAutoSync = false;
+  /** Set while mergeRemoteData writes the server's data to storage. */
+  private static mergingRemoteData = false;
 
   /**
    * Generates a user-friendly, cryptographically random sync token
@@ -198,69 +208,76 @@ export class CloudSyncService {
   public static mergeRemoteData(remote: CloudSyncPayload): void {
     if (!remote || !Array.isArray(remote.sessions)) return;
 
-    const localSessions = StorageService.getSessions();
-    const sessionMap = new Map<string, StudySession>();
+    // These writes bring the server's data in, so they must not count as local changes:
+    // auto-syncing them would merge another reply, which would auto-sync again, and so on.
+    this.mergingRemoteData = true;
+    try {
+      const localSessions = StorageService.getSessions();
+      const sessionMap = new Map<string, StudySession>();
 
-    // Index local sessions
-    localSessions.forEach(s => sessionMap.set(s.id, s));
+      // Index local sessions
+      localSessions.forEach(s => sessionMap.set(s.id, s));
 
-    const getLatestTimestamp = (s: StudySession): number => {
-      let latest = 0;
-      if (s.createdAt) {
-        const t = new Date(s.createdAt).getTime();
-        if (!isNaN(t)) latest = Math.max(latest, t);
-      }
-      if (s.completedAt) {
-        const ct = new Date(s.completedAt).getTime();
-        if (!isNaN(ct)) latest = Math.max(latest, ct);
-      }
-      (s.concepts || []).forEach(cp => {
-        (cp.retrievalCards || []).forEach(card => {
-          if (card.lastReviewDate) {
-            const rt = new Date(card.lastReviewDate).getTime();
-            if (!isNaN(rt)) latest = Math.max(latest, rt);
-          }
-        });
-      });
-      return latest;
-    };
-
-    // Merge or insert remote sessions with genuine timestamp comparison
-    remote.sessions.forEach(remoteS => {
-      const localS = sessionMap.get(remoteS.id);
-      if (!localS) {
-        sessionMap.set(remoteS.id, remoteS);
-      } else {
-        const localTime = getLatestTimestamp(localS);
-        const remoteTime = getLatestTimestamp(remoteS);
-        if (remoteTime >= localTime) {
-          sessionMap.set(remoteS.id, remoteS);
+      const getLatestTimestamp = (s: StudySession): number => {
+        let latest = 0;
+        if (s.createdAt) {
+          const t = new Date(s.createdAt).getTime();
+          if (!isNaN(t)) latest = Math.max(latest, t);
         }
-      }
-    });
-
-    const mergedSessions = Array.from(sessionMap.values());
-    StorageService.saveSessions(mergedSessions);
-
-    // Merge stats (take highest streak & highest XP)
-    const localStats = StorageService.getStats();
-    if (remote.stats) {
-      const mergedStats: UserStats = {
-        ...localStats,
-        xp: Math.max(localStats.xp || 0, remote.stats.xp || 0),
-        currentStreak: Math.max(localStats.currentStreak || 0, remote.stats.currentStreak || 0),
-        conceptsMastered: Math.max(localStats.conceptsMastered || 0, remote.stats.conceptsMastered || 0),
-        sessionsCompleted: Math.max(localStats.sessionsCompleted || 0, remote.stats.sessionsCompleted || 0),
-        totalStudyMinutes: Math.max(localStats.totalStudyMinutes || 0, remote.stats.totalStudyMinutes || 0),
+        if (s.completedAt) {
+          const ct = new Date(s.completedAt).getTime();
+          if (!isNaN(ct)) latest = Math.max(latest, ct);
+        }
+        (s.concepts || []).forEach(cp => {
+          (cp.retrievalCards || []).forEach(card => {
+            if (card.lastReviewDate) {
+              const rt = new Date(card.lastReviewDate).getTime();
+              if (!isNaN(rt)) latest = Math.max(latest, rt);
+            }
+          });
+        });
+        return latest;
       };
-      StorageService.saveStats(mergedStats);
-    }
 
-    // Only the avatar's look comes from the sync server. Its address is set by the user, so
-    // anything that moves tokens (coins, level, XP) from there would let a server mint them.
-    if (remote.characterState && typeof remote.characterState === 'object') {
-      const look = appearanceOf(remote.characterState);
-      if (Object.keys(look).length > 0) characterService.updateCustomization(look);
+      // Merge or insert remote sessions with genuine timestamp comparison
+      remote.sessions.forEach(remoteS => {
+        const localS = sessionMap.get(remoteS.id);
+        if (!localS) {
+          sessionMap.set(remoteS.id, remoteS);
+        } else {
+          const localTime = getLatestTimestamp(localS);
+          const remoteTime = getLatestTimestamp(remoteS);
+          if (remoteTime >= localTime) {
+            sessionMap.set(remoteS.id, remoteS);
+          }
+        }
+      });
+
+      const mergedSessions = Array.from(sessionMap.values());
+      StorageService.saveSessions(mergedSessions);
+
+      // Merge stats (take highest streak & highest XP)
+      const localStats = StorageService.getStats();
+      if (remote.stats) {
+        const mergedStats: UserStats = {
+          ...localStats,
+          xp: Math.max(localStats.xp || 0, remote.stats.xp || 0),
+          currentStreak: Math.max(localStats.currentStreak || 0, remote.stats.currentStreak || 0),
+          conceptsMastered: Math.max(localStats.conceptsMastered || 0, remote.stats.conceptsMastered || 0),
+          sessionsCompleted: Math.max(localStats.sessionsCompleted || 0, remote.stats.sessionsCompleted || 0),
+          totalStudyMinutes: Math.max(localStats.totalStudyMinutes || 0, remote.stats.totalStudyMinutes || 0),
+        };
+        StorageService.saveStats(mergedStats);
+      }
+
+      // Only the avatar's look comes from the sync server. Its address is set by the user, so
+      // anything that moves tokens (coins, level, XP) from there would let a server mint them.
+      if (remote.characterState && typeof remote.characterState === 'object') {
+        const look = appearanceOf(remote.characterState);
+        if (Object.keys(look).length > 0) characterService.updateCustomization(look);
+      }
+    } finally {
+      this.mergingRemoteData = false;
     }
   }
 
@@ -277,9 +294,13 @@ export class CloudSyncService {
   }
 
   /**
-   * Trigger auto-sync if enabled and user is online
+   * Trigger auto-sync if enabled and user is online. Changes less than AUTO_SYNC_DELAY_MS
+   * apart share one sync, which runs once they stop.
    */
   public static triggerAutoSync(): void {
+    // Merging a sync's reply writes to storage, but that's the server's data, not a local change.
+    if (this.mergingRemoteData) return;
+
     const config = this.getConfig();
     if (!config.enabled || !config.autoSyncOnReview) return;
 
@@ -288,15 +309,33 @@ export class CloudSyncService {
       return;
     }
 
-    // Debounced: a burst of changes (a run of reviews) syncs once, 1.5 s after the last one.
-    if (this.autoSyncTimer) clearTimeout(this.autoSyncTimer);
+    // Debounced async sync: each change restarts the wait.
+    if (this.autoSyncTimer !== null) clearTimeout(this.autoSyncTimer);
     this.autoSyncTimer = setTimeout(() => {
       this.autoSyncTimer = null;
-      this.syncNow().catch(() => {});
-    }, 1500);
+      this.runAutoSync();
+    }, AUTO_SYNC_DELAY_MS);
   }
 
-  private static autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Starts an auto-sync, or if one is still out, has one more follow it. */
+  private static runAutoSync(): void {
+    if (this.autoSyncInFlight) {
+      // The sync that's out may have read the data before this change.
+      this.changedDuringAutoSync = true;
+      return;
+    }
+
+    this.autoSyncInFlight = true;
+    this.syncNow()
+      .catch(() => {})
+      .finally(() => {
+        this.autoSyncInFlight = false;
+        if (this.changedDuringAutoSync) {
+          this.changedDuringAutoSync = false;
+          this.triggerAutoSync();
+        }
+      });
+  }
 
   /**
    * Subscribe to cloud sync config and status changes

@@ -612,6 +612,13 @@ describe('StorageService deck edits', () => {
     expect(queueIds()).toEqual(['a', 'c']);
   });
 
+  it('takes cards removed from a deck out of the review queue when the whole library is saved', () => {
+    // A synced copy of a deck from another device can have fewer cards than this one.
+    StorageService.saveSessions([deckWith('deck', ['a', 'b', 'c'])]);
+    StorageService.saveSessions([deckWith('deck', ['a', 'c'])]);
+    expect(queueIds()).toEqual(['a', 'c']);
+  });
+
   it('replaces a card inside its deck, so the new cards are studied and the old one is gone', () => {
     StorageService.saveSession(deckWith('deck', ['a', 'hard', 'c']));
     StorageService.replaceCard('hard', [card('hard-1'), card('hard-2')]);
@@ -627,6 +634,58 @@ describe('StorageService deck edits', () => {
     expect(queueIds()).toEqual(['a', 'shared']);
     StorageService.deleteSession('two');
     expect(queueIds()).toEqual(['a']);
+  });
+});
+
+describe('StorageService library size', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    StorageService.setActiveUserId(null);
+  });
+
+  const card = (id: string) => ({ id, conceptId: 'k', question: `Q ${id}`, answer: `A ${id}`, stability: 1, difficulty: 5, reps: 0, lapses: 0 }) as RetrievalCard;
+  const deck = (n: number) =>
+    ({ id: `deck-${n}`, title: `Deck ${n}`, concepts: [{ id: 'k', title: 'K', retrievalCards: [card(`card-${n}`)] }] }) as never;
+  const deckIds = () => StorageService.getSessions().map(s => s.id);
+  /** Cards in the review queue that no deck contains: they keep coming due but belong to no deck. */
+  const orphanedCardIds = () => {
+    const inDecks = new Set(StorageService.getSessions().flatMap(s => s.concepts.flatMap(c => c.retrievalCards.map(rc => rc.id))));
+    return StorageService.getAllCards().map(c => c.id).filter(id => !inDecks.has(id));
+  };
+
+  it('keeps the oldest deck when a 31st is created', () => {
+    for (let n = 1; n <= 31; n++) StorageService.saveSession(deck(n));
+    expect(deckIds()).toHaveLength(31);
+    expect(deckIds()).toContain('deck-1');
+    expect(orphanedCardIds()).toEqual([]);
+  });
+
+  it('keeps every deck when the whole library is saved at once', () => {
+    StorageService.saveSessions(Array.from({ length: 51 }, (_, i) => deck(i + 1)));
+    expect(deckIds()).toHaveLength(51);
+    expect(orphanedCardIds()).toEqual([]);
+  });
+
+  it('replaces the decks and their cards when a backup is restored', () => {
+    StorageService.saveSession(deck(1));
+    const backup = StorageService.exportAllDataAsJSON();
+    StorageService.saveSession(deck(2));
+
+    expect(StorageService.importDataFromJSON(backup).success).toBe(true);
+    expect(deckIds()).toEqual(['deck-1']);
+    expect(orphanedCardIds()).toEqual([]);
+    expect(StorageService.getAllCards().map(c => c.id)).toEqual(['card-1']);
+  });
+
+  it("keeps a backup's cards that belong to no deck, in a deck of their own", () => {
+    // A backup taken while cards were orphaned (by the old 30-deck limit, say) still has them.
+    const reviewed = { ...card('loose'), reps: 4, stability: 20 };
+    const backup = JSON.stringify({ version: 2, cards: [card('card-1'), reviewed], sessions: [deck(1)], folders: [] });
+
+    expect(StorageService.importDataFromJSON(backup).success).toBe(true);
+    expect(orphanedCardIds()).toEqual([]);
+    expect(deckIds()).toHaveLength(2);
+    expect(StorageService.getAllCards().find(c => c.id === 'loose')).toMatchObject({ question: 'Q loose', reps: 4, stability: 20 });
   });
 });
 
@@ -662,6 +721,16 @@ describe('StorageService review progress', () => {
     StorageService.toggleCardStar('a');
     unsubscribe();
     expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps reviews made since the library was loaded when it is saved whole', () => {
+    StorageService.saveSession(deckWith('deck', ['a', 'b']));
+    const olderLibrary = StorageService.getSessions();
+    StorageService.saveCard(reviewed('a'));
+    StorageService.saveSessions(olderLibrary);
+
+    const stored = StorageService.getSessions().find(s => s.id === 'deck')!;
+    expect(stored.concepts[0].retrievalCards[0]).toMatchObject({ reps: 3, lapses: 1, stability: 12 });
   });
 
   it('gives an older copy of a card, or of a deck, the saved progress and keeps its content', () => {
