@@ -40,7 +40,7 @@ Built-in background audio generated with the Web Audio API: brown noise, rain, a
 
 Optional, non-study features live in the sidebar's collapsed **Extras** group: a customizable 3D student avatar and a home and room designer where you spend tokens earned by studying.
 
-The avatar is a stylized, fully skinned character sculpted in code: body, face, hair (8 styles), clothing (6 tops, 5 bottoms, 4 shoes), hats, glasses and facial hair, with expressions, blinking and IK-driven poses (wave, cheer, reading a book). Clothing is generated from the body itself, so it moves with it, and geometry is built in background Web Workers so the UI never stalls. To inspect it in development, open `http://localhost:5173/avatar-lab.html` (e.g. `?view=head3q&hairStyle=bob-cut&mood=happy`).
+The avatar is a fully skinned, realistically proportioned character sculpted in code (about seven heads tall, with the face built on real facial thirds): body, face, hair (8 styles), clothing (6 tops, 5 bottoms, 4 shoes), hats, glasses and facial hair, with sculpted expressions, blinking eyelids and IK-driven poses (wave, cheer, reading a book). Skin colour detail (lips, cheeks, lids, stubble) is painted per vertex, and hair has strand shading with soft hairlines. Clothing is generated from the body itself, so it moves with it, and geometry is built in background Web Workers so the UI never stalls. To inspect it in development, open `http://localhost:5173/avatar-lab.html` (e.g. `?view=head3q&hairStyle=bob-cut&mood=happy`).
 
 ---
 

@@ -4,6 +4,7 @@ import {
   type Sdf, v3, ellipsoid, roundCone, capsule, torusY, smin, smax,
 } from '../sdf/sdf';
 import type { AvatarDims } from './anatomy';
+import { cranium, headLayout } from './head';
 import type { MeshSpec } from './meshSpec';
 import { hatInterior } from './hatShape';
 
@@ -17,25 +18,29 @@ const smoothstep = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** Cranium grown by t (approximate offset of the head ellipsoid). */
+/** Cranium grown by t (the same skull the head is sculpted on). */
 function skull(d: AvatarDims, t: number, dy = 0): Sdf {
-  // Must match the cranium in head.ts.
-  return ellipsoid(v3(0, 0.146 + dy, -0.012), d.headWidth + 0.004 + t, 0.126 + t, 0.12 + t);
+  return cranium(d, t, dy);
 }
 
 /** Leaves the face, ears and neck clear. `fringeY` lets bangs cover the forehead. */
 function hairMasks(d: AvatarDims, opts: { fringeY?: number; nape?: number; coverEars?: boolean } = {}): Sdf {
-  const face = ellipsoid(v3(0, 0.098, 0.112), 0.1, 0.128, 0.098);
-  const earL = ellipsoid(v3(d.headWidth, 0.115, -0.01), 0.026, 0.038, 0.032);
-  const earR = ellipsoid(v3(-d.headWidth, 0.115, -0.01), 0.026, 0.038, 0.032);
+  const L = headLayout(d);
+  const W = d.headWidth;
+  const face = ellipsoid(v3(0, 0.1, 0.11), W * 0.9, 0.13, 0.1);
+  const earX = W + 0.004;
+  const earL = ellipsoid(v3(earX, L.earY, L.earZ), 0.022, 0.043, 0.03);
+  const earR = ellipsoid(v3(-earX, L.earY, L.earZ), 0.022, 0.043, 0.03);
   const nape = opts.nape ?? 0.07;
   return (x, y, z) => {
     // Positive where hair is allowed: outside the face, ears and below the hairline.
     let allow = face(x, y, z);
     if (opts.fringeY !== undefined && y > opts.fringeY) allow = Math.max(allow, y - opts.fringeY);
     if (!opts.coverEars) allow = Math.min(allow, Math.min(earL(x, y, z), earR(x, y, z)));
-    // Hairline at the sides and back: higher in front of the ears.
-    const lowY = nape + 0.045 * smoothstep(-0.04, 0.05, z);
+    // Hairline at the sides and back: higher in front of the ears, with
+    // sideburns running down just in front of them.
+    const sideburn = 0.026 * smoothstep(-0.02, -0.006, z) * smoothstep(0.03, 0.014, z) * smoothstep(W - 0.035, W - 0.012, Math.abs(x));
+    const lowY = nape + 0.045 * smoothstep(-0.04, 0.05, z) - sideburn;
     allow = Math.min(allow, y - lowY);
     return allow;
   };
@@ -56,13 +61,13 @@ function flowAngle(x: number, y: number, z: number) {
 }
 
 /**
- * Surface detail that follows the hair flow: broad sculpted clumps (the
- * stylized-game look) plus faint fine strands.
+ * Surface detail that follows the hair flow: soft locks only. Anything finer
+ * than a few mesh cells aliases into a crosshatch, so individual strands
+ * come from the strand texture instead (see getStrandTexture).
  */
 const strands = (amp: number, freq: number): Sdf => (x, y, z) => {
   const a = flowAngle(x, y, z);
-  const clump = Math.sin(a * 11 + 0.6 * Math.sin(a * 5));
-  return amp * 1.6 * clump * Math.abs(clump) + amp * 0.3 * Math.sin(a * freq * 1.2);
+  return amp * 0.7 * Math.sin(a * 9 + 0.6 * Math.sin(a * 4)) + amp * 0.35 * Math.sin(a * freq * 0.3 + 1.3);
 };
 
 /**
@@ -80,13 +85,27 @@ function shell(d: AvatarDims, thickness: (x: number, y: number, z: number) => nu
   };
 }
 
+type MaskOptions = Parameters<typeof hairMasks>[1];
+
+/** Where each style's hair may grow (hairline, fringe, ears). */
+const STYLE_MASKS: Record<HairStyle, MaskOptions> = {
+  buzz: { nape: 0.08 },
+  'short-fade': { nape: 0.085 },
+  'side-part': { nape: 0.08 },
+  spiky: { nape: 0.085 },
+  'curly-afro': { nape: 0.07, coverEars: true },
+  'bob-cut': { fringeY: 0.168, nape: 0.035, coverEars: true },
+  'long-wavy': { fringeY: 0.19, nape: -0.06, coverEars: true },
+  ponytail: { nape: 0.075 },
+};
+
 function styleSdf(style: HairStyle, d: AvatarDims): Sdf {
+  const masks = hairMasks(d, STYLE_MASKS[style] ?? STYLE_MASKS.ponytail);
   switch (style) {
     case 'buzz':
-      return shell(d, () => 0.0035, hairMasks(d, { nape: 0.08 }), 0.0004);
+      return shell(d, () => 0.0035, masks, 0.0004);
 
     case 'short-fade': {
-      const masks = hairMasks(d, { nape: 0.085 });
       const quiff = ellipsoid(v3(0, 0.248, 0.04), 0.055, 0.024, 0.045);
       // Short sides, volume on top, thin at the front hairline (no bowl overhang).
       const base = shell(d, (_x, y, z) => 0.004 + 0.017 * smoothstep(0.1, 0.26, y) * (1 - 0.65 * smoothstep(0.03, 0.11, z)), masks);
@@ -104,18 +123,16 @@ function styleSdf(style: HairStyle, d: AvatarDims): Sdf {
     }
 
     case 'side-part': {
-      const masks = hairMasks(d, { nape: 0.08 });
-      const sweep = ellipsoid(v3(-0.03, 0.245, 0.04), 0.08, 0.032, 0.065);
+      const sweep = ellipsoid(v3(-0.022, 0.236, 0.05), 0.06, 0.016, 0.052);
       const part = capsule(v3(0.042, 0.27, 0.09), v3(0.05, 0.27, -0.06), 0.004);
-      const base = shell(d, (_x, y, z) => 0.006 + 0.015 * smoothstep(0.1, 0.25, y) * (1 - 0.55 * smoothstep(0.03, 0.11, z)), masks);
+      const base = shell(d, (_x, y, z) => 0.005 + 0.011 * smoothstep(0.1, 0.25, y) * (1 - 0.55 * smoothstep(0.03, 0.11, z)), masks);
       return (x, y, z) => {
-        const h = smin(base(x, y, z), smax(sweep(x, y, z), -masks(x, y, z), 0.006), 0.025);
+        const h = smin(base(x, y, z), smax(sweep(x, y, z), -masks(x, y, z), 0.006), 0.02);
         return smax(h, -part(x, y, z), 0.004);
       };
     }
 
     case 'spiky': {
-      const masks = hairMasks(d, { nape: 0.085 });
       const base = shell(d, (_x, y) => 0.006 + 0.01 * smoothstep(0.12, 0.2, y), masks, 0.0008);
       const spikes: Sdf[] = [];
       const centre = new THREE.Vector3(0, 0.142, -0.012);
@@ -137,12 +154,12 @@ function styleSdf(style: HairStyle, d: AvatarDims): Sdf {
     }
 
     case 'curly-afro': {
-      const masks = hairMasks(d, { nape: 0.07, coverEars: true });
       const volume = ellipsoid(v3(0, 0.168, -0.022), d.headWidth + 0.062, 0.162, 0.168);
       const face = ellipsoid(v3(0, 0.07, 0.13), 0.1, 0.13, 0.1);
       return (x, y, z) => {
-        const curls = 0.0075 * (Math.sin(x * 95) * Math.sin(y * 95 + 1.3) * Math.sin(z * 95 + 2.1)) +
-          0.004 * Math.sin(x * 190 + y * 170) * Math.sin(z * 180);
+        // Tight coils: many small bumps rather than a few big blobs.
+        const curls = 0.0042 * (Math.sin(x * 150) * Math.sin(y * 150 + 1.3) * Math.sin(z * 150 + 2.1)) +
+          0.0022 * Math.sin(x * 260 + y * 230) * Math.sin(z * 250);
         let h = volume(x, y, z) + curls;
         h = smax(h, -face(x, y, z), 0.02);
         return smax(h, -masks(x, y, z) - 0.02, 0.01);
@@ -150,7 +167,6 @@ function styleSdf(style: HairStyle, d: AvatarDims): Sdf {
     }
 
     case 'bob-cut': {
-      const masks = hairMasks(d, { fringeY: 0.168, nape: 0.035, coverEars: true });
       const cap = skull(d, 0.02);
       // A rounded, mushroom-like bob that curves back in toward the jaw.
       const volume = ellipsoid(v3(0, 0.14, -0.014), d.headWidth + 0.034, 0.152, 0.146);
@@ -165,7 +181,6 @@ function styleSdf(style: HairStyle, d: AvatarDims): Sdf {
     }
 
     case 'long-wavy': {
-      const masks = hairMasks(d, { fringeY: 0.19, nape: -0.06, coverEars: true });
       const cap = skull(d, 0.018);
       const curtain = roundCone(v3(0, -0.07, -0.06), v3(0, 0.2, -0.015), d.headWidth + 0.016, d.headWidth + 0.02);
       const sweep = ellipsoid(v3(0.035, 0.21, 0.07), 0.07, 0.03, 0.05);
@@ -186,7 +201,7 @@ function styleSdf(style: HairStyle, d: AvatarDims): Sdf {
     case 'ponytail':
     default:
       // Sleek cap; the tail itself is a separate swaying mesh.
-      return shell(d, (_x, y) => 0.008 + 0.006 * smoothstep(0.12, 0.22, y), hairMasks(d, { nape: 0.075 }), 0.0014);
+      return shell(d, (_x, y) => 0.008 + 0.006 * smoothstep(0.12, 0.22, y), masks, 0.0014);
   }
 }
 
@@ -226,7 +241,108 @@ export function hairMeshSpec(style: HairStyle, part: HairPart, d: AvatarDims, un
   const hair = styleSdf(style, d);
   const hat = hatInterior(under, style);
   const sdf: Sdf = hat ? (x, y, z) => smax(hair(x, y, z), -hat(x, y, z), 0.004) : hair;
-  return { sdf, ...BOUNDS, cellSize: cell, ao: { distance: 0.025 } };
+  // Hair thins out over the last few millimetres before the hairline (and at
+  // the tips of a fringe) instead of ending in a hard, wig-like edge.
+  const masks = hairMasks(d, STYLE_MASKS[style] ?? STYLE_MASKS.ponytail);
+  const grow = style === 'curly-afro' ? 0.02 : 0;
+  const alpha = (x: number, y: number, z: number) => smoothstep(-0.001, 0.009, masks(x, y, z) + grow);
+  return { sdf, ...BOUNDS, cellSize: cell, ao: { distance: 0.025 }, alpha };
+}
+
+// ─── Strand detail ───────────────────────────────────────────────────────────
+
+/**
+ * Texture coordinates that follow the hair: u runs around the crown (across
+ * the strands), v away from it (along them). The strand texture and the
+ * anisotropic highlight both use them, so highlights stretch along the hair.
+ * The u seam sits at the nape, where it is least visible.
+ */
+export function ensureStrandUv(geo: THREE.BufferGeometry, frame: 'head' | 'tail' | 'face'): void {
+  if (geo.getAttribute('uv')) return; // cached geometry is shared
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const uv = new Float32Array(pos.count * 2);
+  const p = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    p.fromBufferAttribute(pos, i);
+    let u: number, v: number;
+    if (frame === 'head') {
+      const q = p.clone().sub(HEAD_CENTRE);
+      u = (Math.atan2(q.dot(AXIS_U), -q.dot(AXIS_V)) / (Math.PI * 2)) * 22;
+      v = Math.acos(Math.min(1, q.normalize().dot(CROWN_AXIS))) * 0.5;
+    } else if (frame === 'tail') {
+      u = (Math.atan2(p.x, p.z + 0.04) / (Math.PI * 2)) * 6;
+      v = -p.y * 2;
+    } else {
+      u = (Math.atan2(p.x, p.z + 0.02) / (Math.PI * 2)) * 40;
+      v = p.y * 4;
+    }
+    uv[i * 2] = u;
+    uv[i * 2 + 1] = v;
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+}
+
+let strandTexture: THREE.CanvasTexture | null = null;
+
+/**
+ * Fine strands (light and dark lines running along v) used as a colour
+ * modulation and bump map on hair, so it reads as hair rather than a shell.
+ */
+export function getStrandTexture(): THREE.CanvasTexture {
+  if (strandTexture) return strandTexture;
+  const W = 256, H = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = 'rgb(205,205,205)';
+  ctx.fillRect(0, 0, W, H);
+  let s = 12345;
+  const rand = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  // Clumps: soft lighter and darker bands a few strands wide.
+  for (let i = 0; i < 9; i++) {
+    const x = rand() * W;
+    const w = 10 + rand() * 26;
+    const shade = rand() < 0.5 ? 255 : 90;
+    for (const dx of [-W, 0, W]) {
+      const g = ctx.createLinearGradient(x + dx - w, 0, x + dx + w, 0);
+      g.addColorStop(0, `rgba(${shade},${shade},${shade},0)`);
+      g.addColorStop(0.5, `rgba(${shade},${shade},${shade},${0.25 + rand() * 0.2})`);
+      g.addColorStop(1, `rgba(${shade},${shade},${shade},0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(x + dx - w, 0, 2 * w, H);
+    }
+  }
+  for (let i = 0; i < 700; i++) {
+    const x = rand() * W;
+    const shade = 160 + rand() * 95;
+    ctx.strokeStyle = `rgba(${shade},${shade},${shade},${0.3 + rand() * 0.4})`;
+    ctx.lineWidth = 0.5 + rand() * 1.1;
+    const sway = (rand() - 0.5) * 2;
+    // Each strand wraps vertically so the texture tiles.
+    for (const dx of [-W, 0, W]) {
+      ctx.beginPath();
+      ctx.moveTo(x + dx, -2);
+      ctx.bezierCurveTo(x + dx + sway, H * 0.33, x + dx - sway, H * 0.66, x + dx, H + 2);
+      ctx.stroke();
+    }
+  }
+  strandTexture = new THREE.CanvasTexture(canvas);
+  strandTexture.wrapS = strandTexture.wrapT = THREE.RepeatWrapping;
+  strandTexture.anisotropy = 8;
+  return strandTexture;
+}
+
+/**
+ * Tunes the (per-avatar) hair material for a style: coily hair scatters
+ * light and has no single long highlight; straight hair is sleeker.
+ */
+export function styleHairMaterial(mat: THREE.MeshPhysicalMaterial, style: HairStyle): void {
+  const coily = style === 'curly-afro';
+  mat.roughness = coily ? 0.78 : 0.56;
+  mat.anisotropy = coily ? 0.05 : 0.4;
+  mat.specularIntensity = coily ? 0.25 : 0.4;
+  mat.bumpScale = coily ? 1.2 : 0.6;
 }
 
 /** Assembles a hairstyle (child of the head) from its meshed parts. */
@@ -237,6 +353,8 @@ export function assembleHair(
 ): THREE.Object3D {
   const group = new THREE.Group();
   group.name = `Hair_${style}`;
+  if (geos.main) ensureStrandUv(geos.main, 'head');
+  if (geos['ponytail-tail']) ensureStrandUv(geos['ponytail-tail'], 'tail');
   const mesh = new THREE.Mesh(geos.main, material);
   mesh.castShadow = true;
   group.add(mesh);

@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import type { Eyewear, FacialHair, HairStyle, Headwear } from '../../../../types/character';
 import { type Sdf, v3, ellipsoid, roundBox, sphere, smin, smax } from '../sdf/sdf';
 import type { AvatarDims } from './anatomy';
-import { headBaseSdf, headLayout } from './head';
+import { beardZone, headBaseSdf, headLayout } from './head';
 import { hairVolume } from './hatShape';
+import { ensureStrandUv } from './hair';
 import { taperedTube } from './face';
 import type { AvatarMaterials } from './materials';
 import type { MeshSpec } from './meshSpec';
@@ -57,9 +58,11 @@ export function buildEyewear(
   if (kind === 'none') return null;
   const group = new THREE.Group();
   group.name = `Eyewear_${kind}`;
-  const R = d.eyeRadius;
-  const frameR = kind === 'thick-frame' ? 0.0034 : kind === 'sunglasses' ? 0.0026 : 0.0012;
-  const lensZ = Math.max(...eyes.map((e) => e[2])) + R + 0.013;
+  const L = headLayout(d);
+  // Lens size: real frames are ~5 cm wide, a little over the eye opening.
+  const R = 0.0225;
+  const frameR = kind === 'thick-frame' ? 0.0028 : kind === 'sunglasses' ? 0.0021 : 0.001;
+  const lensZ = Math.max(...eyes.map((e) => e[2])) + d.eyeRadius + 0.016;
   const shape2d = outline(kind, R);
 
   const innerEdges: THREE.Vector3[] = [];
@@ -88,11 +91,12 @@ export function buildEyewear(
     innerEdges.push(new THREE.Vector3(innerX, R * 0.25, 0).applyMatrix4(lens.matrix));
     const outerX = side > 0 ? Math.max(...shape2d.map((p) => p.x)) : Math.min(...shape2d.map((p) => p.x));
     const hinge = new THREE.Vector3(outerX, R * 0.45, 0).applyMatrix4(lens.matrix);
+    // Arms run back along the temples, rest on the ears and hook behind them.
     const templePts = [
       hinge,
-      new THREE.Vector3(side * (d.headWidth + 0.011), 0.142, 0.035),
-      new THREE.Vector3(side * (d.headWidth + 0.015), 0.151, -0.012),
-      new THREE.Vector3(side * (d.headWidth + 0.008), 0.128, -0.042),
+      new THREE.Vector3(side * (d.headWidth + 0.009), L.earY + 0.03, 0.05),
+      new THREE.Vector3(side * (d.headWidth + 0.012), L.earY + 0.029, L.earZ + 0.02),
+      new THREE.Vector3(side * (d.headWidth + 0.006), L.earY + 0.008, L.earZ - 0.02),
     ];
     const templeGeo = taperedTube(templePts, (t) => Math.max(frameR, 0.0016) * (1 - 0.25 * t), 24, 6);
     group.add(new THREE.Mesh(templeGeo, mats.glasses));
@@ -133,7 +137,7 @@ export function headwearMeshSpec(kind: Headwear, part: HeadwearPart, hair: HairS
 
   switch (kind) {
     case 'cap': {
-      const dome = ellipsoid(v3(0, 0.148 + lift * 0.5, -0.012), W + grow + 0.015, 0.126 + lift + 0.008, 0.122 + grow + 0.011);
+      const dome = ellipsoid(v3(0, 0.146 + lift * 0.5, -0.012), W + grow + 0.009, 0.126 + lift * 0.7 + 0.005, 0.12 + grow + 0.008);
       const brim = ellipsoid(v3(0, 0.188 + lift * 0.4, 0.15 + grow * 0.5), 0.086, 0.006, 0.07);
       const button = sphere(v3(0, crownTop + 0.012, -0.01), 0.009);
       const field: Sdf = (x, y, z) => {
@@ -146,7 +150,7 @@ export function headwearMeshSpec(kind: Headwear, part: HeadwearPart, hair: HairS
       return { sdf: field, min: [-0.2, 0.08, -0.2], max: [0.2, 0.34, 0.26], cellSize: 0.0032, ao };
     }
     case 'beanie': {
-      const dome = ellipsoid(v3(0, 0.16 + lift * 0.5, -0.014), W + grow + 0.018, 0.134 + lift, 0.124 + grow + 0.014);
+      const dome = ellipsoid(v3(0, 0.152 + lift * 0.5, -0.014), W + grow + 0.012, 0.128 + lift * 0.7, 0.12 + grow + 0.01);
       const edge = (y: number, z: number) => 0.155 + lift * 0.3 + 0.2 * z - y;
       const field: Sdf = (x, y, z) => {
         const rib = 0.0011 * Math.sin(Math.atan2(x, z) * 52);
@@ -158,7 +162,7 @@ export function headwearMeshSpec(kind: Headwear, part: HeadwearPart, hair: HairS
       return { sdf: field, min: [-0.2, 0.06, -0.2], max: [0.2, 0.34, 0.2], cellSize: 0.0032, ao };
     }
     case 'mortarboard': {
-      const capDome = ellipsoid(v3(0, 0.155 + lift * 0.5, -0.012), W + grow + 0.014, 0.124 + lift, 0.122 + grow + 0.01);
+      const capDome = ellipsoid(v3(0, 0.15 + lift * 0.5, -0.012), W + grow + 0.009, 0.122 + lift * 0.7, 0.12 + grow + 0.008);
       const board = roundBox(v3(0, crownTop + 0.016, -0.015), 0.13, 0.0055, 0.13, 0.002);
       const button = sphere(v3(0, crownTop + 0.024, -0.015), 0.008);
       const field: Sdf = (x, y, z) => {
@@ -170,13 +174,15 @@ export function headwearMeshSpec(kind: Headwear, part: HeadwearPart, hair: HairS
     case 'headphones':
     default: {
       const bandR = W + grow + 0.022;
-      const centre = v3(0, 0.122, -0.006);
+      const centre = v3(0, L.earY + 0.008, L.earZ);
       const band: Sdf = (x, y, z) => {
         const q = Math.sqrt((x - centre.x) ** 2 + ((y - centre.y) * 0.92) ** 2) - bandR;
         const ring = Math.max(Math.abs(q) - 0.007, Math.abs(z - centre.z) - 0.014);
         return smax(ring, centre.y + 0.02 - y, 0.004);
       };
-      const cups: Sdf[] = [1, -1].map((s) => roundBox(v3(s * (W + 0.03), 0.118, -0.006), 0.016, 0.038, 0.03, 0.014));
+      // Cups sit on the ears, or on top of a big hairstyle.
+      const cupX = W + 0.028 + grow * 0.75;
+      const cups: Sdf[] = [1, -1].map((s) => roundBox(v3(s * cupX, L.earY, L.earZ), 0.016, 0.038, 0.03, 0.014));
       const field: Sdf = (x, y, z) => smin(band(x, y, z), Math.min(cups[0](x, y, z), cups[1](x, y, z)), 0.012);
       return { sdf: field, min: [-0.2, 0.05, -0.08], max: [0.2, 0.34, 0.07], cellSize: 0.003, ao };
     }
@@ -228,7 +234,7 @@ export function assembleHeadwear(
         const cushion = new THREE.Mesh(new THREE.CylinderGeometry(0.031, 0.031, 0.012, 32), cushionMat);
         cushion.rotation.z = Math.PI / 2;
         cushion.scale.set(1, 1, 0.82);
-        cushion.position.set(s * (W + 0.012), 0.118, -0.006);
+        cushion.position.set(s * (W + 0.014 + grow * 0.75), L.earY, L.earZ);
         group.add(cushion);
       }
       break;
@@ -275,17 +281,19 @@ export function assembleHeadwear(
 
 /** What to mesh for a facial-hair style (head-bone space), or null for none. */
 export function facialHairMeshSpec(style: FacialHair, d: AvatarDims): MeshSpec | null {
-  if (style === 'none') return null;
+  // Stubble is painted into the skin (see headTint), so only beards are meshed.
+  if (style === 'none' || style === 'stubble') return null;
   const L = headLayout(d);
   const head = headBaseSdf(d);
-  const mouth = ellipsoid(v3(0, L.mouthY - 0.002, 0.11), 0.023, 0.0085, 0.04);
-  const nose = ellipsoid(v3(0, 0.1, 0.125), 0.024, 0.024, 0.032);
-  const mustache = ellipsoid(v3(0, L.mouthY + 0.016, 0.104), 0.03, 0.0085, 0.022);
+  // Clear of the lips in every expression.
+  const mouth = ellipsoid(v3(0, L.mouthY, L.lipZ - 0.004), d.mouthHalfWidth * 1.2, 0.0115, 0.03);
+  const zone = beardZone(d);
+  const mustache = ellipsoid(v3(0, L.mouthY + 0.018, L.lipZ - 0.006), 0.03, 0.0085, 0.02);
 
   let field: Sdf;
   if (style === 'goatee') {
     const thickness = 0.0042;
-    const chin = ellipsoid(v3(0, 0.038, 0.078), 0.022, 0.026, 0.04);
+    const chin = ellipsoid(v3(0, -0.01, 0.09), 0.02, 0.028, 0.04);
     field = (x, y, z) => {
       const shellD = head(x, y, z) - thickness;
       const patch = smax(shellD, chin(x, y, z), 0.006);
@@ -293,33 +301,22 @@ export function facialHairMeshSpec(style: FacialHair, d: AvatarDims): MeshSpec |
       return smax(Math.min(patch, tache), -mouth(x, y, z), 0.003);
     };
   } else {
-    const thickness = style === 'beard' ? 0.011 : 0.0016;
     field = (x, y, z) => {
       // Jaw, chin and cheeks below the cheekbones, with sideburns at the sides.
-      const side = smoothstep(0.06, 0.1, Math.abs(x));
-      const allow = Math.min(0.094 + 0.04 * side - y, z + 0.03, y + 0.012);
-      let s = smax(head(x, y, z) - thickness, -allow, 0.006);
-      s = smax(s, -mouth(x, y, z), 0.003);
-      s = smax(s, -nose(x, y, z), 0.004);
-      if (style === 'beard') s = smin(s, smax(head(x, y, z) - 0.008, mustache(x, y, z), 0.004), 0.004);
-      return s;
+      const s = smax(head(x, y, z) - 0.0075, -zone(x, y, z), 0.005);
+      return smin(s, smax(head(x, y, z) - 0.0062, mustache(x, y, z), 0.004), 0.004);
     };
   }
-  return { sdf: field, min: [-0.14, -0.03, -0.08], max: [0.14, 0.17, 0.16], cellSize: 0.0032, ao: { distance: 0.012 } };
+  // Thins out at its edges instead of ending in a hard line.
+  const alpha = (x: number, y: number, z: number) =>
+    style === 'beard' ? smoothstep(-0.002, 0.008, zone(x, y, z)) : 1;
+  return { sdf: field, min: [-0.14, -0.075, -0.08], max: [0.14, 0.17, 0.17], cellSize: 0.0028, ao: { distance: 0.012 }, alpha };
 }
 
 export function assembleFacialHair(style: FacialHair, geo: THREE.BufferGeometry, material: THREE.Material): THREE.Object3D {
+  ensureStrandUv(geo, 'face');
   const mesh = new THREE.Mesh(geo, material);
   mesh.name = `FacialHair_${style}`;
-  mesh.castShadow = style !== 'stubble';
-  if (style === 'stubble') {
-    // Stubble is a translucent shadow of hair rather than a solid layer.
-    const stubble = (material as THREE.MeshPhysicalMaterial).clone();
-    stubble.transparent = true;
-    stubble.opacity = 0.2;
-    stubble.depthWrite = false;
-    mesh.material = stubble;
-    mesh.userData.ownsMaterial = true;
-  }
+  mesh.castShadow = true;
   return mesh;
 }

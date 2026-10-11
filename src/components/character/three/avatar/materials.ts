@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { CharacterCustomization } from '../../../../types/character';
-import { getEyeTexture } from './face';
+import { getEyeTexture, getLashTexture } from './face';
+import { getStrandTexture } from './hair';
 
 export interface AvatarMaterials {
   skin: THREE.MeshPhysicalMaterial;
@@ -9,7 +10,7 @@ export interface AvatarMaterials {
   brow: THREE.MeshStandardMaterial;
   facialHair: THREE.MeshPhysicalMaterial;
   eye: THREE.MeshPhysicalMaterial;
-  lash: THREE.MeshStandardMaterial;
+  lash: THREE.MeshBasicMaterial;
   /** Tops: zone 0 = main colour, zone 1 = secondary (trims, varsity sleeves). */
   top: THREE.MeshPhysicalMaterial;
   /** Secondary colour as a plain material, for details like drawstrings. */
@@ -79,26 +80,42 @@ function fabricColor(hex: string): THREE.Color {
   return lum > 0.72 ? c.multiplyScalar(0.72 / lum) : c;
 }
 
-/** Lip tint: the skin tone pulled toward a warm rose. */
-export function lipColorFor(c: CharacterCustomization): string {
-  const rose = c.gender === 'female' ? '#c2566b' : '#b0645a';
-  return new THREE.Color(c.skinTone).lerp(new THREE.Color(rose), 0.5).getStyle();
+/**
+ * Skin: a soft specular with a warm, red-shifted sheen at grazing angles,
+ * which stands in for light scattering under the skin. Lip, cheek and lid
+ * colour come from per-vertex tints on the head (see headTint).
+ */
+function skinMaterial(): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    roughness: 0.52,
+    metalness: 0,
+    specularIntensity: 0.55,
+    sheen: 0.32,
+    sheenRoughness: 0.5,
+  });
 }
 
 export function createAvatarMaterials(initial: CharacterCustomization): AvatarMaterials {
-  const skin = new THREE.MeshPhysicalMaterial({
-    roughness: 0.6,
-    metalness: 0,
-    sheen: 0.45,
-    sheenRoughness: 0.55,
-  });
+  const skin = skinMaterial();
+  // Hair: strand texture as colour and bump, with an anisotropic highlight
+  // that runs along the strands (see ensureStrandUv).
+  const strands = getStrandTexture();
   const hair = new THREE.MeshPhysicalMaterial({
-    roughness: 0.62,
+    roughness: 0.56,
     metalness: 0,
-    sheen: 0.3,
-    sheenRoughness: 0.45,
+    map: strands,
+    bumpMap: strands,
+    bumpScale: 0.6,
+    anisotropy: 0.4,
+    anisotropyRotation: Math.PI / 2,
+    specularIntensity: 0.4,
+    sheen: 0.22,
+    sheenRoughness: 0.5,
+    // Soft hairline: vertex alpha resolved by MSAA coverage (no sorting).
+    alphaToCoverage: true,
   });
-  const facialHair = hair.clone();
+  // Facial hair is coarser and less glossy than scalp hair.
+  const facialHair = Object.assign(hair.clone(), { roughness: 0.8, anisotropy: 0, specularIntensity: 0.25, sheen: 0.12 });
   // Brows: matte, a little darker than the hair (thin strokes read too light otherwise).
   const brow = new THREE.MeshStandardMaterial({ roughness: 0.85 });
 
@@ -112,7 +129,7 @@ export function createAvatarMaterials(initial: CharacterCustomization): AvatarMa
 
   const m = {
     skin,
-    lid: skin.clone(),
+    lid: Object.assign(skinMaterial(), { side: THREE.DoubleSide }),
     hair,
     brow,
     facialHair,
@@ -122,7 +139,15 @@ export function createAvatarMaterials(initial: CharacterCustomization): AvatarMa
       clearcoat: 1,
       clearcoatRoughness: 0.03,
     }),
-    lash: new THREE.MeshStandardMaterial({ color: 0x1c1416, roughness: 0.75 }),
+    // Unlit: lashes are too fine to shade, and lit cards catch grey highlights.
+    lash: new THREE.MeshBasicMaterial({
+      color: 0x120d0b,
+      map: getLashTexture(),
+      transparent: true,
+      alphaTest: 0.02,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
     top,
     topSecondary: fabric(),
     bottom: fabric(0.9, 0.5),
@@ -148,7 +173,8 @@ export function createAvatarMaterials(initial: CharacterCustomization): AvatarMa
   const applyColors = (c: CharacterCustomization) => {
     m.skin.color.set(c.skinTone);
     m.skin.sheenColor.copy(lighten(c.skinTone, 0.55)).lerp(new THREE.Color('#ff9e8a'), 0.25);
-    m.lid.color.set(c.skinTone).multiplyScalar(0.93).lerp(new THREE.Color('#b0645a'), 0.05);
+    // Lids match the tinted, shadowed skin around the eyes (see headTint).
+    m.lid.color.set(c.skinTone).multiplyScalar(0.8).lerp(new THREE.Color('#8a5058'), 0.08);
     m.lid.sheenColor.copy(m.skin.sheenColor);
     m.hair.color.set(c.hairColor);
     m.hair.sheenColor.copy(lighten(c.hairColor, 0.25));

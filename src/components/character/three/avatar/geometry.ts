@@ -26,6 +26,8 @@ export function buildPayload(
   data: MeshData,
   opts: {
     materialOf?: (x: number, y: number, z: number) => number;
+    tint?: (x: number, y: number, z: number) => [number, number, number];
+    alpha?: (x: number, y: number, z: number) => number;
     skin?: { skinIndex: Uint16Array; skinWeight: Float32Array };
   } = {}
 ): GeometryPayload {
@@ -41,6 +43,27 @@ export function buildPayload(
       colors[i * 3 + 2] = a * (0.9 + 0.1 * a);
     }
     payload.color = colors;
+  }
+  if (opts.tint) {
+    const p = data.positions;
+    const colors = payload.color ?? new Float32Array(p.length).fill(1);
+    for (let v = 0; v < p.length / 3; v++) {
+      const [r, g, b] = opts.tint(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
+      colors[v * 3] *= r;
+      colors[v * 3 + 1] *= g;
+      colors[v * 3 + 2] *= b;
+    }
+    payload.color = colors;
+  }
+  if (opts.alpha) {
+    const p = data.positions;
+    const n = p.length / 3;
+    const rgba = new Float32Array(n * 4);
+    for (let v = 0; v < n; v++) {
+      for (let c = 0; c < 3; c++) rgba[v * 4 + c] = payload.color ? payload.color[v * 3 + c] : 1;
+      rgba[v * 4 + 3] = opts.alpha(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
+    }
+    payload.color = rgba;
   }
   if (opts.skin) {
     payload.skinIndex = opts.skin.skinIndex;
@@ -66,7 +89,7 @@ export function payloadToGeometry(p: GeometryPayload): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(p.positions, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(p.normals, 3));
-  if (p.color) g.setAttribute('color', new THREE.BufferAttribute(p.color, 3));
+  if (p.color) g.setAttribute('color', new THREE.BufferAttribute(p.color, p.color.length / (p.positions.length / 3)));
   if (p.skinIndex) g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(p.skinIndex, 4));
   if (p.skinWeight) g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(p.skinWeight, 4));
   if (p.zone) g.setAttribute('zone', new THREE.BufferAttribute(p.zone, 1));

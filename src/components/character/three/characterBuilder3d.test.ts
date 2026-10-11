@@ -99,6 +99,35 @@ describe('characterBuilder3d unit tests', { timeout: 30_000 }, () => {
     });
   });
 
+  it('has adult human proportions: ~1.6 m tall and about seven heads high', () => {
+    for (const { custom } of sampleConfigs) {
+      const char = buildCharacter3D({ ...custom, hairStyle: 'buzz', headwear: 'none' }, { showPedestal: false, showShadow: false });
+      char.root.updateMatrixWorld(true);
+      const body = new THREE.Box3().setFromObject(char.root);
+      // Head height is crown to chin: the head mesh also carries a short
+      // neck stub (hidden inside the neck), so the chin is the lowest point
+      // of the face's front.
+      const headMesh = char.root.getObjectByName('Head') as THREE.Mesh;
+      const pos = headMesh.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const p = new THREE.Vector3();
+      let crown = -Infinity, chin = Infinity;
+      for (let i = 0; i < pos.count; i++) {
+        p.fromBufferAttribute(pos, i);
+        const front = p.z > 0.07;
+        p.applyMatrix4(headMesh.matrixWorld);
+        crown = Math.max(crown, p.y);
+        if (front) chin = Math.min(chin, p.y);
+      }
+      const height = body.max.y - body.min.y;
+      const heads = height / (crown - chin);
+      expect(height).toBeGreaterThan(1.5);
+      expect(height).toBeLessThan(1.75);
+      expect(heads).toBeGreaterThan(6.3);
+      expect(heads).toBeLessThan(7.8);
+      char.dispose();
+    }
+  });
+
   it('builds every top and bottom as a visible, non-empty mesh', () => {
     const tops = ['hoodie', 'varsity-jacket', 'button-down', 'sweater', 'lab-coat', 'casual-tee'] as const;
     const bottoms = ['jeans', 'chinos', 'joggers', 'pleated-skirt', 'shorts'] as const;

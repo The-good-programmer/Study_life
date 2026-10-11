@@ -10,6 +10,9 @@ export const BONE_NAMES = [
 ] as const;
 
 export type BoneName = (typeof BONE_NAMES)[number];
+
+/** The head sits forward of the neck base: the neck leans forward a little. */
+export const HEAD_BONE_Z = 0.02;
 export type BoneMap = Record<BoneName, THREE.Bone>;
 
 export interface AvatarRig {
@@ -48,7 +51,7 @@ export function buildRig(d: AvatarDims): AvatarRig {
   bones.chest.add(bones.neck);
   bones.neck.position.set(0, d.neckY - d.chestY, -0.008);
   bones.neck.add(bones.head);
-  bones.head.position.set(0, d.headY - d.neckY, 0.006);
+  bones.head.position.set(0, d.headY - d.neckY, HEAD_BONE_Z);
 
   for (const side of [1, -1] as const) {
     const s = side === 1 ? 'L' : 'R';
