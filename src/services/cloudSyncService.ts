@@ -337,8 +337,6 @@ export class CloudSyncService {
       });
   }
 
-  private static autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
-
   /**
    * Subscribe to cloud sync config and status changes
    */
