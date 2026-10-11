@@ -16,14 +16,15 @@ const custom: CharacterCustomization = { ...characterService.getCharacter() };
 for (const [k, v] of params) if (k in custom) (custom as unknown as Record<string, string>)[k] = v;
 
 const VIEWS: Record<string, { pos: [number, number, number]; target: [number, number, number] }> = {
-  face: { pos: [0, 1.41, 0.5], target: [0, 1.39, 0] },
-  head: { pos: [0, 1.38, 0.78], target: [0, 1.36, 0] },
-  head3q: { pos: [0.5, 1.4, 0.62], target: [0, 1.37, 0] },
-  torso: { pos: [0, 1.15, 1.5], target: [0, 1.05, 0] },
-  full: { pos: [0, 0.9, 2.8], target: [0, 0.78, 0] },
-  side: { pos: [2.6, 0.95, 0], target: [0, 0.78, 0] },
-  back: { pos: [0, 1.0, -2.8], target: [0, 0.8, 0] },
-  three: { pos: [1.3, 1.2, 2.2], target: [0, 0.85, 0] },
+  face: { pos: [0, 1.5, 0.42], target: [0, 1.49, 0] },
+  head: { pos: [0, 1.5, 0.7], target: [0, 1.49, 0] },
+  head3q: { pos: [0.42, 1.52, 0.56], target: [0, 1.49, 0.01] },
+  headSide: { pos: [0.7, 1.5, 0.02], target: [0, 1.49, 0.01] },
+  torso: { pos: [0, 1.3, 1.7], target: [0, 1.2, 0] },
+  full: { pos: [0, 0.95, 3.2], target: [0, 0.84, 0] },
+  side: { pos: [3.0, 1.0, 0], target: [0, 0.84, 0] },
+  back: { pos: [0, 1.05, -3.2], target: [0, 0.86, 0] },
+  three: { pos: [1.5, 1.3, 2.5], target: [0, 0.92, 0] },
 };
 
 const stage = document.getElementById('stage')!;
@@ -98,6 +99,19 @@ addEventListener('resize', () => {
     const v = VIEWS[name];
     camera.position.set(...v.pos);
     camera.lookAt(...v.target);
+    renderer.render(scene, camera);
+  },
+  /** Free camera: lab.look([x, y, z], [tx, ty, tz]). */
+  look: (pos: [number, number, number], target: [number, number, number]) => {
+    camera.position.set(...pos);
+    camera.lookAt(...target);
+    renderer.render(scene, camera);
+  },
+  /** Shows or hides meshes by name (e.g. 'Top', 'Hair_buzz'). */
+  show: (name: string, visible: boolean) => {
+    avatar.root.traverse((o) => {
+      if (o.name === name) o.visible = visible;
+    });
     renderer.render(scene, camera);
   },
 };

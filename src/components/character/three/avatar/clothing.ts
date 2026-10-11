@@ -133,6 +133,8 @@ export function buildTopSpec(
     regionInflate: { torso: looseTowardHem, armL: (st.loose ?? 0) * 0.4, armR: (st.loose ?? 0) * 0.4 },
     clip: { torso: hemCut, armL: sleeveCut('L'), armR: sleeveCut('R') },
     clipRound: 0.005,
+    // A tight armpit join: a wide one bunches into a bulge when the arm lowers.
+    kAttach: 0.016,
   });
 
   const extraParts: BodyPart[] = [];

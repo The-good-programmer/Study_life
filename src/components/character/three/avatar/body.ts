@@ -80,7 +80,7 @@ export function buildBodyParts(rig: AvatarRig, d: AvatarDims): BodyPart[] {
     const elbow = bonePoint(rig, `forearm${s}`);
     const wrist = bonePoint(rig, `hand${s}`);
     const bicep = bonePoint(rig, `upperArm${s}`, 0, -d.upperArmLen * 0.42, 0.006);
-    add(`deltoid${s}`, `upperArm${s}`, region, S(toV(bonePoint(rig, `upperArm${s}`, 0, -0.014, 0)), d.shoulderRadius * 0.9));
+    add(`deltoid${s}`, `upperArm${s}`, region, S(toV(bonePoint(rig, `upperArm${s}`, 0, -0.014, 0)), d.shoulderRadius * 0.8));
     add(`upperArm${s}`, `upperArm${s}`, region, RC(toV(shoulder), toV(elbow), d.upperArmRadius * 0.95, d.upperArmRadius * 0.8));
     add(`bicep${s}`, `upperArm${s}`, region, E(toV(bicep), d.upperArmRadius * 0.92, d.upperArmLen * 0.3, d.upperArmRadius * 0.95));
     add(`forearm${s}`, `forearm${s}`, region, RC(toV(elbow), toV(wrist), d.forearmRadius, d.wristRadius));

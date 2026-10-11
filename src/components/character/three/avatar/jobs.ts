@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import type {
-  BodyType, CharacterGender, FacialHair, HairStyle, Headwear, OutfitBottom, OutfitTop, Shoes,
+  BodyType, CharacterGender, CharacterMood, FacialHair, HairStyle, Headwear, OutfitBottom, OutfitTop, Shoes,
 } from '../../../../types/character';
-import { getAvatarDims, EYE_DEPTH, type AvatarDims } from './anatomy';
+import { getAvatarDims, type AvatarDims } from './anatomy';
 import { buildRig, type AvatarRig } from './rig';
 import { buildBodyParts, composeBody, type BodyPart } from './body';
 import { handSdf, handBounds } from './hands';
-import { headBaseSdf, headSdf, headBounds, headLayout, traceFront } from './head';
+import { headSdf, headBounds, headTint } from './head';
 import { buildTopSpec, buildBottomSpec, shoeSpec } from './clothing';
 import { hairMeshSpec, type HairPart } from './hair';
 import { headwearMeshSpec, facialHairMeshSpec, type HeadwearPart } from './accessories';
@@ -15,7 +15,7 @@ import type { GeometryPayload } from './geometry';
 
 // Mesh resolutions (metres per cell), tuned for a ~150k-triangle avatar.
 const BODY_CELL = 0.011;
-const HEAD_CELL = 0.0048;
+const HEAD_CELL = 0.0033; // head-space units (the head is scaled ~0.7)
 const HAND_CELL = 0.003;
 const GARMENT_CELL = 0.0098;
 const SHOE_CELL = 0.0045;
@@ -31,7 +31,7 @@ export type GeometryJob =
   | ({ kind: 'body' } & Shape)
   | ({ kind: 'bodyCull'; top: OutfitTop; bottom: OutfitBottom; boots: boolean } & Shape)
   | ({ kind: 'hand'; side: 'L' | 'R' } & Shape)
-  | ({ kind: 'head' } & Shape)
+  | ({ kind: 'head'; mood: CharacterMood; stubble: boolean } & Shape)
   | ({ kind: 'top'; top: OutfitTop } & Shape)
   | ({ kind: 'bottom'; bottom: OutfitBottom; boots: boolean } & Shape)
   | ({ kind: 'shoe'; shoes: Shoes } & Shape)
@@ -67,18 +67,6 @@ export function shapeContext(gender: CharacterGender, bodyType: BodyType): Shape
     contexts.set(key, ctx);
   }
   return ctx;
-}
-
-/** Eyeball centres on the face surface, slightly sunk into their sockets. */
-export function eyeCentres(d: AvatarDims): [number, number, number][] {
-  const L = headLayout(d);
-  const base = headBaseSdf(d);
-  return [1, -1].map((side) => {
-    const x = side * L.eyeX;
-    const z = traceFront(base, x, L.eyeY) ?? L.eyeZ + L.eyeR;
-    // Eyes are flattened to EYE_DEPTH; sink them so ~40% of that depth shows.
-    return [x, L.eyeY, z - L.eyeR * EYE_DEPTH * 0.6] as [number, number, number];
-  });
 }
 
 // Garment specs build small detail meshes; the worker only needs the fields.
@@ -147,7 +135,10 @@ export function runGeometryJob(job: GeometryJob): JobResult {
 
     case 'head':
       return {
-        payload: runMeshSpec({ sdf: headSdf(d, eyeCentres(d)), ...headBounds(), cellSize: HEAD_CELL, ao: { distance: 0.02, strength: 0.75 } }),
+        payload: runMeshSpec({
+          sdf: headSdf(d, job.mood), ...headBounds(), cellSize: HEAD_CELL,
+          ao: { distance: 0.016, strength: 0.8 }, tint: headTint(d, job.mood, job.stubble),
+        }),
       };
 
     case 'top': {

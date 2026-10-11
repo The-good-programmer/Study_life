@@ -14,6 +14,10 @@ export interface MeshSpec {
   max: [number, number, number];
   cellSize: number;
   ao?: { distance: number; strength?: number };
+  /** Per-vertex colour multiplied into the material (e.g. lip colour on skin). */
+  tint?: (x: number, y: number, z: number) => [number, number, number];
+  /** Per-vertex opacity (stored as the colour's alpha), e.g. a soft hairline. */
+  alpha?: (x: number, y: number, z: number) => number;
   /** Per-vertex colour zone (see makeZoned in materials.ts). */
   materialOf?: (x: number, y: number, z: number) => number;
   /** Skin to the avatar skeleton using these tagged parts. */
@@ -24,6 +28,8 @@ export function runMeshSpec(spec: MeshSpec): GeometryPayload {
   const data = meshSdf(spec.sdf, { min: spec.min, max: spec.max, cellSize: spec.cellSize, ao: spec.ao });
   return buildPayload(data, {
     materialOf: spec.materialOf,
+    tint: spec.tint,
+    alpha: spec.alpha,
     skin: spec.skin ? computeSkinWeights(data.positions, spec.skin.parts, spec.skin.boneIndex) : undefined,
   });
 }

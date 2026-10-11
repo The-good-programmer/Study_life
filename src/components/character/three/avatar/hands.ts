@@ -10,7 +10,7 @@ const HAND_SCALE = 1.2;
  * left hand and -1 for the right; the palm faces the body (-side * X).
  */
 export function handSdf(d: AvatarDims, side: 1 | -1): Sdf {
-  const s = (d.wristRadius / 0.026) * HAND_SCALE; // scale with the forearm
+  const s = (d.wristRadius / 0.022) * HAND_SCALE; // scale with the forearm
   const palmIn = -side; // direction the palm faces, along X
 
   const wrist = ellipsoid(v3(0, -0.006 * s, 0), 0.0165 * s, 0.016 * s, 0.024 * s);
@@ -54,6 +54,6 @@ export function handSdf(d: AvatarDims, side: 1 | -1): Sdf {
 
 /** Bounds of the hand in its local frame, for meshing. */
 export function handBounds(d: AvatarDims): { min: [number, number, number]; max: [number, number, number] } {
-  const s = (d.wristRadius / 0.026) * HAND_SCALE;
+  const s = (d.wristRadius / 0.022) * HAND_SCALE;
   return { min: [-0.035 * s, -0.135 * s, -0.045 * s], max: [0.035 * s, 0.02 * s, 0.07 * s] };
 }

@@ -2,19 +2,19 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { CharacterCustomization, CharacterPose } from '../../../types/character';
 import { buildRig, type AvatarRig, type BoneName } from './avatar/rig';
-import { headBaseSdf, headLayout } from './avatar/head';
+import { eyeCentres } from './avatar/head';
 import { buildFace, getEyeTexture, type FaceRig } from './avatar/face';
 import { buildTopSpec } from './avatar/clothing';
-import { hairParts, assembleHair, type HairPart } from './avatar/hair';
+import { hairParts, assembleHair, styleHairMaterial, type HairPart } from './avatar/hair';
 import {
   buildEyewear, headwearParts, assembleHeadwear, assembleFacialHair, type HeadwearPart,
 } from './avatar/accessories';
 import { AvatarAnimator } from './avatar/animator';
 import { coversHair } from './avatar/hatShape';
-import { createAvatarMaterials, type AvatarMaterials, lipColorFor } from './avatar/materials';
-import { shapeContext, eyeCentres, type GeometryJob } from './avatar/jobs';
+import { createAvatarMaterials, type AvatarMaterials } from './avatar/materials';
+import { shapeContext, type GeometryJob } from './avatar/jobs';
 import { geometryService, type Resolved } from './avatar/geometryService';
-import type { AvatarDims } from './avatar/anatomy';
+import { AVATAR_SCALE, type AvatarDims } from './avatar/anatomy';
 
 export interface CharacterModelInstance {
   root: THREE.Group;
@@ -108,9 +108,11 @@ function createBuild(
 
   const group = new THREE.Group();
   group.name = 'Avatar';
+  group.scale.setScalar(AVATAR_SCALE);
   group.add(rig.root);
   const headRoot = new THREE.Group();
   headRoot.name = 'HeadRoot';
+  headRoot.position.set(...dims.headOffset);
   headRoot.scale.setScalar(dims.headScale);
   rig.bones.head.add(headRoot);
   const book = buildBook(mats);
@@ -217,10 +219,9 @@ function createBuild(
   const rebuildFace = () => {
     if (!headGeometry) return;
     face?.dispose();
-    face = buildFace(dims, headLayout(dims), headBaseSdf(dims), new THREE.Mesh(headGeometry), eyeCentres(dims), custom.mood, lipColorFor(custom), {
-      skin: mats.skin,
+    face = buildFace(dims, custom.mood, new THREE.Mesh(headGeometry), {
       lid: mats.lid,
-      hair: mats.brow,
+      brow: mats.brow,
       eye: mats.eye,
       lash: mats.lash,
     });
@@ -230,12 +231,12 @@ function createBuild(
   const requestHead = () =>
     request(
       'head',
-      [{ kind: 'head', ...shape }],
+      [{ kind: 'head', mood: custom.mood, stubble: custom.facialHair === 'stubble', ...shape }],
       ([g]) => {
         headGeometry = g as THREE.BufferGeometry;
         return [['head', rigid(headGeometry, mats.skin, 'Head')]];
       },
-      rebuildFace // the face's decals are projected onto the new head
+      rebuildFace // the brows are projected onto the new head
     );
 
   const requestTop = () => {
@@ -288,6 +289,7 @@ function createBuild(
     request('hair', pieces.map((part) => ({ kind: 'hair', style, part, under, ...shape })), (results) => {
       const geos: Partial<Record<HairPart, THREE.BufferGeometry>> = {};
       pieces.forEach((p, i) => (geos[p] = results[i] as THREE.BufferGeometry));
+      styleHairMaterial(mats.hair, style);
       const hair = assembleHair(style, geos, mats.hair);
       ponytail = hair.getObjectByName('PonytailPivot') ?? null;
       return [['head', hair]];
@@ -307,7 +309,8 @@ function createBuild(
 
   const requestFacialHair = () => {
     const style = custom.facialHair ?? 'none';
-    if (style === 'none') {
+    // Stubble is painted into the head's skin (see headTint), not a mesh.
+    if (style === 'none' || style === 'stubble') {
       request('facialHair', [], () => []);
       return;
     }
@@ -342,7 +345,9 @@ function createBuild(
     ponytail: () => ponytail,
     apply(prev, next) {
       custom = { ...next };
-      if (prev.mood !== next.mood || prev.skinTone !== next.skinTone) rebuildFace();
+      // Expressions are sculpted, so a new mood re-meshes the head (then the face).
+      // Stubble is part of the skin too.
+      if (prev.mood !== next.mood || (prev.facialHair === 'stubble') !== (next.facialHair === 'stubble')) requestHead();
       const topChanged = prev.outfitTop !== next.outfitTop;
       const bottomChanged = prev.outfitBottom !== next.outfitBottom || (prev.shoes === 'boots') !== (next.shoes === 'boots');
       if (topChanged) requestTop();
