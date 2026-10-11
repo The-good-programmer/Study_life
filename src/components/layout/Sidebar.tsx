@@ -322,7 +322,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <NavItem icon={Compass} label="Explore decks" collapsed={collapsed} onClick={go(onOpenStarterCatalog)} />
         </div>
 
-        <GroupLabel collapsed={collapsed}>Life</GroupLabel>
+        <GroupLabel collapsed={collapsed}>Extras</GroupLabel>
         <div className="space-y-0.5">
           <NavItem
             icon={Building2}

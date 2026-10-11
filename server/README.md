@@ -9,8 +9,11 @@ backed by PostgreSQL.
 
 1. **AI gateway (`/api/ai/generate`, `/api/ai/stream`)**
    - Keeps your master `GEMINI_API_KEY` on the server, so students don't need their own keys.
-   - Signed-in users only, with a burst limit and a per-user daily quota (atomic in the database).
-   - Falls back across several Gemini models.
+   - Signed-in users only, with a burst limit and daily quotas per account, per network and for the whole service
+     (atomic in the database), so the bill has a ceiling.
+   - Serves the app's own requests, not general Gemini use: text and images only, up to 200,000 characters,
+     only the response schemas the app uses (`src/aiSchemas.js`), and a system instruction to stick to studying.
+   - Falls back across Gemini Flash models (never a Pro model).
 
 2. **Authentication (`/api/auth/*`)**
    - Password accounts (PBKDF2, hashed off the main thread) and Google sign-in (ID tokens verified server-side).
@@ -21,9 +24,12 @@ backed by PostgreSQL.
 
 3. **Cloud sync (`/api/sync/*`)**
    - Decks, stats and how the avatar looks. Tokens, level and XP are never taken from a client.
+   - Up to 2,000 decks and 25 MB per account.
 
 4. **Community decks (`/api/decks/*`)**
    - Public sharing with slugs, search and one like per user.
+   - Authors can delete their decks; up to 20 published a day, 2 MB each.
+   - Readers can report a deck; reports from 3 different people hide it (set `hidden_at` back to null to restore).
 
 ---
 
@@ -37,7 +43,7 @@ npm run server
 It starts on `http://localhost:3001`. With no `DATABASE_URL`, an embedded PostgreSQL (PGlite) is used and kept in
 `server/data/pgdata`, so there is nothing to install. It is the same SQL dialect as production.
 
-Tests (`npx vitest run server`) use the embedded database in memory.
+Tests (`npm run test:server` from the repository root) use the embedded database in memory.
 
 ## Database
 
@@ -62,6 +68,8 @@ Old local data in `server/data/studify.sqlite` (from the SQLite version) is not 
 | `GET` | `/api/decks/public` | Search community decks |
 | `POST` | `/api/decks/share` | Publish a deck |
 | `POST` | `/api/decks/:id/like` | Like a deck (once per user) |
+| `POST` | `/api/decks/:id/report` | Report a deck: send `{"reason":"..."}` (once per user) |
+| `DELETE` | `/api/decks/:id` | Delete your own published deck |
 | `GET` | `/api/decks/:id` | Fetch a deck by id or slug |
 
 ---
@@ -73,7 +81,7 @@ Old local data in `server/data/studify.sqlite` (from the SQLite version) is not 
    reach the pooler. Before real users arrive, use a paid Supabase plan (free projects pause when idle and don't
    promise backups).
 2. **Service:** in Render, create a new **Web Service** from this repository (or use `render.yaml` as a Blueprint).
-   Leave **Root Directory empty** (the server shares code with the website, which lives outside `server/`).
+   Leave **Root Directory empty**; the build and start commands below work from the repository root.
    Build command `npm install --prefix server`, start command `npm start --prefix server`, health check path
    `/api/health`.
 3. **Environment variables** (Render, Environment tab; never put them in code):

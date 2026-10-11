@@ -22,6 +22,9 @@ import { DepthEstimationService, SUPPORTED_LANGUAGES } from './depthEstimationSe
 import { ApiConfig } from './apiConfig';
 import { FEYNMAN_EVALUATION_SCHEMA, VIVA_VOCE_TURN_SCHEMA, LEECH_ANALYSIS_SCHEMA, STUDY_SESSION_GENERATION_SCHEMA } from './aiSchemas';
 
+/** Source text sent for deck generation; the shared AI service refuses prompts over 200,000 characters. */
+const MAX_SOURCE_CHARS = 150_000;
+
 export interface VivaVoceTurnResponse {
   nextTurn: SocraticTurn;
   verdict?: VivaDefenseVerdict;
@@ -969,7 +972,7 @@ Material Type: ${isRawNotes ? 'Raw Lecture Notes / Text Paste' : 'Study Topic'}
 ${studentProfile ? `Student: Age ${studentProfile.age}, Country: ${studentProfile.country}, Grade: ${studentProfile.grade}` : `Target Academic Grade & Difficulty: ${effectiveGradeLevel.toUpperCase()}`}
 Target Checkpoint Depth Tier: ${effectiveTier.toUpperCase()}
 Content:
-"""${input}"""
+"""${input.slice(0, MAX_SOURCE_CHARS)}"""
 
 ${profileInstruction}
 

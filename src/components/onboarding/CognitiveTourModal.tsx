@@ -38,14 +38,14 @@ const Flow: React.FC<{ items: { label: string; icon?: LucideIcon; coin?: boolean
 
 const STEPS: TourStep[] = [
   {
-    title: 'Study anything. Get paid for it.',
-    body: 'Studify is a small world that runs on learning. Studying earns tokens, and tokens pay for your life on campus.',
+    title: 'Remember what you study',
+    body: 'Studify brings each card back shortly before you would forget it, so a few minutes a day keeps everything fresh.',
     points: [
-      'Reviews earn XP. Sessions, exams and games earn tokens too.',
-      'Pay depends on real work, and daily limits keep it fair.',
-      'Spend tokens on rent, food and your room.',
+      'Today shows what is due. Most days it takes a few minutes.',
+      'Rate honestly: Again, Hard, Good or Easy. The scheduler learns from your answers.',
+      'Insights shows what is sticking and which cards keep slipping.',
     ],
-    visual: <Flow items={[{ label: 'Study', icon: GraduationCap }, { label: 'Earn tokens', coin: true }, { label: 'Live on campus', icon: Building2 }]} />,
+    visual: <Flow items={[{ label: 'Learn', icon: GraduationCap }, { label: 'Review when due', icon: Repeat }, { label: 'Remember', icon: Check }]} />,
   },
   {
     title: 'AI builds your decks',
@@ -80,14 +80,14 @@ const STEPS: TourStep[] = [
     ),
   },
   {
-    title: 'Reviews come back at the right time',
-    body: 'Studify schedules every card on its own, bringing it back shortly before you would forget it. A few minutes a day keeps it all fresh.',
+    title: 'Optional: a campus to spend on',
+    body: 'Studying also earns tokens you can spend on an avatar and a home on campus. It is just for fun; ignore it if you only want to study.',
     points: [
-      'Today shows what is due and what it pays.',
-      'Rate honestly: Again, Hard, Good or Easy. Pay is the same for each rating.',
-      'Insights shows your memory, streak and earnings.',
+      'Sessions, exams and games earn tokens; reviews earn XP.',
+      'Each card pays once a day per activity, with daily limits.',
+      'Find Campus and your avatar under Extras in the menu.',
     ],
-    visual: <Flow items={[{ label: 'Learn', icon: GraduationCap }, { label: 'Review when due', icon: Repeat }, { label: 'Remember', icon: Check }]} />,
+    visual: <Flow items={[{ label: 'Study', icon: GraduationCap }, { label: 'Earn tokens', coin: true }, { label: 'Campus', icon: Building2 }]} />,
   },
 ];
 

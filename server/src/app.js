@@ -12,6 +12,8 @@ import { handleAuthRoutes } from './routes/authRoutes.js';
 import { handleSyncRoutes } from './routes/syncRoutes.js';
 import { handleDeckRoutes } from './routes/deckRoutes.js';
 import * as defaultAi from './ai.js';
+import { checkAiRequest } from './aiGuard.js';
+import { clientIp } from './rateLimit.js';
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5MB
 
@@ -63,16 +65,19 @@ async function authorizeAiRequest(req, res, ai) {
     sendJson(res, 429, { error: 'Rate limit exceeded. Please wait a moment before sending more AI requests.' });
     return null;
   }
-  if (!(await ai.consumeDailyQuota(user.id))) {
-    sendJson(res, 429, { error: 'Daily AI limit reached. It resets at midnight UTC, or add your own Gemini API key in Settings.' });
+  const spent = await ai.consumeDailyQuota(user.id, clientIp(req));
+  if (spent) {
+    sendJson(res, 429, { error: `${QUOTA_MESSAGES[spent]} It resets at midnight UTC, or add your own Gemini API key in Settings.` });
     return null;
   }
   return user;
 }
 
-function isValidContents(contents) {
-  return Boolean(contents) && (typeof contents === 'string' || Array.isArray(contents) || typeof contents === 'object');
-}
+const QUOTA_MESSAGES = {
+  user: 'Daily AI limit reached.',
+  ip: 'Daily AI limit reached for this network.',
+  all: 'The shared AI service has reached its daily limit.',
+};
 
 export function createApp({ ai = defaultAi } = {}) {
   const allowedOrigins = getAllowedOrigins();
@@ -145,15 +150,13 @@ export function createApp({ ai = defaultAi } = {}) {
 
       // 2. AI PROXY GATEWAYS (REST & SSE STREAMING) — signed-in users only
       if (pathname === '/api/ai/generate' && req.method === 'POST') {
+        // Checked before the quota, so a malformed request doesn't use one up.
+        const { request, error } = checkAiRequest(body);
+        if (error) return sendJson(res, 400, { error });
         if (!(await authorizeAiRequest(req, res, ai))) return;
 
-        const { contents, responseMimeType, enableThinking, responseSchema } = body || {};
-        if (!isValidContents(contents)) {
-          return sendJson(res, 400, { error: 'contents prompt or payload is required.' });
-        }
-
         try {
-          const text = await ai.generateContent({ contents, responseMimeType, enableThinking, responseSchema });
+          const text = await ai.generateContent(request);
           return sendJson(res, 200, { success: true, text });
         } catch (aiErr) {
           console.error('[Server AI Proxy] Error:', aiErr);
@@ -162,12 +165,9 @@ export function createApp({ ai = defaultAi } = {}) {
       }
 
       if (pathname === '/api/ai/stream' && req.method === 'POST') {
+        const { request, error } = checkAiRequest(body, { stream: true });
+        if (error) return sendJson(res, 400, { error });
         if (!(await authorizeAiRequest(req, res, ai))) return;
-
-        const { contents, responseMimeType, enableThinking } = body || {};
-        if (!isValidContents(contents)) {
-          return sendJson(res, 400, { error: 'contents prompt or payload is required.' });
-        }
 
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
@@ -176,7 +176,7 @@ export function createApp({ ai = defaultAi } = {}) {
         });
 
         try {
-          for await (const chunk of ai.generateContentStream({ contents, responseMimeType, enableThinking })) {
+          for await (const chunk of ai.generateContentStream(request)) {
             res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
           }
           res.write(`data: ${JSON.stringify({ done: true })}\n\n`);

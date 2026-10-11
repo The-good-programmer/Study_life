@@ -352,7 +352,7 @@ const CategoryChip: React.FC<{ label: string; count: number; active: boolean; on
 
 const DeckFeatures: React.FC<{ deck: StarterDeckMetadata }> = ({ deck }) => {
   const isBoardExam = isBoardExamDeck(deck);
-  if (!isBoardExam && !deck.hasImageOcclusion && !deck.hasSourcePdf) return null;
+  if (!isBoardExam && !deck.hasImageOcclusion && !deck.hasSourceNotes) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {isBoardExam && (
@@ -367,10 +367,10 @@ const DeckFeatures: React.FC<{ deck: StarterDeckMetadata }> = ({ deck }) => {
           Diagrams
         </Badge>
       )}
-      {deck.hasSourcePdf && (
+      {deck.hasSourceNotes && (
         <Badge>
           <FileText className="h-3 w-3" aria-hidden="true" />
-          Source PDF
+          Source notes
         </Badge>
       )}
     </div>

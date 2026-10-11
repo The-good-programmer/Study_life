@@ -818,38 +818,41 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                     <h3 className="text-[18px] font-semibold leading-snug text-ink">
                       <MathRenderer text={currentCard.question} />
                     </h3>
-                    <div className="relative flex w-full select-none items-center justify-center overflow-hidden rounded-2xl border border-line bg-canvas p-2">
-                      <img
-                        src={currentCard.imageUrl}
-                        alt="Diagram with hidden labels"
-                        className="pointer-events-none h-auto max-h-[380px] w-full rounded-xl object-contain"
-                      />
-                      {(currentCard.masks || []).map((mask, idx) => {
-                        const isTarget = mask.id === currentCard.activeMaskId;
-                        const isRevealed = isTarget && isAnswerRevealed;
-                        if (currentCard.occlusionMode === 'hide-one-reveal-one' && !isTarget) return null;
-                        const box = { left: `${mask.x}%`, top: `${mask.y}%`, width: `${mask.width}%`, height: `${mask.height}%` };
-                        if (isTarget) {
-                          return (
-                            <button
-                              key={mask.id}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleReveal();
-                              }}
-                              aria-label={isRevealed ? `Label: ${mask.label || currentCard.answer}` : `Reveal hidden label ${idx + 1}`}
-                              className={`absolute flex items-center justify-center rounded-lg p-1 text-[11px] font-semibold shadow-lg transition-colors cursor-pointer ${
-                                isRevealed ? 'bg-success text-success-ink' : 'animate-pulse bg-gold text-[#2a1d00] ring-2 ring-gold/40'
-                              }`}
-                              style={box}
-                            >
-                              <span className="truncate px-1">{isRevealed ? mask.label || currentCard.answer : '?'}</span>
-                            </button>
-                          );
-                        }
-                        return <div key={mask.id} className="absolute rounded-lg border border-line-strong bg-surface-solid" style={box} />;
-                      })}
+                    <div className="flex w-full select-none items-center justify-center overflow-hidden rounded-2xl border border-line bg-canvas p-2">
+                      {/* Sized to the image itself, so mask percentages land on the same spot of the diagram at any width. */}
+                      <div className="relative min-w-0 max-w-full">
+                        <img
+                          src={currentCard.imageUrl}
+                          alt="Diagram with hidden labels"
+                          className="pointer-events-none block h-auto max-h-[380px] w-auto max-w-full rounded-xl"
+                        />
+                        {(currentCard.masks || []).map((mask, idx) => {
+                          const isTarget = mask.id === currentCard.activeMaskId;
+                          const isRevealed = isTarget && isAnswerRevealed;
+                          if (currentCard.occlusionMode === 'hide-one-reveal-one' && !isTarget) return null;
+                          const box = { left: `${mask.x}%`, top: `${mask.y}%`, width: `${mask.width}%`, height: `${mask.height}%` };
+                          if (isTarget) {
+                            return (
+                              <button
+                                key={mask.id}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleReveal();
+                                }}
+                                aria-label={isRevealed ? `Label: ${mask.label || currentCard.answer}` : `Reveal hidden label ${idx + 1}`}
+                                className={`absolute flex items-center justify-center rounded-lg p-1 text-[11px] font-semibold shadow-lg transition-colors cursor-pointer ${
+                                  isRevealed ? 'bg-success text-success-ink' : 'bg-gold text-[#2a1d00] ring-2 ring-gold/40'
+                                }`}
+                                style={box}
+                              >
+                                <span className="truncate px-1">{isRevealed ? mask.label || currentCard.answer : '?'}</span>
+                              </button>
+                            );
+                          }
+                          return <div key={mask.id} className="absolute rounded-lg border border-line-strong bg-surface-solid" style={box} />;
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}

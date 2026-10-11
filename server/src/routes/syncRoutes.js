@@ -12,6 +12,13 @@ function send(res, status, payload) {
 
 const UNAUTHORIZED = 'Unauthorized. Please provide valid Bearer token.';
 
+// Per-account storage limits, so one account cannot fill the database.
+const MAX_SESSIONS_PER_USER = 2000;
+const MAX_SESSION_BYTES_PER_USER = 25 * 1024 * 1024;
+const MAX_STATS_BYTES = 1024 * 1024;
+
+class OverLimit extends Error {}
+
 /** A date from the client as an ISO string, or the fallback when it isn't a real date. */
 function validDate(value, fallback) {
   const parsed = new Date(value);
@@ -39,6 +46,44 @@ export function sanitizeCharacter(source) {
   return Object.keys(look).length > 0 ? look : null;
 }
 
+/** Writes a push that is within the account's limits. statsJson is null when the push carried no stats. */
+async function saveSync(t, user, sessions, statsJson, characterState, now) {
+  for (const session of sessions.values()) {
+    await t.run(
+      `INSERT INTO study_sessions (id, user_id, title, subject, data_json, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (id) DO UPDATE SET
+         title = excluded.title,
+         subject = excluded.subject,
+         data_json = excluded.data_json,
+         updated_at = excluded.updated_at
+       WHERE study_sessions.user_id = excluded.user_id`,
+      [
+        session.id,
+        user.id,
+        String(session.title || 'Untitled Session'),
+        String(session.subject || 'General'),
+        JSON.stringify(session),
+        validDate(session.createdAt, now),
+        now,
+      ],
+    );
+  }
+
+  const character = sanitizeCharacter(characterState);
+  if (statsJson || character) {
+    await t.run(
+      `INSERT INTO user_stats (user_id, stats_json, character_json, updated_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id) DO UPDATE SET
+         stats_json = excluded.stats_json,
+         character_json = excluded.character_json,
+         updated_at = excluded.updated_at`,
+      [user.id, statsJson || '{}', character ? JSON.stringify(character) : null, now],
+    );
+  }
+}
+
 export async function handleSyncRoutes(req, res, pathname, body) {
   // 1. SYNC PUSH
   if (pathname === '/api/sync/push' && req.method === 'POST') {
@@ -52,46 +97,38 @@ export async function handleSyncRoutes(req, res, pathname, body) {
     }
 
     const now = new Date().toISOString();
+    const statsJson = JSON.stringify(stats || {});
+    if (Buffer.byteLength(statsJson) > MAX_STATS_BYTES) {
+      return send(res, 413, { error: 'Study stats are too large to sync.' });
+    }
+    const incoming = new Map();
+    for (const session of Array.isArray(sessions) ? sessions : []) {
+      if (session && typeof session.id === 'string' && session.id) incoming.set(session.id, session);
+    }
 
-    await db.tx(async (t) => {
-      if (Array.isArray(sessions)) {
-        for (const session of sessions) {
-          if (!session || typeof session.id !== 'string' || !session.id) continue;
-          await t.run(
-            `INSERT INTO study_sessions (id, user_id, title, subject, data_json, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (id) DO UPDATE SET
-               title = excluded.title,
-               subject = excluded.subject,
-               data_json = excluded.data_json,
-               updated_at = excluded.updated_at
-             WHERE study_sessions.user_id = excluded.user_id`,
-            [
-              session.id,
-              user.id,
-              String(session.title || 'Untitled Session'),
-              String(session.subject || 'General'),
-              JSON.stringify(session),
-              validDate(session.createdAt, now),
-              now,
-            ],
-          );
+    try {
+      await db.tx(async (t) => {
+        if (incoming.size > 0) {
+          // What the account will hold after this push: its other sessions plus the ones sent now.
+          const stored = await t.all('SELECT id, octet_length(data_json) AS bytes FROM study_sessions WHERE user_id = $1', [user.id]);
+          let count = incoming.size;
+          let bytes = 0;
+          for (const row of stored) {
+            if (incoming.has(row.id)) continue;
+            count += 1;
+            bytes += Number(row.bytes);
+          }
+          for (const session of incoming.values()) bytes += Buffer.byteLength(JSON.stringify(session));
+          if (count > MAX_SESSIONS_PER_USER || bytes > MAX_SESSION_BYTES_PER_USER) throw new OverLimit();
         }
-      }
-
-      const character = sanitizeCharacter(characterState);
-      if (stats || character) {
-        await t.run(
-          `INSERT INTO user_stats (user_id, stats_json, character_json, updated_at)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (user_id) DO UPDATE SET
-             stats_json = excluded.stats_json,
-             character_json = excluded.character_json,
-             updated_at = excluded.updated_at`,
-          [user.id, JSON.stringify(stats || {}), character ? JSON.stringify(character) : null, now],
-        );
-      }
-    });
+        await saveSync(t, user, incoming, stats ? statsJson : null, characterState, now);
+      });
+    } catch (err) {
+      if (!(err instanceof OverLimit)) throw err;
+      return send(res, 413, {
+        error: `Cloud sync is full: an account can keep up to ${MAX_SESSIONS_PER_USER} decks and ${MAX_SESSION_BYTES_PER_USER / 1024 / 1024} MB in the cloud. Your decks are still saved on this device.`,
+      });
+    }
 
     return send(res, 200, {
       success: true,

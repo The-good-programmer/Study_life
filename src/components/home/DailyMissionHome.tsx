@@ -500,7 +500,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                 </div>
                 <h3 className="mt-4 text-[15px] font-semibold text-ink">No decks yet</h3>
                 <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-ink-muted">
-                  Start from a verified starter deck, or let the AI turn your lecture notes or a PDF into a deck.
+                  Start from a starter deck, or let the AI turn your lecture notes or a PDF into a deck.
                 </p>
                 <div className="mt-5 flex flex-wrap justify-center gap-2">
                   <Button variant="primary" icon={Compass} onClick={onOpenStarterCatalog}>
