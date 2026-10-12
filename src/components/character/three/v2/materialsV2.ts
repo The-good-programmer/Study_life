@@ -44,6 +44,7 @@ export function prepareMaterial(m: THREE.Material): THREE.Material {
   const role = roleOf(m.name);
   let out = m;
   if (role && STRAND_ROLES.has(role)) out = hairMaterial(m as THREE.MeshStandardMaterial);
+  if (role === 'skin') addScalpShading(out);
   if (role && CARD_ROLES.has(role)) {
     // Alpha-to-coverage (with MSAA) gives soft, order-independent strand edges.
     out.transparent = false;
@@ -79,6 +80,66 @@ function hairMaterial(src: THREE.MeshStandardMaterial): THREE.MeshPhysicalMateri
   hair.userData = { ...src.userData };
   src.dispose();
   return hair;
+}
+
+interface ScalpUniforms {
+  scalpBit: { value: number };
+  scalpColor: { value: THREE.Color };
+  scalpStrength: { value: number };
+}
+
+/**
+ * Tints the scalp under the worn hairstyle with the hair colour, so the
+ * hairline fades into the hair instead of meeting it at a hard edge, and so
+ * a buzz cut can be shading alone. The body carries a `_scalp` bit mask (one
+ * bit per hairstyle, see manifest.ts); the bit is interpolated across each
+ * triangle, which softens the edge over about a centimetre.
+ */
+function addScalpShading(m: THREE.Material) {
+  const uniforms: ScalpUniforms = {
+    scalpBit: { value: -1 },
+    scalpColor: { value: new THREE.Color() },
+    scalpStrength: { value: 0 },
+  };
+  m.userData.scalp = uniforms;
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = [
+      'attribute float _scalp;',
+      'uniform float scalpBit;',
+      'varying float vScalp;',
+      shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n\tvScalp = scalpBit < 0.0 ? 0.0 : mod( floor( _scalp / exp2( scalpBit ) ), 2.0 );'
+      ),
+    ].join('\n');
+    shader.fragmentShader = [
+      'uniform vec3 scalpColor;',
+      'uniform float scalpStrength;',
+      'varying float vScalp;',
+      shader.fragmentShader.replace(
+        '#include <map_fragment>',
+        '#include <map_fragment>\n\tdiffuseColor.rgb = mix( diffuseColor.rgb, scalpColor, vScalp * scalpStrength );'
+      ),
+    ].join('\n');
+  };
+  m.customProgramCacheKey = () => 'avatar-skin-scalp';
+}
+
+/** Shades the scalp under hairstyle `bit` (-1: none) in the hair colour. */
+export function setScalp(root: THREE.Object3D, bit: number, hairHex: string, strength: number) {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      const u = m.userData.scalp as ScalpUniforms | undefined;
+      if (!u) continue;
+      u.scalpBit.value = bit;
+      // Hair over skin reads darker than the hair itself.
+      u.scalpColor.value.set(hairHex).multiplyScalar(0.7);
+      u.scalpStrength.value = bit < 0 ? 0 : strength;
+    }
+  });
 }
 
 /** Sets every role-coloured material under root from the customization. */

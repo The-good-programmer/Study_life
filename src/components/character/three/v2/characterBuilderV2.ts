@@ -12,7 +12,7 @@ import { BodyHider, hideMask } from './bodyHide';
 import { SkeletonShaper } from './skeletonShape';
 import { FaceController } from './expressions';
 import { loadManifest, resolveItems, assetUrl, type AvatarManifest, type ResolvedItem, type Slot } from './manifest';
-import { applyRoleColors, prepareMaterial } from './materialsV2';
+import { applyRoleColors, prepareMaterial, setScalp } from './materialsV2';
 import { getQualityTier, type QualityTier } from './quality';
 import { measureDims, Retargeter } from './retarget';
 
@@ -117,7 +117,7 @@ export function buildCharacterV2(
     const removed = [...equipped.keys()].filter((s) => !wanted.some((it) => it.slot === s));
     const loaded = await Promise.all(
       changed.map((item) =>
-        deps.assets.acquire(item.url).then(
+        (item.url ? deps.assets.acquire(item.url) : Promise.resolve(new THREE.Group())).then(
           (object) => ({ item, object }),
           (err) => {
             console.warn(`[avatar v2] could not load ${item.slot} "${item.id}"`, err);
@@ -149,7 +149,7 @@ export function buildCharacterV2(
     });
     e.object.removeFromParent();
     disposeInstance(e.object);
-    deps.assets.release(e.item.url);
+    if (e.item.url) deps.assets.release(e.item.url);
   };
 
   const unequip = (slot: Slot) => {
@@ -230,6 +230,8 @@ export function buildCharacterV2(
     });
     reshape();
     applyRoleColors(avatar, current);
+    const hair = equipped.get('hair')?.item.entry;
+    setScalp(avatar, hair?.scalpBit ?? -1, current.hairColor, hair?.scalpOnly ? 0.92 : 0.75);
     face.setMeshes(avatar);
   };
 

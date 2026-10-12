@@ -1,0 +1,4 @@
+# Vendored and generated files must stay byte-for-byte as committed
+# (core.autocrlf would otherwise rewrite them on checkout).
+public/basis/** -text
+public/avatar/** -text

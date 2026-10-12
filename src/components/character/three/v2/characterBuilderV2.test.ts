@@ -139,6 +139,29 @@ describe('buildCharacterV2', () => {
     expect(assets.refCount('placeholder:hair/short-fade')).toBe(0);
   });
 
+  it('shades the scalp under the hair, and draws a buzz cut as shading alone', async () => {
+    const { d, assets } = deps();
+    const a = buildCharacterV2(custom({ hairColor: '#171717' }), { showShadow: false }, d);
+    await settle();
+    const skin = (find(a.root, 'Body_torso') as THREE.Mesh).material as THREE.Material;
+    const scalp = skin.userData.scalp;
+    expect(scalp.scalpBit.value).toBe(0);
+    expect(scalp.scalpStrength.value).toBeGreaterThan(0);
+
+    a.updateCustomization(custom({ hairStyle: 'buzz', hairColor: '#171717' }));
+    await settle();
+    expect(find(a.root, 'Item_hair_short-fade')).toBeUndefined();
+    expect(find(a.root, 'Item_hair_buzz')).toBeDefined(); // an empty stand-in, nothing loaded
+    expect(assets.refCount('')).toBe(0);
+    expect(scalp.scalpBit.value).toBe(1);
+    expect(scalp.scalpStrength.value).toBeGreaterThan(0.85);
+
+    a.updateCustomization(custom({ hairStyle: 'side-part' })); // no asset: optional slot empties
+    await settle();
+    expect(scalp.scalpBit.value).toBe(-1);
+    expect(scalp.scalpStrength.value).toBe(0);
+  });
+
   it('keeps only the latest of overlapping changes', async () => {
     const { d, assets } = deps();
     const a = buildCharacterV2(custom(), { showShadow: false }, d);

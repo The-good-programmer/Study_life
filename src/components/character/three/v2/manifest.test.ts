@@ -37,6 +37,12 @@ describe('avatar manifest', () => {
     expect(items.find((i) => i.slot === 'top')?.id).toBe('casual-tee');
   });
 
+  it('resolves scalp-only items with nothing to load', () => {
+    const buzz = resolveItems(m, custom({ hairStyle: 'buzz' }), 'medium').find((i) => i.slot === 'hair')!;
+    expect(buzz).toMatchObject({ id: 'buzz', url: '' });
+    expect(buzz.entry.scalpOnly).toBe(true);
+  });
+
   it('reports which customizer options still need assets', () => {
     const missing = missingItems(m);
     expect(missing.top).toContain('lab-coat');

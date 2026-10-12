@@ -75,9 +75,9 @@ for (const items of Object.values(manifest.items)) {
 }
 await writeFile(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 
-const tiers = new Set([manifest.base, ...Object.values(manifest.items).flatMap((i) => Object.values(i))].flatMap((e) => Object.keys(e.bytes)));
+const tiers = new Set([manifest.base, ...Object.values(manifest.items).flatMap((i) => Object.values(i))].flatMap((e) => Object.keys(e.bytes ?? {})));
 for (const tier of tiers) {
   const total = [manifest.base, ...Object.values(manifest.items).flatMap((i) => Object.values(i))]
-    .reduce((sum, e) => sum + (e.bytes[tier] ?? 0), 0);
+    .reduce((sum, e) => sum + (e.bytes?.[tier] ?? 0), 0);
   console.log(`${tier}: ${(total / 1e6).toFixed(2)} MB for the base and every item`);
 }

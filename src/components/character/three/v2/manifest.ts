@@ -38,6 +38,10 @@ export interface ItemEntry extends AssetRef {
   attach?: string;
   /** Bit in the body's `_HIDE` mask for the skin this item covers. */
   hideBit?: number;
+  /** Hair: bit in the body's `_SCALP` mask for the scalp it covers (tinted with the hair colour). */
+  scalpBit?: number;
+  /** An item drawn only as scalp shading, with no asset to load (a buzz cut). */
+  scalpOnly?: boolean;
 }
 
 export interface AvatarManifest {
@@ -91,6 +95,7 @@ export interface ResolvedItem {
   id: string;
   requested: string;
   entry: ItemEntry;
+  /** Empty for scalp-only items, which have nothing to load. */
   url: string;
 }
 
@@ -109,14 +114,15 @@ export function resolveItems(m: AvatarManifest, c: CharacterCustomization, tier:
     let id = requested in items ? requested : null;
     if (!id && required) id = Object.keys(items)[0] ?? null;
     if (!id) continue;
-    const url = assetUrl(items[id], tier);
-    if (url) out.push({ slot, id, requested, entry: items[id], url });
+    const url = items[id].scalpOnly ? '' : assetUrl(items[id], tier);
+    if (url !== null) out.push({ slot, id, requested, entry: items[id], url });
   }
   return out;
 }
 
 /** Option ids the customizer offers that the manifest has no asset for. */
 export function missingItems(m: AvatarManifest): Partial<Record<Slot, string[]>> {
+  // (Scalp-only items count as present: they need no asset.)
   const missing: Partial<Record<Slot, string[]>> = {};
   for (const slot of Object.keys(SLOT_IDS) as Slot[]) {
     const ids = SLOT_IDS[slot].filter((id) => !m.items[slot]?.[id]);
