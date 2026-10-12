@@ -65,10 +65,16 @@ export class SkeletonShaper {
     return Object.values(this.morphs).some((m) => m && Object.keys(m).length > 0);
   }
 
-  /** Tracks a skeleton (the base's, or a garment's bound to the same bones). */
+  /**
+   * Tracks a skeleton (the base's, or a garment's bound to the same bones).
+   * Its inverse bind matrices are replaced by private copies first: cloned
+   * assets share them with the cached original (and with every other avatar
+   * built from it), so rebinding them in place would compound across loads.
+   */
   addSkeleton(skeleton: THREE.Skeleton) {
     if (this.skeletons.has(skeleton)) return;
     this.skeletons.set(skeleton, skeleton.boneInverses.map((m) => m.clone()));
+    skeleton.boneInverses = skeleton.boneInverses.map((m) => m.clone());
     this.rebind(skeleton);
   }
 
