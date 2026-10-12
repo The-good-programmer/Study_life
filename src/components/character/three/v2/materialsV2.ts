@@ -31,16 +31,54 @@ export function roleOf(materialName: string): MaterialRole | null {
 /** Card-based hair, brows, lashes and beards: soft edges without sorting. */
 const CARD_ROLES = new Set<MaterialRole>(['hair', 'brow', 'facialHair']);
 
-/** One-time per-material setup when an asset joins an avatar. */
-export function prepareMaterial(m: THREE.Material) {
+/** Roles drawn as strands: they get an anisotropic, hair-like highlight. */
+const STRAND_ROLES = new Set<MaterialRole>(['hair', 'facialHair']);
+
+/**
+ * One-time setup when an asset joins an avatar. Returns the material to use,
+ * which may be a replacement (hair is upgraded to a physical material);
+ * calling it again on its result is a no-op.
+ */
+export function prepareMaterial(m: THREE.Material): THREE.Material {
+  if (m.userData.prepared) return m;
   const role = roleOf(m.name);
+  let out = m;
+  if (role && STRAND_ROLES.has(role)) out = hairMaterial(m as THREE.MeshStandardMaterial);
   if (role && CARD_ROLES.has(role)) {
     // Alpha-to-coverage (with MSAA) gives soft, order-independent strand edges.
-    m.transparent = false;
-    m.alphaToCoverage = true;
-    m.alphaTest = 0.02;
-    m.side = THREE.DoubleSide;
+    out.transparent = false;
+    out.alphaToCoverage = true;
+    out.alphaTest = 0.02;
+    out.side = THREE.DoubleSide;
   }
+  out.userData.prepared = true;
+  return out;
+}
+
+/**
+ * Hair shading: real hair reads through a highlight stretched along the
+ * strands (anisotropic specular) and a soft sheen at grazing angles. The
+ * asset textures run strands along V, so the anisotropy is turned 90° from
+ * the U-aligned tangent three.js derives from the UVs.
+ */
+function hairMaterial(src: THREE.MeshStandardMaterial): THREE.MeshPhysicalMaterial {
+  const hair = new THREE.MeshPhysicalMaterial({
+    name: src.name,
+    map: src.map,
+    color: src.color,
+    normalMap: src.normalMap,
+    roughness: 0.42,
+    metalness: 0,
+    anisotropy: 0.85,
+    anisotropyRotation: Math.PI / 2,
+    specularIntensity: 0.7,
+    sheen: 0.35,
+    sheenRoughness: 0.5,
+    sheenColor: new THREE.Color(0.35, 0.33, 0.3),
+  });
+  hair.userData = { ...src.userData };
+  src.dispose();
+  return hair;
 }
 
 /** Sets every role-coloured material under root from the customization. */

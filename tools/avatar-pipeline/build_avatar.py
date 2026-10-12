@@ -97,7 +97,15 @@ BASE_PARTS = [
 # Wearable items. A source may be split into several items by height
 # (`split`: item -> "upper" / "lower" part of the source's loose pieces).
 ITEM_SOURCES = [
-    {"mhclo": "hair/short01/short01.mhclo", "type": "Hair", "items": {("hair", "short-fade"): "hair_short01"}},
+    # MakeHuman's hair, mapped to Studify's styles (buzz is a stand-in until
+    # it gets scalp shading of its own).
+    *[
+        {"mhclo": f"hair/{src}/{src}.mhclo", "type": "Hair", "items": {("hair", style): f"hair_{src}"}}
+        for style, src in [
+            ("short-fade", "short04"), ("curly-afro", "afro01"), ("bob-cut", "bob01"), ("long-wavy", "long01"),
+            ("ponytail", "ponytail01"), ("spiky", "short02"), ("side-part", "short03"), ("buzz", "short01"),
+        ]
+    ],
     {
         "mhclo": "clothes/male_casualsuit01/male_casualsuit01.mhclo", "type": "Clothes",
         "items": {("top", "button-down"): "top_shirt", ("bottom", "jeans"): "bottom_jeans"},
@@ -442,7 +450,14 @@ def read_mhmat(path):
     return props
 
 
-def load_texture(path, size, neutralise):
+# Average brightness tinted textures are normalised to. Hair textures carry
+# painted-in shine, so they sit darker to keep dark colours dark under the
+# runtime's specular highlight.
+NEUTRAL_GREY = {"hair": 0.5}
+DEFAULT_GREY = 0.82
+
+
+def load_texture(path, size, neutralise, grey=DEFAULT_GREY):
     img = bpy.data.images.load(path, check_existing=False)
     img.name = os.path.basename(path)
     if img.size[0] > size:
@@ -454,7 +469,7 @@ def load_texture(path, size, neutralise):
         opaque = px[:, 3] > 0.5
         mean = px[opaque, :3].mean(axis=0) if opaque.any() else px[:, :3].mean(axis=0)
         # Keep the texture's detail but make its average a light neutral grey.
-        px[:, :3] = np.clip(px[:, :3] / np.maximum(mean, 1e-3) * 0.82, 0, 1)
+        px[:, :3] = np.clip(px[:, :3] / np.maximum(mean, 1e-3) * grey, 0, 1)
         img.pixels.foreach_set(px.ravel())
     img.pack()
     return img
@@ -473,7 +488,7 @@ def simple_material(name, mhmat_path, size, cutout=False):
     diffuse = props.get("diffuseTexture")
     if diffuse:
         tex = nt.nodes.new("ShaderNodeTexImage")
-        tex.image = load_texture(os.path.join(folder, diffuse), size, role in TINTED_ROLES)
+        tex.image = load_texture(os.path.join(folder, diffuse), size, role in TINTED_ROLES, NEUTRAL_GREY.get(role, DEFAULT_GREY))
         nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
         if cutout or props.get("transparent") == "True":
             nt.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])

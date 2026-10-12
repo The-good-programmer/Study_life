@@ -120,9 +120,26 @@ describe('material roles', () => {
   });
 
   it('renders hair cards with alpha-to-coverage instead of blending', () => {
-    const hair = new THREE.MeshStandardMaterial({ name: 'hair_cards', transparent: true });
-    prepareMaterial(hair);
+    const brow = new THREE.MeshStandardMaterial({ name: 'brow_cards', transparent: true });
+    expect(prepareMaterial(brow)).toBe(brow);
+    expect(brow.alphaToCoverage).toBe(true);
+    expect(brow.transparent).toBe(false);
+  });
+
+  it('upgrades hair to an anisotropic physical material, once', () => {
+    const map = new THREE.Texture();
+    const src = new THREE.MeshStandardMaterial({ name: 'hair_short01', map, transparent: true });
+    const hair = prepareMaterial(src) as THREE.MeshPhysicalMaterial;
+    expect(hair.isMeshPhysicalMaterial).toBe(true);
+    expect(hair.name).toBe('hair_short01');
+    expect(hair.map).toBe(map);
+    expect(hair.anisotropy).toBeGreaterThan(0.5);
     expect(hair.alphaToCoverage).toBe(true);
-    expect(hair.transparent).toBe(false);
+    expect(prepareMaterial(hair)).toBe(hair);
+    // Still coloured by role afterwards.
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BufferGeometry(), hair));
+    applyRoleColors(g, { hairColor: '#66391a' } as never);
+    expect(hair.color.getHexString()).toBe('66391a');
   });
 });
