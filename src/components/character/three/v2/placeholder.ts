@@ -267,6 +267,10 @@ export function placeholderManifest(): AvatarManifest {
   }
   // A buzz cut is scalp shading only: nothing to load.
   (items.hair ??= {}).buzz = { files: {}, scalpOnly: true, scalpBit: 1 };
+  items.facialHair = {
+    stubble: { files: {}, scalpOnly: true, beardBit: 8, shadeStrength: 0.3 },
+    beard: { files: {}, scalpOnly: true, beardBit: 8, shadeStrength: 0.88 },
+  };
   // A male body stands 4 cm taller from the neck up (joints only; enough to exercise the runtime).
   const up: [number, number, number] = [0, 0.04, 0];
   const jointMorphs = { gender_male: { neck_01: up, head: up } };

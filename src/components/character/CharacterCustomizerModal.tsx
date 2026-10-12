@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BookOpen, Check, Glasses, Hand, Palette, RotateCw, Shirt, Shuffle, Smile, Sparkles, Trophy, User, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -32,6 +32,15 @@ import { cn } from '../../utils/cn';
 import { Dialog, DialogPanel } from '../common/Dialog';
 import { Button, IconButton } from '../ui/primitives';
 import { CharacterCanvas3D } from './CharacterCanvas3D';
+import { getPortrait, savePortrait } from './portraitStore';
+
+/** Snapshots the 3D avatar for the 2D badges (three.js is already loaded wherever this runs). */
+function snapshotPortrait(look: CharacterCustomization) {
+  void import('./three/portraitRenderer')
+    .then(({ renderPortrait }) => renderPortrait(look))
+    .then((url) => savePortrait(look, url))
+    .catch(() => {}); // the SVG badge stays
+}
 
 export interface CharacterCustomizerModalProps {
   isOpen: boolean;
@@ -110,6 +119,13 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
     }
   }
 
+  // Avatars saved before portraits existed get one the first time the editor opens.
+  useEffect(() => {
+    if (!isOpen) return;
+    const saved = characterService.getCharacter();
+    if (!getPortrait(saved)) snapshotPortrait(saved);
+  }, [isOpen]);
+
   const update = (partial: Partial<CharacterCustomization>) => {
     setCharacter(prev => ({ ...prev, ...partial }));
     setHasChanges(true);
@@ -118,6 +134,7 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
 
   const save = () => {
     characterService.updateCustomization(character);
+    snapshotPortrait({ ...character });
     soundEngine.playSuccess();
     onSaved?.(character);
     onClose();

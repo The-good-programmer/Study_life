@@ -47,6 +47,7 @@ import addon_utils  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import accessories  # noqa: E402  (tools/avatar-pipeline/accessories.py)
+import garments  # noqa: E402  (tools/avatar-pipeline/garments.py)
 addon_utils.enable("bl_ext.blender_org.mpfb", default_set=True)
 
 from bl_ext.blender_org.mpfb.entities.objectproperties import HumanObjectProperties
@@ -474,6 +475,46 @@ def scalp_coverage(body, body_co, hair, eye_top, eye_y):
     return sorted(covered)
 
 
+# Facial hair drawn as shading on the skin (MakeHuman has no beard meshes):
+# style -> (region, strength). Bits 8+ of the body's `_scalp` mask hold the
+# regions, after the hairstyles' bits.
+FACIAL_HAIR = {"stubble": ("beard", 0.55), "goatee": ("goatee", 1.0), "beard": ("beard", 1.0)}
+FACIAL_BITS = {"beard": 8, "goatee": 9}
+
+
+def facial_hair_regions(body, body_co, real, eye_co):
+    """Beard and goatee regions on the face, from the lips, eyes and ears.
+
+    Beard: the lower face up to a cheek line that rises from just above the
+    upper lip (centre) to below the eyes (sides), to the sideburns, and a
+    little under the jaw. Goatee: a mustache over the upper lip plus a patch
+    on the chin. Lips and ears are never included.
+    """
+    def group(name):
+        gi = body.vertex_groups[name].index
+        return {v.index for v in body.data.vertices if any(g.group == gi and g.weight > 0.5 for g in v.groups)}
+
+    lips, ears = group("lips"), group("ears")
+    lip_co = body_co[sorted(lips)]
+    mx, lip_top, lip_bot = float(lip_co[:, 0].mean()), float(lip_co[:, 2].max()), float(lip_co[:, 2].min())
+    eye_z, eye_y = float(eye_co[:, 2].mean()), float(eye_co[:, 1].mean())
+    ear_y = eye_y + 0.075  # just in front of the ears (Blender's front is -Y)
+    beard, goatee = [], []
+    for i, (x, y, z) in enumerate(body_co):
+        if not real[i] or i in lips or i in ears or y > ear_y + 0.01:
+            continue
+        if z > eye_z - 0.03 or z < lip_bot - 0.06:
+            continue
+        dx = abs(x - mx)
+        cheek_line = lip_top + 0.015 + (eye_z - 0.045 - lip_top - 0.015) * min(1.0, dx / 0.055)
+        if z > cheek_line:
+            continue
+        beard.append(i)
+        if (lip_top - 0.002 < z < lip_top + 0.02 and dx < 0.03) or (lip_bot - 0.05 < z < lip_bot and dx < 0.022):
+            goatee.append(i)
+    return {"beard": beard, "goatee": goatee}
+
+
 def mark_layering(item_objects, manifest_items):
     """Gives inner items a `_hide` mask for the vertices an outer item covers."""
     layered = [(*LAYERS[slot], slot, item_id, obj) for slot, item_id, obj in item_objects if slot in LAYERS]
@@ -860,6 +901,46 @@ def main():
             manifest_items.setdefault(slot, {})[item_id] = entry
             item_objects.append((slot, item_id, obj))
 
+    # Garments built from MakeHuman ones (hoodie, lab coat): new parts are
+    # skinned from the body and follow its variants through a Surface Deform.
+    tops = {item_id: obj for slot, item_id, obj in item_objects if slot == "top"}
+    body_variants = {v: captured[v]["coords"][basemesh.name] for v in BODY_VARIANTS}
+
+    def derived_top(item_id, source_id, parts, bones):
+        nonlocal next_bit
+        source = tops[source_id]
+        obj = garments.duplicate(source, f"Item_{item_id}")
+        parts.data.materials.append(obj.data.materials[0])
+        garments.skin_from_body(parts, xbody, xrig, bones)
+        garments.morphs_via_surface_deform(parts, xbody, body_variants)
+        garments.join_into(obj, parts)
+        # Hides the same skin as its source, under a bit of its own.
+        src_bit = manifest_items["top"][source_id]["hideBit"]
+        bit = next_bit
+        next_bit += 1
+        covered = (hide.astype(np.int64) >> src_bit) & 1
+        hide[covered == 1] += float(1 << bit)
+        manifest_items["top"][item_id] = {"files": {}, "hideBit": bit}
+        item_objects.append(("top", item_id, obj))
+        log(f"{item_id}: built from {source_id}, hide bit {bit}")
+
+    sweater = tops["sweater"]
+    sweater_co = np.array([v.co[:] for v in sweater.data.vertices])
+    hood = garments.build_hoodie_parts(sweater, waist_cut)
+    back = (float(sweater_co[:, 0].mean()), float(sweater_co[:, 1].max()), float(waist_cut + 0.25))
+    garments.set_constant_uv(hood.data, garments.uv_near(sweater, back))
+    derived_top("hoodie", "sweater", hood, {"spine_01", "spine_02", "spine_03", "neck_01", "clavicle_l", "clavicle_r"})
+
+    shirt = tops["button-down"]
+    shirt_co = np.array([v.co[:] for v in shirt.data.vertices])
+    # Torso and legs only: in the bind pose the hands hang right beside the hips.
+    body_faces = [p.vertices[:] for p in xbody.data.polygons
+                  if all(real[v] and abs(body_co[v][0]) < 0.21 for v in p.vertices)]
+    tail = garments.build_coat_tail(shirt, body_co, body_faces)
+    back = (float(shirt_co[:, 0].mean()), float(shirt_co[:, 1].max()), float(waist_cut + 0.2))
+    garments.set_constant_uv(tail.data, garments.uv_near(shirt, back))
+    derived_top("lab-coat", "button-down", tail, {"pelvis", "spine_01", "thigh_l", "thigh_r"})
+
     # Procedural glasses and hats, rigged to the head with body-shape morphs.
     shell = accessories.HeadShell(xbody, real, neutral_fit)
     builders = (("eyewear", accessories.GLASSES, lambda st: accessories.build_glasses(st, neutral_fit)),
@@ -882,6 +963,16 @@ def main():
     # A leading underscore makes the glTF exporter keep it (three.js reads it as `_hide`).
     attr = xbody.data.attributes.new("_hide", "FLOAT", "POINT")
     attr.data.foreach_set("value", hide)
+    # Facial hair regions share the mask (bits after the hairstyles').
+    regions = facial_hair_regions(xbody, body_co, real, eye_co)
+    for region, bit in FACIAL_BITS.items():
+        assert bit >= next_scalp_bit, "facial hair bits overlap the hairstyles'"
+        scalp[regions[region]] += float(1 << bit)
+        log(f"facial hair region {region}: {len(regions[region])} vertices (bit {bit})")
+    for style, (region, strength) in FACIAL_HAIR.items():
+        manifest_items.setdefault("facialHair", {})[style] = {
+            "files": {}, "scalpOnly": True, "beardBit": FACIAL_BITS[region], "shadeStrength": strength,
+        }
     xbody.data.attributes.new("_scalp", "FLOAT", "POINT").data.foreach_set("value", scalp)
 
     remove_helpers(xbody)

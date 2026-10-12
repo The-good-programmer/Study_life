@@ -186,6 +186,24 @@ describe('buildCharacterV2', () => {
     expect(scalp.scalpStrength.value).toBe(0);
   });
 
+  it('shades facial hair independently of the hair', async () => {
+    const { d } = deps();
+    const a = buildCharacterV2(custom({ facialHair: 'stubble', facialHairColor: '#382212' }), { showShadow: false }, d);
+    await settle();
+    const u = ((find(a.root, 'Body_torso') as THREE.Mesh).material as THREE.Material).userData.scalp;
+    expect(u.beardBit.value).toBe(8);
+    expect(u.beardStrength.value).toBeCloseTo(0.3);
+    expect(u.scalpBit.value).toBe(0); // the hair keeps its own channel
+    // Two shading-only styles (no URLs) still swap.
+    a.updateCustomization(custom({ facialHair: 'beard', facialHairColor: '#382212' }));
+    await settle();
+    expect(u.beardStrength.value).toBeCloseTo(0.88);
+    a.updateCustomization(custom({ facialHair: 'none' }));
+    await settle();
+    expect(u.beardBit.value).toBe(-1);
+    expect(u.beardStrength.value).toBe(0);
+  });
+
   it('keeps only the latest of overlapping changes', async () => {
     const { d, assets } = deps();
     const a = buildCharacterV2(custom(), { showShadow: false }, d);

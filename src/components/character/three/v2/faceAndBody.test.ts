@@ -4,7 +4,7 @@ import type { CharacterMood } from '../../../../types/character';
 import { ARKIT_SHAPES, FaceController, MOOD_PRESETS } from './expressions';
 import { applyBodyShape, bodyMorphWeights } from './bodyShape';
 import { tierFromSignals, TIER_SETTINGS } from './quality';
-import { applyRoleColors, prepareMaterial, roleOf } from './materialsV2';
+import { applyRoleColors, poreNormals, prepareMaterial, roleOf } from './materialsV2';
 
 function morphMesh(names: string[]) {
   const mesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial());
@@ -124,6 +124,23 @@ describe('material roles', () => {
     expect(prepareMaterial(brow)).toBe(brow);
     expect(brow.alphaToCoverage).toBe(true);
     expect(brow.transparent).toBe(false);
+  });
+
+  it('upgrades skin to a physical material with pores, sheen and subsurface lighting', () => {
+    const map = new THREE.Texture();
+    const src = new THREE.MeshStandardMaterial({ name: 'skin_body', map });
+    const skin = prepareMaterial(src) as THREE.MeshPhysicalMaterial;
+    expect(skin.isMeshPhysicalMaterial).toBe(true);
+    expect(skin.map).toBe(map);
+    expect(skin.normalMap).toBe(poreNormals());
+    expect(skin.sheen).toBeGreaterThan(0);
+    expect(skin.userData.scalp).toBeDefined();
+    // The shader patch swaps three.js's Lambert term for wrapped lighting.
+    const shader = { uniforms: {}, vertexShader: '#include <begin_vertex>', fragmentShader: '#include <map_fragment>\n#include <lights_physical_pars_fragment>' };
+    skin.onBeforeCompile(shader as never, undefined as never);
+    expect(shader.fragmentShader).toContain('skinWrap');
+    expect(shader.fragmentShader).not.toContain('#include <lights_physical_pars_fragment>');
+    expect(prepareMaterial(skin)).toBe(skin);
   });
 
   it('upgrades hair to an anisotropic physical material, once', () => {

@@ -40,7 +40,11 @@ export interface ItemEntry extends AssetRef {
   hideBit?: number;
   /** Hair: bit in the body's `_SCALP` mask for the scalp it covers (tinted with the hair colour). */
   scalpBit?: number;
-  /** An item drawn only as scalp shading, with no asset to load (a buzz cut). */
+  /** Facial hair: bit in the body's `_SCALP` mask for its region of the face. */
+  beardBit?: number;
+  /** How strongly shading-only items tint the skin (0-1). */
+  shadeStrength?: number;
+  /** An item drawn only as skin shading, with no asset to load (buzz cut, stubble, beards). */
   scalpOnly?: boolean;
 }
 
