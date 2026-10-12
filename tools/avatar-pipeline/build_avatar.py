@@ -44,6 +44,9 @@ from mathutils.bvhtree import BVHTree
 
 # Headless Blender (-b) doesn't load add-ons before running the script.
 import addon_utils  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import accessories  # noqa: E402  (tools/avatar-pipeline/accessories.py)
 addon_utils.enable("bl_ext.blender_org.mpfb", default_set=True)
 
 from bl_ext.blender_org.mpfb.entities.objectproperties import HumanObjectProperties
@@ -137,7 +140,8 @@ ITEM_SOURCES = [
 
 # Garment layers, inside to outside: an outer garment hides what of an inner one
 # it covers (shoe collars under jeans, waistbands under shirts).
-LAYERS = {"shoes": 0, "bottom": 1, "top": 2}
+# Layering groups don't interact: body clothes, and hair under headwear.
+LAYERS = {"shoes": ("body", 0), "bottom": ("body", 1), "top": ("body", 2), "hair": ("head", 0), "headwear": ("head", 1)}
 
 # Material roles whose textures are tinted at runtime (normalised to grey here).
 TINTED_ROLES = ("skin", "hair", "brow", "top", "bottom", "shoes")
@@ -471,29 +475,38 @@ def scalp_coverage(body, body_co, hair, eye_top, eye_y):
 
 
 def mark_layering(item_objects, manifest_items):
-    """Gives inner garments a `_hide` mask for the vertices inside outer ones."""
-    layered = [(LAYERS[slot], slot, item_id, obj) for slot, item_id, obj in item_objects if slot in LAYERS]
-    for inner_layer, _, inner_id, inner in layered:
+    """Gives inner items a `_hide` mask for the vertices an outer item covers."""
+    layered = [(*LAYERS[slot], slot, item_id, obj) for slot, item_id, obj in item_objects if slot in LAYERS]
+    for group, inner_layer, _, inner_id, inner in layered:
         co = rest_coords(inner)
         normals = np.empty(len(co) * 3, dtype=np.float32)
         inner.data.vertices.foreach_get("normal", normals)
         normals = normals.reshape(-1, 3)
         mask = np.zeros(len(co), dtype=np.float32)
-        for outer_layer, outer_slot, outer_id, outer in layered:
+        for outer_group, outer_layer, outer_slot, outer_id, outer in layered:
             bit = manifest_items[outer_slot][outer_id].get("hideBit")
-            if outer_layer <= inner_layer or bit is None:
+            if outer_group != group or outer_layer <= inner_layer or bit is None:
                 continue
-            tree = BVHTree.FromPolygons(rest_coords(outer).tolist(), [p.vertices[:] for p in outer.data.polygons])
+            outer_co = rest_coords(outer)
+            tree = BVHTree.FromPolygons(outer_co.tolist(), [p.vertices[:] for p in outer.data.polygons])
+            rim = float(outer_co[:, 2].min())
             for i, (c, n) in enumerate(zip(co, normals)):
                 c, n = Vector(c), Vector(n)
-                # Covered: the outer garment lies just outside this vertex, or
-                # the vertex already pokes through it (the garment is just behind).
-                covered = tree.ray_cast(c + n * 1e-4, n, 0.03)[0] is not None or                     tree.ray_cast(c - n * 1e-4, -n, 0.015)[0] is not None
+                if group == "head":
+                    # Hair cards are double-sided (normals say little): hair is
+                    # under a hat when the hat is straight above it.
+                    covered = c.z > rim + 0.005 and tree.ray_cast(c, Vector((0, 0, 1)), 0.2)[0] is not None
+                else:
+                    # The outer garment lies just outside this vertex, or the
+                    # vertex already pokes through it (the garment is just behind).
+                    covered = tree.ray_cast(c + n * 1e-4, n, 0.03)[0] is not None or                         tree.ray_cast(c - n * 1e-4, -n, 0.015)[0] is not None
                 if covered:
                     mask[i] += float(1 << bit)
         if mask.any():
-            inner.data.attributes.new("_hide", "FLOAT", "POINT").data.foreach_set("value", mask)
-            log(f"{inner_id}: {int((mask > 0).sum())} vertices hidden under outer garments")
+            name = "_hide"
+            attr = inner.data.attributes.get(name) or inner.data.attributes.new(name, "FLOAT", "POINT")
+            attr.data.foreach_set("value", mask)
+            log(f"{inner_id}: {int((mask > 0).sum())} vertices hidden under outer items")
 
 
 # ─── Materials and textures ─────────────────────────────────────────────────
@@ -745,6 +758,16 @@ def main():
     all_meshes = [basemesh, *parts.values(), *sources]
     neutral, captured = capture_variants(basemesh, all_meshes)
 
+    # Head measurements for fitting glasses and hats (helper geometry excluded).
+    helper_groups = {basemesh.vertex_groups[g].index for g in ("HelperGeometry", "JointCubes") if g in basemesh.vertex_groups}
+    real = np.array([not any(g.group in helper_groups and g.weight > 0.5 for g in v.groups) for v in basemesh.data.vertices])
+
+    def head_fit(data):
+        return accessories.HeadFit(data["coords"][parts["eyes"].name], data["coords"][basemesh.name][real])
+
+    neutral_fit = head_fit(neutral)
+    variant_fits = {v: head_fit(captured[v]) for v in BODY_VARIANTS}
+
     # Joint offsets per gender variant (glTF axes, avatar space).
     joint_morphs = {}
     for variant in JOINT_VARIANTS:
@@ -836,6 +859,23 @@ def main():
                 next_bit += 1
             manifest_items.setdefault(slot, {})[item_id] = entry
             item_objects.append((slot, item_id, obj))
+
+    # Procedural glasses and hats, rigged to the head with body-shape morphs.
+    shell = accessories.HeadShell(xbody, real, neutral_fit)
+    builders = (("eyewear", accessories.GLASSES, lambda st: accessories.build_glasses(st, neutral_fit)),
+                ("headwear", accessories.HATS, lambda st: accessories.build_hat(st, neutral_fit, shell)))
+    for slot, styles, build in builders:
+        for style in styles:
+            obj = build(style)
+            accessories.rig_to_head(obj, xrig, neutral_fit, variant_fits)
+            entry = {"files": {}}
+            if slot == "headwear":
+                entry["hideBit"] = next_bit
+                next_bit += 1
+            manifest_items.setdefault(slot, {})[style] = entry
+            item_objects.append((slot, style, obj))
+    shell.dispose()
+    log(f"accessories: {len(accessories.GLASSES)} glasses, {len(accessories.HATS)} hats")
 
     mark_layering(item_objects, manifest_items)
 
