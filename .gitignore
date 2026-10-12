@@ -30,3 +30,6 @@ server/data/*.sqlite*
 server/data/pgdata/
 server/.env
 !server/.env.example
+
+# Uncompressed avatar export (compressed copies live in public/avatar)
+tools/avatar-pipeline/.build/

@@ -13,7 +13,10 @@ Builds the v2 avatar's glTF assets in `public/avatar/` (and `manifest.json`) fro
 
 ```bash
 blender -b -P tools/avatar-pipeline/build_avatar.py -- --repo <path to Studify>
+npm run avatar:compress
 ```
+
+The first step exports uncompressed glTF into `tools/avatar-pipeline/.build/` (git-ignored). The second quantizes and meshopt-compresses those files into `public/avatar/` and writes the manifest with their final sizes (about 5.8 MB down to 2.5 MB for the medium tier).
 
 The script rebuilds everything from MPFB on each run, so no `.blend` file is kept in the repository. What it produces and the conventions the runtime relies on are documented at the top of `build_avatar.py` and in `src/components/character/three/v2/manifest.ts`.
 

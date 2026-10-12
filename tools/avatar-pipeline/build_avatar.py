@@ -68,7 +68,8 @@ def _repo_root():
 
 
 REPO = _repo_root()
-OUT_DIR = os.path.join(REPO, "public", "avatar")
+# Uncompressed export; compress.mjs writes the final files to public/avatar.
+OUT_DIR = os.path.join(REPO, "tools", "avatar-pipeline", ".build")
 URL_PREFIX = "/avatar"
 SCENE_NAME = "StudifyAvatarBuild"
 

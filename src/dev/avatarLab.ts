@@ -6,6 +6,11 @@
  * Renderer: avatar=v2 for the asset-based avatar, placeholder=1 to run v2 on
  * the procedural stand-in mannequin, compare=1 for v1 (left) beside v2 (right).
  * window.lab.set({...}) updates the avatar live.
+ *
+ * The HUD's second line is for device testing (e.g. a phone on the LAN):
+ * frame rate, slowest frame, quality tier, render size, GPU and how much
+ * avatar data was downloaded. Rendering follows the device's quality tier
+ * like the app does.
  */
 import * as THREE from 'three';
 import { buildCharacter3D, type CharacterModelInstance } from '../components/character/three/characterBuilder3d';
@@ -13,7 +18,7 @@ import { buildAvatar } from '../components/character/three/buildAvatar';
 import { buildCharacterV2 } from '../components/character/three/v2/characterBuilderV2';
 import { AssetCache } from '../components/character/three/v2/assetLoader';
 import { fetchPlaceholder, placeholderManifest } from '../components/character/three/v2/placeholder';
-import { getQualityTier } from '../components/character/three/v2/quality';
+import { getQualityTier, getTierSettings } from '../components/character/three/v2/quality';
 import { applyStudioLighting } from '../components/character/three/studio';
 import { characterService } from '../services/characterService';
 import type { CharacterCustomization, CharacterPose } from '../types/character';
@@ -35,14 +40,16 @@ const VIEWS: Record<string, { pos: [number, number, number]; target: [number, nu
 };
 
 const stage = document.getElementById('stage')!;
+const tier = getQualityTier();
+const tierSettings = getTierSettings(tier);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, tierSettings.maxPixelRatio));
 renderer.setSize(innerWidth, innerHeight);
 stage.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x111827);
-applyStudioLighting(scene, renderer);
+applyStudioLighting(scene, renderer, { shadowMapSize: tierSettings.shadowMapSize });
 
 const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 50);
 const view = VIEWS[params.get('view') ?? 'full'] ?? VIEWS.full;
@@ -87,15 +94,49 @@ const readyPoll = setInterval(() => {
     const m = o as THREE.Mesh;
     if (m.isMesh && m.geometry.index) tris += m.geometry.index.count / 3;
   });
-  hud.textContent = `main thread ${buildMs.toFixed(0)} ms · ready after ${(performance.now() - t0).toFixed(0)} ms · ${Math.round(tris / 1000)}k tris · ${custom.gender}/${custom.bodyType}/${custom.hairStyle}/${custom.outfitTop}`;
+  hudLoad.textContent = `main thread ${buildMs.toFixed(0)} ms · ready after ${(performance.now() - t0).toFixed(0)} ms · ${Math.round(tris / 1000)}k tris · ${custom.gender}/${custom.bodyType}/${custom.hairStyle}/${custom.outfitTop}`;
   renderer.render(scene, camera);
 }, 20);
+const hudLoad = hud.appendChild(document.createElement('div'));
+const hudLive = hud.appendChild(document.createElement('div'));
+hudLive.className = 'live';
+
+const gl = renderer.getContext();
+const gpuInfo = gl.getExtension('WEBGL_debug_renderer_info');
+const gpu = String(gpuInfo ? gl.getParameter(gpuInfo.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+
+/** Avatar files fetched by this page (encoded size, so cached files still count). */
+function avatarBytes() {
+  return (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+    .filter((e) => new URL(e.name).pathname.startsWith('/avatar/'))
+    .reduce((sum, e) => sum + (e.encodedBodySize || e.transferSize || 0), 0);
+}
+
+// Frame stats over a rolling two-second window.
+let frames = 0;
+let worst = 0;
+let windowStart = performance.now();
+let lastFrame = windowStart;
+function sampleFrame(now: number) {
+  frames++;
+  worst = Math.max(worst, now - lastFrame);
+  lastFrame = now;
+  if (now - windowStart < 2000) return;
+  const fps = (frames * 1000) / (now - windowStart);
+  const size = new THREE.Vector2();
+  renderer.getDrawingBufferSize(size);
+  hudLive.textContent = `${fps.toFixed(0)} fps · slowest frame ${worst.toFixed(0)} ms · tier ${tier} · ${size.x}×${size.y} px · ${(avatarBytes() / 1e6).toFixed(2)} MB avatar data · ${gpu}`;
+  frames = 0;
+  worst = 0;
+  windowStart = now;
+}
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
   for (const a of avatars) a.update(dt, pose);
   renderer.render(scene, camera);
+  sampleFrame(performance.now());
 });
 
 addEventListener('resize', () => {
