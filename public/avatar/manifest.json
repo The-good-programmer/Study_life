@@ -5,7 +5,7 @@
       "medium": "/avatar/medium/base.glb"
     },
     "bytes": {
-      "medium": 1147332
+      "medium": 1148632
     }
   },
   "boneMap": {
@@ -624,25 +624,88 @@
         "scalpBit": 7
       }
     },
-    "bottom": {
-      "jeans": {
-        "files": {
-          "medium": "/avatar/medium/bottom/jeans.glb"
-        },
-        "hideBit": 0,
-        "bytes": {
-          "medium": 273900
-        }
-      }
-    },
     "top": {
       "button-down": {
         "files": {
           "medium": "/avatar/medium/top/button-down.glb"
         },
-        "hideBit": 1,
+        "hideBit": 0,
         "bytes": {
           "medium": 271692
+        }
+      },
+      "casual-tee": {
+        "files": {
+          "medium": "/avatar/medium/top/casual-tee.glb"
+        },
+        "hideBit": 3,
+        "bytes": {
+          "medium": 176628
+        }
+      },
+      "sweater": {
+        "files": {
+          "medium": "/avatar/medium/top/sweater.glb"
+        },
+        "hideBit": 4,
+        "bytes": {
+          "medium": 147436
+        }
+      },
+      "varsity-jacket": {
+        "files": {
+          "medium": "/avatar/medium/top/varsity-jacket.glb"
+        },
+        "hideBit": 5,
+        "bytes": {
+          "medium": 164572
+        }
+      }
+    },
+    "bottom": {
+      "jeans": {
+        "files": {
+          "medium": "/avatar/medium/bottom/jeans.glb"
+        },
+        "hideBit": 1,
+        "bytes": {
+          "medium": 278300
+        }
+      },
+      "chinos": {
+        "files": {
+          "medium": "/avatar/medium/bottom/chinos.glb"
+        },
+        "hideBit": 6,
+        "bytes": {
+          "medium": 114812
+        }
+      },
+      "shorts": {
+        "files": {
+          "medium": "/avatar/medium/bottom/shorts.glb"
+        },
+        "hideBit": 7,
+        "bytes": {
+          "medium": 210672
+        }
+      },
+      "pleated-skirt": {
+        "files": {
+          "medium": "/avatar/medium/bottom/pleated-skirt.glb"
+        },
+        "hideBit": 8,
+        "bytes": {
+          "medium": 142724
+        }
+      },
+      "joggers": {
+        "files": {
+          "medium": "/avatar/medium/bottom/joggers.glb"
+        },
+        "hideBit": 9,
+        "bytes": {
+          "medium": 93144
         }
       }
     },
@@ -653,7 +716,34 @@
         },
         "hideBit": 2,
         "bytes": {
-          "medium": 246972
+          "medium": 247964
+        }
+      },
+      "running": {
+        "files": {
+          "medium": "/avatar/medium/shoes/running.glb"
+        },
+        "hideBit": 10,
+        "bytes": {
+          "medium": 271684
+        }
+      },
+      "loafers": {
+        "files": {
+          "medium": "/avatar/medium/shoes/loafers.glb"
+        },
+        "hideBit": 11,
+        "bytes": {
+          "medium": 348576
+        }
+      },
+      "boots": {
+        "files": {
+          "medium": "/avatar/medium/shoes/boots.glb"
+        },
+        "hideBit": 12,
+        "bytes": {
+          "medium": 152780
         }
       }
     }

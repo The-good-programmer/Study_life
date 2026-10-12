@@ -113,6 +113,26 @@ ITEM_SOURCES = [
         "split": {("top", "button-down"): "upper", ("bottom", "jeans"): "lower"},
     },
     {"mhclo": "clothes/shoes01/shoes01.mhclo", "type": "Clothes", "items": {("shoes", "sneakers"): "shoes_01"}},
+    # Single garments taken from two-piece outfits (the other half is dropped).
+    *[
+        {"mhclo": f"clothes/{src}/{src}.mhclo", "type": "Clothes", "items": {key: mat}, "split": {key: part}}
+        for src, key, part, mat in [
+            ("male_casualsuit06", ("top", "casual-tee"), "upper", "top_tee_nologo"),
+            ("male_casualsuit02", ("top", "sweater"), "upper", "top_longsleeve_nologo"),
+            ("male_casualsuit05", ("top", "varsity-jacket"), "upper", "top_jacket"),
+            ("male_elegantsuit01", ("bottom", "chinos"), "lower", "bottom_trousers"),
+            ("female_casualsuit02", ("bottom", "shorts"), "lower", "bottom_shorts"),
+            ("female_elegantsuit01", ("bottom", "pleated-skirt"), "lower", "bottom_skirt"),
+            ("female_sportsuit01", ("bottom", "joggers"), "lower", "bottom_leggings"),
+        ]
+    ],
+    # Shoes that come with socks: the socks get their own, untinted material.
+    *[
+        {"mhclo": f"clothes/{src}/{src}.mhclo", "type": "Clothes", "items": {("shoes", item): f"shoes_{src}"}, "socks": True}
+        for src, item in [("shoes05", "running"), ("shoes04", "loafers")]
+    ],
+    # shoes03's shaft is part of the boot, not a sock: tint it all.
+    {"mhclo": "clothes/shoes03/shoes03.mhclo", "type": "Clothes", "items": {("shoes", "boots"): "shoes_shoes03"}},
 ]
 
 # Garment layers, inside to outside: an outer garment hides what of an inner one
@@ -350,18 +370,17 @@ def uv_islands(bm, uv):
     return islands
 
 
-def split_by_height(obj, lower_name, upper_name):
+def split_by_height(obj, lower_name, upper_name, cut):
     """Splits a two-piece outfit (e.g. shirt + trousers) into lower and upper
     garments. MakeHuman suits are often one connected mesh, but each garment
-    has its own UV islands: islands are split at the largest gap in height."""
+    has its own UV islands: an island belongs to the lower garment when its
+    centre is below `cut` (just above the waist, so waistbands and belts go
+    with the trousers and shirt panels, which start higher, don't)."""
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     bm.faces.ensure_lookup_table()
     islands = uv_islands(bm, bm.loops.layers.uv.active)
     centre = [float(np.mean([v.co.z for f in isl for v in f.verts])) for isl in islands]
-    order = sorted(centre)
-    gaps = [(order[i + 1] - order[i], (order[i + 1] + order[i]) / 2) for i in range(len(order) - 1)]
-    cut = max(gaps)[1]
     lower_faces = {f.index for isl, z in zip(islands, centre) if z < cut for f in isl}
     bm.free()
     log(f"{obj.name}: {len(islands)} UV islands, split at z={cut:.3f}, {len(lower_faces)} lower faces")
@@ -393,20 +412,27 @@ def delete_group_vertices(basemesh, source_name):
     return {v.index for v in basemesh.data.vertices if any(g.group == group.index and g.weight > 0.5 for g in v.groups)}
 
 
-def assign_hidden(body_co, hidden, pieces):
-    """Gives each hidden body vertex to the nearest piece of the outfit."""
-    trees = []
-    for piece in pieces:
-        co = rest_coords(piece)
-        t = kdtree.KDTree(len(co))
-        for i, c in enumerate(co):
-            t.insert(c, i)
-        t.balance()
-        trees.append(t)
+def assign_hidden(body, body_co, hidden, pieces):
+    """Shares a two-piece outfit's hidden skin between its pieces: a vertex is
+    hidden by every piece that covers it (a ray along the skin's normal meets
+    the piece within 4 cm, or the piece is within 1 cm). Vertices covered by
+    neither go to the nearest piece. Hiding is a bit mask, so a vertex can
+    belong to both, and a piece worn alone still hides all the skin it covers.
+    """
+    normals = np.empty(len(body_co) * 3, dtype=np.float32)
+    body.data.vertices.foreach_get("normal", normals)
+    normals = normals.reshape(-1, 3)
+    trees = [BVHTree.FromPolygons(rest_coords(p).tolist(), [f.vertices[:] for f in p.data.polygons]) for p in pieces]
     out = [set() for _ in pieces]
     for vi in hidden:
-        d = [t.find(body_co[vi])[2] for t in trees]
-        out[int(np.argmin(d))].add(vi)
+        c, n = Vector(body_co[vi]), Vector(normals[vi])
+        hits = [k for k, t in enumerate(trees)
+                if t.ray_cast(c + n * 1e-4, n, 0.04)[0] is not None or t.find_nearest(c, 0.01)[0] is not None]
+        if not hits:
+            dist = [(t.find_nearest(c)[3] if t.find_nearest(c)[0] is not None else 1e9) for t in trees]
+            hits = [int(np.argmin(dist))]
+        for k in hits:
+            out[k].add(vi)
     return out
 
 
@@ -492,11 +518,46 @@ NEUTRAL_GREY = {"hair": 0.5}
 DEFAULT_GREY = 0.82
 
 
-def load_texture(path, size, neutralise, grey=DEFAULT_GREY):
+def remove_logo(px, w, h):
+    """Paints out MakeHuman's orange logo: orange pixels (and a 3 px margin)
+    are refilled from the surrounding fabric (a normalised box blur of the
+    unmasked pixels, widened until every hole is filled)."""
+    img = px.reshape(h, w, 4)
+    r, g, b = img[..., 0], img[..., 1], img[..., 2]
+    mask = (r > 0.35) & (r - b > 0.2) & (r > g) & (g > b - 0.05)
+    for _ in range(3):  # dilate
+        m = mask.copy()
+        m[1:] |= mask[:-1]; m[:-1] |= mask[1:]; m[:, 1:] |= mask[:, :-1]; m[:, :-1] |= mask[:, 1:]
+        mask = m
+    if not mask.any():
+        return 0
+    keep = (~mask).astype(np.float32)
+    k = 9
+    while True:
+        def blur(a):
+            c = np.cumsum(np.cumsum(np.pad(a, ((k + 1, k), (k + 1, k))), 0), 1)
+            return c[2 * k + 1:, 2 * k + 1:] - c[:-2 * k - 1, 2 * k + 1:] - c[2 * k + 1:, :-2 * k - 1] + c[:-2 * k - 1, :-2 * k - 1]
+        weight = blur(keep)
+        if (weight[mask] > 0).all() or k > 200:
+            break
+        k *= 2
+    for ch in range(3):
+        fill = blur(img[..., ch] * keep) / np.maximum(weight, 1e-6)
+        img[..., ch][mask] = fill[mask]
+    return int(mask.sum())
+
+
+def load_texture(path, size, neutralise, grey=DEFAULT_GREY, clean_logo=False):
     img = bpy.data.images.load(path, check_existing=False)
     img.name = os.path.basename(path)
     if img.size[0] > size:
         img.scale(size, size)
+    if clean_logo:
+        px = np.empty(img.size[0] * img.size[1] * 4, dtype=np.float32)
+        img.pixels.foreach_get(px)
+        n = remove_logo(px, img.size[0], img.size[1])
+        img.pixels.foreach_set(px)
+        log(f"{img.name}: painted out {n} logo pixels")
     if neutralise:
         px = np.empty(img.size[0] * img.size[1] * 4, dtype=np.float32)
         img.pixels.foreach_get(px)
@@ -523,7 +584,8 @@ def simple_material(name, mhmat_path, size, cutout=False):
     diffuse = props.get("diffuseTexture")
     if diffuse:
         tex = nt.nodes.new("ShaderNodeTexImage")
-        tex.image = load_texture(os.path.join(folder, diffuse), size, role in TINTED_ROLES, NEUTRAL_GREY.get(role, DEFAULT_GREY))
+        tex.image = load_texture(os.path.join(folder, diffuse), size, role in TINTED_ROLES, NEUTRAL_GREY.get(role, DEFAULT_GREY),
+                                 clean_logo=name.endswith("_nologo"))
         nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
         if cutout or props.get("transparent") == "True":
             nt.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
@@ -622,6 +684,36 @@ def eye_materials(eye_obj, mhmat_path, size):
     log(f"eyes: irises at {[tuple(round(x, 3) for x in c) for c, _ in irises]}; sclera/iris/cornea faces {counts}")
 
 
+def add_socks(obj, mhmat_path, size):
+    """Moves a shoe's sock faces (its upper UV islands) onto an untinted
+    material, so socks stay white whatever colour the shoes are."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+    islands = uv_islands(bm, bm.loops.layers.uv.active)
+    centre = [float(np.mean([v.co.z for f in isl for v in f.verts])) for isl in islands]
+    faces = [[f.index for f in isl] for isl in islands]
+    bm.free()
+    if len(islands) < 2:
+        return
+    order = sorted(centre)
+    cut = max((order[i + 1] - order[i], (order[i + 1] + order[i]) / 2) for i in range(len(order) - 1))[1]
+    sock_faces = {i for isl, z in zip(faces, centre) if z > cut for i in isl}
+    props = read_mhmat(mhmat_path)
+    socks = bpy.data.materials.new("socks")
+    socks.use_nodes = True
+    tex = socks.node_tree.nodes.new("ShaderNodeTexImage")
+    tex.image = load_texture(os.path.join(os.path.dirname(mhmat_path), props["diffuseTexture"]), size, False)
+    bsdf = socks.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs["Roughness"].default_value = 0.95
+    socks.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    obj.data.materials.append(socks)
+    for poly in obj.data.polygons:
+        if poly.index in sock_faces:
+            poly.material_index = len(obj.data.materials) - 1
+    log(f"{obj.name}: {len(sock_faces)} sock faces")
+
+
 def set_material(obj, mat):
     obj.data.materials.clear()
     obj.data.materials.append(mat)
@@ -696,6 +788,7 @@ def main():
         next_scalp_bit += 1
         log(f"scalp bit {entry['scalpBit']}: {len(covered)} head vertices")
 
+    waist_cut = rig.data.bones["pelvis"].head_local.z + 0.12
     for src_def, src in zip(ITEM_SOURCES, sources):
         xsrc = bpy.data.objects[src.name + "_x"]
         hidden = source_hidden.get(src.name, set())
@@ -707,20 +800,32 @@ def main():
             bpy.data.objects.remove(xsrc, do_unlink=True)
             continue
         if "split" in src_def:
-            lower_key = next(k for k, v in src_def["split"].items() if v == "lower")
-            upper_key = next(k for k, v in src_def["split"].items() if v == "upper")
-            lower, upper = split_by_height(xsrc, f"Item_{lower_key[1]}", f"Item_{upper_key[1]}")
-            pieces = {lower_key: lower, upper_key: upper}
+            lower, upper = split_by_height(xsrc, f"{xsrc.name}_lower", f"{xsrc.name}_upper", waist_cut)
+            halves = {"lower": lower, "upper": upper}
+            pieces = {}
+            for key, part in src_def["split"].items():
+                halves[part].name = f"Item_{key[1]}"
+                pieces[key] = halves[part]
         else:
             key = next(iter(src_def["items"]))
             xsrc.name = f"Item_{key[1]}"
+            halves = {"whole": xsrc}
             pieces = {key: xsrc}
-        shares = assign_hidden(body_co, hidden, list(pieces.values())) if hidden else [set() for _ in pieces]
+        # Hidden skin is shared out over every half (even one we drop), so a
+        # kept half only hides the skin it actually covers.
+        all_shares = assign_hidden(xbody, body_co, hidden, list(halves.values())) if hidden else [set() for _ in halves]
+        share_of = {obj.name: share for obj, share in zip(halves.values(), all_shares)}
+        shares = [share_of[obj.name] for obj in pieces.values()]
+        for obj in halves.values():
+            if obj not in pieces.values():
+                bpy.data.objects.remove(obj, do_unlink=True)
         mhmat = os.path.splitext(data_path(src_def["mhclo"]))[0] + ".mhmat"
         for (key, obj), share in zip(pieces.items(), shares):
             slot, item_id = key
             mat = simple_material(src_def["items"][key], mhmat, size, cutout=slot == "hair")
             set_material(obj, mat)
+            if src_def.get("socks"):
+                add_socks(obj, mhmat, size)
             entry = {"files": {}}
             if slot == "hair":
                 add_scalp(entry, obj)

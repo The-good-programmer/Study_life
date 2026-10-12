@@ -127,6 +127,30 @@ describe('buildCharacterV2', () => {
     expect(Number.isFinite(skinned().x)).toBe(true);
   });
 
+  it('does not let joint morphs leak into the shared cache (re-equips and second avatars match)', async () => {
+    const { d } = deps();
+    const vertex = (a: CharacterModelInstance) => {
+      a.root.updateMatrixWorld(true);
+      const neck = find(a.root, 'Body_neck') as THREE.SkinnedMesh;
+      return neck.getVertexPosition(0, new THREE.Vector3()).applyMatrix4(neck.matrixWorld);
+    };
+    const first = buildCharacterV2(custom({ gender: 'male' }), { showShadow: false }, d);
+    await settle();
+    const expected = vertex(first);
+    const second = buildCharacterV2(custom({ gender: 'male' }), { showShadow: false }, d);
+    await settle();
+    expect(vertex(second).distanceTo(expected)).toBeLessThan(1e-5);
+    // Re-equipping a garment rebinds a fresh clone of it.
+    const tee = () => (find(first.root, 'Tee') as THREE.SkinnedMesh);
+    const teeVertex = () => tee().getVertexPosition(0, new THREE.Vector3());
+    const before = teeVertex();
+    for (const top of ['lab-coat', 'casual-tee', 'lab-coat', 'casual-tee'] as const) {
+      first.updateCustomization(custom({ gender: 'male', outfitTop: top }));
+      await settle();
+    }
+    expect(teeVertex().distanceTo(before)).toBeLessThan(1e-5);
+  });
+
   it('swaps items without a gap and releases the old asset', async () => {
     const { d, assets } = deps();
     const a = buildCharacterV2(custom(), { showShadow: false }, d);
