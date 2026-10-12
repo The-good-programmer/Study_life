@@ -8,6 +8,8 @@ import { getAvatarDims } from '../avatar/anatomy';
 import { buildRig, BONE_NAMES, type AvatarRig, type BoneName } from '../avatar/rig';
 import { avatarAssets, disposeInstance, type AssetCache } from './assetLoader';
 import { applyBodyShape, bodyMorphWeights } from './bodyShape';
+import { BodyHider, hideMask } from './bodyHide';
+import { SkeletonShaper } from './skeletonShape';
 import { FaceController } from './expressions';
 import { loadManifest, resolveItems, assetUrl, type AvatarManifest, type ResolvedItem, type Slot } from './manifest';
 import { applyRoleColors, prepareMaterial } from './materialsV2';
@@ -29,6 +31,8 @@ const defaultDeps = (): V2Deps => ({ loadManifest, assets: avatarAssets, tier: g
 interface Equipped {
   item: ResolvedItem;
   object: THREE.Object3D;
+  /** Hides the parts of this item covered by outer garments. */
+  hider?: BodyHider;
 }
 
 /**
@@ -81,6 +85,10 @@ export function buildCharacterV2(
     /** Each node's bind-pose matrix relative to the avatar, inverted (for rigid attachments). */
     bindInverse: Map<string, THREE.Matrix4>;
   } | null = null;
+  let targets: Record<BoneName, THREE.Object3D> | null = null;
+  let shaper: SkeletonShaper | null = null;
+  let hider: BodyHider | null = null;
+  let shapeKey = '';
   let proxy: AvatarRig | null = null;
   let retarget: Retargeter | null = null;
   let book: THREE.Group | null = null;
@@ -134,6 +142,11 @@ export function buildCharacterV2(
   };
 
   const release = (e: Equipped) => {
+    e.hider?.dispose();
+    e.object.traverse((o) => {
+      const mesh = o as THREE.SkinnedMesh;
+      if (mesh.isSkinnedMesh) shaper?.removeSkeleton(mesh.skeleton);
+    });
     e.object.removeFromParent();
     disposeInstance(e.object);
     deps.assets.release(e.item.url);
@@ -157,7 +170,10 @@ export function buildCharacterV2(
       // Drive the garment with the base skeleton, matched by bone name.
       const bones = mesh.skeleton.bones.map((b) => (base!.bones.get(b.name) as THREE.Bone) ?? b);
       mesh.bind(new THREE.Skeleton(bones, mesh.skeleton.boneInverses), mesh.bindMatrix);
+      shaper?.addSkeleton(mesh.skeleton);
     });
+    const hider = new BodyHider(object, 2);
+    if (!hider.isEmpty) e.hider = hider;
     const anchor = item.entry.attach ? base!.bones.get(item.entry.attach) : null;
     if (!skinned && anchor) {
       // Rigid items are authored in the avatar's bind pose: re-express them in the bone's frame.
@@ -169,14 +185,42 @@ export function buildCharacterV2(
     equipped.set(item.slot, e);
   };
 
+  /**
+   * Builds the proxy rig the animator poses, sized to the skeleton's current
+   * joints, and the retargeter that copies its pose across. The skeleton must
+   * be at rest.
+   */
+  const rebuildProxy = () => {
+    if (!avatar || !targets || !book) return;
+    proxy?.root.removeFromParent();
+    avatar.updateMatrixWorld(true);
+    dims = measureDims(targets, avatar, dims);
+    proxy = buildRig(dims);
+    proxy.root.name = 'ProxyRig';
+    avatar.add(proxy.root);
+    avatar.updateMatrixWorld(true);
+    retarget = new Retargeter(proxy, avatar, targets);
+    proxy.bones.chest.add(book);
+  };
+
+  /** Body shape: morph weights everywhere, plus joints when the shape changed. */
+  const reshape = () => {
+    if (!avatar) return;
+    const weights = bodyMorphWeights(current.gender, current.bodyType);
+    applyBodyShape(avatar, weights);
+    const key = `${current.gender}|${current.bodyType}`;
+    if (key === shapeKey) return;
+    shapeKey = key;
+    shaper?.apply(weights);
+    rebuildProxy();
+  };
+
   /** Re-applies everything that depends on the set of equipped items. */
   const refresh = () => {
     if (!avatar || !base) return;
-    const hidden = new Set([...equipped.values()].flatMap((e) => e.item.entry.hides ?? []));
-    base.object.traverse((o) => {
-      const region = /^Body_(.+)$/.exec(o.name)?.[1];
-      if (region) o.visible = !hidden.has(region);
-    });
+    const mask = hideMask([...equipped.values()].map((e) => e.item.entry.hideBit));
+    hider?.apply(mask);
+    for (const e of equipped.values()) e.hider?.apply(mask);
     avatar.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -184,7 +228,7 @@ export function buildCharacterV2(
       if ((mesh as THREE.SkinnedMesh).isSkinnedMesh || mesh.morphTargetInfluences) mesh.frustumCulled = false;
       for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) prepareMaterial(m);
     });
-    applyBodyShape(avatar, bodyMorphWeights(current.gender, current.bodyType));
+    reshape();
     applyRoleColors(avatar, current);
     face.setMeshes(avatar);
   };
@@ -209,33 +253,35 @@ export function buildCharacterV2(
     object.traverse((o) => {
       if (o.name && !bones.has(o.name)) bones.set(o.name, o);
     });
-    const targets: Partial<Record<BoneName, THREE.Object3D>> = {};
+    const found: Partial<Record<BoneName, THREE.Object3D>> = {};
     for (const name of BONE_NAMES) {
       const t = bones.get(manifest.boneMap[name]);
-      if (t) targets[name] = t;
+      if (t) found[name] = t;
     }
-    const missing = BONE_NAMES.filter((n) => !targets[n]);
+    const missing = BONE_NAMES.filter((n) => !found[n]);
     if (missing.length) {
       deps.assets.release(url);
       disposeInstance(object);
       return switchToFallback(`the base skeleton is missing ${missing.join(', ')}`);
     }
 
+    targets = found as Record<BoneName, THREE.Object3D>;
     avatar = new THREE.Group();
     avatar.name = 'Avatar';
     avatar.add(object);
     avatar.updateMatrixWorld(true);
-    dims = measureDims(targets as Record<BoneName, THREE.Object3D>, avatar, dims);
-    proxy = buildRig(dims);
-    proxy.root.name = 'ProxyRig';
-    avatar.add(proxy.root);
-    avatar.updateMatrixWorld(true);
     const bindInverse = new Map<string, THREE.Matrix4>();
     for (const [name, node] of bones) bindInverse.set(name, node.matrixWorld.clone().invert());
     base = { url, object, bones, bindInverse };
-    retarget = new Retargeter(proxy, avatar, targets);
+    const skeletonBones = [...bones.values()].filter((o): o is THREE.Bone => (o as THREE.Bone).isBone);
+    shaper = new SkeletonShaper(avatar, skeletonBones, manifest.jointMorphs);
+    object.traverse((o) => {
+      const mesh = o as THREE.SkinnedMesh;
+      if (mesh.isSkinnedMesh) shaper!.addSkeleton(mesh.skeleton);
+    });
+    hider = new BodyHider(object);
     book = buildBook(bookMats);
-    proxy.bones.chest.add(book);
+    reshape(); // joints for the initial body shape, then the proxy rig
     eyeballs = ['Eye_L', 'Eye_R'].map((n) => bones.get(n)).filter((o): o is THREE.Object3D => Boolean(o));
     face.setMood(current.mood);
     face.snap();
@@ -286,6 +332,7 @@ export function buildCharacterV2(
     disposed = true;
     fallback?.dispose();
     for (const slot of [...equipped.keys()]) unequip(slot);
+    hider?.dispose();
     if (base) {
       disposeInstance(base.object);
       deps.assets.release(base.url);
