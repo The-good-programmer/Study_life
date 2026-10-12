@@ -68,7 +68,9 @@ import {
 } from './three/houseBuilder';
 import { buildRoomFurniture, type FurnitureItemMeta } from './three/furniture';
 import { skyGradient } from './three/textures';
-import { buildCharacter3D, type CharacterModelInstance } from '../character/three/characterBuilder3d';
+import type { CharacterModelInstance } from '../character/three/characterBuilder3d';
+import { buildAvatar } from '../character/three/buildAvatar';
+import { getTierSettings } from '../character/three/v2/quality';
 import { characterService } from '../../services/characterService';
 
 export interface HomeDesign3DProps {
@@ -432,7 +434,8 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     });
     rendererRef.current = renderer;
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    const tier = getTierSettings();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5, tier.maxPixelRatio));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.shadowMap.autoUpdate = false;
@@ -457,16 +460,32 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     gtao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 12, distanceFallOff: 1 });
     gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
     // Skip the occlusion pass on phones and low-core devices to keep it smooth.
-    const lowPower =
-      window.matchMedia?.('(pointer: coarse)').matches || (navigator.hardwareConcurrency ?? 4) <= 4;
-    if (!lowPower) composer.addPass(gtao);
+    if (tier.ambientOcclusion) composer.addPass(gtao);
     composer.addPass(new OutputPass());
 
     // Image-based lighting for realistic reflections on glass, metal and marble
     const pmrem = new THREE.PMREMGenerator(renderer);
     const roomEnv = new RoomEnvironment();
-    const envTexture = pmrem.fromScene(roomEnv, 0.04).texture;
+    let envTexture = pmrem.fromScene(roomEnv, 0.04).texture;
     scene.environment = envTexture;
+
+    // Mobile GPUs drop contexts under memory pressure. Allow the browser to
+    // restore it, then re-render what lived only on the GPU (the environment
+    // map and the on-demand shadow map).
+    let contextLost = false;
+    const onContextLost = (e: Event) => {
+      e.preventDefault();
+      contextLost = true;
+    };
+    const onContextRestored = () => {
+      envTexture.dispose();
+      envTexture = pmrem.fromScene(roomEnv, 0.04).texture;
+      scene.environment = envTexture;
+      renderer.shadowMap.needsUpdate = true;
+      contextLost = false;
+    };
+    renderer.domElement.addEventListener('webglcontextlost', onContextLost);
+    renderer.domElement.addEventListener('webglcontextrestored', onContextRestored);
     scene.environmentIntensity = 0.45;
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -488,7 +507,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     const sun = new THREE.DirectionalLight(0xfff4e5, 2.6);
     sunLightRef.current = sun;
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.setScalar(tier.shadowMapSize);
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 120;
     sun.shadow.camera.left = -26;
@@ -511,7 +530,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
 
     // 3D User Character sitting / standing in study sanctuary
     // The avatar arrives from background workers; refresh shadows when it does.
-    const char = buildCharacter3D(characterService.getCharacter(), {
+    const char = buildAvatar(characterService.getCharacter(), {
       showPedestal: false,
       showShadow: true,
       onChange: () => {
@@ -678,6 +697,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
     let lastTime = performance.now();
     const animate = () => {
       frame = requestAnimationFrame(animate);
+      if (contextLost) return;
       const now = performance.now();
       const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
@@ -787,6 +807,8 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
         charInstanceRef.current.dispose();
         charInstanceRef.current = null;
       }
+      renderer.domElement.removeEventListener('webglcontextlost', onContextLost);
+      renderer.domElement.removeEventListener('webglcontextrestored', onContextRestored);
       renderer.domElement.removeEventListener('pointerdown', onDown);
       renderer.domElement.removeEventListener('pointerup', onUp);
       renderer.domElement.removeEventListener('pointermove', onMove);
@@ -937,7 +959,7 @@ export const HomeDesign3D: React.FC<HomeDesign3DProps> = ({
       charInstanceRef.current.dispose();
       charInstanceRef.current = null;
     }
-    const char = buildCharacter3D(characterService.getCharacter(), {
+    const char = buildAvatar(characterService.getCharacter(), {
       showPedestal: false,
       showShadow: true,
       onChange: () => {

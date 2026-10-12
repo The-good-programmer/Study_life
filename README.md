@@ -42,6 +42,8 @@ Optional, non-study features live in the sidebar's collapsed **Extras** group: a
 
 The avatar is a fully skinned, realistically proportioned character sculpted in code (about seven heads tall, with the face built on real facial thirds): body, face, hair (8 styles), clothing (6 tops, 5 bottoms, 4 shoes), hats, glasses and facial hair, with sculpted expressions, blinking eyelids and IK-driven poses (wave, cheer, reading a book). Skin colour detail (lips, cheeks, lids, stubble) is painted per vertex, and hair has strand shading with soft hairlines. Clothing is generated from the body itself, so it moves with it, and geometry is built in background Web Workers so the UI never stalls. To inspect it in development, open `http://localhost:5173/avatar-lab.html` (e.g. `?view=head3q&hairStyle=bob-cut&mood=happy`).
 
+A realistic, asset-based avatar (v2) is being built alongside it in `src/components/character/three/v2/`: a skinned glTF base human dressed with per-item glTF assets listed in `public/avatar/manifest.json`, with body shape as morph targets, moods as ARKit blend-shape presets, and the same procedural animator retargeted onto the imported skeleton. It is opt-in (`?avatar=v2`, or `localStorage.studify_avatar_renderer = 'v2'`) and falls back to the procedural avatar until the manifest exists. Rendering quality follows the device tier (`v2/quality.ts`; override with `localStorage.studify_avatar_quality = 'high' | 'medium' | 'low'`). In the avatar lab, `?placeholder=1` runs v2 on a procedural stand-in mannequin and `?compare=1` shows v1 and v2 side by side.
+
 ---
 
 ## 🚀 Getting Started

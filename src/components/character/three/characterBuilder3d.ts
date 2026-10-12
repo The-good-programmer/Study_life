@@ -47,7 +47,7 @@ function disposeOwned(obj: THREE.Object3D) {
 }
 
 let blobShadowTexture: THREE.CanvasTexture | null = null;
-function getBlobShadowTexture(): THREE.CanvasTexture {
+export function getBlobShadowTexture(): THREE.CanvasTexture {
   if (!blobShadowTexture) {
     const canvas = document.createElement('canvas');
     canvas.width = 128;
@@ -510,7 +510,7 @@ export function buildCharacter3D(
 }
 
 /** Open textbook held in the study / read poses (child of the chest bone). */
-function buildBook(mats: AvatarMaterials): THREE.Group {
+export function buildBook(mats: Pick<AvatarMaterials, 'bookCover' | 'bookPages' | 'ribbon'>): THREE.Group {
   const group = new THREE.Group();
   group.name = 'HeldBook';
   const prop = new THREE.Group();
@@ -542,7 +542,7 @@ function buildBook(mats: AvatarMaterials): THREE.Group {
   return group;
 }
 
-function buildPedestal(): THREE.Group {
+export function buildPedestal(): THREE.Group {
   const group = new THREE.Group();
   const base = new THREE.Mesh(
     new THREE.CylinderGeometry(0.62, 0.66, 0.05, 64),

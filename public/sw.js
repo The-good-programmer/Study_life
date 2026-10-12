@@ -1,4 +1,8 @@
 const CACHE_NAME = 'studify-v2-pwa-offline';
+// Avatar models and textures are large and content-hashed, so they get their
+// own cache: cache-first, capped, oldest entries evicted first.
+const AVATAR_CACHE = 'studify-avatar-assets-v1';
+const AVATAR_CACHE_MAX_ENTRIES = 80;
 const CORE_ASSETS = [
   '/',
   '/index.html',
@@ -22,7 +26,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          if (key !== CACHE_NAME && key !== AVATAR_CACHE) {
             return caches.delete(key);
           }
         })
@@ -70,7 +74,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Application chunks & static assets: Stale-While-Revalidate
+  // 3. Avatar assets. The manifest is network-first so new asset versions show
+  // up; the files it points at never change under the same URL.
+  if (url.origin === self.location.origin && (url.pathname.startsWith('/avatar/') || url.pathname.startsWith('/basis/'))) {
+    if (url.pathname === '/avatar/manifest.json') {
+      event.respondWith(
+        fetch(event.request).then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(AVATAR_CACHE).then((cache) => cache.put(event.request, copy));
+          }
+          return res;
+        }).catch(() => caches.match(event.request))
+      );
+    } else {
+      event.respondWith(avatarAsset(event.request));
+    }
+    return;
+  }
+
+  // 4. Application chunks & static assets: Stale-While-Revalidate
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {
@@ -97,6 +120,21 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+async function avatarAsset(request) {
+  const cache = await caches.open(AVATAR_CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const res = await fetch(request);
+  if (res.ok && request.method === 'GET') {
+    await cache.put(request, res.clone());
+    const keys = await cache.keys();
+    for (const old of keys.slice(0, Math.max(0, keys.length - AVATAR_CACHE_MAX_ENTRIES))) {
+      if (!old.url.endsWith('/avatar/manifest.json')) await cache.delete(old);
+    }
+  }
+  return res;
+}
 
 // Push: Handle incoming Web Push notifications from cloud server
 self.addEventListener('push', (event) => {

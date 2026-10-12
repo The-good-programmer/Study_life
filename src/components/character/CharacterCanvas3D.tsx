@@ -2,8 +2,10 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { CharacterCustomization, CharacterPose } from '../../types/character';
-import { buildCharacter3D, type CharacterModelInstance } from './three/characterBuilder3d';
+import type { CharacterModelInstance } from './three/characterBuilder3d';
+import { buildAvatar } from './three/buildAvatar';
 import { applyStudioLighting } from './three/studio';
+import { getTierSettings } from './three/v2/quality';
 
 export interface CharacterCanvas3DProps {
   customization: CharacterCustomization;
@@ -77,12 +79,29 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
       antialias: true,
       powerPreference: 'high-performance',
     });
+    const tier = getTierSettings();
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier.maxPixelRatio));
     container.appendChild(renderer.domElement);
 
     // 4. Studio lighting rig (key, fill, two rims, dim environment).
-    const studio = applyStudioLighting(scene, renderer);
+    let studio = applyStudioLighting(scene, renderer, { shadowMapSize: tier.shadowMapSize });
+
+    // Mobile GPUs drop contexts under memory pressure. Allow the browser to
+    // restore it, then rebuild what lived only on the GPU (the environment
+    // map is rendered, not uploaded, so it can't be re-uploaded).
+    let contextLost = false;
+    const onContextLost = (e: Event) => {
+      e.preventDefault();
+      contextLost = true;
+    };
+    const onContextRestored = () => {
+      studio.dispose();
+      studio = applyStudioLighting(scene, renderer, { shadowMapSize: tier.shadowMapSize });
+      contextLost = false;
+    };
+    renderer.domElement.addEventListener('webglcontextlost', onContextLost);
+    renderer.domElement.addEventListener('webglcontextrestored', onContextRestored);
 
     // 5. Controls
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -101,7 +120,7 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
     controls.maxPolarAngle = Math.PI / 1.8;
 
     // 6. Build Character Instance
-    const charInstance = buildCharacter3D(mountProps.customization, { showPedestal: mountProps.showPedestal, showShadow: true });
+    const charInstance = buildAvatar(mountProps.customization, { showPedestal: mountProps.showPedestal, showShadow: true });
     characterRef.current = charInstance;
     scene.add(charInstance.root);
 
@@ -126,7 +145,7 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
     const animate = () => {
       animId = requestAnimationFrame(animate);
 
-      if (!isIntersecting || document.hidden) {
+      if (!isIntersecting || document.hidden || contextLost) {
         lastTime = performance.now();
         return;
       }
@@ -167,6 +186,8 @@ export const CharacterCanvas3D: React.FC<CharacterCanvas3DProps> = ({
       io.disconnect();
       document.removeEventListener('visibilitychange', onVisibilityChange);
       resizeObserver.disconnect();
+      renderer.domElement.removeEventListener('webglcontextlost', onContextLost);
+      renderer.domElement.removeEventListener('webglcontextrestored', onContextRestored);
       controls.dispose();
       charInstance.dispose();
       studio.dispose();
