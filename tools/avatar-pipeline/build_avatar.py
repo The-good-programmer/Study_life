@@ -97,15 +97,16 @@ BASE_PARTS = [
 # Wearable items. A source may be split into several items by height
 # (`split`: item -> "upper" / "lower" part of the source's loose pieces).
 ITEM_SOURCES = [
-    # MakeHuman's hair, mapped to Studify's styles (buzz is a stand-in until
-    # it gets scalp shading of its own).
+    # MakeHuman's hair, mapped to Studify's styles.
     *[
         {"mhclo": f"hair/{src}/{src}.mhclo", "type": "Hair", "items": {("hair", style): f"hair_{src}"}}
         for style, src in [
             ("short-fade", "short04"), ("curly-afro", "afro01"), ("bob-cut", "bob01"), ("long-wavy", "long01"),
-            ("ponytail", "ponytail01"), ("spiky", "short02"), ("side-part", "short03"), ("buzz", "short01"),
+            ("ponytail", "ponytail01"), ("spiky", "short02"), ("side-part", "short03"),
         ]
     ],
+    # A buzz cut is just shaded scalp: short01's coverage, with no hair mesh.
+    {"mhclo": "hair/short01/short01.mhclo", "type": "Hair", "items": {}, "scalpOnly": ("hair", "buzz")},
     {
         "mhclo": "clothes/male_casualsuit01/male_casualsuit01.mhclo", "type": "Clothes",
         "items": {("top", "button-down"): "top_shirt", ("bottom", "jeans"): "bottom_jeans"},
@@ -409,6 +410,40 @@ def assign_hidden(body_co, hidden, pieces):
     return out
 
 
+def scalp_coverage(body, body_co, hair, eye_top, eye_y):
+    """Scalp vertices a hairstyle covers, grown by one ring of neighbours so
+    the hairline fades out instead of stopping at the hair's edge.
+
+    Covered: the hair lies over the skin (a ray along the skin's normal meets
+    it within 5 cm) or right beside it (within 3 cm). In front of a plane
+    just ahead of the ears, only skin above a natural hairline (about 4.5 cm
+    over the eyes) counts, so neither hair hanging beside the face nor a
+    fringe tints the cheeks, temples or forehead.
+    """
+    def face(c):
+        return c[2] < eye_top + 0.045 and c[1] < eye_y + 0.075  # Blender's front is -Y
+    normals = np.empty(len(body_co) * 3, dtype=np.float32)
+    body.data.vertices.foreach_get("normal", normals)
+    normals = normals.reshape(-1, 3)
+    tree = BVHTree.FromPolygons(rest_coords(hair).tolist(), [p.vertices[:] for p in hair.data.polygons])
+    covered = set()
+    for i in np.nonzero(body_co[:, 2] > eye_top - 0.08)[0]:
+        if face(body_co[i]):
+            continue
+        c, n = Vector(body_co[i]), Vector(normals[i])
+        near = tree.find_nearest(c, 0.03)[0] is not None
+        if near or tree.ray_cast(c + n * 1e-4, n, 0.05)[0] is not None:
+            covered.add(int(i))
+    # One ring of dilation for a soft edge (still only on the scalp side).
+    ring = set()
+    for e in body.data.edges:
+        a, b = e.vertices
+        if (a in covered) != (b in covered):
+            ring.add(b if a in covered else a)
+    covered.update(i for i in ring if not face(body_co[i]))
+    return sorted(covered)
+
+
 def mark_layering(item_objects, manifest_items):
     """Gives inner garments a `_hide` mask for the vertices inside outer ones."""
     layered = [(LAYERS[slot], slot, item_id, obj) for slot, item_id, obj in item_objects if slot in LAYERS]
@@ -648,9 +683,29 @@ def main():
     next_bit = 0
     item_objects = []
     size = TIERS["medium"]
+    scalp = np.zeros(len(xbody.data.vertices), dtype=np.float32)
+    next_scalp_bit = 0
+    eye_co = rest_coords(bpy.data.objects[parts["eyes"].name + "_x"])
+    eye_top, eye_y = float(eye_co[:, 2].max()), float(eye_co[:, 1].mean())
+
+    def add_scalp(entry, hair_obj):
+        nonlocal next_scalp_bit
+        covered = scalp_coverage(xbody, body_co, hair_obj, eye_top, eye_y)
+        entry["scalpBit"] = next_scalp_bit
+        scalp[covered] += float(1 << next_scalp_bit)
+        next_scalp_bit += 1
+        log(f"scalp bit {entry['scalpBit']}: {len(covered)} head vertices")
+
     for src_def, src in zip(ITEM_SOURCES, sources):
         xsrc = bpy.data.objects[src.name + "_x"]
         hidden = source_hidden.get(src.name, set())
+        if "scalpOnly" in src_def:
+            slot, item_id = src_def["scalpOnly"]
+            entry = {"files": {}, "scalpOnly": True}
+            add_scalp(entry, xsrc)
+            manifest_items.setdefault(slot, {})[item_id] = entry
+            bpy.data.objects.remove(xsrc, do_unlink=True)
+            continue
         if "split" in src_def:
             lower_key = next(k for k, v in src_def["split"].items() if v == "lower")
             upper_key = next(k for k, v in src_def["split"].items() if v == "upper")
@@ -667,6 +722,8 @@ def main():
             mat = simple_material(src_def["items"][key], mhmat, size, cutout=slot == "hair")
             set_material(obj, mat)
             entry = {"files": {}}
+            if slot == "hair":
+                add_scalp(entry, obj)
             if share or slot in LAYERS:
                 entry["hideBit"] = next_bit
                 for vi in share:
@@ -680,6 +737,7 @@ def main():
     # A leading underscore makes the glTF exporter keep it (three.js reads it as `_hide`).
     attr = xbody.data.attributes.new("_hide", "FLOAT", "POINT")
     attr.data.foreach_set("value", hide)
+    xbody.data.attributes.new("_scalp", "FLOAT", "POINT").data.foreach_set("value", scalp)
 
     remove_helpers(xbody)
 

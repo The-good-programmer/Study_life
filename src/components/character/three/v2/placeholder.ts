@@ -254,7 +254,7 @@ const ITEMS: Record<string, { build: () => THREE.Object3D; entry: Omit<ItemEntry
       g.add(cap);
       return g;
     },
-    entry: { attach: 'head' },
+    entry: { attach: 'head', scalpBit: 0 },
   },
 };
 
@@ -265,6 +265,8 @@ export function placeholderManifest(): AvatarManifest {
     const [slot, id] = key.split('/') as [keyof AvatarManifest['items'], string];
     (items[slot] ??= {})[id] = { ...entry, files: { medium: `placeholder:${key}` } };
   }
+  // A buzz cut is scalp shading only: nothing to load.
+  (items.hair ??= {}).buzz = { files: {}, scalpOnly: true, scalpBit: 1 };
   // A male body stands 4 cm taller from the neck up (joints only; enough to exercise the runtime).
   const up: [number, number, number] = [0, 0.04, 0];
   const jointMorphs = { gender_male: { neck_01: up, head: up } };
