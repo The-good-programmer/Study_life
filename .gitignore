@@ -33,3 +33,6 @@ server/.env
 
 # Uncompressed avatar export (compressed copies live in public/avatar)
 tools/avatar-pipeline/.build/
+
+# Python bytecode from the avatar pipeline
+__pycache__/
