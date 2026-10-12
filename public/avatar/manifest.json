@@ -560,7 +560,63 @@
           "medium": "/avatar/medium/hair/short-fade.glb"
         },
         "bytes": {
-          "medium": 527968
+          "medium": 288064
+        }
+      },
+      "curly-afro": {
+        "files": {
+          "medium": "/avatar/medium/hair/curly-afro.glb"
+        },
+        "bytes": {
+          "medium": 773064
+        }
+      },
+      "bob-cut": {
+        "files": {
+          "medium": "/avatar/medium/hair/bob-cut.glb"
+        },
+        "bytes": {
+          "medium": 310616
+        }
+      },
+      "long-wavy": {
+        "files": {
+          "medium": "/avatar/medium/hair/long-wavy.glb"
+        },
+        "bytes": {
+          "medium": 255308
+        }
+      },
+      "ponytail": {
+        "files": {
+          "medium": "/avatar/medium/hair/ponytail.glb"
+        },
+        "bytes": {
+          "medium": 376300
+        }
+      },
+      "spiky": {
+        "files": {
+          "medium": "/avatar/medium/hair/spiky.glb"
+        },
+        "bytes": {
+          "medium": 219776
+        }
+      },
+      "side-part": {
+        "files": {
+          "medium": "/avatar/medium/hair/side-part.glb"
+        },
+        "bytes": {
+          "medium": 165300
+        }
+      },
+      "buzz": {
+        "files": {
+          "medium": "/avatar/medium/hair/buzz.glb"
+        },
+        "bytes": {
+          "medium": 502368
         }
       }
     },

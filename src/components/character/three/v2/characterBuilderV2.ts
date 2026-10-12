@@ -226,7 +226,7 @@ export function buildCharacterV2(
       if (!mesh.isMesh) return;
       mesh.castShadow = true;
       if ((mesh as THREE.SkinnedMesh).isSkinnedMesh || mesh.morphTargetInfluences) mesh.frustumCulled = false;
-      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) prepareMaterial(m);
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(prepareMaterial) : prepareMaterial(mesh.material);
     });
     reshape();
     applyRoleColors(avatar, current);
