@@ -5,7 +5,7 @@
       "medium": "/avatar/medium/base.glb"
     },
     "bytes": {
-      "medium": 1148616
+      "medium": 1153528
     }
   },
   "boneMap": {
@@ -667,6 +667,24 @@
         "bytes": {
           "medium": 164572
         }
+      },
+      "hoodie": {
+        "files": {
+          "medium": "/avatar/medium/top/hoodie.glb"
+        },
+        "hideBit": 20,
+        "bytes": {
+          "medium": 168352
+        }
+      },
+      "lab-coat": {
+        "files": {
+          "medium": "/avatar/medium/top/lab-coat.glb"
+        },
+        "hideBit": 21,
+        "bytes": {
+          "medium": 297960
+        }
       }
     },
     "bottom": {
@@ -676,7 +694,7 @@
         },
         "hideBit": 8,
         "bytes": {
-          "medium": 278300
+          "medium": 282476
         }
       },
       "chinos": {
@@ -685,7 +703,7 @@
         },
         "hideBit": 13,
         "bytes": {
-          "medium": 114812
+          "medium": 114144
         }
       },
       "shorts": {
@@ -694,7 +712,7 @@
         },
         "hideBit": 14,
         "bytes": {
-          "medium": 210704
+          "medium": 211344
         }
       },
       "pleated-skirt": {
@@ -703,7 +721,7 @@
         },
         "hideBit": 15,
         "bytes": {
-          "medium": 142732
+          "medium": 142908
         }
       },
       "joggers": {
@@ -712,7 +730,7 @@
         },
         "hideBit": 16,
         "bytes": {
-          "medium": 93144
+          "medium": 92584
         }
       }
     },
@@ -793,34 +811,34 @@
         "files": {
           "medium": "/avatar/medium/headwear/cap.glb"
         },
-        "hideBit": 20,
+        "hideBit": 22,
         "bytes": {
-          "medium": 30164
+          "medium": 29724
         }
       },
       "beanie": {
         "files": {
           "medium": "/avatar/medium/headwear/beanie.glb"
         },
-        "hideBit": 21,
+        "hideBit": 23,
         "bytes": {
-          "medium": 29540
+          "medium": 29304
         }
       },
       "mortarboard": {
         "files": {
           "medium": "/avatar/medium/headwear/mortarboard.glb"
         },
-        "hideBit": 22,
+        "hideBit": 24,
         "bytes": {
-          "medium": 31328
+          "medium": 32436
         }
       },
       "headphones": {
         "files": {
           "medium": "/avatar/medium/headwear/headphones.glb"
         },
-        "hideBit": 23,
+        "hideBit": 25,
         "bytes": {
           "medium": 28592
         }
@@ -829,7 +847,7 @@
         "files": {
           "medium": "/avatar/medium/headwear/halo.glb"
         },
-        "hideBit": 24,
+        "hideBit": 26,
         "bytes": {
           "medium": 27648
         }
@@ -838,10 +856,30 @@
         "files": {
           "medium": "/avatar/medium/headwear/crown.glb"
         },
-        "hideBit": 25,
+        "hideBit": 27,
         "bytes": {
           "medium": 20436
         }
+      }
+    },
+    "facialHair": {
+      "stubble": {
+        "files": {},
+        "scalpOnly": true,
+        "beardBit": 8,
+        "shadeStrength": 0.55
+      },
+      "goatee": {
+        "files": {},
+        "scalpOnly": true,
+        "beardBit": 9,
+        "shadeStrength": 1
+      },
+      "beard": {
+        "files": {},
+        "scalpOnly": true,
+        "beardBit": 8,
+        "shadeStrength": 1
       }
     }
   }

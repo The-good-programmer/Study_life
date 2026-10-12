@@ -12,7 +12,7 @@ import { BodyHider, hideMask } from './bodyHide';
 import { SkeletonShaper } from './skeletonShape';
 import { FaceController } from './expressions';
 import { loadManifest, resolveItems, assetUrl, type AvatarManifest, type ResolvedItem, type Slot } from './manifest';
-import { applyRoleColors, prepareMaterial, setScalp } from './materialsV2';
+import { applyRoleColors, prepareMaterial, setBeard, setScalp } from './materialsV2';
 import { getQualityTier, type QualityTier } from './quality';
 import { measureDims, Retargeter } from './retarget';
 
@@ -113,7 +113,12 @@ export function buildCharacterV2(
     if (!manifest || !base || !avatar) return;
     const v = ++version;
     const wanted = resolveItems(manifest, c, deps.tier);
-    const changed = wanted.filter((it) => equipped.get(it.slot)?.item.url !== it.url);
+    // Shading-only items share an empty URL, so they are told apart by id.
+    const key = (it: ResolvedItem) => it.url || `shade:${it.id}`;
+    const changed = wanted.filter((it) => {
+      const e = equipped.get(it.slot);
+      return !e || key(e.item) !== key(it);
+    });
     const removed = [...equipped.keys()].filter((s) => !wanted.some((it) => it.slot === s));
     const loaded = await Promise.all(
       changed.map((item) =>
@@ -232,6 +237,8 @@ export function buildCharacterV2(
     applyRoleColors(avatar, current);
     const hair = equipped.get('hair')?.item.entry;
     setScalp(avatar, hair?.scalpBit ?? -1, current.hairColor, hair?.scalpOnly ? 0.92 : 0.75);
+    const beard = equipped.get('facialHair')?.item.entry;
+    setBeard(avatar, beard?.beardBit ?? -1, current.facialHairColor ?? current.hairColor, beard?.shadeStrength ?? 0.85);
     face.setMeshes(avatar);
   };
 

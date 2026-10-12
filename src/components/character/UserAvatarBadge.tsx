@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { CharacterCustomization } from '../../types/character';
 import { characterService } from '../../services/characterService';
+import { getPortrait, subscribePortrait } from './portraitStore';
 
 export interface UserAvatarBadgeProps {
   customization?: CharacterCustomization;
@@ -25,6 +26,11 @@ export const UserAvatarBadge: React.FC<UserAvatarBadgeProps> = ({
   }, [customization]);
 
   const character = customization || storedCharacter;
+
+  // A rendered portrait of the 3D avatar, when one matches this look.
+  const [, setPortraitVersion] = useState(0);
+  useEffect(() => subscribePortrait(() => setPortraitVersion((v) => v + 1)), []);
+  const portrait = getPortrait(character);
 
   const sizeDimensions = {
     xs: { w: 32, h: 32, viewBox: '0 0 100 100' },
@@ -53,6 +59,16 @@ export const UserAvatarBadge: React.FC<UserAvatarBadgeProps> = ({
       title={`${character.name || 'Student Avatar'} (Click to customize)`}
       style={{ width: w, height: h }}
     >
+      {portrait ? (
+        <img
+          src={portrait}
+          alt={character.name || 'Student avatar'}
+          className={`w-full h-full rounded-2xl object-cover ${
+            showBorder ? 'border border-indigo-500/30 shadow-md shadow-indigo-950/40 bg-gradient-to-b from-[#131b34] to-[#090d1a]' : ''
+          }`}
+          draggable={false}
+        />
+      ) : (
       <svg
         viewBox={viewBox}
         className={`w-full h-full rounded-2xl ${
@@ -249,6 +265,7 @@ export const UserAvatarBadge: React.FC<UserAvatarBadgeProps> = ({
           <polygon points="34,22 38,12 44,20 50,10 56,20 62,12 66,22" fill="#fbbf24" />
         )}
       </svg>
+      )}
     </div>
   );
 };

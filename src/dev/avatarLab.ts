@@ -3,7 +3,7 @@
  * part of the production build). Renders one avatar full-screen so details
  * can be inspected. Query params: view=face|torso|full|side|back,
  * pose, mood, plus any CharacterCustomization field (e.g. hairStyle=bob-cut).
- * Renderer: avatar=v2 for the asset-based avatar, placeholder=1 to run v2 on
+ * Renderer: v2 (asset-based) by default, avatar=v1 for the procedural one, placeholder=1 to run v2 on
  * the procedural stand-in mannequin, compare=1 for v1 (left) beside v2 (right).
  * window.lab.set({...}) updates the avatar live.
  *
