@@ -7,7 +7,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
  * environment map is kept dim so the key light, not flat ambient, shapes
  * the forms. Shared by the customizer canvas and the dev avatar lab.
  */
-export function applyStudioLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer) {
+export function applyStudioLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer, opts: { shadowMapSize?: number } = {}) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
@@ -27,7 +27,7 @@ export function applyStudioLighting(scene: THREE.Scene, renderer: THREE.WebGLRen
   const key = new THREE.DirectionalLight(0xfff0de, 2.5);
   key.position.set(1.8, 3.2, 2.6);
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.mapSize.setScalar(opts.shadowMapSize ?? 2048);
   key.shadow.camera.near = 0.5;
   key.shadow.camera.far = 9;
   key.shadow.camera.left = -1.1;

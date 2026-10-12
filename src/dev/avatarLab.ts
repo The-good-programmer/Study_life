@@ -3,10 +3,17 @@
  * part of the production build). Renders one avatar full-screen so details
  * can be inspected. Query params: view=face|torso|full|side|back,
  * pose, mood, plus any CharacterCustomization field (e.g. hairStyle=bob-cut).
+ * Renderer: avatar=v2 for the asset-based avatar, placeholder=1 to run v2 on
+ * the procedural stand-in mannequin, compare=1 for v1 (left) beside v2 (right).
  * window.lab.set({...}) updates the avatar live.
  */
 import * as THREE from 'three';
-import { buildCharacter3D } from '../components/character/three/characterBuilder3d';
+import { buildCharacter3D, type CharacterModelInstance } from '../components/character/three/characterBuilder3d';
+import { buildAvatar } from '../components/character/three/buildAvatar';
+import { buildCharacterV2 } from '../components/character/three/v2/characterBuilderV2';
+import { AssetCache } from '../components/character/three/v2/assetLoader';
+import { fetchPlaceholder, placeholderManifest } from '../components/character/three/v2/placeholder';
+import { getQualityTier } from '../components/character/three/v2/quality';
 import { applyStudioLighting } from '../components/character/three/studio';
 import { characterService } from '../services/characterService';
 import type { CharacterCustomization, CharacterPose } from '../types/character';
@@ -47,16 +54,33 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
+const compare = params.has('compare');
+const buildV2 = (c: CharacterCustomization) =>
+  params.has('placeholder')
+    ? buildCharacterV2(c, { showShadow: true }, {
+      loadManifest: async () => placeholderManifest(),
+      assets: new AssetCache(fetchPlaceholder),
+      tier: getQualityTier(),
+      fallback: buildCharacter3D,
+    })
+    : buildCharacterV2(c, { showShadow: true });
+
 const t0 = performance.now();
-const avatar = buildCharacter3D(custom, { showShadow: true });
+const avatars: CharacterModelInstance[] = compare
+  ? [buildCharacter3D(custom, { showShadow: true }), buildV2(custom)]
+  : [params.has('placeholder') ? buildV2(custom) : buildAvatar(custom, { showShadow: true })];
 const buildMs = performance.now() - t0;
-scene.add(avatar.root);
+avatars.forEach((a, i) => {
+  if (compare) a.root.position.x = i === 0 ? -0.45 : 0.45;
+  scene.add(a.root);
+});
+const avatar = avatars[avatars.length - 1];
 let pose = (params.get('pose') as CharacterPose) || custom.pose;
 
 // Geometry is meshed in workers: report when the avatar actually appears.
 const hud = document.getElementById('hud')!;
 const readyPoll = setInterval(() => {
-  if (!avatar.root.getObjectByName('Avatar')) return;
+  if (avatars.some((a) => !a.root.getObjectByName('Avatar'))) return;
   clearInterval(readyPoll);
   let tris = 0;
   avatar.root.traverse((o) => {
@@ -69,7 +93,8 @@ const readyPoll = setInterval(() => {
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
-  avatar.update(clock.getDelta(), pose);
+  const dt = clock.getDelta();
+  for (const a of avatars) a.update(dt, pose);
   renderer.render(scene, camera);
 });
 
@@ -85,13 +110,13 @@ addEventListener('resize', () => {
   set: (patch: Partial<CharacterCustomization>) => {
     Object.assign(custom, patch);
     const s = performance.now();
-    avatar.updateCustomization({ ...custom });
+    for (const a of avatars) a.updateCustomization({ ...custom });
     return `${(performance.now() - s).toFixed(0)} ms`;
   },
   /** Advances the animation n steps and renders now (rAF pauses in background tabs). */
   tick: (n = 60, p?: CharacterPose) => {
     if (p) pose = p;
-    for (let i = 0; i < n; i++) avatar.update(0.05, pose);
+    for (let i = 0; i < n; i++) for (const a of avatars) a.update(0.05, pose);
     renderer.render(scene, camera);
     return pose;
   },
@@ -109,9 +134,11 @@ addEventListener('resize', () => {
   },
   /** Shows or hides meshes by name (e.g. 'Top', 'Hair_buzz'). */
   show: (name: string, visible: boolean) => {
-    avatar.root.traverse((o) => {
-      if (o.name === name) o.visible = visible;
-    });
+    for (const a of avatars) {
+      a.root.traverse((o) => {
+        if (o.name === name) o.visible = visible;
+      });
+    }
     renderer.render(scene, camera);
   },
 };

@@ -55,6 +55,11 @@ export default defineConfig({
             if (id.includes('react') || id.includes('react-dom')) {
               return 'vendor-react';
             }
+            // The glTF/KTX2 loaders are imported on demand by the v2 avatar;
+            // keep them out of the core chunk so v1 users never download them.
+            if (/three\/examples\/jsm\/(loaders\/(GLTF|KTX2)Loader|libs\/meshopt)/.test(id)) {
+              return 'vendor-three-loaders';
+            }
             if (id.includes('three')) {
               return 'vendor-three';
             }
