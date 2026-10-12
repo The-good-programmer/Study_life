@@ -7,9 +7,9 @@ import type { AvatarManifest, ItemEntry } from './manifest';
 /**
  * A procedural stand-in for the real v2 assets: a capsule mannequin built the
  * way the pipeline's glTF exports will be (T-pose bind, Blender-style bone
- * axes with +Y along each bone, extra clavicle and spine bones, `Body_*`
- * regions, body-shape and ARKit morphs, role-named materials, garments
- * skinned to a copy of the skeleton). Dev and tests only: it lets the whole
+ * axes with +Y along each bone, extra clavicle and spine bones, a `_hide`
+ * mask on the body, body-shape and ARKit morphs, joint morphs, role-named
+ * materials, garments skinned to a copy of the skeleton). Dev and tests only: it lets the whole
  * v2 runtime run before any art exists. Not imported by the app.
  */
 
@@ -146,6 +146,12 @@ const BODY_RADIUS: Record<string, number> = {
 const bodyRadius = (bone: string) => BODY_RADIUS[bone] ?? BODY_RADIUS[bone.replace(/_[lr]$/, '')] ?? 0.04;
 const bothSides = (n: string) => [side(1, n), side(-1, n)];
 
+// Hide bits of the placeholder items (see ITEMS) and the body regions they cover.
+const BIT = { bottom: 0, top: 1, shoes: 2 };
+const REGION_HIDE: Record<string, number> = {
+  torso: 1 << BIT.top, upperArms: 1 << BIT.top, thighs: 1 << BIT.bottom, shins: 1 << BIT.bottom, feet: 1 << BIT.shoes,
+};
+
 const REGIONS: Record<string, string[]> = {
   torso: ['pelvis', 'spine_01', 'spine_02', 'spine_03', ...bothSides('clavicle')],
   neck: ['neck_01'],
@@ -168,7 +174,9 @@ export function placeholderBase(): THREE.Group {
   const skel = buildSkeleton();
   const skin = mat('skin_body', 0xd9d9d9, { roughness: 0.55, sheen: 0.3 });
   for (const [region, bones] of Object.entries(REGIONS)) {
-    skinnedMesh(segments(bones, bodyRadius, 0), skin, `Body_${region}`, skel);
+    const geo = segments(bones, bodyRadius, 0);
+    geo.setAttribute('_hide', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count).fill(REGION_HIDE[region] ?? 0), 1));
+    skinnedMesh(geo, skin, `Body_${region}`, skel);
   }
 
   // Head: rigid on the head bone, with a few ARKit shapes.
@@ -225,15 +233,15 @@ function garment(bones: string[], inflate: number, material: THREE.Material, nam
 const ITEMS: Record<string, { build: () => THREE.Object3D; entry: Omit<ItemEntry, 'files'> }> = {
   'top/casual-tee': {
     build: () => garment([...REGIONS.torso, ...bothSides('upperarm')], 0.008, mat('top_body', 0xdddddd, { roughness: 0.9, sheen: 0.6 }), 'Tee'),
-    entry: { hides: ['torso', 'upperArms'] },
+    entry: { hideBit: BIT.top },
   },
   'bottom/jeans': {
     build: () => garment(['pelvis', ...REGIONS.thighs, ...REGIONS.shins], 0.009, mat('bottom_denim', 0xdddddd, { roughness: 0.85 }), 'Jeans'),
-    entry: { hides: ['thighs', 'shins'] },
+    entry: { hideBit: BIT.bottom },
   },
   'shoes/sneakers': {
     build: () => garment(REGIONS.feet, 0.012, mat('shoes_upper', 0xdddddd, { roughness: 0.6 }), 'Sneakers'),
-    entry: { hides: ['feet'] },
+    entry: { hideBit: BIT.shoes },
   },
   'hair/short-fade': {
     build: () => {
@@ -257,7 +265,10 @@ export function placeholderManifest(): AvatarManifest {
     const [slot, id] = key.split('/') as [keyof AvatarManifest['items'], string];
     (items[slot] ??= {})[id] = { ...entry, files: { medium: `placeholder:${key}` } };
   }
-  return { version: 1, base: { files: { medium: 'placeholder:base' } }, boneMap: PLACEHOLDER_BONE_MAP, items };
+  // A male body stands 4 cm taller from the neck up (joints only; enough to exercise the runtime).
+  const up: [number, number, number] = [0, 0.04, 0];
+  const jointMorphs = { gender_male: { neck_01: up, head: up } };
+  return { version: 1, base: { files: { medium: 'placeholder:base' } }, boneMap: PLACEHOLDER_BONE_MAP, jointMorphs, items };
 }
 
 export const fetchPlaceholder: AssetFetcher = async (url) => {

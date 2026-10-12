@@ -4,6 +4,7 @@ import {
 } from '../../../../types/character';
 import type { BoneName } from '../avatar/rig';
 import type { QualityTier } from './quality';
+import type { JointMorphs } from './skeletonShape';
 
 /**
  * The avatar asset manifest (`public/avatar/manifest.json`), written by the
@@ -12,12 +13,13 @@ import type { QualityTier } from './quality';
  *
  * Asset conventions the pipeline guarantees:
  * - Metres, +Y up, facing +Z, feet on y = 0.
- * - The base is one skinned scene (body, head, eyes, teeth, brows, lashes).
- *   Body skin is split into meshes named `Body_<region>` so garments can
- *   hide what they cover (see ItemEntry.hides).
+ * - The base is one skinned scene (body, eyes, teeth, brows, lashes). Body
+ *   meshes carry a `_HIDE` vertex attribute: a bit mask of the items a vertex
+ *   sits under (see ItemEntry.hideBit), so skin under clothes is not drawn.
  * - Body-shape morph targets are named `gender_male`, `gender_female`,
  *   `build_slender`, `build_athletic` (all zero = neutral, average build), and
  *   every skinned garment carries the same ones so it follows the body.
+ *   Morphs that move joints list per-bone offsets in `jointMorphs`.
  * - Facial morph targets use the 52 ARKit blend-shape names (see expressions.ts).
  * - Material names start with a colour role (see MATERIAL_ROLES in materialsV2.ts).
  */
@@ -34,8 +36,8 @@ export interface AssetRef {
 export interface ItemEntry extends AssetRef {
   /** Rigid items (hair, hats, glasses) are parented to this bone of the base. */
   attach?: string;
-  /** Body regions (`Body_<region>` meshes) this item covers and hides. */
-  hides?: string[];
+  /** Bit in the body's `_HIDE` mask for the skin this item covers. */
+  hideBit?: number;
 }
 
 export interface AvatarManifest {
@@ -43,6 +45,7 @@ export interface AvatarManifest {
   base: AssetRef;
   /** Base skeleton bone name for each bone the animator drives. */
   boneMap: Record<BoneName, string>;
+  jointMorphs?: JointMorphs;
   items: Partial<Record<Slot, Record<string, ItemEntry>>>;
 }
 

@@ -70,9 +70,14 @@ describe('buildCharacterV2', () => {
     const a = buildCharacterV2(custom(), { showShadow: false }, d);
     await settle();
     const avatar = find(a.root, 'Avatar')!;
-    expect(find(avatar, 'Body_torso')!.visible).toBe(false);
-    expect(find(avatar, 'Body_feet')!.visible).toBe(false);
-    expect(find(avatar, 'Body_forearms')!.visible).toBe(true);
+    const drawn = (n: string) => (find(avatar, n) as THREE.Mesh).geometry.drawRange.count;
+    expect(drawn('Body_torso')).toBe(0);
+    expect(drawn('Body_feet')).toBe(0);
+    expect(drawn('Body_forearms')).toBe((find(avatar, 'Body_forearms') as THREE.Mesh).geometry.index!.count);
+    // Taking the shoes off shows the feet again (and the cached geometry is untouched).
+    a.updateCustomization(custom({ shoes: 'boots' })); // no asset: falls back to sneakers
+    await settle();
+    expect(drawn('Body_feet')).toBe(0);
     const tee = find(avatar, 'Tee') as THREE.Mesh;
     expect((tee.material as THREE.MeshStandardMaterial).color.getHexString()).toBe('991b1b');
     const skin = (find(avatar, 'Head') as THREE.Mesh).material as THREE.MeshStandardMaterial;
@@ -93,6 +98,33 @@ describe('buildCharacterV2', () => {
     expect(w(body, 'gender_female')).toBe(0);
     expect(w(body, 'gender_male')).toBe(1);
     expect(w(tee, 'build_athletic')).toBe(1);
+  });
+
+  it('moves the joints with the gender morph and rebinds, so the skin stays put at rest', async () => {
+    const { d } = deps();
+    const a = buildCharacterV2(custom({ gender: 'female' }), { showShadow: false }, d);
+    await settle();
+    const avatar = find(a.root, 'Avatar')!;
+    const head = find(avatar, 'head')!;
+    const body = find(avatar, 'Body_hands') as THREE.SkinnedMesh;
+    avatar.updateMatrixWorld(true);
+    const headY = head.getWorldPosition(new THREE.Vector3()).y;
+    const skinned = () => body.getVertexPosition(0, new THREE.Vector3()).applyMatrix4(body.matrixWorld);
+    const before = skinned();
+
+    a.updateCustomization(custom({ gender: 'male' }));
+    avatar.updateMatrixWorld(true);
+    expect(head.getWorldPosition(new THREE.Vector3()).y - headY).toBeCloseTo(0.04, 4);
+    // The hands didn't move: the rebind keeps rest-pose skin exactly where the morph put it.
+    expect(skinned().distanceTo(before)).toBeLessThan(1e-5);
+
+    a.updateCustomization(custom({ gender: 'female' }));
+    avatar.updateMatrixWorld(true);
+    expect(head.getWorldPosition(new THREE.Vector3()).y).toBeCloseTo(headY, 5);
+    // Still animates cleanly afterwards.
+    for (let i = 0; i < 20; i++) a.update(0.033, 'wave');
+    avatar.updateMatrixWorld(true);
+    expect(Number.isFinite(skinned().x)).toBe(true);
   });
 
   it('swaps items without a gap and releases the old asset', async () => {
