@@ -42,6 +42,18 @@ function setCorsHeaders(req, res, allowedOrigins) {
   }
 }
 
+/**
+ * Headers for every API response: the browser must not sniff types or frame
+ * it, it sends no referrer onwards, and nothing in between may store it
+ * (responses carry accounts, sync data and session tokens).
+ */
+function setSecurityHeaders(res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Cache-Control', 'no-store');
+}
+
 function sendJson(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   return res.end(JSON.stringify(payload));
@@ -84,6 +96,7 @@ export function createApp({ ai = defaultAi } = {}) {
 
   return async function handleRequest(req, res) {
     const startTime = Date.now();
+    setSecurityHeaders(res);
     setCorsHeaders(req, res, allowedOrigins);
 
     // Handle CORS preflight
