@@ -1,13 +1,46 @@
-import { defineConfig } from 'vite'
+import { createHash } from 'node:crypto'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { configDefaults } from 'vitest/config'
+
+/**
+ * Stamps a build id into dist/sw.js. The browser only installs a new service
+ * worker when sw.js changes, so without this, users would keep the first
+ * deploy's worker (and its caches) forever. The id is a hash of index.html
+ * (which names every hashed entry chunk) and the worker's own sources, so it
+ * changes exactly when the app does.
+ */
+function stampServiceWorker(): Plugin {
+  let outDir = 'dist'
+  return {
+    name: 'studify-stamp-service-worker',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir
+    },
+    closeBundle() {
+      const sw = join(outDir, 'sw.js')
+      const source = readFileSync(sw, 'utf8')
+      const id = createHash('sha256')
+        .update(readFileSync(join(outDir, 'index.html')))
+        .update(readFileSync(join(outDir, 'sw-routes.js')))
+        .update(source)
+        .digest('hex')
+        .slice(0, 12)
+      writeFileSync(sw, source.replace("'__BUILD_ID__'", `'${id}'`))
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    stampServiceWorker(),
   ],
   server: {
     port: 5173,

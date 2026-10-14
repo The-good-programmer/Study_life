@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:server": "vitest run server",
     "preview": "vite preview",
-    "avatar:compress": "node tools/avatar-pipeline/compress.mjs"
+    "avatar:compress": "node tools/avatar-pipeline/compress.mjs",
+    "check:build": "node scripts/check-build.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.25.0",

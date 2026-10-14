@@ -1,139 +1,112 @@
-const CACHE_NAME = 'studify-v2-pwa-offline';
-// Avatar models and textures are large and content-hashed, so they get their
-// own cache: cache-first, capped, oldest entries evicted first.
-const AVATAR_CACHE = 'studify-avatar-assets-v1';
-const AVATAR_CACHE_MAX_ENTRIES = 80;
-const CORE_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.svg',
-  '/icons.svg',
-];
+/* Studify service worker.
+ *
+ * Request handling lives in sw-routes.js (shared with the tests). In short:
+ * the API and other origins are never cached, page loads are network-first
+ * with the cached app shell as the offline fallback, and content-hashed files
+ * are cache-first. BUILD_ID is stamped in at build time (vite.config.ts), so
+ * every deploy installs a new worker, which then drops the old caches.
+ */
+importScripts('/sw-routes.js');
 
-// Install: Pre-cache essential app shell assets
+const BUILD_ID = '__BUILD_ID__';
+const SHELL_CACHE = `studify-shell-${BUILD_ID}`;
+// Content-hashed avatar models and the Basis transcoder: kept across deploys,
+// capped, oldest entries evicted first.
+const AVATAR_CACHE = 'studify-avatar-assets-v2';
+const AVATAR_CACHE_MAX_ENTRIES = 80;
+const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.svg'];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(CORE_ASSETS);
-    }).then(() => self.skipWaiting())
+    caches.open(SHELL_CACHE)
+      .then((cache) => cache.addAll(SHELL))
+      .then(() => self.skipWaiting())
   );
 });
 
-// Activate: Evict outdated cache namespaces
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME && key !== AVATAR_CACHE) {
-            return caches.delete(key);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL_CACHE && k !== AVATAR_CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
-// Fetch: Multi-tier offline caching strategy
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // 1. Google Gemini / External AI APIs: Network-first with offline JSON fallback
-  if (url.hostname.includes('googleapis.com') || url.hostname.includes('generativelanguage')) {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Network connection unavailable. Studify is running in offline mode. Active recall, FSRS reviews, and Starter Catalog remain fully functional.' 
-          }), 
-          {
-            headers: { 'Content-Type': 'application/json' },
-            status: 503,
-          }
-        );
-      })
-    );
-    return;
+  const request = event.request;
+  const strategy = self.studifyStrategyFor(new URL(request.url), request.mode, request.method, self.location.origin);
+  switch (strategy) {
+    case 'network':
+      return; // the browser handles it; nothing is cached
+    case 'gemini':
+      event.respondWith(fetch(request).catch(() => offlineJson()));
+      return;
+    case 'navigate':
+      event.respondWith(networkFirst(request, SHELL_CACHE, '/index.html'));
+      return;
+    case 'fresh':
+      event.respondWith(networkFirst(request, AVATAR_CACHE));
+      return;
+    case 'immutable':
+      event.respondWith(cacheFirst(request, SHELL_CACHE));
+      return;
+    case 'avatar':
+      event.respondWith(cacheFirst(request, AVATAR_CACHE, AVATAR_CACHE_MAX_ENTRIES));
+      return;
+    default:
+      event.respondWith(staleWhileRevalidate(request, SHELL_CACHE));
   }
-
-  // 2. Google Fonts & CDN assets: Cache-First
-  if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached;
-        return fetch(event.request).then((networkRes) => {
-          if (networkRes && networkRes.status === 200) {
-            const resClone = networkRes.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
-          }
-          return networkRes;
-        }).catch(() => cached);
-      })
-    );
-    return;
-  }
-
-  // 3. Avatar assets. The manifest is network-first so new asset versions show
-  // up; the files it points at never change under the same URL.
-  if (url.origin === self.location.origin && (url.pathname.startsWith('/avatar/') || url.pathname.startsWith('/basis/'))) {
-    if (url.pathname === '/avatar/manifest.json') {
-      event.respondWith(
-        fetch(event.request).then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(AVATAR_CACHE).then((cache) => cache.put(event.request, copy));
-          }
-          return res;
-        }).catch(() => caches.match(event.request))
-      );
-    } else {
-      event.respondWith(avatarAsset(event.request));
-    }
-    return;
-  }
-
-  // 4. Application chunks & static assets: Stale-While-Revalidate
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        if (
-          networkResponse &&
-          networkResponse.status === 200 &&
-          (event.request.method === 'GET')
-        ) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return networkResponse;
-      }).catch(() => {
-        // Fallback to root index.html if navigating offline
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html') || cachedResponse;
-        }
-        return cachedResponse;
-      });
-
-      return cachedResponse || fetchPromise;
-    })
-  );
 });
 
-async function avatarAsset(request) {
-  const cache = await caches.open(AVATAR_CACHE);
+async function networkFirst(request, cacheName, fallbackUrl) {
+  const cache = await caches.open(cacheName);
+  try {
+    const res = await fetch(request);
+    if (res.ok) cache.put(fallbackUrl || request, res.clone());
+    return res;
+  } catch (err) {
+    const cached = await cache.match(fallbackUrl || request);
+    if (cached) return cached;
+    throw err;
+  }
+}
+
+async function cacheFirst(request, cacheName, maxEntries) {
+  const cache = await caches.open(cacheName);
   const cached = await cache.match(request);
   if (cached) return cached;
   const res = await fetch(request);
-  if (res.ok && request.method === 'GET') {
+  if (res.ok) {
     await cache.put(request, res.clone());
-    const keys = await cache.keys();
-    for (const old of keys.slice(0, Math.max(0, keys.length - AVATAR_CACHE_MAX_ENTRIES))) {
-      if (!old.url.endsWith('/avatar/manifest.json')) await cache.delete(old);
+    if (maxEntries) {
+      const keys = await cache.keys();
+      for (const old of keys.slice(0, Math.max(0, keys.length - maxEntries))) {
+        if (!old.url.endsWith('/avatar/manifest.json')) await cache.delete(old);
+      }
     }
   }
   return res;
+}
+
+async function staleWhileRevalidate(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+  const network = fetch(request)
+    .then((res) => {
+      if (res.ok) cache.put(request, res.clone());
+      return res;
+    })
+    .catch(() => cached);
+  return cached || network;
+}
+
+function offlineJson() {
+  return new Response(
+    JSON.stringify({
+      error: 'Network connection unavailable. Studify is running in offline mode. Active recall, FSRS reviews, and Starter Catalog remain fully functional.',
+    }),
+    { headers: { 'Content-Type': 'application/json' }, status: 503 }
+  );
 }
 
 // Push: Handle incoming Web Push notifications from cloud server
