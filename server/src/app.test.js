@@ -254,6 +254,22 @@ describe('CORS', () => {
   });
 });
 
+describe('security headers', () => {
+  it('are on every response, including errors and preflights', async () => {
+    for (const res of [
+      await fetch(`${baseUrl}/api/health`),
+      await fetch(`${baseUrl}/api/auth/me`),
+      await fetch(`${baseUrl}/api/nope`),
+      await fetch(`${baseUrl}/api/health`, { method: 'OPTIONS', headers: { Origin: 'http://localhost:5173' } }),
+    ]) {
+      expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(res.headers.get('x-frame-options')).toBe('DENY');
+      expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+      expect(res.headers.get('cache-control')).toBe('no-store');
+    }
+  });
+});
+
 describe('database', () => {
   it('applies its migrations once and reports healthy', async () => {
     const applied = await db.all('SELECT id FROM schema_migrations');
