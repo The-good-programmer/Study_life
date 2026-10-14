@@ -10,8 +10,13 @@
  * part of a mesh (the face units) become sparse. The runtime's GLTFLoader
  * already has the meshopt decoder. The body's `_HIDE` bit mask is left as
  * exact floats: quantizing it would corrupt the bits.
+ *
+ * Output files are named by content hash (`base.1a2b3c4d.glb`), so browsers
+ * and the service worker can cache them forever and a re-export still
+ * reaches users; files no longer referenced are deleted.
  */
-import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readdir, readFile, rm, writeFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
@@ -52,19 +57,37 @@ async function compress(rel) {
   doc.createExtension(EXTMeshoptCompression)
     .setRequired(true)
     .setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });
-  const out = path.join(OUT, rel);
+  const bytes = await io.writeBinary(doc);
+  const hash = createHash('sha256').update(bytes).digest('hex').slice(0, 8);
+  const hashedRel = rel.replace(/\.glb$/, `.${hash}.glb`);
+  const out = path.join(OUT, hashedRel);
   await mkdir(path.dirname(out), { recursive: true });
-  await writeFile(out, await io.writeBinary(doc));
-  const [before, after] = [(await stat(path.join(SRC, rel))).size, (await stat(out)).size];
-  console.log(`${rel.padEnd(32)} ${(before / 1e6).toFixed(2)} MB -> ${(after / 1e6).toFixed(2)} MB`);
-  return after;
+  await writeFile(out, bytes);
+  written.add(path.resolve(out));
+  const before = (await stat(path.join(SRC, rel))).size;
+  console.log(`${hashedRel.padEnd(40)} ${(before / 1e6).toFixed(2)} MB -> ${(bytes.byteLength / 1e6).toFixed(2)} MB`);
+  return { rel: hashedRel, bytes: bytes.byteLength };
+}
+
+const written = new Set();
+
+/** Every .glb under dir, recursively. */
+async function glbFiles(dir) {
+  const out = [];
+  for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...(await glbFiles(p)));
+    else if (e.name.endsWith('.glb')) out.push(path.resolve(p));
+  }
+  return out;
 }
 
 /** Compresses every file an asset entry lists and records the new sizes. */
 async function compressEntry(entry) {
   for (const [tier, url] of Object.entries(entry.files)) {
-    const rel = url.slice(URL_PREFIX.length);
-    (entry.bytes ??= {})[tier] = await compress(rel);
+    const result = await compress(url.slice(URL_PREFIX.length));
+    entry.files[tier] = URL_PREFIX + result.rel;
+    (entry.bytes ??= {})[tier] = result.bytes;
   }
 }
 
@@ -74,6 +97,10 @@ for (const items of Object.values(manifest.items)) {
   for (const entry of Object.values(items)) await compressEntry(entry);
 }
 await writeFile(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+for (const stale of (await glbFiles(OUT)).filter((f) => !written.has(f))) {
+  await rm(stale);
+  console.log(`removed ${path.relative(OUT, stale)}`);
+}
 
 const tiers = new Set([manifest.base, ...Object.values(manifest.items).flatMap((i) => Object.values(i))].flatMap((e) => Object.keys(e.bytes ?? {})));
 for (const tier of tiers) {

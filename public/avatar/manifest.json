@@ -2,7 +2,7 @@
   "version": 1,
   "base": {
     "files": {
-      "medium": "/avatar/medium/base.glb"
+      "medium": "/avatar/medium/base.4d2af721.glb"
     },
     "bytes": {
       "medium": 1153528
@@ -557,7 +557,7 @@
     "hair": {
       "short-fade": {
         "files": {
-          "medium": "/avatar/medium/hair/short-fade.glb"
+          "medium": "/avatar/medium/hair/short-fade.4b92cce0.glb"
         },
         "scalpBit": 0,
         "hideBit": 0,
@@ -567,7 +567,7 @@
       },
       "curly-afro": {
         "files": {
-          "medium": "/avatar/medium/hair/curly-afro.glb"
+          "medium": "/avatar/medium/hair/curly-afro.ba76d3cd.glb"
         },
         "scalpBit": 1,
         "hideBit": 1,
@@ -577,7 +577,7 @@
       },
       "bob-cut": {
         "files": {
-          "medium": "/avatar/medium/hair/bob-cut.glb"
+          "medium": "/avatar/medium/hair/bob-cut.fb254c58.glb"
         },
         "scalpBit": 2,
         "hideBit": 2,
@@ -587,7 +587,7 @@
       },
       "long-wavy": {
         "files": {
-          "medium": "/avatar/medium/hair/long-wavy.glb"
+          "medium": "/avatar/medium/hair/long-wavy.75f70a93.glb"
         },
         "scalpBit": 3,
         "hideBit": 3,
@@ -597,7 +597,7 @@
       },
       "ponytail": {
         "files": {
-          "medium": "/avatar/medium/hair/ponytail.glb"
+          "medium": "/avatar/medium/hair/ponytail.301d127f.glb"
         },
         "scalpBit": 4,
         "hideBit": 4,
@@ -607,7 +607,7 @@
       },
       "spiky": {
         "files": {
-          "medium": "/avatar/medium/hair/spiky.glb"
+          "medium": "/avatar/medium/hair/spiky.7be149c8.glb"
         },
         "scalpBit": 5,
         "hideBit": 5,
@@ -617,7 +617,7 @@
       },
       "side-part": {
         "files": {
-          "medium": "/avatar/medium/hair/side-part.glb"
+          "medium": "/avatar/medium/hair/side-part.ee49e1fe.glb"
         },
         "scalpBit": 6,
         "hideBit": 6,
@@ -634,7 +634,7 @@
     "top": {
       "button-down": {
         "files": {
-          "medium": "/avatar/medium/top/button-down.glb"
+          "medium": "/avatar/medium/top/button-down.cf849a4d.glb"
         },
         "hideBit": 7,
         "bytes": {
@@ -643,7 +643,7 @@
       },
       "casual-tee": {
         "files": {
-          "medium": "/avatar/medium/top/casual-tee.glb"
+          "medium": "/avatar/medium/top/casual-tee.bcef058c.glb"
         },
         "hideBit": 10,
         "bytes": {
@@ -652,7 +652,7 @@
       },
       "sweater": {
         "files": {
-          "medium": "/avatar/medium/top/sweater.glb"
+          "medium": "/avatar/medium/top/sweater.6d4e615c.glb"
         },
         "hideBit": 11,
         "bytes": {
@@ -661,7 +661,7 @@
       },
       "varsity-jacket": {
         "files": {
-          "medium": "/avatar/medium/top/varsity-jacket.glb"
+          "medium": "/avatar/medium/top/varsity-jacket.61e8aea0.glb"
         },
         "hideBit": 12,
         "bytes": {
@@ -670,7 +670,7 @@
       },
       "hoodie": {
         "files": {
-          "medium": "/avatar/medium/top/hoodie.glb"
+          "medium": "/avatar/medium/top/hoodie.8b7982f0.glb"
         },
         "hideBit": 20,
         "bytes": {
@@ -679,7 +679,7 @@
       },
       "lab-coat": {
         "files": {
-          "medium": "/avatar/medium/top/lab-coat.glb"
+          "medium": "/avatar/medium/top/lab-coat.f17ed1a9.glb"
         },
         "hideBit": 21,
         "bytes": {
@@ -690,7 +690,7 @@
     "bottom": {
       "jeans": {
         "files": {
-          "medium": "/avatar/medium/bottom/jeans.glb"
+          "medium": "/avatar/medium/bottom/jeans.c50a80ba.glb"
         },
         "hideBit": 8,
         "bytes": {
@@ -699,7 +699,7 @@
       },
       "chinos": {
         "files": {
-          "medium": "/avatar/medium/bottom/chinos.glb"
+          "medium": "/avatar/medium/bottom/chinos.95bea25e.glb"
         },
         "hideBit": 13,
         "bytes": {
@@ -708,7 +708,7 @@
       },
       "shorts": {
         "files": {
-          "medium": "/avatar/medium/bottom/shorts.glb"
+          "medium": "/avatar/medium/bottom/shorts.7f74c4b1.glb"
         },
         "hideBit": 14,
         "bytes": {
@@ -717,7 +717,7 @@
       },
       "pleated-skirt": {
         "files": {
-          "medium": "/avatar/medium/bottom/pleated-skirt.glb"
+          "medium": "/avatar/medium/bottom/pleated-skirt.9708d543.glb"
         },
         "hideBit": 15,
         "bytes": {
@@ -726,7 +726,7 @@
       },
       "joggers": {
         "files": {
-          "medium": "/avatar/medium/bottom/joggers.glb"
+          "medium": "/avatar/medium/bottom/joggers.94bfad79.glb"
         },
         "hideBit": 16,
         "bytes": {
@@ -737,7 +737,7 @@
     "shoes": {
       "sneakers": {
         "files": {
-          "medium": "/avatar/medium/shoes/sneakers.glb"
+          "medium": "/avatar/medium/shoes/sneakers.fc155728.glb"
         },
         "hideBit": 9,
         "bytes": {
@@ -746,7 +746,7 @@
       },
       "running": {
         "files": {
-          "medium": "/avatar/medium/shoes/running.glb"
+          "medium": "/avatar/medium/shoes/running.932e41ba.glb"
         },
         "hideBit": 17,
         "bytes": {
@@ -755,7 +755,7 @@
       },
       "loafers": {
         "files": {
-          "medium": "/avatar/medium/shoes/loafers.glb"
+          "medium": "/avatar/medium/shoes/loafers.2fc2d5be.glb"
         },
         "hideBit": 18,
         "bytes": {
@@ -764,7 +764,7 @@
       },
       "boots": {
         "files": {
-          "medium": "/avatar/medium/shoes/boots.glb"
+          "medium": "/avatar/medium/shoes/boots.ab61420a.glb"
         },
         "hideBit": 19,
         "bytes": {
@@ -775,7 +775,7 @@
     "eyewear": {
       "wireframe": {
         "files": {
-          "medium": "/avatar/medium/eyewear/wireframe.glb"
+          "medium": "/avatar/medium/eyewear/wireframe.ec13eed3.glb"
         },
         "bytes": {
           "medium": 39892
@@ -783,7 +783,7 @@
       },
       "thick-frame": {
         "files": {
-          "medium": "/avatar/medium/eyewear/thick-frame.glb"
+          "medium": "/avatar/medium/eyewear/thick-frame.c8c43c62.glb"
         },
         "bytes": {
           "medium": 34108
@@ -791,7 +791,7 @@
       },
       "round": {
         "files": {
-          "medium": "/avatar/medium/eyewear/round.glb"
+          "medium": "/avatar/medium/eyewear/round.0de3f94f.glb"
         },
         "bytes": {
           "medium": 38720
@@ -799,7 +799,7 @@
       },
       "sunglasses": {
         "files": {
-          "medium": "/avatar/medium/eyewear/sunglasses.glb"
+          "medium": "/avatar/medium/eyewear/sunglasses.08be9d25.glb"
         },
         "bytes": {
           "medium": 34280
@@ -809,7 +809,7 @@
     "headwear": {
       "cap": {
         "files": {
-          "medium": "/avatar/medium/headwear/cap.glb"
+          "medium": "/avatar/medium/headwear/cap.2a5bf05d.glb"
         },
         "hideBit": 22,
         "bytes": {
@@ -818,7 +818,7 @@
       },
       "beanie": {
         "files": {
-          "medium": "/avatar/medium/headwear/beanie.glb"
+          "medium": "/avatar/medium/headwear/beanie.8b1f3255.glb"
         },
         "hideBit": 23,
         "bytes": {
@@ -827,7 +827,7 @@
       },
       "mortarboard": {
         "files": {
-          "medium": "/avatar/medium/headwear/mortarboard.glb"
+          "medium": "/avatar/medium/headwear/mortarboard.02ea3020.glb"
         },
         "hideBit": 24,
         "bytes": {
@@ -836,7 +836,7 @@
       },
       "headphones": {
         "files": {
-          "medium": "/avatar/medium/headwear/headphones.glb"
+          "medium": "/avatar/medium/headwear/headphones.f1f72463.glb"
         },
         "hideBit": 25,
         "bytes": {
@@ -845,7 +845,7 @@
       },
       "halo": {
         "files": {
-          "medium": "/avatar/medium/headwear/halo.glb"
+          "medium": "/avatar/medium/headwear/halo.ed1614ec.glb"
         },
         "hideBit": 26,
         "bytes": {
@@ -854,7 +854,7 @@
       },
       "crown": {
         "files": {
-          "medium": "/avatar/medium/headwear/crown.glb"
+          "medium": "/avatar/medium/headwear/crown.907b5e4f.glb"
         },
         "hideBit": 27,
         "bytes": {
