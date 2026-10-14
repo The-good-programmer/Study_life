@@ -14,7 +14,7 @@ const SHELL_CACHE = `studify-shell-${BUILD_ID}`;
 // capped, oldest entries evicted first.
 const AVATAR_CACHE = 'studify-avatar-assets-v2';
 const AVATAR_CACHE_MAX_ENTRIES = 80;
-const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.svg'];
+const SHELL = ['/', '/index.html', '/manifest.json', '/favicon.svg', '/icons/icon-192.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -127,8 +127,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
     tag: 'studify-push-streak',
     data: { url: data.url || '/' },
     actions: [
