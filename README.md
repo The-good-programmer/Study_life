@@ -82,7 +82,40 @@ npm run lint
 ### Build for production
 ```bash
 npm run build
+npm run check:build   # service worker stamped, avatar manifest points at real files
 ```
+
+### Deploying the website
+
+Both halves run on [Render](https://render.com), deployed from `fix/audit-hardening`:
+
+| Service | Type | Build | Notes |
+| :--- | :--- | :--- | :--- |
+| `studify` | Static site | `npm ci && npm run build`, publish `dist` | the web app |
+| `studify-api` | Web service (Node 22) | `npm install --prefix server`, start `npm start --prefix server` | health check `/api/health`; see `server/README.md` for its variables |
+
+- **Frontend variables** (set on the static site, read at build time): `VITE_API_BASE_URL`
+  (the API's URL including `/api`, e.g. `https://api.example.com/api`) and `VITE_GOOGLE_CLIENT_ID`
+  (the same client ID as the API's `GOOGLE_CLIENT_ID`).
+- **API variables:** `ALLOWED_ORIGINS` must list every address the site is served from
+  (comma-separated, e.g. `https://example.com,https://www.example.com`).
+- **Google sign-in:** add every site address to *Authorized JavaScript origins* for the client ID in
+  Google Cloud Console.
+- **CI gate:** `.github/workflows/ci.yml` runs lint, types, tests, the build and `check:build` on every
+  PR and push. Set both Render services to *Auto-Deploy: After CI checks pass* so a failing build
+  never ships.
+- **Rollback:** in Render, open the service's *Events*, pick the last good deploy and choose
+  *Rollback*.
+- **Caching:** the service worker (`public/sw.js`, routing in `public/sw-routes.js`) never caches the
+  API, loads pages network-first and gets a new build id every deploy, so users pick up new versions
+  (an open tab offers a reload). Recommended static-site headers (Render, *Settings → Headers*):
+  `Cache-Control: public, max-age=31536000, immutable` for `/assets/*`, `/avatar/medium/*` and
+  `/basis/*`; `Cache-Control: no-cache` for `/`, `/index.html`, `/sw.js`, `/sw-routes.js`,
+  `/register-sw.js`, `/manifest.json` and `/avatar/manifest.json`; and `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin` and
+  `Cross-Origin-Opener-Policy: same-origin-allow-popups` (keeps the Google sign-in popup working) on `/*`.
+- **Avatar assets:** rebuilt with `tools/avatar-pipeline` (Blender + MPFB, then
+  `npm run avatar:compress`); the models are named by content hash, so they can be cached forever.
 
 ---
 
