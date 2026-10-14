@@ -1,0 +1,43 @@
+# Checks every pull request and every push to the production branch. Render
+# deploys fix/audit-hardening, so this is the gate in front of production
+# (set both Render services to "Auto-Deploy: After CI checks pass").
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [fix/audit-hardening]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix server
+      - name: Lint
+        run: npm run lint
+      - name: Type-check
+        run: npx tsc -b
+      - name: Frontend tests
+        run: npm test -- --exclude "server/**"
+      - name: Server tests
+        run: npm run test:server
+      - name: Build
+        run: npm run build
+      - name: Check the build
+        run: npm run check:build
