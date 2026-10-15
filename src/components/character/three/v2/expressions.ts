@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { CharacterMood } from '../../../../types/character';
+import { EYE_RANGE } from '../avatar/animator';
 
 /** The 52 ARKit face blend shapes; the base head's morph targets use these names. */
 export const ARKIT_SHAPES = [
@@ -36,13 +37,47 @@ export const MOOD_PRESETS: Record<CharacterMood, FaceWeights> = {
   sleepy: { ...both('eyeBlink', 0.62), browInnerUp: 0.15, jawOpen: 0.06, ...both('mouthFrown', 0.1) },
 };
 
+const slot = (name: ArkitShape) => ARKIT_SHAPES.indexOf(name);
+const BLINK_L = slot('eyeBlinkLeft');
+const BLINK_R = slot('eyeBlinkRight');
+const LOOK = {
+  inL: slot('eyeLookInLeft'), outL: slot('eyeLookOutLeft'), upL: slot('eyeLookUpLeft'), downL: slot('eyeLookDownLeft'),
+  inR: slot('eyeLookInRight'), outR: slot('eyeLookOutRight'), upR: slot('eyeLookUpRight'), downR: slot('eyeLookDownRight'),
+};
+/** How far the upper lids follow the eyes down (as a share of a blink) when looking fully down. */
+const LID_DROOP = 0.22;
+
+const unit = (v: number, max: number) => Math.min(Math.max(v / max, 0), 1);
+
 /**
- * Drives the face: eases toward the mood's preset (about 250 ms) and adds
- * blinks on top, writing ARKit weights into every mesh that has them.
+ * ARKit eye-look weights for eye rotations relative to the head (radians),
+ * written into `out`, indexed like ARKIT_SHAPES (other entries untouched).
+ * Yaw turns toward the avatar's left (+X), pitch downward. Left and Right
+ * are the avatar's own eyes, and In means toward the nose. Weight 1 is the
+ * edge of EYE_RANGE: the shipped eye shapes turn the eye about 29° sideways,
+ * 14° up and 23° down at full weight.
+ */
+export function gazeWeights(yawL: number, yawR: number, pitch: number, out: Float32Array): Float32Array {
+  out[LOOK.outL] = unit(yawL, EYE_RANGE.side);
+  out[LOOK.inL] = unit(-yawL, EYE_RANGE.side);
+  out[LOOK.inR] = unit(yawR, EYE_RANGE.side);
+  out[LOOK.outR] = unit(-yawR, EYE_RANGE.side);
+  out[LOOK.downL] = out[LOOK.downR] = unit(pitch, EYE_RANGE.down);
+  out[LOOK.upL] = out[LOOK.upR] = unit(-pitch, EYE_RANGE.up);
+  return out;
+}
+
+/**
+ * Drives the face: eases toward the mood's preset (about 250 ms), adds the
+ * gaze (see setGaze) and blinks on top, and writes ARKit weights into every
+ * mesh that has them.
  */
 export class FaceController {
   private current = new Float32Array(ARKIT_SHAPES.length);
   private target = new Float32Array(ARKIT_SHAPES.length);
+  /** Eye-look weights from the gaze, added to the mood's. */
+  private gaze = new Float32Array(ARKIT_SHAPES.length);
+  private lidDroop = 0;
   private meshes: { mesh: THREE.Mesh; slots: Int16Array }[] = [];
   private blinkTimer = 0;
   private nextBlink = 2 + Math.random() * 3;
@@ -62,6 +97,16 @@ export class FaceController {
   setMood(mood: CharacterMood) {
     const preset = MOOD_PRESETS[mood] ?? {};
     ARKIT_SHAPES.forEach((n, i) => (this.target[i] = preset[n] ?? 0));
+  }
+
+  /**
+   * Where the eyes look, relative to the head (see AvatarAnimator.gaze). It
+   * adds to the mood's own eye-look weights (e.g. 'proud' looks down a
+   * little), and the upper lids follow the eyes down.
+   */
+  setGaze(yawL: number, yawR: number, pitch: number) {
+    gazeWeights(yawL, yawR, pitch, this.gaze);
+    this.lidDroop = LID_DROOP * this.gaze[LOOK.downL];
   }
 
   /** Snaps to the target (no easing), e.g. for the first frame. */
@@ -93,9 +138,8 @@ export class FaceController {
       const inf = mesh.morphTargetInfluences!;
       for (let i = 0; i < slots.length; i++) {
         if (slots[i] < 0) continue;
-        const name = ARKIT_SHAPES[i];
-        const w = name === 'eyeBlinkLeft' || name === 'eyeBlinkRight' ? Math.max(this.current[i], blink) : this.current[i];
-        inf[slots[i]] = w;
+        const w = i === BLINK_L || i === BLINK_R ? Math.max(this.current[i] + this.lidDroop, blink) : this.current[i] + this.gaze[i];
+        inf[slots[i]] = Math.min(w, 1);
       }
     }
   }
