@@ -2,10 +2,10 @@
   "version": 1,
   "base": {
     "files": {
-      "medium": "/avatar/medium/base.4d2af721.glb"
+      "medium": "/avatar/medium/base.b6fc1478.glb"
     },
     "bytes": {
-      "medium": 1153528
+      "medium": 1146640
     }
   },
   "boneMap": {
@@ -557,72 +557,72 @@
     "hair": {
       "short-fade": {
         "files": {
-          "medium": "/avatar/medium/hair/short-fade.4b92cce0.glb"
+          "medium": "/avatar/medium/hair/short-fade.e25ede8a.glb"
         },
         "scalpBit": 0,
         "hideBit": 0,
         "bytes": {
-          "medium": 289428
+          "medium": 289448
         }
       },
       "curly-afro": {
         "files": {
-          "medium": "/avatar/medium/hair/curly-afro.ba76d3cd.glb"
+          "medium": "/avatar/medium/hair/curly-afro.cc8e5933.glb"
         },
         "scalpBit": 1,
         "hideBit": 1,
         "bytes": {
-          "medium": 776276
+          "medium": 776296
         }
       },
       "bob-cut": {
         "files": {
-          "medium": "/avatar/medium/hair/bob-cut.fb254c58.glb"
+          "medium": "/avatar/medium/hair/bob-cut.b7f84329.glb"
         },
         "scalpBit": 2,
         "hideBit": 2,
         "bytes": {
-          "medium": 314192
+          "medium": 314208
         }
       },
       "long-wavy": {
         "files": {
-          "medium": "/avatar/medium/hair/long-wavy.75f70a93.glb"
+          "medium": "/avatar/medium/hair/long-wavy.dc4c7377.glb"
         },
         "scalpBit": 3,
         "hideBit": 3,
         "bytes": {
-          "medium": 259976
+          "medium": 259992
         }
       },
       "ponytail": {
         "files": {
-          "medium": "/avatar/medium/hair/ponytail.301d127f.glb"
+          "medium": "/avatar/medium/hair/ponytail.9ee9a0d3.glb"
         },
         "scalpBit": 4,
         "hideBit": 4,
         "bytes": {
-          "medium": 378624
+          "medium": 378640
         }
       },
       "spiky": {
         "files": {
-          "medium": "/avatar/medium/hair/spiky.7be149c8.glb"
+          "medium": "/avatar/medium/hair/spiky.acec77db.glb"
         },
         "scalpBit": 5,
         "hideBit": 5,
         "bytes": {
-          "medium": 221556
+          "medium": 221572
         }
       },
       "side-part": {
         "files": {
-          "medium": "/avatar/medium/hair/side-part.ee49e1fe.glb"
+          "medium": "/avatar/medium/hair/side-part.b36b43da.glb"
         },
         "scalpBit": 6,
         "hideBit": 6,
         "bytes": {
-          "medium": 166424
+          "medium": 166444
         }
       },
       "buzz": {
@@ -809,29 +809,29 @@
     "headwear": {
       "cap": {
         "files": {
-          "medium": "/avatar/medium/headwear/cap.2a5bf05d.glb"
+          "medium": "/avatar/medium/headwear/cap.e92a24c2.glb"
         },
         "hideBit": 22,
         "bytes": {
-          "medium": 29724
+          "medium": 30616
         }
       },
       "beanie": {
         "files": {
-          "medium": "/avatar/medium/headwear/beanie.8b1f3255.glb"
+          "medium": "/avatar/medium/headwear/beanie.f7a21b65.glb"
         },
         "hideBit": 23,
         "bytes": {
-          "medium": 29304
+          "medium": 29880
         }
       },
       "mortarboard": {
         "files": {
-          "medium": "/avatar/medium/headwear/mortarboard.02ea3020.glb"
+          "medium": "/avatar/medium/headwear/mortarboard.e17cca95.glb"
         },
         "hideBit": 24,
         "bytes": {
-          "medium": 32436
+          "medium": 32280
         }
       },
       "headphones": {

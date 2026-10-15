@@ -146,6 +146,8 @@ LAYERS = {"shoes": ("body", 0), "bottom": ("body", 1), "top": ("body", 2), "hair
 
 # Material roles whose textures are tinted at runtime (normalised to grey here).
 TINTED_ROLES = ("skin", "hair", "brow", "top", "bottom", "shoes")
+# Roles drawn as alpha-tested strand cards at runtime (see materialsV2.ts).
+CARD_ROLES = ("hair", "brow")
 
 TIERS = {"medium": 1024}  # texture size per quality tier
 
@@ -565,6 +567,21 @@ def read_mhmat(path):
     return props
 
 
+# Texture helpers. Pixel arrays are (rows, columns, 4) floats in bpy's layout
+# (row 0 at v = 0), sRGB-encoded as Image.pixels gives them for 8-bit files.
+LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+
+
+def smoothstep(a, b, x):
+    t = np.clip((x - a) / (b - a), 0, 1)
+    return t * t * (3 - 2 * t)
+
+
+def soft_clip(y, knee):
+    """Identity up to `knee`, then a shoulder that eases into 1 (no hard clipping)."""
+    return np.where(y > knee, knee + (1 - knee) * (1 - np.exp(-np.maximum(y - knee, 0) / (1 - knee))), y)
+
+
 # Average brightness tinted textures are normalised to. Hair textures carry
 # painted-in shine, so they sit darker to keep dark colours dark under the
 # runtime's specular highlight.
@@ -642,7 +659,16 @@ def simple_material(name, mhmat_path, size, cutout=False):
                                  clean_logo=name.endswith("_nologo"))
         nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
         if cutout or props.get("transparent") == "True":
-            nt.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
+            alpha = tex.outputs["Alpha"]
+            if role in CARD_ROLES:
+                # Exported as an alpha cutout (glTF MASK): the runtime draws
+                # strand cards alpha-tested, and loaders turn depth writes off
+                # for BLEND, which let the skin cover the brows.
+                clip = nt.nodes.new("ShaderNodeMath")
+                clip.operation = "ROUND"
+                nt.links.new(alpha, clip.inputs[0])
+                alpha = clip.outputs[0]
+            nt.links.new(alpha, bsdf.inputs["Alpha"])
             if hasattr(mat, "blend_method"):
                 mat.blend_method = "HASHED"
     normal = props.get("normalmapTexture")
@@ -664,7 +690,7 @@ def find_irises(img):
     px = px.reshape(h, w, 4)
     rgb = px[..., :3]
     sat = rgb.max(-1) - rgb.min(-1)
-    lum = rgb @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    lum = rgb @ LUMA
     ys, xs = np.nonzero((sat > 0.2) & (lum < 0.45))
     pts = np.stack([xs / w, ys / h], axis=1)
     # Two irises: k-means seeded at the extremes of x - y.
@@ -677,9 +703,18 @@ def find_irises(img):
     return [(Vector(c), r) for c, r in zip(centres, radii)]
 
 
+# Brightness (sRGB) of the greyscaled iris; the runtime multiplies the eye
+# colour in, so a light grey lets dark brown, hazel, blue and green all read
+# as their swatch.
+IRIS_GREY = 0.82
+
+
 def eye_materials(eye_obj, mhmat_path, size):
     """Splits the eyeballs into sclera and iris materials, with the iris
-    greyscaled so the runtime can tint it with the user's eye colour."""
+    greyscaled so the runtime can tint it with the user's eye colour: its
+    fibres are kept (contrast-limited) around IRIS_GREY, the pupil stays
+    black, and a darker limbal ring at the rim blends into the sclera (no
+    bright fringe where the iris texture meets the white)."""
     props = read_mhmat(mhmat_path)
     tex_path = os.path.join(os.path.dirname(mhmat_path), props["diffuseTexture"])
     img = bpy.data.images.load(tex_path, check_existing=False)
@@ -692,12 +727,16 @@ def eye_materials(eye_obj, mhmat_path, size):
     px = px.reshape(h, w, 4)
     yy, xx = np.mgrid[0:h, 0:w]
     uv = np.stack([(xx + 0.5) / w, (yy + 0.5) / h], axis=-1)
-    inside = np.zeros((h, w), dtype=bool)
+    lum = px[..., :3] @ LUMA
     for c, r in irises:
-        inside |= np.linalg.norm(uv - np.array(c[:]), axis=-1) < r * 1.04
-    lum = px[..., :3] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
-    grey = np.clip(lum / max(float(lum[inside].mean()), 1e-3) * 0.55, 0, 1)
-    px[inside, 0] = px[inside, 1] = px[inside, 2] = grey[inside]
+        rr = np.linalg.norm(uv - np.array(c[:]), axis=-1) / r  # 1 at the iris rim
+        zone = rr < 1.15
+        fibres = lum / max(float(lum[(rr > 0.4) & (rr < 0.85)].mean()), 1e-3)
+        grey = (1 + np.tanh((fibres - 1) / 0.6) * 0.6) * IRIS_GREY
+        grey *= smoothstep(0.26, 0.36, rr) * (1 - 0.65 * smoothstep(0.78, 0.98, rr))
+        rim = smoothstep(0.96, 1.1, rr)  # past the rim: the sclera's own (greyed) brightness
+        grey = soft_clip((1 - rim) * grey + rim * lum, 0.85)
+        px[zone, 0] = px[zone, 1] = px[zone, 2] = grey[zone]
     img.pixels.foreach_set(px.ravel())
     img.name = "eye_greyiris.png"
     img.pack()
