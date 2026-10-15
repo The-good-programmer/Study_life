@@ -20,7 +20,7 @@ const HANDS = {
   relaxed: { curl: 0.3, spread: 0.08, thumb: 0.45 },
   open: { curl: -0.1, spread: 0.7, thumb: 0.1 },
   loose: { curl: 0.6, spread: 0.05, thumb: 0.6 },
-  book: { curl: 0.4, spread: 0.1, thumb: 0.15 },
+  book: { curl: 0.02, spread: 0.1, thumb: 0.8 },
 } as const satisfies Record<string, HandPose>;
 
 /**
@@ -143,11 +143,13 @@ function armGoal(pose: CharacterPose, side: 1 | -1, t: number, shoulder: THREE.V
   switch (pose) {
     case 'study':
     case 'read':
-      // Cradle the open book (held on the chest bone) from underneath.
-      out.target.set(side * 0.108, -0.092, 0.19);
+      // Cradle the open book (held on the chest bone, tilted 0.38 rad toward
+      // the reader) from underneath: palms flat on its underside, fingers
+      // along it, so the thumbs come up over the outer edges.
+      out.target.set(side * 0.105, -0.078, 0.191);
       out.pole.set(side * 0.3, -0.35, -0.2).add(shoulder);
-      out.fingers.set(-side * 0.45, 0.12, 1);
-      out.palm.set(-side * 0.25, 1, -0.15);
+      out.fingers.set(-side * 0.2, -0.371, 0.929);
+      out.palm.set(-side * 0.2, 0.929, 0.371);
       return true;
     case 'wave': {
       if (side === 1) return false;
