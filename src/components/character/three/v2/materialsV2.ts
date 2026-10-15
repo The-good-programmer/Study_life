@@ -166,6 +166,13 @@ function hairMaterial(src: THREE.MeshStandardMaterial): THREE.MeshPhysicalMateri
           '\t\tmaterial.anisotropyT = cross( material.anisotropyB, normal );',
           '\t}',
           '#endif',
+          // Strand detail in the highlight: painted strands catch the light, the gaps between them
+          // less. Without it, dark hair (whose texture barely shows) shades like a smooth helmet.
+          '#ifdef USE_MAP',
+          '\tfloat hairStrand = clamp( 4.0 * dot( sampledDiffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ), 0.3, 1.8 );',
+          '\tmaterial.specularColor *= hairStrand;',
+          '\tmaterial.specularColorBlended *= hairStrand;',
+          '#endif',
         ].join('\n')
       ),
     ].join('\n');
@@ -375,17 +382,18 @@ function addScalpShading(m: THREE.Material) {
       'uniform sampler2D shortHairs;',
       'varying float vScalp;',
       'varying float vBeard;',
+      // Hairs take the full tint; the skin between them less, the less dense the growth (stubble vs beard).
+      'float hairTint( float strength, float hairs ) { return strength * mix( 0.75 * strength, 1.0, hairs ); }',
       shader.fragmentShader.replace(
         '#include <map_fragment>',
         [
           '#include <map_fragment>',
-          // Hairs at full tint, skin between them partly tinted (roots and shade).
           '\tfloat hairs = 1.0;',
           '\t#ifdef USE_MAP',
           `\t\thairs = texture2D( shortHairs, vMapUv * ${SHORT_HAIR_REPEAT.toFixed(1)} ).r;`,
           '\t#endif',
-          '\tdiffuseColor.rgb = mix( diffuseColor.rgb, scalpColor, vScalp * scalpStrength * mix( 0.5, 1.0, hairs ) );',
-          '\tdiffuseColor.rgb = mix( diffuseColor.rgb, beardColor, vBeard * beardStrength * mix( 0.3, 1.0, hairs ) );',
+          '\tdiffuseColor.rgb = mix( diffuseColor.rgb, scalpColor, vScalp * hairTint( scalpStrength, hairs ) );',
+          '\tdiffuseColor.rgb = mix( diffuseColor.rgb, beardColor, vBeard * hairTint( beardStrength, hairs ) );',
         ].join('\n')
       ),
     ].join('\n');

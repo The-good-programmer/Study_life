@@ -4,6 +4,39 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 /** Shadow-map texels the key light's filter spans (r186's PCF filter softens over shadow.radius texels). */
 const SHADOW_SOFTNESS = 3;
 
+const CUSTOM_TONE_MAPPING_STUB = 'vec3 CustomToneMapping( vec3 color ) { return color; }';
+
+/**
+ * Khronos PBR Neutral tone mapping without its toe. Colours below the
+ * highlights pass through unchanged, so a skin, hair or clothing swatch
+ * reads as itself on the avatar, and highlights still roll off softly. ACES
+ * desaturates and lightens skin; PBR Neutral's toe pulls the weakest
+ * channel of dark colours towards black, which turned the darker skin tones
+ * orange; AgX greys them all. Installed as three.js's custom tone mapping
+ * (a shader chunk shared by the page; only CustomToneMapping renderers use it).
+ */
+function applySwatchTrueToneMapping(renderer: THREE.WebGLRenderer) {
+  const chunk = THREE.ShaderChunk.tonemapping_pars_fragment;
+  if (chunk.includes(CUSTOM_TONE_MAPPING_STUB)) {
+    THREE.ShaderChunk.tonemapping_pars_fragment = chunk.replace(CUSTOM_TONE_MAPPING_STUB, [
+      'vec3 CustomToneMapping( vec3 color ) {',
+      '\tconst float StartCompression = 0.8 - 0.04;',
+      '\tconst float Desaturation = 0.15;',
+      '\tcolor *= toneMappingExposure;',
+      '\tfloat peak = max( color.r, max( color.g, color.b ) );',
+      '\tif ( peak < StartCompression ) return color;',
+      '\tfloat d = 1. - StartCompression;',
+      '\tfloat newPeak = 1. - d * d / ( peak + d - StartCompression );',
+      '\tcolor *= newPeak / peak;',
+      '\tfloat g = 1. - 1. / ( Desaturation * ( peak - newPeak ) + 1. );',
+      '\treturn mix( color, vec3( newPeak ), g );',
+      '}',
+    ].join('\n'));
+  }
+  renderer.toneMapping = THREE.CustomToneMapping;
+  renderer.toneMappingExposure = 1;
+}
+
 /**
  * Character-showcase lighting: a near-neutral key with soft shadows, a cool
  * fill, and two rim lights that trace the silhouette against a dark
@@ -11,14 +44,12 @@ const SHADOW_SOFTNESS = 3;
  * ambient, shapes the forms. Shared by the customizer canvas, portraits and
  * the dev avatar lab.
  *
- * Tone mapping is Khronos PBR Neutral: it leaves colours below the
- * highlights as they are, so a skin, hair or clothing swatch reads as
- * itself on the avatar (ACES desaturates and lightens skin). The key light
- * is set so a key-lit cheek renders about at the chosen skin swatch.
+ * Colour is calibrated for the customizer's swatches: with the tone mapping
+ * above, a key-lit cheek renders at about the chosen skin swatch (measured
+ * in the avatar lab for the whole SKIN_TONE_PALETTE).
  */
 export function applyStudioLighting(scene: THREE.Scene, renderer: THREE.WebGLRenderer, opts: { shadowMapSize?: number } = {}) {
-  renderer.toneMapping = THREE.NeutralToneMapping;
-  renderer.toneMappingExposure = 1;
+  applySwatchTrueToneMapping(renderer);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
