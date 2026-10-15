@@ -421,7 +421,9 @@ export class AvatarAnimator {
     const x0 = this.readStep < READ_COLS * READ_LINES ? 0.095 : -0.025;
     const x = x0 - (col / (READ_COLS - 1)) * 0.07;
     const z = 0.045 - (line / (READ_LINES - 1)) * 0.09;
-    return (book.children[0] ?? book).localToWorld(out.set(x, 0.012, z));
+    const page = book.children[0] ?? book;
+    page.updateWorldMatrix(true, false);
+    return page.localToWorld(out.set(x, 0.012, z));
   }
 
   /** Saccades: wandering glances when idle (mode 0), tiny ones while fixating (1), none while reading (2). */
