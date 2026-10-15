@@ -12,7 +12,7 @@ import { BodyHider, hideMask } from './bodyHide';
 import { SkeletonShaper } from './skeletonShape';
 import { FaceController } from './expressions';
 import { loadManifest, resolveItems, assetUrl, type AvatarManifest, type ResolvedItem, type Slot } from './manifest';
-import { applyRoleColors, prepareMaterial, setBeard, setScalp } from './materialsV2';
+import { applyRoleColors, prepareMaterial, setBeard, setScalp, setShadowFlags } from './materialsV2';
 import { getQualityTier, type QualityTier } from './quality';
 import { measureDims, Retargeter } from './retarget';
 
@@ -229,7 +229,7 @@ export function buildCharacterV2(
     avatar.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
-      mesh.castShadow = true;
+      setShadowFlags(mesh);
       if ((mesh as THREE.SkinnedMesh).isSkinnedMesh || mesh.morphTargetInfluences) mesh.frustumCulled = false;
       mesh.material = Array.isArray(mesh.material) ? mesh.material.map(prepareMaterial) : prepareMaterial(mesh.material);
     });

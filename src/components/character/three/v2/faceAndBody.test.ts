@@ -4,7 +4,9 @@ import type { CharacterMood } from '../../../../types/character';
 import { ARKIT_SHAPES, FaceController, MOOD_PRESETS } from './expressions';
 import { applyBodyShape, bodyMorphWeights } from './bodyShape';
 import { tierFromSignals, TIER_SETTINGS } from './quality';
-import { applyRoleColors, poreNormals, prepareMaterial, roleOf } from './materialsV2';
+import {
+  applyRoleColors, poreNormals, prepareMaterial, roleOf, setShadowFlags, shortHairs, TEXTURE_ANISOTROPY,
+} from './materialsV2';
 
 function morphMesh(names: string[]) {
   const mesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial());
@@ -119,11 +121,18 @@ describe('material roles', () => {
     expect(beard.color.getHexString()).toBe('0000ff'); // no facialHairColor: follows the hair
   });
 
-  it('renders hair cards with alpha-to-coverage instead of blending', () => {
-    const brow = new THREE.MeshStandardMaterial({ name: 'brow_cards', transparent: true });
-    expect(prepareMaterial(brow)).toBe(brow);
-    expect(brow.alphaToCoverage).toBe(true);
-    expect(brow.transparent).toBe(false);
+  it('draws brows and lashes in the opaque pass with soft alpha-to-coverage and depth writes', () => {
+    // GLTFLoader imports them as blended materials without depth writes.
+    for (const name of ['brow_001', 'lash_01']) {
+      const card = new THREE.MeshStandardMaterial({ name, transparent: true, depthWrite: false });
+      expect(prepareMaterial(card)).toBe(card);
+      expect(card.alphaToCoverage).toBe(true);
+      expect(card.transparent).toBe(false);
+      // Without depth writes, skin drawn later in the opaque pass covered the brows.
+      expect(card.depthWrite).toBe(true);
+      // No threshold: three.js would sharpen the coverage into a hard edge.
+      expect(card.alphaTest).toBe(0);
+    }
   });
 
   it('upgrades skin to a physical material with pores, sheen and subsurface lighting', () => {
@@ -140,23 +149,98 @@ describe('material roles', () => {
     skin.onBeforeCompile(shader as never, undefined as never);
     expect(shader.fragmentShader).toContain('skinWrap');
     expect(shader.fragmentShader).not.toContain('#include <lights_physical_pars_fragment>');
+    // Facial hair and the scalp are broken into hairs by a filtered texture, not per-pixel noise.
+    expect(shader.uniforms).toHaveProperty('shortHairs.value', shortHairs());
+    expect(shader.fragmentShader).toContain('texture2D( shortHairs');
     expect(prepareMaterial(skin)).toBe(skin);
   });
 
   it('upgrades hair to an anisotropic physical material, once', () => {
     const map = new THREE.Texture();
-    const src = new THREE.MeshStandardMaterial({ name: 'hair_short01', map, transparent: true });
+    const src = new THREE.MeshStandardMaterial({ name: 'hair_short01', map, transparent: true, depthWrite: false });
     const hair = prepareMaterial(src) as THREE.MeshPhysicalMaterial;
     expect(hair.isMeshPhysicalMaterial).toBe(true);
     expect(hair.name).toBe('hair_short01');
     expect(hair.map).toBe(map);
     expect(hair.anisotropy).toBeGreaterThan(0.5);
     expect(hair.alphaToCoverage).toBe(true);
+    expect(hair.depthWrite).toBe(true);
+    expect(hair.alphaTest).toBe(0.5);
     expect(prepareMaterial(hair)).toBe(hair);
+    // A smooth strand direction replaces the per-triangle one three.js derives from the UVs.
+    const shader = {
+      uniforms: {},
+      vertexShader: '#include <defaultnormal_vertex>',
+      fragmentShader: '#include <lights_physical_fragment>',
+    };
+    hair.onBeforeCompile(shader as never, undefined as never);
+    expect(shader.vertexShader).toContain('vHairFlow =');
+    expect(shader.fragmentShader).toContain('material.anisotropyT =');
     // Still coloured by role afterwards.
     const g = new THREE.Group();
     g.add(new THREE.Mesh(new THREE.BufferGeometry(), hair));
     applyRoleColors(g, { hairColor: '#66391a' } as never);
     expect(hair.color.getHexString()).toBe('66391a');
+  });
+
+  it('keeps coily hair nearly isotropic', () => {
+    const afro = prepareMaterial(new THREE.MeshStandardMaterial({ name: 'hair_afro01' })) as THREE.MeshPhysicalMaterial;
+    expect(afro.anisotropy).toBeLessThan(0.1);
+    expect(afro.roughness).toBeGreaterThan(0.6);
+  });
+
+  it('tints sheen and highlights from the chosen colours', () => {
+    const hair = prepareMaterial(new THREE.MeshStandardMaterial({ name: 'hair_short04' })) as THREE.MeshPhysicalMaterial;
+    const skin = prepareMaterial(new THREE.MeshStandardMaterial({ name: 'skin_body' })) as THREE.MeshPhysicalMaterial;
+    const brow = prepareMaterial(new THREE.MeshStandardMaterial({ name: 'brow_001' })) as THREE.MeshStandardMaterial;
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BufferGeometry(), [hair, skin, brow]));
+
+    applyRoleColors(g, { hairColor: '#171717', skinTone: '#321d13' } as never);
+    // Black hair: no light sheen washing it out; dark skin: no grey (ashy) sheen.
+    expect(Math.max(hair.sheenColor.r, hair.sheenColor.g, hair.sheenColor.b)).toBeLessThan(0.01);
+    expect(Math.max(skin.sheenColor.r, skin.sheenColor.g, skin.sheenColor.b)).toBeLessThan(0.02);
+    expect(skin.sheenColor.r).toBeGreaterThan(skin.sheenColor.b);
+    // Brows: the hair colour, a little darker.
+    expect(brow.color.r).toBeLessThan(hair.color.r);
+
+    applyRoleColors(g, { hairColor: '#963d1e', skinTone: '#e5b88f' } as never);
+    // Auburn's highlight is coppery, at full brightness.
+    expect(hair.specularColor.r).toBeCloseTo(1, 5);
+    expect(hair.specularColor.r).toBeGreaterThan(hair.specularColor.g);
+    expect(hair.specularColor.g).toBeGreaterThan(hair.specularColor.b);
+  });
+
+  it('filters colour and normal maps anisotropically', () => {
+    const map = new THREE.Texture();
+    const normalMap = new THREE.Texture();
+    prepareMaterial(new THREE.MeshStandardMaterial({ name: 'top_body', map, normalMap }));
+    expect(map.anisotropy).toBe(TEXTURE_ANISOTROPY);
+    expect(normalMap.anisotropy).toBe(TEXTURE_ANISOTROPY);
+    expect(poreNormals().anisotropy).toBe(TEXTURE_ANISOTROPY);
+  });
+
+  it('makes the avatar shade itself, without shadows from tiny details or the eyes', () => {
+    const mesh = (name: string) => new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ name }));
+    for (const name of ['skin_body', 'hair_short04', 'top_body', 'brow_001', 'lash_01', 'eye_cornea']) {
+      const m = mesh(name);
+      setShadowFlags(m);
+      expect(m.receiveShadow, name).toBe(true);
+      expect(m.castShadow, name).toBe(!/^(brow|lash|eye)/.test(name));
+    }
+  });
+
+  it('draws a tiling, mipmapped short-hair mask with partial coverage', () => {
+    const tex = shortHairs();
+    expect(tex).toBe(shortHairs());
+    expect(tex.wrapS).toBe(THREE.RepeatWrapping);
+    expect(tex.generateMipmaps).toBe(true);
+    const { data, width, height } = tex.image as { data: Uint8Array; width: number; height: number };
+    let sum = 0;
+    for (let i = 0; i < width * height; i++) sum += data[i * 4];
+    const mean = sum / (width * height * 255);
+    // Hairs with skin between them: its average (what distance shows) is a partial tint.
+    expect(mean).toBeGreaterThan(0.25);
+    expect(mean).toBeLessThan(0.7);
   });
 });
