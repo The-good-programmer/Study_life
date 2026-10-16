@@ -542,9 +542,11 @@ def facial_hair_regions(body, body_co, real, eye_co):
     return {"beard": beard, "goatee": goatee}
 
 
-def mark_layering(item_objects, manifest_items):
+def mark_layering(item_objects, manifest_items, head_centre):
     """Gives inner items a `_hide` mask for the vertices an outer item covers."""
-    layered = [(*LAYERS[slot], slot, item_id, obj) for slot, item_id, obj in item_objects if slot in LAYERS]
+    layered = [(*LAYERS[slot], slot, item_id, obj) for slot, item_id, obj in item_objects
+               if slot in LAYERS and item_id not in accessories.NO_HAIR_HIDING]
+    head_centre = Vector(head_centre)
     for group, inner_layer, _, inner_id, inner in layered:
         co = rest_coords(inner)
         normals = np.empty(len(co) * 3, dtype=np.float32)
@@ -557,13 +559,19 @@ def mark_layering(item_objects, manifest_items):
                 continue
             outer_co = rest_coords(outer)
             tree = BVHTree.FromPolygons(outer_co.tolist(), [p.vertices[:] for p in outer.data.polygons])
-            rim = float(outer_co[:, 2].min())
             for i, (c, n) in enumerate(zip(co, normals)):
                 c, n = Vector(c), Vector(n)
                 if group == "head":
-                    # Hair cards are double-sided (normals say little): hair is
-                    # under a hat when the hat is straight above it.
-                    covered = c.z > rim + 0.005 and tree.ray_cast(c, Vector((0, 0, 1)), 0.2)[0] is not None
+                    # Hair cards are double-sided (normals say little), so look
+                    # out from the middle of the head instead: hair is under the
+                    # hat when the hat is just outside it, or squashed by it when
+                    # the hat is between it and the head. Hair below the hat's
+                    # rim stays (at the temples, under a cap's back, a fringe).
+                    d = c - head_centre
+                    dist = d.length
+                    d.normalize()
+                    covered = (tree.ray_cast(c, d, 0.05)[0] is not None
+                               or tree.ray_cast(c, -d, max(dist - 0.03, 0.0))[0] is not None)
                 else:
                     # The outer garment lies just outside this vertex, or the
                     # vertex already pokes through it (the garment is just behind).
@@ -830,8 +838,12 @@ def main():
     helper_groups = {basemesh.vertex_groups[g].index for g in ("HelperGeometry", "JointCubes") if g in basemesh.vertex_groups}
     real = np.array([not any(g.group in helper_groups and g.weight > 0.5 for g in v.groups) for v in basemesh.data.vertices])
 
+    ears_group = basemesh.vertex_groups["ears"].index
+    ears = np.array([any(g.group == ears_group and g.weight > 0.5 for g in v.groups) for v in basemesh.data.vertices])
+
     def head_fit(data):
-        return accessories.HeadFit(data["coords"][parts["eyes"].name], data["coords"][basemesh.name][real])
+        body = data["coords"][basemesh.name]
+        return accessories.HeadFit(data["coords"][parts["eyes"].name], body[real], body[ears & real])
 
     neutral_fit = head_fit(neutral)
     variant_fits = {v: head_fit(captured[v]) for v in BODY_VARIANTS}
@@ -933,11 +945,12 @@ def main():
     tops = {item_id: obj for slot, item_id, obj in item_objects if slot == "top"}
     body_variants = {v: captured[v]["coords"][basemesh.name] for v in BODY_VARIANTS}
 
-    def derived_top(item_id, source_id, parts, bones, extra_materials=(), dress=None, reweight=None):
+    def derived_top(item_id, source_id, parts, bones, extra_materials=(), dress=None, reweight=None, after_morphs=None):
         """`parts` (material slot 0 = the source's fabric, then
         `extra_materials`) are joined into a copy of the source top;
         `dress(obj)` may re-material that copy first, `reweight(parts)`
-        replace the nearest-body weights."""
+        replace the nearest-body weights and `after_morphs(parts, obj)` adjust
+        the parts' body-shape morphs."""
         nonlocal next_bit
         source = tops[source_id]
         obj = garments.duplicate(source, f"Item_{item_id}")
@@ -949,6 +962,8 @@ def main():
         if reweight:
             reweight(parts)
         garments.morphs_via_surface_deform(parts, xbody, body_variants)
+        if after_morphs:
+            after_morphs(parts, obj)
         garments.join_into(obj, parts)
         # Hides the same skin as its source, under a bit of its own.
         src_bit = manifest_items["top"][source_id]["hideBit"]
@@ -971,7 +986,9 @@ def main():
     # Hoodie: drawstrings in the secondary colour (like the procedural avatar's).
     hood = garments.build_hoodie_parts(tops["sweater"])
     derived_top("hoodie", "sweater", hood, {"spine_01", "spine_02", "spine_03", "neck_01", "clavicle_l", "clavicle_r"},
-                extra_materials=[plain_material("topSecondary_cord", 0.7)])
+                extra_materials=[plain_material("topSecondary_cord", 0.7)],
+                reweight=lambda o: garments.weights_from_garment(o, tops["sweater"]),
+                after_morphs=garments.morphs_from_garment)
 
     # Lab coat: always white (untinted, as on the procedural avatar), with the
     # shirt underneath showing in the V in the secondary colour.
@@ -998,7 +1015,7 @@ def main():
     knee_z = xrig.data.bones["calf_l"].head_local.z
     coat_hem = knee_z + 0.03
     shirt_hem = float(min(v.co.z for v in shirt.data.vertices))
-    coat, loosen_coat = garments.build_coat_parts(shirt, coat_v, body_co, body_faces, coat_hem)
+    coat, loosen_coat, match_coat = garments.build_coat_parts(shirt, coat_v, body_co, body_faces, coat_hem)
 
     def dress_coat(obj):
         loosen_coat(obj)
@@ -1010,16 +1027,23 @@ def main():
 
     derived_top("lab-coat", "button-down", coat, {"pelvis", "spine_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r"},
                 dress=dress_coat,
-                reweight=lambda o: garments.skirt_weights(o, shirt_hem + 0.03, coat_hem, shirt_hem + 0.045))
+                reweight=lambda o: (garments.skirt_weights(o, shirt_hem + 0.03, coat_hem, shirt_hem + 0.045),
+                                    garments.weights_from_garment(o, shirt, where=lambda co: co.z > coat_v.bottom - 0.03)),
+                after_morphs=lambda parts, obj: (match_coat(parts, obj), garments.morphs_from_garment(
+                    parts, obj, where=lambda co: co.z > coat_v.bottom - 0.03)))
 
     # Procedural glasses and hats, rigged to the head with body-shape morphs.
     shell = accessories.HeadShell(xbody, real, neutral_fit)
-    builders = (("eyewear", accessories.GLASSES, lambda st: accessories.build_glasses(st, neutral_fit)),
-                ("headwear", accessories.HATS, lambda st: accessories.build_hat(st, neutral_fit, shell)))
-    for slot, styles, build in builders:
+    for slot, styles in (("eyewear", accessories.GLASSES), ("headwear", accessories.HATS)):
         for style in styles:
-            obj = build(style)
-            accessories.rig_to_head(obj, xrig, neutral_fit, variant_fits)
+            if slot == "eyewear":
+                # Glasses are rebuilt on every variant's face (an exact fit).
+                obj = accessories.build_glasses(style, neutral_fit)
+                accessories.rig_to_head(obj, xrig, neutral_fit, variant_fits,
+                                        rebuild=lambda fit, style=style: accessories.build_glasses(style, fit))
+            else:
+                obj = accessories.build_hat(style, neutral_fit, shell)
+                accessories.rig_to_head(obj, xrig, neutral_fit, variant_fits)
             entry = {"files": {}}
             if slot == "headwear":
                 entry["hideBit"] = next_bit
@@ -1029,7 +1053,8 @@ def main():
     shell.dispose()
     log(f"accessories: {len(accessories.GLASSES)} glasses, {len(accessories.HATS)} hats")
 
-    mark_layering(item_objects, manifest_items)
+    head_centre = (neutral_fit.centre.x, neutral_fit.centre.y, neutral_fit.eye_z + 0.02)
+    mark_layering(item_objects, manifest_items, head_centre)
 
     # A leading underscore makes the glTF exporter keep it (three.js reads it as `_hide`).
     attr = xbody.data.attributes.new("_hide", "FLOAT", "POINT")

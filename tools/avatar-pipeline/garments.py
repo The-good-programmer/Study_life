@@ -238,6 +238,61 @@ def morphs_via_surface_deform(obj, body_obj, variants):
     bpy.data.meshes.remove(me)
 
 
+def weights_from_garment(obj, garment, where=lambda co: True):
+    """Gives the vertices of `obj` that lie on `garment` (and pass `where`)
+    the garment's bone weights at the nearest point of its surface, so they
+    bend exactly like it in every pose."""
+    co = [v.co.copy() for v in garment.data.vertices]
+    polys = [p.vertices[:] for p in garment.data.polygons]
+    tree = BVHTree.FromPolygons(co, polys)
+    names = {g.index: g.name for g in garment.vertex_groups}
+    vw = [{names[g.group]: g.weight for g in v.groups} for v in garment.data.vertices]
+    for v in obj.data.vertices:
+        if not where(v.co):
+            continue
+        _, _, face, _ = tree.find_nearest(v.co)
+        corners = polys[face]
+        mixed = {}
+        for k, wk in zip(corners, poly_3d_calc([co[k] for k in corners], v.co)):
+            for name, w in vw[k].items():
+                mixed[name] = mixed.get(name, 0.0) + w * wk
+        for g in list(v.groups):
+            obj.vertex_groups[g.group].remove([v.index])
+        for name, w in mixed.items():
+            if w > 1e-3:
+                (obj.vertex_groups.get(name) or obj.vertex_groups.new(name=name)).add([v.index], w, "REPLACE")
+
+
+def morphs_from_garment(obj, garment, where=lambda co: True):
+    """Gives the vertices of `obj` that lie on `garment` (and pass `where`)
+    the garment's own body-shape morphs, taken at the nearest point of its
+    surface: parts sewn onto a MakeHuman garment move exactly with it in
+    every body variant, instead of following the body underneath."""
+    if not (obj.data.shape_keys and garment.data.shape_keys):
+        return
+    g_keys = garment.data.shape_keys.key_blocks
+    g_basis = g_keys[0]
+    g_co = [d.co.copy() for d in g_basis.data]
+    polys = [p.vertices[:] for p in garment.data.polygons]
+    tree = BVHTree.FromPolygons(g_co, polys)
+    keys = obj.data.shape_keys.key_blocks
+    basis = keys[0]
+    for i, d in enumerate(basis.data):
+        if not where(d.co):
+            continue
+        _, _, face, _ = tree.find_nearest(d.co)
+        corners = polys[face]
+        w = poly_3d_calc([g_co[k] for k in corners], d.co)
+        for key in keys[1:]:
+            if key.name not in g_keys:
+                continue
+            gk = g_keys[key.name].data
+            delta = Vector()
+            for k, wk in zip(corners, w):
+                delta += (gk[k].co - g_basis.data[k].co) * wk
+            key.data[i].co = d.co + delta
+
+
 # ─── Hoodie ─────────────────────────────────────────────────────────────────
 
 # Plain fabric on the sweater's texture (male_casualsuit02): the middle of
@@ -317,7 +372,7 @@ def build_hoodie_parts(sweater):
             # Thick (the hood's layers bunched up) near the neck, thinning to
             # its edge, with a few soft folds across it.
             t = 0.003 + (0.012 + 0.014 * (1 - a)) * (1 - v ** 2.5)
-            t *= 1 + 0.2 * v * math.sin(phi * 5.0)
+            t *= 1 + 0.1 * v * math.sin(phi * 5.0)
             flap[k].append(bm.verts.new(p + n * t))
             flap_uvs[k].append((plain["u"] + plain["u_per_m"] * 0.075 * phi * 0.9, plain["v_top"] - plain["v_per_m"] * travelled))
         # The edge rolls under, back towards the neck, so it reads as fabric with a thickness.
@@ -488,11 +543,12 @@ def build_coat_parts(shirt, coat_v, body_co, body_faces, hem_z, front_gap=0.09, 
 
     # Skirt.
     loops = [lp for lp in _boundary_loops(shirt.data) if len(lp) > 8 and abs(co[lp, 0].mean()) < 0.05]
-    hem = co[min(loops, key=lambda lp: co[lp, 2].mean())]
+    hem_idx = np.array(min(loops, key=lambda lp: co[lp, 2].mean()))
+    hem = co[hem_idx]
     centre = hem.mean(0)
     ang = np.arctan2(hem[:, 0] - centre[0], hem[:, 1] - centre[1])  # 0 back, +-pi front
     order = np.argsort(ang)
-    ang, hem = ang[order], hem[order]
+    ang, hem, hem_idx = ang[order], hem[order], hem_idx[order]
     # Open at the front centre: both ends of the strip start there.
     front = [float(np.interp(math.pi, ang, hem[:, k], period=2 * math.pi)) for k in range(3)]
     top = np.vstack([front, hem, front])
@@ -579,6 +635,29 @@ def build_coat_parts(shirt, coat_v, body_co, body_faces, hem_z, front_gap=0.09, 
             patch_uv.append([fabric_uv(s_u[k, c], s_v[k, c]) for c in cols])
         _grid_faces(bm, patch, patch_uv, uv_layer)
     hem_top = float(top[:, 2].max())
+    bm.verts.index_update()
+    # Shirt vertex each skirt column hangs from (facing and front columns: the nearest end).
+    sources = [hem_idx[0], hem_idx[0], *hem_idx, hem_idx[-1], hem_idx[-1]]
+    seam_rows = [[v.index for v in rows[r]] for r in range(min(5, rings))]
+
+    def match_variants(parts, obj):
+        """The skirt's body-shape morphs come from the body, the shirt's from
+        MakeHuman's fitting: near the waist seam, blend the skirt's into the
+        shirt hem's (fully at the seam), so the two never part."""
+        if not (parts.data.shape_keys and obj.data.shape_keys):
+            return
+        shirt_keys = obj.data.shape_keys.key_blocks
+        basis, shirt_basis = parts.data.shape_keys.key_blocks[0], shirt_keys[0]
+        for key in parts.data.shape_keys.key_blocks[1:]:
+            if key.name not in shirt_keys:
+                continue
+            sk = shirt_keys[key.name]
+            for r, row in enumerate(seam_rows):
+                w = 1.0 - r / len(seam_rows)
+                for vi, src in zip(row, sources):
+                    own = key.data[vi].co - basis.data[vi].co
+                    follow = sk.data[int(src)].co - shirt_basis.data[int(src)].co
+                    key.data[vi].co = basis.data[vi].co + follow * w + own * (1 - w)
 
     def loosen(obj, from_z=1.12):
         """Lets the coat's copy of the shirt out below `from_z`, reaching the
@@ -596,7 +675,7 @@ def build_coat_parts(shirt, coat_v, body_co, body_faces, hem_z, front_gap=0.09, 
             v.co += off
         obj.data.update()
 
-    return _finish(bm, "coat_parts"), loosen
+    return _finish(bm, "coat_parts"), loosen, match_variants
 
 
 # ─── Joining ────────────────────────────────────────────────────────────────
