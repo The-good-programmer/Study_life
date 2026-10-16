@@ -514,8 +514,12 @@ def facial_hair_regions(body, body_co, real, eye_co):
     # (the skin faces down there, and turns forward again down the neck).
     under = [i for i, (x, y, z) in enumerate(body_co)
              if real[i] and abs(x - mx) < 0.006 and lip_y < y < ear_y and lip_bot - 0.08 < z < lip_bot and normals[i][2] < -0.5]
-    throat_y, throat_z = body_co[max(under, key=lambda i: body_co[i][1])][1:]
-    slope = (lobe_z - 0.03 - throat_z) / (ear_y - throat_y)  # up to 3 cm under the lobes
+    if under:
+        throat_y, throat_z = body_co[max(under, key=lambda i: body_co[i][1])][1:]
+        slope = (lobe_z - 0.03 - throat_z) / (ear_y - throat_y)  # up to 3 cm under the lobes
+    else:  # no chin underside found: a level neckline under the chin
+        throat_y, throat_z, slope = lip_y, lip_bot - 0.045, 0.0
+        log("facial hair: no chin underside found, using a level neckline")
     fade = 0.015
     beard, goatee = [], []
     for i, (x, y, z) in enumerate(body_co):
@@ -845,6 +849,10 @@ def finish_textures(objects):
         img.pixels.foreach_set(px.ravel())
         img.pack()
         log(f"{img.name}: {role} texture neutralised over {cover.mean() * 100:.0f}% of it{note}")
+    for img in bpy.data.images:
+        if "studify_role" in img and img.name not in uses:
+            img.pack()  # no exported face shows it through a base colour: left as loaded
+            log(f"warning: {img.name} ({img['studify_role']}) is not used by any exported mesh")
 
 
 def simple_material(name, mhmat_path, size, cutout=False):

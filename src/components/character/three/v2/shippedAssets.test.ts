@@ -48,16 +48,19 @@ async function textureStats(image: Uint8Array, byAlpha: boolean): Promise<Stats>
   let weight = 0, saturation = 0, clipped = 0;
   const sum = [0, 0, 0];
   for (let i = 0; i < data.length; i += 4) {
-    const a = byAlpha ? data[i + 3] / 255 : 1;
+    const a = byAlpha ? data[i + 3] : 255;
     if (!a) continue;
-    const rgb = [data[i] / 255, data[i + 1] / 255, data[i + 2] / 255];
-    const max = Math.max(...rgb);
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const max = Math.max(r, g, b);
     weight += a;
-    rgb.forEach((c, k) => (sum[k] += c * a));
-    saturation += (max - Math.min(...rgb)) * a;
-    if (max >= 254 / 255) clipped += a;
+    sum[0] += r * a;
+    sum[1] += g * a;
+    sum[2] += b * a;
+    saturation += (max - Math.min(r, g, b)) * a;
+    if (max >= 254) clipped += a;
   }
-  const channels = sum.map((c) => c / weight);
+  saturation /= 255;
+  const channels = sum.map((c) => c / weight / 255);
   return { mean: (channels[0] + channels[1] + channels[2]) / 3, channels, saturation: saturation / weight, clipped: clipped / weight };
 }
 
@@ -75,7 +78,8 @@ function vertexCounts(doc: Document) {
   return counts;
 }
 
-describe('shipped avatar assets', () => {
+// Decoding every texture takes a few seconds on a busy CI machine.
+describe('shipped avatar assets', { timeout: 30_000 }, () => {
   it('has every file the manifest lists, at the listed size', () => {
     for (const [name, ref] of assets) {
       for (const [tier, url] of Object.entries(ref.files)) {
