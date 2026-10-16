@@ -23,21 +23,39 @@ export const MATERIAL_ROLES = {
 
 export type MaterialRole = keyof typeof MATERIAL_ROLES;
 
+/** The part of a material name before the first separator (`hair` for `hair.001`). */
+const prefixOf = (materialName: string) => materialName.split(/[_.\s-]/)[0];
+
 export function roleOf(materialName: string): MaterialRole | null {
-  const prefix = materialName.split(/[_.\s-]/)[0];
+  const prefix = prefixOf(materialName);
   return prefix in MATERIAL_ROLES ? (prefix as MaterialRole) : null;
 }
 
-/** Card-based hair, brows, lashes and beards: soft edges without sorting. */
-const CARD_ROLES = new Set<MaterialRole>(['hair', 'brow', 'facialHair']);
+/**
+ * Hair, brows, lashes and beard cards: textures with see-through strands,
+ * drawn in the opaque pass with alpha-to-coverage (MSAA resolves the
+ * strand edges, so nothing needs sorting). GLTFLoader imports them as
+ * blended materials with depth writes off; they need depth writes in the
+ * opaque pass, or skin drawn after them covers them.
+ */
+const CARD_PREFIXES = new Set(['hair', 'brow', 'facialHair', 'lash']);
 
 /** Roles drawn as strands: they get an anisotropic, hair-like highlight. */
 const STRAND_ROLES = new Set<MaterialRole>(['hair', 'facialHair']);
 
+/** Small details that would only add shadow-map noise (and the eyes, whose cornea would shade the iris). */
+const NO_SHADOW_CAST = new Set(['brow', 'lash', 'eye', 'iris']);
+
+/**
+ * Anisotropic filtering for colour and normal maps, so cloth and skin stay
+ * sharp at grazing angles. three.js clamps it to what the GPU supports.
+ */
+export const TEXTURE_ANISOTROPY = 8;
+
 /**
  * One-time setup when an asset joins an avatar. Returns the material to use,
- * which may be a replacement (hair is upgraded to a physical material);
- * calling it again on its result is a no-op.
+ * which may be a replacement (hair and skin are upgraded to physical
+ * materials); calling it again on its result is a no-op.
  */
 export function prepareMaterial(m: THREE.Material): THREE.Material {
   if (m.userData.prepared) return m;
@@ -48,39 +66,118 @@ export function prepareMaterial(m: THREE.Material): THREE.Material {
     out = skinMaterial(m as THREE.MeshStandardMaterial);
     addScalpShading(out);
   }
-  if (role && CARD_ROLES.has(role)) {
-    // Alpha-to-coverage (with MSAA) gives soft, order-independent strand edges.
+  if (CARD_PREFIXES.has(prefixOf(m.name))) {
     out.transparent = false;
+    out.depthWrite = true;
     out.alphaToCoverage = true;
-    out.alphaTest = 0.02;
+    // A threshold makes three.js sharpen the coverage into a crisp,
+    // antialiased cut there: strands keep their shape on hair. Brows and
+    // lashes are soft strokes, so they keep the raw alpha (soft edges).
+    out.alphaTest = role && STRAND_ROLES.has(role) ? HAIR_ALPHA_CUTOFF : 0;
     out.side = THREE.DoubleSide;
   }
+  filterTextures(out);
   out.userData.prepared = true;
   return out;
 }
 
 /**
- * Hair shading: real hair reads through a highlight stretched along the
- * strands (anisotropic specular) and a soft sheen at grazing angles. The
- * asset textures run strands along V, so the anisotropy is turned 90° from
- * the U-aligned tangent three.js derives from the UVs.
+ * Shadow flags for one avatar mesh: everything receives shadows (so the
+ * avatar shades itself: hair on the forehead, arms on the torso), and all
+ * but tiny details and the eyes cast them.
+ */
+export function setShadowFlags(mesh: THREE.Mesh) {
+  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  mesh.receiveShadow = true;
+  mesh.castShadow = !mats.some((m) => NO_SHADOW_CAST.has(prefixOf(m.name)));
+}
+
+function filterTextures(m: THREE.Material) {
+  const std = m as THREE.MeshStandardMaterial;
+  for (const tex of [std.map, std.normalMap]) {
+    if (!tex || tex.anisotropy >= TEXTURE_ANISOTROPY) continue;
+    tex.anisotropy = TEXTURE_ANISOTROPY;
+    tex.needsUpdate = true; // the setting is applied on upload
+  }
+}
+
+/** Where hair's alpha-to-coverage cut sits (see prepareMaterial). */
+const HAIR_ALPHA_CUTOFF = 0.5;
+
+/** Coily hair scatters light every way: no long highlight along the strands. */
+const isCoily = (materialName: string) => /afro|coil|curl/i.test(materialName);
+
+/**
+ * Hair shading: real hair reads through a narrow highlight band running
+ * across the strands (anisotropic specular) and a soft sheen at grazing
+ * angles, both in the hair's own hue (see tintHair), so dark hair stays
+ * dark. Coily hair is rougher and nearly isotropic.
+ *
+ * Without stored tangents, three.js derives the strand direction per
+ * triangle from the UVs, which shades every card facet differently (a scaly
+ * look). Instead, a smooth, procedural strand direction is used: strands fall
+ * down and back from the crown, following the head as it moves.
  */
 function hairMaterial(src: THREE.MeshStandardMaterial): THREE.MeshPhysicalMaterial {
+  const coily = isCoily(src.name);
   const hair = new THREE.MeshPhysicalMaterial({
     name: src.name,
     map: src.map,
     color: src.color,
     normalMap: src.normalMap,
-    roughness: 0.42,
+    roughness: coily ? 0.72 : 0.46,
     metalness: 0,
-    anisotropy: 0.85,
-    anisotropyRotation: Math.PI / 2,
-    specularIntensity: 0.7,
-    sheen: 0.35,
-    sheenRoughness: 0.5,
-    sheenColor: new THREE.Color(0.35, 0.33, 0.3),
+    anisotropy: coily ? 0.05 : 0.6,
+    specularIntensity: coily ? 0.4 : 0.6,
+    sheen: 1,
+    sheenRoughness: coily ? 0.6 : 0.4,
+    // The studio environment is a bright white room: on hair its reflection
+    // reads as a grey film over dark colours.
+    envMapIntensity: 0.5,
   });
   hair.userData = { ...src.userData };
+  hair.onBeforeCompile = (shader) => {
+    shader.vertexShader = [
+      'varying vec3 vHairFlow;',
+      shader.vertexShader.replace(
+        '#include <defaultnormal_vertex>',
+        [
+          '#include <defaultnormal_vertex>',
+          // Down and back in the avatar's bind space (it faces +Z), then skinned like a tangent.
+          '\tvec3 hairFlow = vec3( 0.0, -0.93, -0.37 );',
+          '\t#ifdef USE_SKINNING',
+          '\t\thairFlow = ( skinMatrix * vec4( hairFlow, 0.0 ) ).xyz;',
+          '\t#endif',
+          '\tvHairFlow = ( modelViewMatrix * vec4( hairFlow, 0.0 ) ).xyz;',
+        ].join('\n')
+      ),
+    ].join('\n');
+    shader.fragmentShader = [
+      'varying vec3 vHairFlow;',
+      shader.fragmentShader.replace(
+        '#include <lights_physical_fragment>',
+        [
+          '#include <lights_physical_fragment>',
+          '#ifdef USE_ANISOTROPY',
+          // The strand direction on this surface; the rough axis (T) runs across the strands.
+          '\tvec3 hairAlong = vHairFlow - normal * dot( vHairFlow, normal );',
+          '\tif ( dot( hairAlong, hairAlong ) > 1e-8 ) {',
+          '\t\tmaterial.anisotropyB = normalize( hairAlong );',
+          '\t\tmaterial.anisotropyT = cross( material.anisotropyB, normal );',
+          '\t}',
+          '#endif',
+          // Strand detail in the highlight: painted strands catch the light, the gaps between them
+          // less. Without it, dark hair (whose texture barely shows) shades like a smooth helmet.
+          '#ifdef USE_MAP',
+          '\tfloat hairStrand = clamp( 4.0 * dot( sampledDiffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ), 0.3, 1.8 );',
+          '\tmaterial.specularColor *= hairStrand;',
+          '\tmaterial.specularColorBlended *= hairStrand;',
+          '#endif',
+        ].join('\n')
+      ),
+    ].join('\n');
+  };
+  hair.customProgramCacheKey = () => 'avatar-hair';
   src.dispose();
   return hair;
 }
@@ -92,36 +189,29 @@ interface ScalpUniforms {
   beardBit: { value: number };
   beardColor: { value: THREE.Color };
   beardStrength: { value: number };
+  shortHairs: { value: THREE.Texture };
 }
 
 /**
- * Tints the scalp under the worn hairstyle with the hair colour, so the
- * hairline fades into the hair instead of meeting it at a hard edge, and so
- * a buzz cut can be shading alone. Facial hair (stubble, goatee, beard) is
- * a second, independent channel on the same mask. The body carries a
- * `_scalp` bit mask (one bit per hairstyle or face region, see manifest.ts);
- * each bit is interpolated across a triangle, which softens edges over about
- * a centimetre.
- */
-/**
- * Skin as a physical material: a soft sheen (peach fuzz), a faint second
- * specular lobe (the skin's oily layer, as a low clearcoat) and tiled
- * micro-normals for pores. The subsurface look comes from the shader patch
- * in addScalpShading (wrapped diffuse lighting).
+ * Skin as a physical material: a soft sheen in the skin's own colour (peach
+ * fuzz; see tintSkin), a faint second specular lobe (the skin's oily layer,
+ * as a low clearcoat) and tiled micro-normals for pores. The subsurface look
+ * comes from the shader patch in addScalpShading (wrapped diffuse lighting).
+ * Specular stays low at grazing angles too: a strong white Fresnel rim is
+ * what makes skin read as plastic.
  */
 function skinMaterial(src: THREE.MeshStandardMaterial): THREE.MeshPhysicalMaterial {
   const skin = new THREE.MeshPhysicalMaterial({
     name: src.name,
     map: src.map,
     color: src.color,
-    roughness: 0.52,
+    roughness: 0.5,
     metalness: 0,
-    specularIntensity: 0.55,
-    sheen: 0.22,
-    sheenRoughness: 0.8,
-    sheenColor: new THREE.Color(0.32, 0.27, 0.24),
-    clearcoat: 0.06,
-    clearcoatRoughness: 0.42,
+    specularIntensity: 0.45,
+    sheen: 1,
+    sheenRoughness: 0.6,
+    clearcoat: 0.08,
+    clearcoatRoughness: 0.38,
     normalMap: poreNormals(),
     normalScale: new THREE.Vector2(0.07, 0.07),
   });
@@ -172,14 +262,65 @@ export function poreNormals(): THREE.DataTexture {
       data[i + 3] = 255;
     }
   }
-  poreTexture = new THREE.DataTexture(data, size, size);
-  poreTexture.wrapS = poreTexture.wrapT = THREE.RepeatWrapping;
+  poreTexture = tilingTexture(data, size);
   poreTexture.repeat.set(72, 72);
-  poreTexture.generateMipmaps = true;
-  poreTexture.minFilter = THREE.LinearMipmapLinearFilter;
-  poreTexture.magFilter = THREE.LinearFilter;
-  poreTexture.needsUpdate = true;
   return poreTexture;
+}
+
+let shortHairTexture: THREE.DataTexture | null = null;
+
+/** How often the short-hair mask repeats across the body's UV atlas (a tile is about 2.5 cm of skin). */
+const SHORT_HAIR_REPEAT = 40;
+
+/**
+ * A small tiling mask of short, soft-edged hairs (1 on a hair, 0 between),
+ * drawn procedurally. The skin shader breaks stubble, beards and the scalp
+ * under a hairstyle into hairs with it. Being a mipmapped texture, it fades
+ * to its average with distance instead of shimmering like per-pixel noise.
+ */
+export function shortHairs(): THREE.DataTexture {
+  if (shortHairTexture) return shortHairTexture;
+  const size = 128;
+  const cover = new Float32Array(size * size);
+  let seed = 3;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const wrap = (v: number) => ((v % size) + size) % size;
+  for (let i = 0; i < 900; i++) {
+    const cx = rand() * size, cy = rand() * size;
+    // Facial hair grows down the face, which is +U on the body's UV atlas.
+    const angle = (rand() - 0.5) * 0.8;
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    const half = 2.5 + rand() * 3;
+    const radius = 0.55 + rand() * 0.35;
+    const reach = Math.ceil(half + radius + 1);
+    for (let y = Math.floor(cy) - reach; y <= Math.floor(cy) + reach; y++) {
+      for (let x = Math.floor(cx) - reach; x <= Math.floor(cx) + reach; x++) {
+        const px = x + 0.5 - cx, py = y + 0.5 - cy;
+        const t = Math.max(-half, Math.min(half, px * dx + py * dy));
+        const d = Math.hypot(px - t * dx, py - t * dy);
+        // An antialiased stroke that thins towards its tip.
+        const r = radius * (1 - (0.4 * (t + half)) / (2 * half));
+        const k = wrap(y) * size + wrap(x);
+        cover[k] = Math.max(cover[k], Math.min(1, Math.max(0, r + 0.5 - d)));
+      }
+    }
+  }
+  const data = new Uint8Array(size * size * 4);
+  for (let k = 0; k < size * size; k++) data.fill(Math.round(cover[k] * 255), k * 4, k * 4 + 4);
+  shortHairTexture = tilingTexture(data, size);
+  return shortHairTexture;
+}
+
+/** A repeating, mipmapped data texture (mipmaps average detail away with distance). */
+function tilingTexture(data: Uint8Array, size: number) {
+  const tex = new THREE.DataTexture(data, size, size);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.anisotropy = TEXTURE_ANISOTROPY;
+  tex.needsUpdate = true;
+  return tex;
 }
 
 /** Three.js's direct diffuse term, swapped for wrapped (subsurface-like) lighting on skin. */
@@ -193,6 +334,15 @@ const WRAPPED_DIRECT = [
   'reflectedLight.directDiffuse += skinIrradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );',
 ].join('\n\t');
 
+/**
+ * Tints the scalp under the worn hairstyle with the hair colour, so the
+ * hairline fades into the hair instead of meeting it at a hard edge, and so
+ * a buzz cut can be shading alone. Facial hair (stubble, goatee, beard) is
+ * a second, independent channel on the same mask. The body carries a
+ * `_scalp` bit mask (one bit per hairstyle or face region, see manifest.ts);
+ * each bit is interpolated across a triangle, which softens edges over about
+ * a centimetre. Both tints are broken into short hairs (see shortHairs).
+ */
 function addScalpShading(m: THREE.Material) {
   const uniforms: ScalpUniforms = {
     scalpBit: { value: -1 },
@@ -201,6 +351,7 @@ function addScalpShading(m: THREE.Material) {
     beardBit: { value: -1 },
     beardColor: { value: new THREE.Color() },
     beardStrength: { value: 0 },
+    shortHairs: { value: shortHairs() },
   };
   m.userData.scalp = uniforms;
   m.onBeforeCompile = (shader) => {
@@ -228,19 +379,21 @@ function addScalpShading(m: THREE.Material) {
       'uniform float scalpStrength;',
       'uniform vec3 beardColor;',
       'uniform float beardStrength;',
+      'uniform sampler2D shortHairs;',
       'varying float vScalp;',
       'varying float vBeard;',
+      // Hairs take the full tint; the skin between them less, the less dense the growth (stubble vs beard).
+      'float hairTint( float strength, float hairs ) { return strength * mix( 0.75 * strength, 1.0, hairs ); }',
       shader.fragmentShader.replace(
         '#include <map_fragment>',
         [
           '#include <map_fragment>',
-          // Per-texel grain breaks the tint into short hairs instead of a flat wash.
-          '\tfloat grain = 1.0;',
+          '\tfloat hairs = 1.0;',
           '\t#ifdef USE_MAP',
-          '\t\tgrain = mix( 0.5, 1.0, fract( sin( dot( floor( vMapUv * 2048.0 ), vec2( 12.9898, 78.233 ) ) ) * 43758.5453 ) );',
+          `\t\thairs = texture2D( shortHairs, vMapUv * ${SHORT_HAIR_REPEAT.toFixed(1)} ).r;`,
           '\t#endif',
-          '\tdiffuseColor.rgb = mix( diffuseColor.rgb, scalpColor, vScalp * scalpStrength * grain );',
-          '\tdiffuseColor.rgb = mix( diffuseColor.rgb, beardColor, vBeard * beardStrength * grain );',
+          '\tdiffuseColor.rgb = mix( diffuseColor.rgb, scalpColor, vScalp * hairTint( scalpStrength, hairs ) );',
+          '\tdiffuseColor.rgb = mix( diffuseColor.rgb, beardColor, vBeard * hairTint( beardStrength, hairs ) );',
         ].join('\n')
       ),
     ].join('\n');
@@ -288,9 +441,34 @@ export function applyRoleColors(root: THREE.Object3D, c: CharacterCustomization)
       const role = roleOf(m.name);
       const hex = role ? colourFor(role, c) : null;
       const std = m as THREE.MeshStandardMaterial;
-      if (hex && std.color) std.color.set(hex);
+      if (!role || !hex || !std.color) continue;
+      std.color.set(hex);
+      tintLayers(m, role);
     }
   });
+}
+
+/** Brows read a little darker than the hair (thin strokes look lighter than they are). */
+const BROW_SHADE = 0.8;
+/** Skin's sheen (peach fuzz) in the skin's own colour: a fixed grey one looks ashy on dark tones. */
+const SKIN_SHEEN = 0.35;
+/** How far hair's highlight is whitened from the hair's hue (real highlights are partly uncoloured). */
+const HAIR_HIGHLIGHT_WHITE = 0.4;
+const HAIR_SHEEN = 0.5;
+const WHITE = new THREE.Color(1, 1, 1);
+
+/** Colours that follow a material's base colour once it is set. */
+function tintLayers(m: THREE.Material, role: MaterialRole) {
+  const p = m as THREE.MeshPhysicalMaterial;
+  if (role === 'brow') p.color.multiplyScalar(BROW_SHADE);
+  if (!p.isMeshPhysicalMaterial) return;
+  if (role === 'skin') p.sheenColor.copy(p.color).multiplyScalar(SKIN_SHEEN);
+  if (STRAND_ROLES.has(role)) {
+    // The highlight takes the hair's hue at full brightness; the sheen its actual colour, so dark hair stays dark.
+    const peak = Math.max(p.color.r, p.color.g, p.color.b, 1e-4);
+    p.specularColor.setRGB(p.color.r / peak, p.color.g / peak, p.color.b / peak).lerp(WHITE, HAIR_HIGHLIGHT_WHITE);
+    p.sheenColor.copy(p.color).multiplyScalar(HAIR_SHEEN);
+  }
 }
 
 function colourFor(role: MaterialRole, c: CharacterCustomization): string | null {

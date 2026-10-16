@@ -24,15 +24,26 @@ export interface AvatarRig {
   boneIndex: Record<BoneName, number>;
 }
 
+/** Bones whose bind position `buildRig` can take as given, each after its parent. */
+const PLACEABLE: [BoneName, BoneName | null][] = [
+  ['hips', null], ['spine', 'hips'], ['chest', 'spine'], ['neck', 'chest'], ['head', 'neck'],
+  ['upperArmL', 'chest'], ['upperArmR', 'chest'], ['thighL', 'hips'], ['thighR', 'hips'],
+];
+
 /**
  * Builds the avatar skeleton in its bind pose: an "A-pose" with the arms
  * angled A_POSE_ANGLE away from the body. Modelling in the A-pose keeps the
  * arms clear of the torso so the skin does not web together; animation then
  * sets absolute bone rotations (0 = arm hanging straight down).
  *
+ * `joints` optionally places the spine, neck, head, shoulder and hip joints
+ * (positions relative to the rig root) instead of the dims' straight column;
+ * the v2 proxy rig copies an imported skeleton's joints this way, so its
+ * spine follows that model's natural curve. Bind rotations are unchanged.
+ *
  * Conventions: +Y up, +Z forward (the face), +X is the avatar's left.
  */
-export function buildRig(d: AvatarDims): AvatarRig {
+export function buildRig(d: AvatarDims, joints?: Partial<Record<BoneName, THREE.Vector3>>): AvatarRig {
   const bones = {} as BoneMap;
   for (const name of BONE_NAMES) {
     bones[name] = new THREE.Bone();
@@ -75,6 +86,17 @@ export function buildRig(d: AvatarDims): AvatarRig {
     shin.position.set(0, -d.thighLen, 0);
     shin.add(foot);
     foot.position.set(0, -d.shinLen, 0);
+  }
+
+  if (joints) {
+    // These bones' parents have no bind rotation, so a local position is a plain offset.
+    const at = new Map<BoneName, THREE.Vector3>();
+    for (const [name, parent] of PLACEABLE) {
+      const base = parent ? at.get(parent)! : new THREE.Vector3();
+      const given = joints[name];
+      if (given) bones[name].position.copy(given).sub(base);
+      at.set(name, bones[name].position.clone().add(base));
+    }
   }
 
   root.updateMatrixWorld(true);
