@@ -16,7 +16,8 @@ import {
   type HomeRoomDefinition,
   type EquippedFurnitureState,
   type PayBoost,
-  type RoomDesignEvaluation
+  type RoomDesignEvaluation,
+  type DesignAestheticStyle,
 } from '../types/lifeSim';
 import { characterService } from './characterService';
 import { soundEngine } from './soundEngine';
@@ -704,7 +705,7 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
     category: 'station',
     brandStyle: 'Modern Lo-Fi',
     cost: 40,
-    roomCompatibility: ['living', 'study'],
+    roomCompatibility: ['living'],
     focusBonus: 8,
     comfortBonus: 10,
     designValue: 50,
@@ -799,7 +800,7 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
     category: 'station',
     brandStyle: 'Industrial Chic',
     cost: 25,
-    roomCompatibility: ['kitchen', 'study'],
+    roomCompatibility: ['kitchen'],
     focusBonus: 8,
     comfortBonus: 6,
     designValue: 35,
@@ -894,7 +895,7 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
     category: 'chair',
     brandStyle: 'Industrial Chic',
     cost: 25,
-    roomCompatibility: ['balcony', 'kitchen'],
+    roomCompatibility: ['balcony'],
     focusBonus: 2,
     comfortBonus: 6,
     designValue: 25,
@@ -954,7 +955,7 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
     category: 'station',
     brandStyle: 'Dark Academia',
     cost: 45,
-    roomCompatibility: ['balcony', 'study'],
+    roomCompatibility: ['balcony'],
     focusBonus: 10,
     comfortBonus: 6,
     designValue: 55,
@@ -1045,7 +1046,7 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
     category: 'chair',
     brandStyle: 'Dark Academia',
     cost: 85,
-    roomCompatibility: ['study', 'living'],
+    roomCompatibility: ['study'],
     focusBonus: 10,
     comfortBonus: 24,
     designValue: 155,
@@ -1060,7 +1061,7 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
     category: 'chair',
     brandStyle: 'Scandinavian',
     cost: 55,
-    roomCompatibility: ['study', 'living', 'bedroom'],
+    roomCompatibility: ['study'],
     focusBonus: 6,
     comfortBonus: 18,
     designValue: 100,
@@ -1075,7 +1076,7 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
     category: 'chair',
     brandStyle: 'Scandinavian',
     cost: 70,
-    roomCompatibility: ['balcony', 'living'],
+    roomCompatibility: ['balcony'],
     focusBonus: 6,
     comfortBonus: 22,
     designValue: 120,
@@ -1352,7 +1353,7 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
     category: 'station',
     brandStyle: 'Industrial Chic',
     cost: 100,
-    roomCompatibility: ['kitchen', 'study'],
+    roomCompatibility: ['kitchen'],
     focusBonus: 20,
     comfortBonus: 14,
     designValue: 180,
@@ -1372,7 +1373,7 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
     category: 'station',
     brandStyle: 'Japanese Zen',
     cost: 75,
-    roomCompatibility: ['kitchen', 'living', 'study'],
+    roomCompatibility: ['kitchen', 'living'],
     focusBonus: 18,
     comfortBonus: 14,
     designValue: 135,
@@ -1392,7 +1393,7 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
     category: 'station',
     brandStyle: 'Dark Academia',
     cost: 95,
-    roomCompatibility: ['living', 'study'],
+    roomCompatibility: ['living'],
     focusBonus: 16,
     comfortBonus: 18,
     designValue: 170,
@@ -1454,6 +1455,185 @@ export const FURNITURE_CATALOG: RoomFurnitureItem[] = [
   },
 ];
 
+/**
+ * Whether a piece can stand in a room: the room must list it, and have a spot for its kind
+ * (a station has nowhere to go in the study). Only such pieces show up, rate and can be placed.
+ */
+export function canPlaceFurniture(item: RoomFurnitureItem, roomId: HomeRoomId): boolean {
+  const room = HOME_ROOMS.find(r => r.id === roomId);
+  return Boolean(room && item.roomCompatibility.includes(roomId) && room.slots.includes(item.category));
+}
+
+/** Most a room's rating can get from each part. They add up to 5, so an empty room rates 1. */
+export const ROOM_RATING_POINTS = { base: 1, fill: 2, value: 1, style: 1 } as const;
+
+export interface RoomRatingTargets {
+  /** What the room's pieces must be worth in all for the full value point. */
+  valueTarget: number;
+  /** How many pieces in one style earn the full style point. */
+  styleTarget: number;
+  /** The style that fits the most of the room's spots, and how many. */
+  bestStyle: DesignAestheticStyle;
+  bestStyleSpots: number;
+}
+
+const ratingTargetCache = new Map<HomeRoomId, RoomRatingTargets>();
+
+/**
+ * What a room has to reach for full marks, from what the catalog offers it, so every room can
+ * reach 5 (the kitchen and balcony have cheaper pieces and fewer styles than the study).
+ */
+export function getRoomRatingTargets(roomId: HomeRoomId): RoomRatingTargets {
+  const cached = ratingTargetCache.get(roomId);
+  if (cached) return cached;
+  const room = HOME_ROOMS.find(r => r.id === roomId) ?? HOME_ROOMS[0];
+  const placeable = FURNITURE_CATALOG.filter(item => canPlaceFurniture(item, room.id));
+  // 80% of the priciest room, in round fifties: top pieces in most spots, not in every one.
+  const bestTotal = room.slots.reduce(
+    (sum, slot) => sum + Math.max(0, ...placeable.filter(item => item.category === slot).map(item => item.designValue)),
+    0,
+  );
+  const valueTarget = Math.max(50, Math.floor((bestTotal * 0.8) / 50) * 50);
+  // Three quarters of the spots the best-fitting style can fill, so a matched set still leaves
+  // room for a standout piece or two.
+  let bestStyle: DesignAestheticStyle = 'Scandinavian';
+  let bestStyleSpots = 0;
+  for (const style of new Set(placeable.map(item => item.brandStyle))) {
+    const spots = room.slots.filter(slot => placeable.some(item => item.category === slot && item.brandStyle === style)).length;
+    if (spots > bestStyleSpots) {
+      bestStyle = style;
+      bestStyleSpots = spots;
+    }
+  }
+  const targets = { valueTarget, styleTarget: Math.max(2, Math.ceil(bestStyleSpots * 0.75)), bestStyle, bestStyleSpots };
+  ratingTargetCache.set(room.id, targets);
+  return targets;
+}
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * Rates a room from 1 (empty) to 5 from the pieces in its spots: up to 2 for how many spots
+ * are filled, 1 for what the pieces are worth and 1 for how many share one style.
+ * Pieces that can't stand in the room are left out. Focus and comfort don't count.
+ */
+export function rateRoomDesign(roomId: HomeRoomId, pieces: Partial<Record<DesignSlotType, RoomFurnitureItem | null>>): RoomDesignEvaluation {
+  const room = HOME_ROOMS.find(r => r.id === roomId) ?? HOME_ROOMS[0];
+  const targets = getRoomRatingTargets(room.id);
+  const placed = room.slots
+    .map(slot => pieces[slot])
+    .filter((item, i): item is RoomFurnitureItem => Boolean(item && item.category === room.slots[i] && canPlaceFurniture(item, room.id)));
+
+  const styleCounts = new Map<DesignAestheticStyle, number>();
+  for (const item of placed) styleCounts.set(item.brandStyle, (styleCounts.get(item.brandStyle) ?? 0) + 1);
+  let matchedStyle: DesignAestheticStyle | null = null;
+  let matchingPieces = 0;
+  for (const [style, count] of styleCounts) {
+    if (count > matchingPieces) {
+      matchedStyle = style;
+      matchingPieces = count;
+    }
+  }
+
+  const totalValue = placed.reduce((sum, item) => sum + item.designValue, 0);
+  const totalSlots = room.slots.length;
+  // Each part is rounded on its own so the parts shown add up to the rating shown.
+  const completeness = round2(ROOM_RATING_POINTS.fill * (totalSlots > 0 ? placed.length / totalSlots : 0));
+  const value = round2(ROOM_RATING_POINTS.value * Math.min(1, totalValue / targets.valueTarget));
+  const harmony = round2(ROOM_RATING_POINTS.style * Math.min(1, matchingPieces / targets.styleTarget));
+  const starRating = round2(ROOM_RATING_POINTS.base + completeness + value + harmony);
+
+  const breakdown: RoomDesignEvaluation['breakdown'] = {
+    base: ROOM_RATING_POINTS.base,
+    filledSlots: placed.length,
+    totalSlots,
+    completeness,
+    value,
+    valueTarget: targets.valueTarget,
+    harmony,
+    matchedStyle,
+    matchingPieces,
+    styleTarget: targets.styleTarget,
+  };
+
+  return {
+    starRating,
+    totalValue,
+    totalFocusBonus: placed.reduce((sum, item) => sum + item.focusBonus, 0),
+    totalComfortBonus: placed.reduce((sum, item) => sum + item.comfortBonus, 0),
+    totalWageMultiplier: 0,
+    harmonyTitle: matchedStyle && matchingPieces >= 2 ? `${matchedStyle} look` : 'Mixed styles',
+    jurorFeedback: ratingTips(room, breakdown, targets, totalValue),
+    lastEvaluatedAt: new Date().toISOString(),
+    breakdown,
+  };
+}
+
+/** Changes that would raise a rating, the biggest first; one line when nothing is left. */
+function ratingTips(
+  room: HomeRoomDefinition,
+  b: RoomDesignEvaluation['breakdown'],
+  targets: RoomRatingTargets,
+  totalValue: number,
+): string[] {
+  const tips: { gain: number; text: string }[] = [];
+  const empty = b.totalSlots - b.filledSlots;
+  if (empty > 0) {
+    const perSpot = (ROOM_RATING_POINTS.fill / b.totalSlots).toFixed(2);
+    tips.push({
+      gain: Infinity,
+      text: `Fill one of the ${empty} empty ${empty === 1 ? 'spot' : 'spots'}: each adds ${perSpot}, more if the piece is valuable or matches the room's style.`,
+    });
+  }
+  const styleGain = ROOM_RATING_POINTS.style - b.harmony;
+  if (styleGain > 0) {
+    const need = b.styleTarget - b.matchingPieces;
+    // Point to a style that can still get there: the room may have too few spots for this one.
+    const current = b.matchedStyle as DesignAestheticStyle | null;
+    const currentSpots = current
+      ? room.slots.filter(slot => FURNITURE_CATALOG.some(item => item.category === slot && item.brandStyle === current && canPlaceFurniture(item, room.id))).length
+      : 0;
+    tips.push({
+      gain: styleGain,
+      text:
+        current && currentSpots >= b.styleTarget
+          ? `Use ${need} more ${current} ${need === 1 ? 'piece' : 'pieces'} for up to +${styleGain.toFixed(2)}.`
+          : `Pick one style for ${b.styleTarget} pieces for up to +${styleGain.toFixed(2)}. ${targets.bestStyle} fits the most spots here.`,
+    });
+  }
+  const valueGain = ROOM_RATING_POINTS.value - b.value;
+  if (valueGain > 0 && b.filledSlots > 0) {
+    tips.push({
+      gain: valueGain,
+      text: `Swap in pieces worth ${b.valueTarget - totalValue} more tokens in all for up to +${valueGain.toFixed(2)}.`,
+    });
+  }
+  if (tips.length === 0) return ['Nothing left to add. This room is rated as high as a room goes.'];
+  return tips.sort((x, y) => y.gain - x.gain).map(tip => tip.text);
+}
+
+/**
+ * Keeps only the saved pieces that can stand where they are: older versions let some pieces
+ * be placed in rooms with no spot for them. Owned pieces are kept elsewhere, so none are lost.
+ */
+export function sanitizeEquippedFurniture(saved: unknown): EquippedFurnitureState {
+  const source = saved && typeof saved === 'object' ? (saved as Record<string, unknown>) : {};
+  const clean: EquippedFurnitureState = {};
+  for (const room of HOME_ROOMS) {
+    const savedRoom = source[room.id];
+    const roomState: Record<string, string> = {};
+    if (savedRoom && typeof savedRoom === 'object') {
+      for (const [slot, id] of Object.entries(savedRoom as Record<string, unknown>)) {
+        const item = typeof id === 'string' ? FURNITURE_CATALOG.find(f => f.id === id) : undefined;
+        if (item && item.category === slot && canPlaceFurniture(item, room.id)) roomState[slot] = item.id;
+      }
+    } else {
+      Object.assign(roomState, DEFAULT_EQUIPPED_FURNITURE[room.id]);
+    }
+    clean[room.id] = roomState;
+  }
+  return clean;
+}
 
 type LifeSimListener = () => void;
 
@@ -1585,21 +1765,12 @@ class LifeSimService {
   }
 
   private loadEquippedFurniture(): EquippedFurnitureState {
-    const fallback = JSON.parse(JSON.stringify(DEFAULT_EQUIPPED_FURNITURE));
     try {
       const raw = localStorage.getItem(StorageService.lifeKey(LIFE_KEYS.ROOM_DESIGNS));
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        // Ensure all rooms exist
-        for (const room of HOME_ROOMS) {
-          if (!parsed[room.id]) {
-            parsed[room.id] = fallback[room.id] || {};
-          }
-        }
-        return parsed;
-      }
+      // Drops pieces older versions let into rooms with no spot for them; they stay owned.
+      if (raw) return sanitizeEquippedFurniture(JSON.parse(raw));
     } catch {}
-    return fallback;
+    return sanitizeEquippedFurniture(DEFAULT_EQUIPPED_FURNITURE);
   }
 
   private saveEquippedFurniture() {
@@ -2140,9 +2311,10 @@ class LifeSimService {
     return JSON.parse(JSON.stringify(this.equippedFurniture));
   }
 
+  /** The catalog, or with `room` only the pieces that can stand in that room. */
   public getFurnitureCatalog(filter?: { room?: HomeRoomId; slot?: DesignSlotType }): RoomFurnitureItem[] {
     return FURNITURE_CATALOG.filter(item => {
-      if (filter?.room && !item.roomCompatibility.includes(filter.room)) {
+      if (filter?.room && !canPlaceFurniture(item, filter.room)) {
         return false;
       }
       if (filter?.slot && item.category !== filter.slot) {
@@ -2172,11 +2344,17 @@ class LifeSimService {
 
     if (this.isFurnitureOwned(furnitureId)) {
       if (autoEquipRoom) {
-        return this.equipFurniture(furnitureId, autoEquipRoom).success 
-          ? { success: true, item } 
-          : { success: false, error: 'Failed to equip owned item', item };
+        const placed = this.equipFurniture(furnitureId, autoEquipRoom);
+        return placed.success ? { success: true, item } : { success: false, error: placed.error, item };
       }
       return { success: false, error: 'You already own this furniture piece!', item };
+    }
+
+    // Buying for a room places the piece there, so check that first: no tokens for a piece
+    // that would sit in storage instead.
+    const placementError = autoEquipRoom ? this.placementError(item, autoEquipRoom) : null;
+    if (placementError) {
+      return { success: false, error: placementError, item };
     }
 
     const currentCoins = this.getWalletBalance();
@@ -2214,8 +2392,7 @@ class LifeSimService {
       this.saveLedger(this.currentLedger);
     }
 
-    // Auto-equip if room specified and compatible
-    if (autoEquipRoom && item.roomCompatibility.includes(autoEquipRoom)) {
+    if (autoEquipRoom) {
       if (!this.equippedFurniture[autoEquipRoom]) {
         this.equippedFurniture[autoEquipRoom] = {};
       }
@@ -2231,6 +2408,15 @@ class LifeSimService {
     return { success: true, item };
   }
 
+  /** Why a piece can't go into a room right now, or null when it can. */
+  private placementError(item: RoomFurnitureItem, roomId: HomeRoomId): string | null {
+    const room = HOME_ROOMS.find(r => r.id === roomId);
+    if (!room) return 'That room does not exist.';
+    if (!canPlaceFurniture(item, roomId)) return `The ${item.name} has no spot in the ${room.name}.`;
+    if (!this.isRoomUnlocked(roomId)) return `The ${room.name} comes with a bigger home. Upgrade to furnish it.`;
+    return null;
+  }
+
   public equipFurniture(furnitureId: string, roomId: HomeRoomId): { success: boolean; error?: string } {
     this.reloadFromStorage();
     const item = FURNITURE_CATALOG.find(f => f.id === furnitureId);
@@ -2242,8 +2428,9 @@ class LifeSimService {
       return { success: false, error: 'You do not own this piece yet. Purchase it first!' };
     }
 
-    if (!item.roomCompatibility.includes(roomId)) {
-      return { success: false, error: `This piece cannot be placed in the ${this.getRoom(roomId).name}` };
+    const placementError = this.placementError(item, roomId);
+    if (placementError) {
+      return { success: false, error: placementError };
     }
 
     if (!this.equippedFurniture[roomId]) {
@@ -2261,87 +2448,9 @@ class LifeSimService {
     return { success: true };
   }
 
+  /** How the room rates from 1 to 5, and what each part adds (see rateRoomDesign). */
   public calculateRoomDesignScore(roomId: HomeRoomId): RoomDesignEvaluation {
-    const room = this.getRoom(roomId);
-    const equipped = this.getEquippedFurniture(roomId);
-    const slots = room.slots;
-
-    let totalValue = 0;
-    let totalFocusBonus = 0;
-    let totalComfortBonus = 0;
-    let totalWageMultiplier = 0;
-    let equippedCount = 0;
-    const styleCounts: Record<string, number> = {};
-
-    for (const slot of slots) {
-      const item = equipped[slot];
-      if (item) {
-        equippedCount += 1;
-        totalValue += item.designValue;
-        totalFocusBonus += item.focusBonus;
-        totalComfortBonus += item.comfortBonus;
-        totalWageMultiplier += item.wageMultiplier;
-        styleCounts[item.brandStyle] = (styleCounts[item.brandStyle] || 0) + 1;
-      }
-    }
-
-    // Determine primary style and synergy
-    let topStyle = 'Eclectic Student';
-    let topCount = 0;
-    for (const [st, count] of Object.entries(styleCounts)) {
-      if (count > topCount) {
-        topCount = count;
-        topStyle = st;
-      }
-    }
-
-    const harmonyBonus = topCount >= 3 ? 0.35 : 0;
-    const completenessRatio = slots.length > 0 ? equippedCount / slots.length : 1;
-    
-    // Design Home Star Formula (3.0 to 5.0 scale)
-    const baseStars = 3.2;
-    const completenessStars = completenessRatio * 0.9;
-    const valueStars = Math.min(0.65, (totalValue / 350) * 0.65);
-    const calculatedRating = Math.min(5.0, Math.max(3.0, Number((baseStars + completenessStars + valueStars + harmonyBonus).toFixed(2))));
-
-    // Juror feedback generation (Design Home style)
-    const feedback: string[] = [];
-    if (harmonyBonus > 0) {
-      feedback.push(`Strong ${topStyle} style cohesion (+0.35 Harmony synergy).`);
-    } else {
-      feedback.push('Eclectic blend of styles creates an energetic student atmosphere.');
-    }
-
-    if (totalFocusBonus >= 20) {
-      feedback.push(`Exceptional cognitive focus rating (+${totalFocusBonus} pts). Optimal for active recall sprints.`);
-    } else {
-      feedback.push(`Solid baseline study ergonomics (+${totalFocusBonus} Focus pts).`);
-    }
-
-    if (totalComfortBonus >= 25) {
-      feedback.push(`Deep restorative comfort (+${totalComfortBonus} Comfort pts) to minimize cognitive fatigue.`);
-    }
-
-    // Furniture is decor: it raises the room's rating, not pay (see getPayBoosts).
-    return {
-      starRating: calculatedRating,
-      totalValue,
-      totalFocusBonus,
-      totalComfortBonus,
-      totalWageMultiplier: Number(totalWageMultiplier.toFixed(2)),
-      harmonyTitle: `${topStyle} Synergy`,
-      jurorFeedback: feedback,
-      lastEvaluatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      breakdown: {
-        base: baseStars,
-        filledSlots: equippedCount,
-        totalSlots: slots.length,
-        completeness: completenessStars,
-        value: valueStars,
-        harmony: harmonyBonus,
-        matchedStyle: harmonyBonus > 0 ? topStyle : null,
-      },
-    };
+    return rateRoomDesign(roomId, this.getEquippedFurniture(roomId));
   }
 
   public resetToStarterLife() {
