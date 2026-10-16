@@ -3,7 +3,7 @@ import type { CharacterCustomization, CharacterPose } from '../../../../types/ch
 import {
   buildCharacter3D, buildBook, buildPedestal, getBlobShadowTexture, type CharacterModelInstance,
 } from '../characterBuilder3d';
-import { AvatarAnimator } from '../avatar/animator';
+import { AvatarAnimator, type AnimatorTargets } from '../avatar/animator';
 import { getAvatarDims } from '../avatar/anatomy';
 import { buildRig, BONE_NAMES, type AvatarRig, type BoneName } from '../avatar/rig';
 import { avatarAssets, disposeInstance, type AssetCache } from './assetLoader';
@@ -14,7 +14,7 @@ import { FaceController } from './expressions';
 import { loadManifest, resolveItems, assetUrl, type AvatarManifest, type ResolvedItem, type Slot } from './manifest';
 import { applyRoleColors, prepareMaterial, setBeard, setScalp, setShadowFlags } from './materialsV2';
 import { getQualityTier, type QualityTier } from './quality';
-import { measureDims, Retargeter } from './retarget';
+import { measureDims, measureJoints, Retargeter } from './retarget';
 
 export interface V2Deps {
   loadManifest: () => Promise<AvatarManifest | null>;
@@ -93,6 +93,8 @@ export function buildCharacterV2(
   let retarget: Retargeter | null = null;
   let book: THREE.Group | null = null;
   let eyeballs: THREE.Object3D[] = [];
+  /** What the animator poses; rebuilt with the proxy rig. */
+  let animTargets: AnimatorTargets | null = null;
   const equipped = new Map<Slot, Equipped>();
   // Replaced by the base skeleton's measurements once it loads.
   let dims = getAvatarDims('nonbinary', 'average');
@@ -191,21 +193,38 @@ export function buildCharacterV2(
   };
 
   /**
-   * Builds the proxy rig the animator poses, sized to the skeleton's current
+   * Builds the proxy rig the animator poses, on the skeleton's current
    * joints, and the retargeter that copies its pose across. The skeleton must
-   * be at rest.
+   * be at rest; the current pose is then carried over, so a body-shape change
+   * doesn't flick the arms back to the bind pose.
    */
   const rebuildProxy = () => {
     if (!avatar || !targets || !book) return;
     proxy?.root.removeFromParent();
     avatar.updateMatrixWorld(true);
     dims = measureDims(targets, avatar, dims);
-    proxy = buildRig(dims);
+    proxy = buildRig(dims, measureJoints(targets, avatar));
     proxy.root.name = 'ProxyRig';
     avatar.add(proxy.root);
     avatar.updateMatrixWorld(true);
     retarget = new Retargeter(proxy, avatar, targets);
     proxy.bones.chest.add(book);
+    animTargets = {
+      bones: proxy.bones,
+      bodyGroup: avatar,
+      lids: [],
+      eyeballs,
+      eyeCentres: eyeballs.length ? null : eyeCentres(avatar, proxy.bones.head),
+      restLid: 0,
+      book,
+      restHipsX: 0,
+      upperArmLen: dims.upperArmLen,
+      forearmLen: dims.forearmLen,
+      ponytail: null,
+      clavicles: retarget.clavicles,
+    };
+    animator.restore(animTargets);
+    retarget.apply(animator.hands);
   };
 
   /** Body shape: morph weights everywhere, plus joints when the shape changed. */
@@ -290,8 +309,10 @@ export function buildCharacterV2(
     });
     hider = new BodyHider(object);
     book = buildBook(bookMats);
-    reshape(); // joints for the initial body shape, then the proxy rig
+    // Eyeball nodes if the base has them; otherwise the eyes turn by blend shapes (see eyeCentres).
     eyeballs = ['Eye_L', 'Eye_R'].map((n) => bones.get(n)).filter((o): o is THREE.Object3D => Boolean(o));
+    if (eyeballs.length !== 2) eyeballs = [];
+    reshape(); // joints for the initial body shape, then the proxy rig
     face.setMood(current.mood);
     face.snap();
     // Show the base only once its first outfit is on (a later sync may supersede this one).
@@ -305,20 +326,11 @@ export function buildCharacterV2(
 
   const update = (dt: number, poseOverride?: CharacterPose) => {
     if (fallback) return fallback.update(dt, poseOverride);
-    if (!avatar || !proxy || !retarget || !book) return;
-    animator.update(dt, poseOverride || current.pose || 'idle', {
-      bones: proxy.bones,
-      bodyGroup: avatar,
-      lids: [],
-      eyeballs,
-      restLid: 0,
-      book,
-      restHipsX: 0,
-      upperArmLen: dims.upperArmLen,
-      forearmLen: dims.forearmLen,
-      ponytail: null,
-    }, hasLook ? lookTarget : null);
-    retarget.apply();
+    if (!avatar || !retarget || !animTargets) return;
+    animator.update(dt, poseOverride || current.pose || 'idle', animTargets, hasLook ? lookTarget : null);
+    retarget.apply(animator.hands);
+    const { yawL, yawR, pitch } = animator.gaze;
+    face.setGaze(yawL, yawR, pitch);
     face.update(dt);
   };
 
@@ -361,6 +373,30 @@ export function buildCharacterV2(
   };
 
   return { root, update, updateCustomization, setLookTarget, dispose };
+}
+
+/**
+ * Centres of the eyes (left, right) in `head`'s frame, measured from the
+ * eyeball meshes: the meshes that look around (eyeLook* shapes) without
+ * blinking. The skeleton must be at rest. Null if there are none.
+ */
+function eyeCentres(avatar: THREE.Object3D, head: THREE.Object3D): THREE.Vector3[] | null {
+  const boxes = [new THREE.Box3(), new THREE.Box3()];
+  const v = new THREE.Vector3();
+  avatar.updateMatrixWorld(true);
+  avatar.traverse((o) => {
+    const mesh = o as THREE.SkinnedMesh;
+    const dict = mesh.isMesh ? mesh.morphTargetDictionary : undefined;
+    if (!dict || dict.eyeLookInLeft === undefined || dict.eyeBlinkLeft !== undefined) return;
+    const local = new THREE.Vector3();
+    for (let i = 0; i < mesh.geometry.attributes.position.count; i++) {
+      mesh.getVertexPosition(i, v).applyMatrix4(mesh.matrixWorld);
+      // The avatar's left is +X in its own frame.
+      boxes[avatar.worldToLocal(local.copy(v)).x >= 0 ? 0 : 1].expandByPoint(v);
+    }
+  });
+  if (boxes.some((b) => b.isEmpty())) return null;
+  return boxes.map((b) => head.worldToLocal(b.getCenter(new THREE.Vector3())));
 }
 
 function blobShadow() {
