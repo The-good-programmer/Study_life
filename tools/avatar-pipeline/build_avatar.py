@@ -386,7 +386,34 @@ def split_by_height(obj, lower_name, upper_name, cut):
     bm.faces.ensure_lookup_table()
     islands = uv_islands(bm, bm.loops.layers.uv.active)
     centre = [float(np.mean([v.co.z for f in isl for v in f.verts])) for isl in islands]
-    lower_faces = {f.index for isl, z in zip(islands, centre) if z < cut for f in isl}
+    lower = [z < cut for z in centre]
+    # Small pieces near the waist (a jacket's hip pockets, a button) would
+    # follow the cut and leave holes in the garment they are sewn to. Islands
+    # that share vertices are one garment unless both sides of the cut hold a
+    # real share of its area (a shirt sewn to its trousers); otherwise every
+    # island goes with the garment's majority.
+    parent = list(range(len(islands)))
+
+    def root(k):
+        while parent[k] != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+    first_island = {}
+    for k, isl in enumerate(islands):
+        for f in isl:
+            for v in f.verts:
+                parent[root(k)] = root(first_island.setdefault(v.index, k))
+    area = [sum(f.calc_area() for f in isl) for isl in islands]
+    garments_of = {}
+    for k in range(len(islands)):
+        garments_of.setdefault(root(k), []).append(k)
+    for members in garments_of.values():
+        low = sum(area[k] for k in members if lower[k]) / max(sum(area[k] for k in members), 1e-12)
+        if low < 0.25 or low > 0.75:
+            for k in members:
+                lower[k] = low > 0.5
+    lower_faces = {f.index for isl, low in zip(islands, lower) if low for f in isl}
     bm.free()
     log(f"{obj.name}: {len(islands)} UV islands, split at z={cut:.3f}, {len(lower_faces)} lower faces")
 
@@ -906,12 +933,21 @@ def main():
     tops = {item_id: obj for slot, item_id, obj in item_objects if slot == "top"}
     body_variants = {v: captured[v]["coords"][basemesh.name] for v in BODY_VARIANTS}
 
-    def derived_top(item_id, source_id, parts, bones):
+    def derived_top(item_id, source_id, parts, bones, extra_materials=(), dress=None, reweight=None):
+        """`parts` (material slot 0 = the source's fabric, then
+        `extra_materials`) are joined into a copy of the source top;
+        `dress(obj)` may re-material that copy first, `reweight(parts)`
+        replace the nearest-body weights."""
         nonlocal next_bit
         source = tops[source_id]
         obj = garments.duplicate(source, f"Item_{item_id}")
-        parts.data.materials.append(obj.data.materials[0])
-        garments.skin_from_body(parts, xbody, xrig, bones)
+        if dress:
+            dress(obj)
+        for mat in (obj.data.materials[0], *extra_materials):
+            parts.data.materials.append(mat)
+        garments.skin_from_body(parts, xbody, xrig, bones, real)
+        if reweight:
+            reweight(parts)
         garments.morphs_via_surface_deform(parts, xbody, body_variants)
         garments.join_into(obj, parts)
         # Hides the same skin as its source, under a bit of its own.
@@ -924,22 +960,57 @@ def main():
         item_objects.append(("top", item_id, obj))
         log(f"{item_id}: built from {source_id}, hide bit {bit}")
 
-    sweater = tops["sweater"]
-    sweater_co = np.array([v.co[:] for v in sweater.data.vertices])
-    hood = garments.build_hoodie_parts(sweater, waist_cut)
-    back = (float(sweater_co[:, 0].mean()), float(sweater_co[:, 1].max()), float(waist_cut + 0.25))
-    garments.set_constant_uv(hood.data, garments.uv_near(sweater, back))
-    derived_top("hoodie", "sweater", hood, {"spine_01", "spine_02", "spine_03", "neck_01", "clavicle_l", "clavicle_r"})
+    def plain_material(name, roughness):
+        mat = bpy.data.materials.new(name)
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes["Principled BSDF"]
+        bsdf.inputs["Base Color"].default_value = (0.85, 0.85, 0.85, 1)
+        bsdf.inputs["Roughness"].default_value = roughness
+        return mat
 
+    # Hoodie: drawstrings in the secondary colour (like the procedural avatar's).
+    hood = garments.build_hoodie_parts(tops["sweater"])
+    derived_top("hoodie", "sweater", hood, {"spine_01", "spine_02", "spine_03", "neck_01", "clavicle_l", "clavicle_r"},
+                extra_materials=[plain_material("topSecondary_cord", 0.7)])
+
+    # Lab coat: always white (untinted, as on the procedural avatar), with the
+    # shirt underneath showing in the V in the secondary colour.
     shirt = tops["button-down"]
-    shirt_co = np.array([v.co[:] for v in shirt.data.vertices])
+    shirt_mat = shirt.data.materials[0]
+    coat_mat = shirt_mat.copy()
+    coat_mat.name = "labcoat_fabric"
+    tex = next(n for n in coat_mat.node_tree.nodes if n.type == "TEX_IMAGE")
+    white = tex.image.copy()
+    px = np.empty(white.size[0] * white.size[1] * 4, dtype=np.float32)
+    white.pixels.foreach_get(px)
+    px = px.reshape(-1, 4)
+    px[:, :3] = np.clip(px[:, :3] * (0.93 / max(float(px[:, :3].mean()), 1e-3)), 0, 1)
+    white.pixels.foreach_set(px.ravel())
+    white.name = "labcoat_white"
+    white.pack()
+    tex.image = white
+    under_mat = shirt_mat.copy()
+    under_mat.name = "topSecondary_shirt"
+    coat_v = garments.CoatV(shirt)
     # Torso and legs only: in the bind pose the hands hang right beside the hips.
     body_faces = [p.vertices[:] for p in xbody.data.polygons
                   if all(real[v] and abs(body_co[v][0]) < 0.21 for v in p.vertices)]
-    tail = garments.build_coat_tail(shirt, body_co, body_faces)
-    back = (float(shirt_co[:, 0].mean()), float(shirt_co[:, 1].max()), float(waist_cut + 0.2))
-    garments.set_constant_uv(tail.data, garments.uv_near(shirt, back))
-    derived_top("lab-coat", "button-down", tail, {"pelvis", "spine_01", "thigh_l", "thigh_r"})
+    knee_z = xrig.data.bones["calf_l"].head_local.z
+    coat_hem = knee_z + 0.03
+    shirt_hem = float(min(v.co.z for v in shirt.data.vertices))
+    coat, loosen_coat = garments.build_coat_parts(shirt, coat_v, body_co, body_faces, coat_hem)
+
+    def dress_coat(obj):
+        loosen_coat(obj)
+        obj.data.materials[0] = coat_mat
+        obj.data.materials.append(under_mat)
+        under = set(coat_v.faces(obj))
+        for p in obj.data.polygons:
+            p.material_index = 1 if p.index in under else 0
+
+    derived_top("lab-coat", "button-down", coat, {"pelvis", "spine_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r"},
+                dress=dress_coat,
+                reweight=lambda o: garments.skirt_weights(o, shirt_hem + 0.03, coat_hem, shirt_hem + 0.045))
 
     # Procedural glasses and hats, rigged to the head with body-shape morphs.
     shell = accessories.HeadShell(xbody, real, neutral_fit)
