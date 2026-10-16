@@ -2,10 +2,10 @@
   "version": 1,
   "base": {
     "files": {
-      "medium": "/avatar/medium/base.b6fc1478.glb"
+      "medium": "/avatar/medium/base.c73097bc.glb"
     },
     "bytes": {
-      "medium": 1146640
+      "medium": 1117772
     }
   },
   "boneMap": {
@@ -557,72 +557,72 @@
     "hair": {
       "short-fade": {
         "files": {
-          "medium": "/avatar/medium/hair/short-fade.e25ede8a.glb"
+          "medium": "/avatar/medium/hair/short-fade.9b9b6c4e.glb"
         },
         "scalpBit": 0,
         "hideBit": 0,
         "bytes": {
-          "medium": 289448
+          "medium": 273160
         }
       },
       "curly-afro": {
         "files": {
-          "medium": "/avatar/medium/hair/curly-afro.cc8e5933.glb"
+          "medium": "/avatar/medium/hair/curly-afro.84ee06c5.glb"
         },
         "scalpBit": 1,
         "hideBit": 1,
         "bytes": {
-          "medium": 776296
+          "medium": 617256
         }
       },
       "bob-cut": {
         "files": {
-          "medium": "/avatar/medium/hair/bob-cut.b7f84329.glb"
+          "medium": "/avatar/medium/hair/bob-cut.76918598.glb"
         },
         "scalpBit": 2,
         "hideBit": 2,
         "bytes": {
-          "medium": 314208
+          "medium": 250920
         }
       },
       "long-wavy": {
         "files": {
-          "medium": "/avatar/medium/hair/long-wavy.dc4c7377.glb"
+          "medium": "/avatar/medium/hair/long-wavy.72645026.glb"
         },
         "scalpBit": 3,
         "hideBit": 3,
         "bytes": {
-          "medium": 259992
+          "medium": 206332
         }
       },
       "ponytail": {
         "files": {
-          "medium": "/avatar/medium/hair/ponytail.9ee9a0d3.glb"
+          "medium": "/avatar/medium/hair/ponytail.ca6d3494.glb"
         },
         "scalpBit": 4,
         "hideBit": 4,
         "bytes": {
-          "medium": 378640
+          "medium": 324728
         }
       },
       "spiky": {
         "files": {
-          "medium": "/avatar/medium/hair/spiky.acec77db.glb"
+          "medium": "/avatar/medium/hair/spiky.831951ef.glb"
         },
         "scalpBit": 5,
         "hideBit": 5,
         "bytes": {
-          "medium": 221572
+          "medium": 225820
         }
       },
       "side-part": {
         "files": {
-          "medium": "/avatar/medium/hair/side-part.b36b43da.glb"
+          "medium": "/avatar/medium/hair/side-part.b36a1305.glb"
         },
         "scalpBit": 6,
         "hideBit": 6,
         "bytes": {
-          "medium": 166444
+          "medium": 143240
         }
       },
       "buzz": {
@@ -634,141 +634,141 @@
     "top": {
       "button-down": {
         "files": {
-          "medium": "/avatar/medium/top/button-down.cf849a4d.glb"
+          "medium": "/avatar/medium/top/button-down.97f15307.glb"
         },
         "hideBit": 7,
         "bytes": {
-          "medium": 271692
+          "medium": 214224
         }
       },
       "casual-tee": {
         "files": {
-          "medium": "/avatar/medium/top/casual-tee.bcef058c.glb"
+          "medium": "/avatar/medium/top/casual-tee.afaec1c7.glb"
         },
         "hideBit": 10,
         "bytes": {
-          "medium": 176628
+          "medium": 147400
         }
       },
       "sweater": {
         "files": {
-          "medium": "/avatar/medium/top/sweater.6d4e615c.glb"
+          "medium": "/avatar/medium/top/sweater.3c424282.glb"
         },
         "hideBit": 11,
         "bytes": {
-          "medium": 147436
+          "medium": 92744
         }
       },
       "varsity-jacket": {
         "files": {
-          "medium": "/avatar/medium/top/varsity-jacket.61e8aea0.glb"
+          "medium": "/avatar/medium/top/varsity-jacket.8ef2deb9.glb"
         },
         "hideBit": 12,
         "bytes": {
-          "medium": 164572
+          "medium": 148780
         }
       },
       "hoodie": {
         "files": {
-          "medium": "/avatar/medium/top/hoodie.8b7982f0.glb"
+          "medium": "/avatar/medium/top/hoodie.e75f4b4e.glb"
         },
         "hideBit": 20,
         "bytes": {
-          "medium": 168352
+          "medium": 113656
         }
       },
       "lab-coat": {
         "files": {
-          "medium": "/avatar/medium/top/lab-coat.f17ed1a9.glb"
+          "medium": "/avatar/medium/top/lab-coat.94ef9535.glb"
         },
         "hideBit": 21,
         "bytes": {
-          "medium": 297960
+          "medium": 240488
         }
       }
     },
     "bottom": {
       "jeans": {
         "files": {
-          "medium": "/avatar/medium/bottom/jeans.c50a80ba.glb"
+          "medium": "/avatar/medium/bottom/jeans.061d8f80.glb"
         },
         "hideBit": 8,
         "bytes": {
-          "medium": 282476
+          "medium": 246632
         }
       },
       "chinos": {
         "files": {
-          "medium": "/avatar/medium/bottom/chinos.95bea25e.glb"
+          "medium": "/avatar/medium/bottom/chinos.7a1b0b81.glb"
         },
         "hideBit": 13,
         "bytes": {
-          "medium": 114144
+          "medium": 79732
         }
       },
       "shorts": {
         "files": {
-          "medium": "/avatar/medium/bottom/shorts.7f74c4b1.glb"
+          "medium": "/avatar/medium/bottom/shorts.ee59b181.glb"
         },
         "hideBit": 14,
         "bytes": {
-          "medium": 211344
+          "medium": 158568
         }
       },
       "pleated-skirt": {
         "files": {
-          "medium": "/avatar/medium/bottom/pleated-skirt.9708d543.glb"
+          "medium": "/avatar/medium/bottom/pleated-skirt.c5bab9a5.glb"
         },
         "hideBit": 15,
         "bytes": {
-          "medium": 142908
+          "medium": 57340
         }
       },
       "joggers": {
         "files": {
-          "medium": "/avatar/medium/bottom/joggers.94bfad79.glb"
+          "medium": "/avatar/medium/bottom/joggers.5b1088b0.glb"
         },
         "hideBit": 16,
         "bytes": {
-          "medium": 92584
+          "medium": 64740
         }
       }
     },
     "shoes": {
       "sneakers": {
         "files": {
-          "medium": "/avatar/medium/shoes/sneakers.fc155728.glb"
+          "medium": "/avatar/medium/shoes/sneakers.98382db1.glb"
         },
         "hideBit": 9,
         "bytes": {
-          "medium": 247964
+          "medium": 243636
         }
       },
       "running": {
         "files": {
-          "medium": "/avatar/medium/shoes/running.932e41ba.glb"
+          "medium": "/avatar/medium/shoes/running.5ebfc99f.glb"
         },
         "hideBit": 17,
         "bytes": {
-          "medium": 271520
+          "medium": 125260
         }
       },
       "loafers": {
         "files": {
-          "medium": "/avatar/medium/shoes/loafers.2fc2d5be.glb"
+          "medium": "/avatar/medium/shoes/loafers.c4d54571.glb"
         },
         "hideBit": 18,
         "bytes": {
-          "medium": 348520
+          "medium": 246524
         }
       },
       "boots": {
         "files": {
-          "medium": "/avatar/medium/shoes/boots.ab61420a.glb"
+          "medium": "/avatar/medium/shoes/boots.7e859cf9.glb"
         },
         "hideBit": 19,
         "bytes": {
-          "medium": 152780
+          "medium": 132780
         }
       }
     },
@@ -809,29 +809,29 @@
     "headwear": {
       "cap": {
         "files": {
-          "medium": "/avatar/medium/headwear/cap.e92a24c2.glb"
+          "medium": "/avatar/medium/headwear/cap.6170764b.glb"
         },
         "hideBit": 22,
         "bytes": {
-          "medium": 30616
+          "medium": 30552
         }
       },
       "beanie": {
         "files": {
-          "medium": "/avatar/medium/headwear/beanie.f7a21b65.glb"
+          "medium": "/avatar/medium/headwear/beanie.aa3fb790.glb"
         },
         "hideBit": 23,
         "bytes": {
-          "medium": 29880
+          "medium": 29240
         }
       },
       "mortarboard": {
         "files": {
-          "medium": "/avatar/medium/headwear/mortarboard.e17cca95.glb"
+          "medium": "/avatar/medium/headwear/mortarboard.e646c5aa.glb"
         },
         "hideBit": 24,
         "bytes": {
-          "medium": 32280
+          "medium": 31704
         }
       },
       "headphones": {
