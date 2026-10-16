@@ -25,8 +25,9 @@ Asset conventions (see src/components/character/three/v2/manifest.ts):
 - The 52 ARKit face units as morph targets (bare ARKit names) on the body and
   on everything that sits on the face (brows, lashes, beards...).
 - Material names start with a colour role (skin_, hair_, top_, ...) and
-  tintable textures are normalised to a neutral grey average, so the runtime
-  multiplies the user's colour in.
+  tintable textures are made neutral grey with a set average brightness per
+  role (over the texels each mesh uses), so the runtime multiplies the
+  user's colour in and a swatch looks the same on every item.
 - The body carries a `_hide` vertex attribute: bit N set means "hidden while
   the item with hideBit N is worn" (from MakeHuman's clothes delete groups).
 """
@@ -116,7 +117,7 @@ ITEM_SOURCES = [
         "items": {("top", "button-down"): "top_shirt", ("bottom", "jeans"): "bottom_jeans"},
         "split": {("top", "button-down"): "upper", ("bottom", "jeans"): "lower"},
     },
-    {"mhclo": "clothes/shoes01/shoes01.mhclo", "type": "Clothes", "items": {("shoes", "sneakers"): "shoes_01"}},
+    {"mhclo": "clothes/shoes01/shoes01.mhclo", "type": "Clothes", "items": {("shoes", "sneakers"): "shoes_01"}, "socks": True},
     # Single garments taken from two-piece outfits (the other half is dropped).
     *[
         {"mhclo": f"clothes/{src}/{src}.mhclo", "type": "Clothes", "items": {key: mat}, "split": {key: part}}
@@ -146,6 +147,8 @@ LAYERS = {"shoes": ("body", 0), "bottom": ("body", 1), "top": ("body", 2), "hair
 
 # Material roles whose textures are tinted at runtime (normalised to grey here).
 TINTED_ROLES = ("skin", "hair", "brow", "top", "bottom", "shoes")
+# Roles drawn as alpha-tested strand cards at runtime (see materialsV2.ts).
+CARD_ROLES = ("hair", "brow")
 
 TIERS = {"medium": 1024}  # texture size per quality tier
 
@@ -483,34 +486,60 @@ FACIAL_BITS = {"beard": 8, "goatee": 9}
 
 
 def facial_hair_regions(body, body_co, real, eye_co):
-    """Beard and goatee regions on the face, from the lips, eyes and ears.
+    """Beard and goatee regions on the face, from the lips, eyes, ears and chin.
 
     Beard: the lower face up to a cheek line that rises from just above the
-    upper lip (centre) to below the eyes (sides), to the sideburns, and a
-    little under the jaw. Goatee: a mustache over the upper lip plus a patch
-    on the chin. Lips and ears are never included.
+    upper lip (centre) to below the eyes (sides), back to the sideburns, and
+    down to a neckline that runs from the throat's angle under the chin up to
+    below the ear lobes, as a barber would trim it. Under the neckline it
+    thins out over 1.5 cm (ever fewer vertices, evenly spread) instead of
+    stopping at an edge. Goatee: a mustache over the upper lip plus a patch
+    on the front of the chin. Lips and ears are never included.
     """
     def group(name):
         gi = body.vertex_groups[name].index
         return {v.index for v in body.data.vertices if any(g.group == gi and g.weight > 0.5 for g in v.groups)}
 
     lips, ears = group("lips"), group("ears")
+    normals = np.empty(len(body_co) * 3, dtype=np.float32)
+    body.data.vertices.foreach_get("normal", normals)
+    normals = normals.reshape(-1, 3)
     lip_co = body_co[sorted(lips)]
     mx, lip_top, lip_bot = float(lip_co[:, 0].mean()), float(lip_co[:, 2].max()), float(lip_co[:, 2].min())
+    lip_y = float(lip_co[:, 1].min())
     eye_z, eye_y = float(eye_co[:, 2].mean()), float(eye_co[:, 1].mean())
     ear_y = eye_y + 0.075  # just in front of the ears (Blender's front is -Y)
+    lobe_z = float(body_co[sorted(ears), 2].min())
+    # The throat's angle: the back edge of the chin's underside on the midline
+    # (the skin faces down there, and turns forward again down the neck).
+    under = [i for i, (x, y, z) in enumerate(body_co)
+             if real[i] and abs(x - mx) < 0.006 and lip_y < y < ear_y and lip_bot - 0.08 < z < lip_bot and normals[i][2] < -0.5]
+    if under:
+        throat_y, throat_z = body_co[max(under, key=lambda i: body_co[i][1])][1:]
+        slope = (lobe_z - 0.03 - throat_z) / (ear_y - throat_y)  # up to 3 cm under the lobes
+    else:  # no chin underside found: a level neckline under the chin
+        throat_y, throat_z, slope = lip_y, lip_bot - 0.045, 0.0
+        log("facial hair: no chin underside found, using a level neckline")
+    fade = 0.015
     beard, goatee = [], []
     for i, (x, y, z) in enumerate(body_co):
         if not real[i] or i in lips or i in ears or y > ear_y + 0.01:
             continue
-        if z > eye_z - 0.03 or z < lip_bot - 0.06:
+        if z > eye_z - 0.03 or z < throat_z - 0.05:
             continue
         dx = abs(x - mx)
         cheek_line = lip_top + 0.015 + (eye_z - 0.045 - lip_top - 0.015) * min(1.0, dx / 0.055)
         if z > cheek_line:
             continue
+        below = throat_z + slope * (y - throat_y) - z
+        # Under the neckline, keep a vertex with a chance falling to 0 over
+        # `fade`, using a golden-ratio sequence on the index as an even dither.
+        if below > 0 and (i * 0.6180339887) % 1.0 > 1 - below / fade:
+            continue
         beard.append(i)
-        if (lip_top - 0.002 < z < lip_top + 0.02 and dx < 0.03) or (lip_bot - 0.05 < z < lip_bot and dx < 0.022):
+        mustache = lip_top - 0.002 < z < lip_top + 0.02 and dx < 0.03
+        chin = z < lip_bot and dx < 0.022 and y < lip_y + 0.04
+        if mustache or chin:
             goatee.append(i)
     return {"beard": beard, "goatee": goatee}
 
@@ -565,64 +594,265 @@ def read_mhmat(path):
     return props
 
 
-# Average brightness tinted textures are normalised to. Hair textures carry
-# painted-in shine, so they sit darker to keep dark colours dark under the
-# runtime's specular highlight.
-NEUTRAL_GREY = {"hair": 0.5}
-DEFAULT_GREY = 0.82
+# Texture helpers. Pixel arrays are (rows, columns, 4) floats in bpy's layout
+# (row 0 at v = 0), sRGB-encoded as Image.pixels gives them for 8-bit files.
+LUMA = np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
 
 
-def remove_logo(px, w, h):
-    """Paints out MakeHuman's orange logo: orange pixels (and a 3 px margin)
-    are refilled from the surrounding fabric (a normalised box blur of the
-    unmasked pixels, widened until every hole is filled)."""
-    img = px.reshape(h, w, 4)
-    r, g, b = img[..., 0], img[..., 1], img[..., 2]
-    mask = (r > 0.35) & (r - b > 0.2) & (r > g) & (g > b - 0.05)
-    for _ in range(3):  # dilate
-        m = mask.copy()
-        m[1:] |= mask[:-1]; m[:-1] |= mask[1:]; m[:, 1:] |= mask[:, :-1]; m[:, :-1] |= mask[:, 1:]
-        mask = m
+def smoothstep(a, b, x):
+    t = np.clip((x - a) / (b - a), 0, 1)
+    return t * t * (3 - 2 * t)
+
+
+def soft_clip(y, knee):
+    """Identity up to `knee`, then a shoulder that eases into 1 (no hard clipping)."""
+    return np.where(y > knee, knee + (1 - knee) * (1 - np.exp(-np.maximum(y - knee, 0) / (1 - knee))), y)
+
+
+def to_linear(c):
+    c = np.clip(c, 0, 1)
+    return np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+
+
+def to_srgb(c):
+    c = np.clip(c, 0, 1)
+    return np.where(c <= 0.0031308, c * 12.92, 1.055 * np.power(c, 1 / 2.4) - 0.055)
+
+
+def box_blur(a, k):
+    """Mean over a (2k+1)^2 box of a 2-D array (the border repeats outwards)."""
+    c = np.cumsum(np.cumsum(np.pad(a.astype(np.float64), ((k + 1, k), (k + 1, k)), mode="edge"), 0), 1)
+    n = 2 * k + 1
+    return (c[n:, n:] - c[:-n, n:] - c[n:, :-n] + c[:-n, :-n]) / (n * n)
+
+
+def weighted_blur(a, w, k):
+    """Box blur of `a` counting each texel by weight `w` (0: ignored)."""
+    return box_blur(a * w, k) / np.maximum(box_blur(w, k), 1e-8)
+
+
+def grow(mask, k):
+    """A boolean mask dilated by k texels."""
+    return box_blur(mask.astype(np.float64), k) > 1e-9
+
+
+def fill_unused(a, used, flat_far=True):
+    """Values outside `used` replaced by nearby used ones (normalised blurs at
+    doubling radii), so texture filtering never pulls in stray colours. With
+    `flat_far`, texels far from any used one get the used texels' mean
+    instead, so they compress to almost nothing and don't skew the average."""
+    out = a.copy()
+    w = used.astype(np.float64)
+    far = ~grow(used, 8) if flat_far else np.zeros_like(used)
+    out[far] = float((a * w).sum() / max(w.sum(), 1e-8))
+    todo = ~used & ~far
+    k = 2
+    while todo.any() and k < 2 * max(a.shape):
+        weight = box_blur(w, k)
+        fill = box_blur(a * w, k) / np.maximum(weight, 1e-8)
+        ok = todo & (weight > 1e-6)
+        out[ok] = fill[ok]
+        todo &= ~ok
+        k *= 2
+    return out
+
+
+def rasterise(uv_tris, w, h):
+    """Texels whose centre lies inside any of the UV triangles ((n, 3, 2), 0..1)."""
+    mask = np.zeros((h, w), dtype=bool)
+    p = np.asarray(uv_tris, dtype=np.float64) * np.array([w, h])
+    lo = np.floor(p.min(1)).astype(int)
+    hi = np.ceil(p.max(1)).astype(int)
+    for t, (x0, y0), (x1, y1) in zip(p, lo, hi):
+        x0, y0, x1, y1 = max(x0, 0), max(y0, 0), min(x1, w - 1), min(y1, h - 1)
+        (ax, ay), (bx, by), (cx, cy) = t
+        d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+        if x1 < x0 or y1 < y0 or abs(d) < 1e-12:
+            continue
+        ys, xs = np.mgrid[y0:y1 + 1, x0:x1 + 1] + 0.5
+        l1 = ((by - cy) * (xs - cx) + (cx - bx) * (ys - cy)) / d
+        l2 = ((cy - ay) * (xs - cx) + (ax - cx) * (ys - cy)) / d
+        mask[y0:y1 + 1, x0:x1 + 1] |= (l1 >= -1e-6) & (l2 >= -1e-6) & (l1 + l2 <= 1 + 1e-6)
+    return mask
+
+
+# Mean brightness (linear light) of tinted textures over the texels each mesh
+# uses. The runtime multiplies the user's colour in, so one swatch looks the
+# same on every item. Hair and brows share a level (brows match the hair), a
+# little under fabric's: their strands carry painted shading and the runtime
+# adds a sheen. Socks are never tinted: theirs is simply a light grey.
+DEFAULT_GREY = 0.62
+NEUTRAL_GREY = {"hair": 0.55, "brow": 0.55, "socks": 0.72}
+# The most log-luminance spread a tinted texture keeps (black hair and dark
+# leather are far contrastier than fabric), and where highlights start to
+# roll off (linear light).
+MAX_LOG_CONTRAST = 0.45
+KNEE = 0.72
+
+
+def remove_prints(px, cover):
+    """Paints out printed logos and lettering (MakeHuman's branding) on the
+    texels `cover` marks: texels that stand out from the fabric around them
+    in colour are masked, and near those also any brightness step well above
+    the fabric's own grain (grey letters, the emblem's ring). The holes are
+    refilled with the surrounding fabric plus knit detail borrowed from clean
+    fabric nearby. Returns the number of texels painted out."""
+    rgb = px[..., :3].astype(np.float64)
+    domain = grow(cover, 3)
+    lum = rgb @ LUMA
+    chroma = rgb - lum[..., None]
+    mask = np.zeros(cover.shape, dtype=bool)
+    for _ in range(4):
+        keep = (domain & ~mask).astype(np.float64)
+        bg = np.stack([weighted_blur(rgb[..., i], keep, 24) for i in range(3)], -1)
+        bg_lum = bg @ LUMA
+        dc = np.linalg.norm(chroma - (bg - bg_lum[..., None]), axis=-1)
+        dl = np.abs(lum - bg_lum)
+        grain = np.sqrt(np.maximum(weighted_blur((lum - bg_lum) ** 2, keep, 24), 0))
+        near = grow(domain & (dc > 0.09), 40)
+        found = domain & ((dc > 0.09) | (dl > 0.16) | (near & ((dc > 0.04) | (dl > np.maximum(0.05, 3 * grain)))))
+        found = grow(found, 2) & domain
+        if (found == mask).all():
+            break
+        mask = found
     if not mask.any():
         return 0
-    keep = (~mask).astype(np.float32)
-    k = 9
-    while True:
-        def blur(a):
-            c = np.cumsum(np.cumsum(np.pad(a, ((k + 1, k), (k + 1, k))), 0), 1)
-            return c[2 * k + 1:, 2 * k + 1:] - c[:-2 * k - 1, 2 * k + 1:] - c[2 * k + 1:, :-2 * k - 1] + c[:-2 * k - 1, :-2 * k - 1]
-        weight = blur(keep)
-        if (weight[mask] > 0).all() or k > 200:
-            break
-        k *= 2
-    for ch in range(3):
-        fill = blur(img[..., ch] * keep) / np.maximum(weight, 1e-6)
-        img[..., ch][mask] = fill[mask]
+    clean = domain & ~mask
+    detail = rgb - np.stack([weighted_blur(rgb[..., i], clean.astype(np.float64), 3) for i in range(3)], -1)
+    borrowed = np.zeros_like(rgb)
+    done = ~mask
+    for dist in (24, 40, 64, 96, 140, 200):
+        for dy, dx in ((0, dist), (0, -dist), (dist, 0), (-dist, 0)):
+            take = ~done & np.roll(clean, (-dy, -dx), (0, 1))
+            borrowed[take] = np.roll(detail, (-dy, -dx), (0, 1))[take]
+            done |= take
+    for i in range(3):
+        fabric = fill_unused(rgb[..., i], clean, flat_far=False)
+        rgb[..., i][mask] = fabric[mask] + np.clip(borrowed[..., i][mask], -0.1, 0.1)
+    px[..., :3] = np.clip(rgb, 0, 1)
     return int(mask.sum())
 
 
-def load_texture(path, size, neutralise, grey=DEFAULT_GREY, clean_logo=False):
+def neutralise(px, cover, target, cards=False):
+    """Makes a tinted texture achromatic, keeping its detail, with mean
+    `target` (linear light) over the texels `cover` marks. Very contrasty
+    sources (black hair, dark leather) are contrast-limited in the log
+    domain, and highlights roll off instead of clipping. Cards (hair, brows)
+    weigh texels by alpha. Texels nothing uses are filled from neighbours."""
+    rgb = px[..., :3].astype(np.float64)
+    alpha = px[..., 3].astype(np.float64)
+    w = cover * (alpha if cards else 1.0)
+    wsum = max(float(w.sum()), 1e-8)
+    # The channels' mean in sRGB: luminance-like, and less noisy than true
+    # luminance in the darkest (e.g. reddish-black hair) textures.
+    y = to_linear(rgb.mean(-1))
+    eps = 0.08 * float((y * w).sum()) / wsum + 1e-5
+    log_y = np.log(y + eps)
+    mu = float((log_y * w).sum()) / wsum
+    sigma = float(np.sqrt(((log_y - mu) ** 2 * w).sum() / wsum))
+    detail = np.exp((log_y - mu) * min(1.0, MAX_LOG_CONTRAST / max(sigma, 1e-6)))
+    lo, hi = 0.0, 4.0 / max(float((detail * w).sum()) / wsum, 1e-6)
+    for _ in range(40):  # the gain that meets the target after the roll-off
+        k = (lo + hi) / 2
+        lo, hi = (k, hi) if float((soft_clip(detail * k, KNEE) * w).sum()) / wsum < target else (lo, k)
+    out = soft_clip(detail * (lo + hi) / 2, KNEE)
+    used = cover & ((alpha > 0.02) if cards else True)
+    px[..., 0] = px[..., 1] = px[..., 2] = to_srgb(fill_unused(out, used))
+
+
+def even_skin(px, cover, target):
+    """Skin is one texture for everyone, tinted with the skin tone. Its
+    large-scale differences in brightness and colour (a paler face, the
+    scalp's painted stubble reaching the ears and neck, pale hands) are
+    evened out per channel, and patches rougher than typical skin (that
+    stubble) are smoothed to match. Fine detail and local warmth (lips,
+    cheeks) stay; the average becomes a neutral grey at `target`."""
+    lin = to_linear(px[..., :3].astype(np.float64))
+    w = cover.astype(np.float64)
+    wsum = float(w.sum())
+    for i in range(3):
+        mean = float((lin[..., i] * w).sum()) / wsum
+        lin[..., i] *= np.clip(mean / np.maximum(weighted_blur(lin[..., i], w, 40), 1e-4), 0.5, 2.5)
+    y = lin @ LUMA
+    fine = y / np.maximum(weighted_blur(y, w, 3), 1e-5) - 1
+    energy = weighted_blur(fine ** 2, w, 10)
+    damp = np.clip(np.sqrt(float(np.median(energy[cover])) / np.maximum(energy, 1e-9)), 0.3, 1)
+    lin *= ((1 + fine * damp) / np.maximum(1 + fine, 1e-3))[..., None]
+    mean = (lin * w[..., None]).sum((0, 1)) / wsum
+    lin *= float(mean @ LUMA) / mean
+    lo, hi = 0.0, 4.0
+    for _ in range(40):
+        k = (lo + hi) / 2
+        lo, hi = (k, hi) if float((soft_clip(lin * k, 0.8) @ LUMA * w).sum()) / wsum < target else (lo, k)
+    lin = soft_clip(lin * (lo + hi) / 2, 0.8)
+    for i in range(3):
+        px[..., i] = to_srgb(fill_unused(lin[..., i], cover))
+
+
+def load_texture(path, size, role=None, prints=False):
+    """Loads a texture at most `size` wide. A tinted `role` tags it for
+    finish_textures(), which neutralises it (and paints out prints) once the
+    meshes using it are final; other textures are final as loaded."""
     img = bpy.data.images.load(path, check_existing=False)
     img.name = os.path.basename(path)
     if img.size[0] > size:
         img.scale(size, size)
-    if clean_logo:
-        px = np.empty(img.size[0] * img.size[1] * 4, dtype=np.float32)
-        img.pixels.foreach_get(px)
-        n = remove_logo(px, img.size[0], img.size[1])
-        img.pixels.foreach_set(px)
-        log(f"{img.name}: painted out {n} logo pixels")
-    if neutralise:
-        px = np.empty(img.size[0] * img.size[1] * 4, dtype=np.float32)
-        img.pixels.foreach_get(px)
-        px = px.reshape(-1, 4)
-        opaque = px[:, 3] > 0.5
-        mean = px[opaque, :3].mean(axis=0) if opaque.any() else px[:, :3].mean(axis=0)
-        # Keep the texture's detail but make its average a light neutral grey.
-        px[:, :3] = np.clip(px[:, :3] / np.maximum(mean, 1e-3) * grey, 0, 1)
-        img.pixels.foreach_set(px.ravel())
-    img.pack()
+    if role:
+        img["studify_role"] = role
+        img["studify_prints"] = prints
+    else:
+        img.pack()
     return img
+
+
+def base_colour_image(mat):
+    bsdf = mat.node_tree.nodes.get("Principled BSDF") if mat and mat.node_tree else None
+    links = bsdf.inputs["Base Color"].links if bsdf else ()
+    node = links[0].from_node if links else None
+    return node.image if node is not None and node.type == "TEX_IMAGE" else None
+
+
+def finish_textures(objects):
+    """Neutralises every texture load_texture() tagged, once the meshes and
+    faces using it are final: statistics and print detection only look at
+    the texels those faces cover (MakeHuman outfits share one atlas between
+    garments, and unused space would skew them)."""
+    uses = {}
+    for obj in objects:
+        me = obj.data
+        if me.uv_layers.active is None:
+            continue
+        uv = np.empty(len(me.loops) * 2, dtype=np.float32)
+        me.uv_layers.active.data.foreach_get("uv", uv)
+        me.calc_loop_triangles()
+        loops = np.empty(len(me.loop_triangles) * 3, dtype=np.int32)
+        me.loop_triangles.foreach_get("loops", loops)
+        mat_index = np.empty(len(me.loop_triangles), dtype=np.int32)
+        me.loop_triangles.foreach_get("material_index", mat_index)
+        tris = uv.reshape(-1, 2)[loops.reshape(-1, 3)]
+        for i, mat in enumerate(me.materials):
+            img = base_colour_image(mat)
+            if img is not None and "studify_role" in img:
+                uses.setdefault(img.name, (img, []))[1].append(tris[mat_index == i])
+    for img, parts in uses.values():
+        w, h = img.size
+        px = np.empty(w * h * 4, dtype=np.float32)
+        img.pixels.foreach_get(px)
+        px = px.reshape(h, w, 4)
+        cover = rasterise(np.concatenate(parts), w, h)
+        role = img["studify_role"]
+        note = f"; painted out {remove_prints(px, cover)} print texels" if img["studify_prints"] else ""
+        if role == "skin":
+            even_skin(px, cover, DEFAULT_GREY)
+        else:
+            neutralise(px, cover, NEUTRAL_GREY.get(role, DEFAULT_GREY), cards=role in CARD_ROLES)
+        img.pixels.foreach_set(px.ravel())
+        img.pack()
+        log(f"{img.name}: {role} texture neutralised over {cover.mean() * 100:.0f}% of it{note}")
+    for img in bpy.data.images:
+        if "studify_role" in img and img.name not in uses:
+            img.pack()  # no exported face shows it through a base colour: left as loaded
+            log(f"warning: {img.name} ({img['studify_role']}) is not used by any exported mesh")
 
 
 def simple_material(name, mhmat_path, size, cutout=False):
@@ -638,17 +868,26 @@ def simple_material(name, mhmat_path, size, cutout=False):
     diffuse = props.get("diffuseTexture")
     if diffuse:
         tex = nt.nodes.new("ShaderNodeTexImage")
-        tex.image = load_texture(os.path.join(folder, diffuse), size, role in TINTED_ROLES, NEUTRAL_GREY.get(role, DEFAULT_GREY),
-                                 clean_logo=name.endswith("_nologo"))
+        tex.image = load_texture(os.path.join(folder, diffuse), size, role if role in TINTED_ROLES else None,
+                                 prints=name.endswith("_nologo"))
         nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
         if cutout or props.get("transparent") == "True":
-            nt.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
+            alpha = tex.outputs["Alpha"]
+            if role in CARD_ROLES:
+                # Exported as an alpha cutout (glTF MASK): the runtime draws
+                # strand cards alpha-tested, and loaders turn depth writes off
+                # for BLEND, which let the skin cover the brows.
+                clip = nt.nodes.new("ShaderNodeMath")
+                clip.operation = "ROUND"
+                nt.links.new(alpha, clip.inputs[0])
+                alpha = clip.outputs[0]
+            nt.links.new(alpha, bsdf.inputs["Alpha"])
             if hasattr(mat, "blend_method"):
                 mat.blend_method = "HASHED"
     normal = props.get("normalmapTexture")
     if normal and os.path.exists(os.path.join(folder, normal)):
         ntex = nt.nodes.new("ShaderNodeTexImage")
-        ntex.image = load_texture(os.path.join(folder, normal), size, False)
+        ntex.image = load_texture(os.path.join(folder, normal), size)
         ntex.image.colorspace_settings.name = "Non-Color"
         nmap = nt.nodes.new("ShaderNodeNormalMap")
         nt.links.new(ntex.outputs["Color"], nmap.inputs["Color"])
@@ -664,7 +903,7 @@ def find_irises(img):
     px = px.reshape(h, w, 4)
     rgb = px[..., :3]
     sat = rgb.max(-1) - rgb.min(-1)
-    lum = rgb @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    lum = rgb @ LUMA
     ys, xs = np.nonzero((sat > 0.2) & (lum < 0.45))
     pts = np.stack([xs / w, ys / h], axis=1)
     # Two irises: k-means seeded at the extremes of x - y.
@@ -677,9 +916,18 @@ def find_irises(img):
     return [(Vector(c), r) for c, r in zip(centres, radii)]
 
 
+# Brightness (sRGB) of the greyscaled iris; the runtime multiplies the eye
+# colour in, so a light grey lets dark brown, hazel, blue and green all read
+# as their swatch.
+IRIS_GREY = 0.82
+
+
 def eye_materials(eye_obj, mhmat_path, size):
     """Splits the eyeballs into sclera and iris materials, with the iris
-    greyscaled so the runtime can tint it with the user's eye colour."""
+    greyscaled so the runtime can tint it with the user's eye colour: its
+    fibres are kept (contrast-limited) around IRIS_GREY, the pupil stays
+    black, and a darker limbal ring at the rim blends into the sclera (no
+    bright fringe where the iris texture meets the white)."""
     props = read_mhmat(mhmat_path)
     tex_path = os.path.join(os.path.dirname(mhmat_path), props["diffuseTexture"])
     img = bpy.data.images.load(tex_path, check_existing=False)
@@ -692,12 +940,16 @@ def eye_materials(eye_obj, mhmat_path, size):
     px = px.reshape(h, w, 4)
     yy, xx = np.mgrid[0:h, 0:w]
     uv = np.stack([(xx + 0.5) / w, (yy + 0.5) / h], axis=-1)
-    inside = np.zeros((h, w), dtype=bool)
+    lum = px[..., :3] @ LUMA
     for c, r in irises:
-        inside |= np.linalg.norm(uv - np.array(c[:]), axis=-1) < r * 1.04
-    lum = px[..., :3] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
-    grey = np.clip(lum / max(float(lum[inside].mean()), 1e-3) * 0.55, 0, 1)
-    px[inside, 0] = px[inside, 1] = px[inside, 2] = grey[inside]
+        rr = np.linalg.norm(uv - np.array(c[:]), axis=-1) / r  # 1 at the iris rim
+        zone = rr < 1.15
+        fibres = lum / max(float(lum[(rr > 0.4) & (rr < 0.85)].mean()), 1e-3)
+        grey = (1 + np.tanh((fibres - 1) / 0.6) * 0.6) * IRIS_GREY
+        grey *= smoothstep(0.26, 0.36, rr) * (1 - 0.65 * smoothstep(0.78, 0.98, rr))
+        rim = smoothstep(0.96, 1.1, rr)  # past the rim: the sclera's own (greyed) brightness
+        grey = soft_clip((1 - rim) * grey + rim * lum, 0.85)
+        px[zone, 0] = px[zone, 1] = px[zone, 2] = grey[zone]
     img.pixels.foreach_set(px.ravel())
     img.name = "eye_greyiris.png"
     img.pack()
@@ -739,25 +991,28 @@ def eye_materials(eye_obj, mhmat_path, size):
 
 
 def add_socks(obj, mhmat_path, size):
-    """Moves a shoe's sock faces (its upper UV islands) onto an untinted
-    material, so socks stay white whatever colour the shoes are."""
+    """Moves a shoe's sock onto an untinted, light grey material, so socks
+    stay white whatever colour the shoes are. MakeHuman's shoes share one
+    ankle-sock tube that rises to mid-shin, far above any part of the shoe:
+    the sock is the UV islands above the widest gap between the islands'
+    tops (their centres can't tell it from a running shoe's tall upper)."""
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     bm.faces.ensure_lookup_table()
     islands = uv_islands(bm, bm.loops.layers.uv.active)
-    centre = [float(np.mean([v.co.z for f in isl for v in f.verts])) for isl in islands]
+    top = [max(v.co.z for f in isl for v in f.verts) for isl in islands]
     faces = [[f.index for f in isl] for isl in islands]
     bm.free()
     if len(islands) < 2:
         return
-    order = sorted(centre)
+    order = sorted(top)
     cut = max((order[i + 1] - order[i], (order[i + 1] + order[i]) / 2) for i in range(len(order) - 1))[1]
-    sock_faces = {i for isl, z in zip(faces, centre) if z > cut for i in isl}
+    sock_faces = {i for isl, z in zip(faces, top) if z > cut for i in isl}
     props = read_mhmat(mhmat_path)
     socks = bpy.data.materials.new("socks")
     socks.use_nodes = True
     tex = socks.node_tree.nodes.new("ShaderNodeTexImage")
-    tex.image = load_texture(os.path.join(os.path.dirname(mhmat_path), props["diffuseTexture"]), size, False)
+    tex.image = load_texture(os.path.join(os.path.dirname(mhmat_path), props["diffuseTexture"]), size, "socks")
     bsdf = socks.node_tree.nodes["Principled BSDF"]
     bsdf.inputs["Roughness"].default_value = 0.95
     socks.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
@@ -991,6 +1246,7 @@ def main():
 
     # Export.
     base_meshes = [xbody] + [bpy.data.objects[parts[k].name + "_x"] for k, *_ in BASE_PARTS]
+    finish_textures(base_meshes + [obj for _, _, obj in item_objects])
     tier = "medium"
     sizes = {}
     sizes["base"] = export_glb(os.path.join(OUT_DIR, tier, "base.glb"), xrig, base_meshes)

@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, rm, writeFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { NodeIO } from '@gltf-transform/core';
+import { NodeIO, PropertyType } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions';
 import { dedup, prune, quantize, reorder, sparse } from '@gltf-transform/functions';
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer';
@@ -32,6 +32,12 @@ const URL_PREFIX = '/avatar/';
 // Every standard attribute, but never application-specific ones like _HIDE.
 const QUANTIZED = /^(POSITION|NORMAL|TANGENT|TEXCOORD_\d+|JOINTS_\d+|WEIGHTS_\d+|COLOR_\d+)$/;
 
+// Material names carry the colour role (iris_, skin_, ...; see materialsV2.ts),
+// so materials are never merged: the eye's sclera and iris share a texture and
+// settings, and merging them by content dropped the iris's eye colour.
+// Identical textures and geometry still are.
+const DEDUP_TYPES = [PropertyType.ACCESSOR, PropertyType.MESH, PropertyType.TEXTURE, PropertyType.SKIN];
+
 await MeshoptEncoder.ready;
 await MeshoptDecoder.ready;
 const io = new NodeIO()
@@ -41,7 +47,7 @@ const io = new NodeIO()
 async function compress(rel) {
   const doc = await io.read(path.join(SRC, rel));
   await doc.transform(
-    dedup(),
+    dedup({ propertyTypes: DEDUP_TYPES }),
     prune(),
     sparse({ ratio: 1 / 3 }),
     reorder({ encoder: MeshoptEncoder, target: 'size' }),
