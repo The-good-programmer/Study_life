@@ -94,10 +94,15 @@ export interface HousingProperty {
   rentPerDay: number;
   upgradeCost: number;
   minCardsReviewed: number;
+  /** Not checked: upgrades need minCardsReviewed and upgradeCost only. */
   minNetWorth: number;
+  /** Pay multiplier on days the rent is paid, e.g. 1.15 for +15%. */
   wageMultiplier: number;
+  /** Not shown: the home dialog describes a home from wageMultiplier and unlockedRooms. */
   perkDescription: string;
+  /** Rooms this home lets you furnish; the others stay locked. */
   unlockedRooms: HomeRoomId[];
+  /** Not shown, and not given on moving in: flavor names of the home's signature pieces. */
   decor: string[];
   icon: string;
 }
@@ -163,11 +168,16 @@ export interface RoomFurnitureItem {
   category: DesignSlotType;
   brandStyle: DesignAestheticStyle;
   cost: number; // AxonCoins
+  /** Rooms the piece can stand in. Each one has a spot for its `category` (see canPlaceFurniture). */
   roomCompatibility: HomeRoomId[];
-  focusBonus: number; // +X Focus Points
-  comfortBonus: number; // +X Comfort Index
-  designValue: number; // Room valuation in tokens
-  wageMultiplier: number; // Not applied to pay: furniture only raises the room's rating
+  /** Flavor only: not part of the room's rating or pay. */
+  focusBonus: number;
+  /** Flavor only: not part of the room's rating or pay. */
+  comfortBonus: number;
+  /** What the piece adds to the room's worth, one of the rating's three parts. */
+  designValue: number;
+  /** @deprecated Unused: furniture changes neither pay nor the rating. */
+  wageMultiplier: number;
   emoji: string;
   description: string;
   colorHex?: string;
@@ -186,7 +196,9 @@ export interface HomeRoomDefinition {
   icon: string;
   slots: DesignSlotType[];
   description: string;
+  /** Unused: the 3D house picks its own wall finish. */
   defaultWallColor: string;
+  /** Unused: the 3D house picks its own floor finish. */
   defaultFloorColor: string;
 }
 
@@ -197,25 +209,41 @@ export interface EquippedFurnitureState {
 }
 
 export interface RoomDesignEvaluation {
-  starRating: number; // 1.0 to 5.0
+  /** 1.0 for an empty room to 5.0: the sum of the breakdown's parts. */
+  starRating: number;
+  /** What the placed pieces are worth in all (their designValue). */
   totalValue: number;
+  /** Flavor only: not part of the rating. */
   totalFocusBonus: number;
+  /** Flavor only: not part of the rating. */
   totalComfortBonus: number;
+  /** @deprecated Always 0: furniture never changes pay. */
   totalWageMultiplier: number;
+  /** The look the pieces share, e.g. "Scandinavian look", or "Mixed styles". */
   harmonyTitle: string;
+  /** Changes that would raise the rating, the biggest first (one line when none are left). */
   jurorFeedback: string[];
+  /** When the rating was worked out, as an ISO string. */
   lastEvaluatedAt: string;
-  /** The parts the rating adds up from (before it is kept between 3 and 5). */
+  /** The parts the rating adds up from. */
   breakdown: {
+    /** Where every room starts: 1. */
     base: number;
     filledSlots: number;
     totalSlots: number;
-    /** Up to 0.9, for spots with a piece in them. */
+    /** Up to 2, for the share of spots with a piece in them. */
     completeness: number;
-    /** Up to 0.65, from what the pieces are worth. */
+    /** Up to 1, for what the pieces are worth against valueTarget. */
     value: number;
-    /** 0.35 once three pieces share a style. */
+    /** What the pieces must be worth in all for the full point. */
+    valueTarget: number;
+    /** Up to 1, for how many pieces share one style against styleTarget. */
     harmony: number;
+    /** The style most pieces share, or null in an empty room. */
     matchedStyle: string | null;
+    /** How many pieces are in matchedStyle. */
+    matchingPieces: number;
+    /** How many pieces in one style earn the full point. */
+    styleTarget: number;
   };
 }
