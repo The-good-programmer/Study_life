@@ -8,7 +8,7 @@ Open Studify, pick a starter deck or turn your own notes or a lecture PDF into f
 
 ## 🔁 The core study loop
 
-1. **Add material** — pick a ready-made starter deck (ranked for your level), paste notes, import Anki/Quizlet/CSV, or drop a PDF.
+1. **Add material** — pick a ready-made starter deck (ranked for your level), paste notes, import Anki/Quizlet/CSV, drop a PDF, or photograph a marked exam.
 2. **Review** — active recall flashcards, rated *Again / Hard / Good / Easy*.
 3. **Let the scheduler work** — reviews are spaced with the open-source FSRS algorithm (`ts-fsrs`), so cards come back just before you would forget them.
 4. **See progress** — the retention dashboard shows what's due, what's sticking, and which cards keep failing.
@@ -26,6 +26,7 @@ Open Studify, pick a starter deck or turn your own notes or a lecture PDF into f
 - **Quick practice** — straight to your due cards.
 - **Guided session** — priming → explain-it-simply → recall → rest.
 - **Mock Exam** — timed test conditions with flagging and a post-exam breakdown.
+- **Roast my exam** — photograph a marked paper from school. The AI finds where you lost marks, sorts each mistake (concept gap, careless slip, misread question…), roasts the mistakes (never you; always gentle under 13) and builds a deck that tests the idea behind each one. You check and correct what it read before the deck is made, and without AI you can type your mistakes in.
 - **Mix Decks** — interleaved cards across subjects.
 - **Speed Match** — fast term/definition matching, with keyboard shortcuts 1–9.
 - **Image Occlusion** — hide labels on diagrams and recall them (Anki-style).

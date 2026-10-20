@@ -258,3 +258,53 @@ export const STUDY_SESSION_GENERATION_SCHEMA = {
   },
   required: ['title', 'category', 'description', 'concepts'],
 };
+
+/** Reading a marked exam paper: what went wrong on each question, and the roast that goes with it. */
+export const EXAM_ROAST_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    isExam: {
+      type: Type.BOOLEAN,
+      description: 'False when the images are not a test, quiz, exam or graded homework.',
+    },
+    examTitle: { type: Type.STRING, description: 'Short name for the paper, e.g. "Chemistry quiz: moles".' },
+    subject: { type: Type.STRING },
+    languageCode: { type: Type.STRING, description: 'ISO 639-1 code of the language the paper is written in.' },
+    scoreText: { type: Type.STRING, description: 'The score written on the paper, e.g. "14/20", or empty if none is visible.' },
+    headline: { type: Type.STRING, description: 'One-line roast of the whole paper.' },
+    verdict: { type: Type.STRING, description: 'Two or three plain sentences: what really cost the marks and what to do first.' },
+    strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
+    patterns: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: 'Habits that repeat across several questions, e.g. dropping units.',
+    },
+    mistakes: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          questionRef: { type: Type.STRING, description: 'Question number as printed, e.g. "3b".' },
+          question: { type: Type.STRING, description: 'The question, transcribed or briefly summarized.' },
+          studentAnswer: { type: Type.STRING, description: 'What the student wrote, transcribed.' },
+          correctAnswer: { type: Type.STRING },
+          kind: {
+            type: Type.STRING,
+            enum: ['concept-gap', 'careless', 'misread-question', 'method-error', 'incomplete', 'memory-slip'],
+          },
+          topic: { type: Type.STRING, description: 'The idea the question tests, a few words.' },
+          whyWrong: { type: Type.STRING, description: 'The misunderstanding behind the mistake and the fix.' },
+          roast: { type: Type.STRING, description: 'One short joke about this mistake, never about the student.' },
+          pointsLost: { type: Type.NUMBER, description: 'Marks lost on this question, or -1 if unknown.' },
+          readConfidence: {
+            type: Type.STRING,
+            enum: ['high', 'low'],
+            description: 'low when the handwriting, the marking or the right answer is uncertain.',
+          },
+        },
+        required: ['questionRef', 'question', 'studentAnswer', 'correctAnswer', 'kind', 'topic', 'whyWrong', 'roast', 'readConfidence'],
+      },
+    },
+  },
+  required: ['isExam', 'examTitle', 'subject', 'languageCode', 'headline', 'verdict', 'strengths', 'patterns', 'mistakes'],
+};
