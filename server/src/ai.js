@@ -22,11 +22,14 @@ if (apiKey && apiKey.trim()) {
 }
 
 // Flash models only: a fallback to a Pro model would multiply the cost of every request that reaches it.
-const MODEL_CANDIDATES = [
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
-  'gemini-2.0-flash',
-];
+// gemini-2.0-flash was shut down on 2026-06-01, and Google limits the 2.5 models to keys that used them
+// recently, so the 3.x Flash model comes last. GEMINI_MODELS (comma-separated) replaces the list.
+const DEFAULT_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.6-flash'];
+const MODEL_CANDIDATES = (process.env.GEMINI_MODELS || '')
+  .split(',')
+  .map((m) => m.trim())
+  .filter(Boolean);
+if (MODEL_CANDIDATES.length === 0) MODEL_CANDIDATES.push(...DEFAULT_MODELS);
 
 function supportsThinking(model) {
   return model.includes('2.5') || model.includes('3.');
