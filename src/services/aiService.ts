@@ -64,6 +64,7 @@ export class AIService {
     responseSchema?: Record<string, unknown>
   ): Promise<string> {
     // 1. Try server proxy if server is reachable
+    let serverError: string | undefined;
     try {
       const isServerUp = await ApiConfig.canUseServerAi();
       if (isServerUp) {
@@ -74,6 +75,7 @@ export class AIService {
         if (res.ok && res.data?.text) {
           return res.data.text;
         }
+        serverError = res.error || (res.ok ? 'The AI returned an empty answer.' : `The AI service answered ${res.status}.`);
       }
     } catch (err) {
       console.warn('[AIService] Backend AI proxy request failed, checking client key...', err);
@@ -86,14 +88,17 @@ export class AIService {
       return response.text || '';
     }
 
-    throw new Error('No AI provider available (server offline and no client API key configured).');
+    // Pass on the server's reason (a spent daily quota, say) rather than claiming it is offline.
+    throw new Error(serverError || 'No AI provider available (server offline and no client API key configured).');
   }
 
+  // gemini-2.0-flash was shut down on 2026-06-01. Google now limits the 2.5 models to keys that used them
+  // recently, so a new key gets the 3.x Flash model at the end instead of no AI at all.
   private static readonly MODEL_CANDIDATES = [
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
-    'gemini-2.0-flash',
     'gemini-2.5-pro',
+    'gemini-3.6-flash',
   ];
 
   /**
@@ -298,8 +303,12 @@ Before assigning the final score, you MUST articulate your step-by-step cognitiv
 
         const text = await this.generateText(contentsPayload, 'application/json', true, FEYNMAN_EVALUATION_SCHEMA);
         const parsed = this.safeParseJSON<Partial<FeynmanEvaluation>>(text, {});
+        // A reply without a score is a failed evaluation: use the self-check below rather than invent a grade.
+        if (typeof parsed.score !== 'number' || !Number.isFinite(parsed.score)) {
+          throw new Error('The AI reply had no score.');
+        }
         return {
-          score: Math.min(100, Math.max(0, parsed.score || 75)),
+          score: Math.min(100, Math.max(0, Math.round(parsed.score))),
           grade: parsed.grade || 'Solid Understanding',
           masteredPoints: parsed.masteredPoints || ['Captured the core high-level idea.'],
           missingNuances: parsed.missingNuances || ['Consider expanding on the underlying mechanism.'],
@@ -458,6 +467,10 @@ Return ONLY valid JSON matching this schema:
         const text = await this.generateText(prompt, 'application/json', true, VIVA_VOCE_TURN_SCHEMA);
 
         const parsed = this.safeParseJSON<Record<string, any>>(text || '', {});
+        // The final round must end in a verdict, or the defense never finishes.
+        if (isFinalRound && !(parsed.verdict && parsed.verdict.overallGrade)) {
+          throw new Error('The AI verdict was missing.');
+        }
         const nextTurn: SocraticTurn = {
           id: `turn-examiner-${Date.now()}`,
           role: 'examiner',
@@ -498,6 +511,11 @@ Return ONLY valid JSON matching this schema:
   ): Promise<VivaVoceTurnResponse> {
     const cleanResponse = studentResponse.trim();
     const isFinalRound = targetRound >= 3;
+    // The verdict needs structured scores, which a text stream cannot carry: take the structured call
+    // and type its words out instead.
+    if (isFinalRound) {
+      return this.typeOutVivaTurn(await this.conductVivaVoceTurn(concept, history, studentResponse, targetRound, currentSessionId), onChunk);
+    }
     const pedState = FSRSService.getConceptPedagogicalState(concept.retrievalCards || []);
     const crossBridges = currentSessionId
       ? KnowledgeGraphService.findCrossDeckBridges(concept, currentSessionId, 2)
@@ -536,12 +554,23 @@ ${JSON.stringify(history.map(h => ({ role: h.role, text: h.text })))}
 Candidate's Latest Statement:
 """${cleanResponse}"""
 
-${!isFinalRound ? `
 Formulate your verbal Socratic response (2-3 concise sentences) directly addressing the candidate as an Oxford/MIT professor adhering to your pedagogical directive (${pedState.mode.toUpperCase()}). Challenge their causal mechanism, analogy, or boundary condition. Speak naturally with academic poise.
-` : `
-Deliver your official oral Viva Voce verdict to the candidate in 3 concise sentences. Declare whether their defense is approved, summarizing their greatest strength and their principal vulnerability.
-`}
 `;
+
+    // A streamed challenge is plain text, so there is no reaction or jargon list to report.
+    const streamedTurn = (text: string): VivaVoceTurnResponse => ({
+      nextTurn: {
+        id: `turn-examiner-${Date.now()}`,
+        role: 'examiner',
+        text: text.trim(),
+        timestamp: Date.now(),
+        turnType: 'mechanism-probe',
+        reaction: 'probing',
+        reactionNote: 'Probing candidate mechanism.',
+        jargonDetected: [],
+      },
+      isComplete: false,
+    });
 
     // 1. Try server SSE stream if server is reachable
     try {
@@ -558,23 +587,7 @@ Deliver your official oral Viva Voce verdict to the candidate in 3 concise sente
           signal
         );
 
-        if (streamResult.ok && accumulated.trim()) {
-          const nextTurn: SocraticTurn = {
-            id: `turn-examiner-${Date.now()}`,
-            role: 'examiner',
-            text: accumulated.trim(),
-            timestamp: Date.now(),
-            turnType: isFinalRound ? 'verdict' : 'mechanism-probe',
-            reaction: isFinalRound ? 'satisfied' : 'probing',
-            reactionNote: isFinalRound ? 'Oral defense concluded.' : 'Probing candidate mechanism.',
-            jargonDetected: concept.keyTerms.filter(k => cleanResponse.toLowerCase().includes(k.term.toLowerCase())).map(k => k.term),
-          };
-
-          return {
-            nextTurn,
-            isComplete: isFinalRound,
-          };
-        }
+        if (streamResult.ok && accumulated.trim()) return streamedTurn(accumulated);
       }
     } catch (err) {
       console.warn('[AIService] SSE stream request failed, falling back:', err);
@@ -583,52 +596,41 @@ Deliver your official oral Viva Voce verdict to the candidate in 3 concise sente
     // 2. Try client-side direct streaming if client API key is configured
     const client = this.getClient();
     if (client) {
-      try {
-        let accumulated = '';
-        for (const model of this.MODEL_CANDIDATES) {
-          try {
-            const stream = await client.models.generateContentStream({
-              model,
-              contents: streamPrompt,
-            });
-            for await (const chunk of stream) {
-              if (chunk.text) {
-                accumulated += chunk.text;
-                onChunk(chunk.text);
-              }
+      for (const model of this.MODEL_CANDIDATES) {
+        try {
+          let accumulated = '';
+          const stream = await client.models.generateContentStream({
+            model,
+            contents: streamPrompt,
+          });
+          for await (const chunk of stream) {
+            if (chunk.text) {
+              accumulated += chunk.text;
+              onChunk(chunk.text);
             }
-            if (accumulated.trim()) {
-              const nextTurn: SocraticTurn = {
-                id: `turn-examiner-${Date.now()}`,
-                role: 'examiner',
-                text: accumulated.trim(),
-                timestamp: Date.now(),
-                turnType: isFinalRound ? 'verdict' : 'mechanism-probe',
-                reaction: isFinalRound ? 'satisfied' : 'probing',
-                reactionNote: isFinalRound ? 'Oral defense concluded.' : 'Probing candidate mechanism.',
-                jargonDetected: concept.keyTerms.filter(k => cleanResponse.toLowerCase().includes(k.term.toLowerCase())).map(k => k.term),
-              };
-
-              return {
-                nextTurn,
-                isComplete: isFinalRound,
-              };
-            }
-          } catch {}
+          }
+          if (accumulated.trim()) return streamedTurn(accumulated);
+        } catch (err) {
+          console.warn(`[AIService] Client stream on ${model} failed, trying next candidate...`, err);
         }
-      } catch (clientStreamErr) {
-        console.warn('[AIService] Client SDK stream failed:', clientStreamErr);
       }
     }
 
     // 3. Fallback to standard/heuristic call with responsive typewriter chunking
-    const fallbackRes = await this.conductVivaVoceTurn(concept, history, studentResponse, targetRound, currentSessionId);
-    const words = fallbackRes.nextTurn.text.split(' ');
+    return this.typeOutVivaTurn(await this.conductVivaVoceTurn(concept, history, studentResponse, targetRound, currentSessionId), onChunk);
+  }
+
+  /** Hands a finished examiner turn to onChunk a word at a time, so it reads like the streamed ones. */
+  private static async typeOutVivaTurn(
+    response: VivaVoceTurnResponse,
+    onChunk: (chunk: string) => void
+  ): Promise<VivaVoceTurnResponse> {
+    const words = response.nextTurn.text.split(' ');
     for (let i = 0; i < words.length; i++) {
       onChunk((i > 0 ? ' ' : '') + words[i]);
       await new Promise(r => setTimeout(r, 22));
     }
-    return fallbackRes;
+    return response;
   }
 
   private static heuristicVivaVoceTurn(
@@ -707,8 +709,9 @@ Deliver your official oral Viva Voce verdict to the candidate in 3 concise sente
     }
 
     // Final Round (Round 3) - Verdict
-    const depthScore = Math.min(98, Math.max(55, 60 + (hasCausal ? 20 : 0) + (wordCount > 35 ? 15 : 5)));
-    const analogyScore = Math.min(100, Math.max(50, hasAnalogy ? 90 : 65));
+    // No generous floors: a one-line answer with no cause and effect should not pass.
+    const depthScore = Math.min(98, 30 + (hasCausal ? 30 : 0) + (wordCount > 35 ? 25 : wordCount > 15 ? 12 : 0));
+    const analogyScore = hasAnalogy ? 85 : 45;
     const jargonFreeScore = Math.min(100, Math.max(60, 95 - detectedJargon.length * 8));
 
     const avgScore = Math.round((depthScore * 0.45) + (analogyScore * 0.3) + (jargonFreeScore * 0.25));
@@ -726,7 +729,9 @@ Deliver your official oral Viva Voce verdict to the candidate in 3 concise sente
       analogyIntegrity: analogyScore,
       jargonFreeScore,
       roundsCompleted: 3,
-      verdictSummary: `The candidate successfully defended ${concept.title} through 3 rigorous Socratic rounds, demonstrating ${avgScore >= 80 ? 'exemplary' : 'competent'} intuitive grasp.`,
+      verdictSummary: avgScore >= 70
+        ? `The candidate defended ${concept.title} through 3 Socratic rounds, demonstrating ${avgScore >= 80 ? 'exemplary' : 'competent'} intuitive grasp.`
+        : `The candidate completed 3 rounds on ${concept.title}, but the causal mechanism is not yet explained clearly enough to pass.`,
       keyStrengths: [
         hasCausal ? 'Demonstrated causal cause-and-effect reasoning across transitions.' : 'Articulated core structural identity.',
         hasAnalogy ? 'Constructed functional intuitive analogy for non-specialists.' : 'Maintained conceptual consistency under interrogation.',
@@ -736,7 +741,11 @@ Deliver your official oral Viva Voce verdict to the candidate in 3 concise sente
       ],
     };
 
-    const examinerText = `The Socratic Board has concluded its interrogation. Verdict awarded: ${grade} (${avgScore}% Depth). You have defended ${concept.title} with commendable clarity. Your active recall foundations are primed for testing.`;
+    const examinerText = `The Socratic Board has concluded its interrogation. Verdict awarded: ${grade} (${avgScore}% Depth). ${
+      avgScore >= 70
+        ? `You have defended ${concept.title} with commendable clarity. Your active recall foundations are primed for testing.`
+        : `Go back over how ${concept.title} works step by step, then defend it again.`
+    }`;
 
     return {
       nextTurn: {
@@ -746,7 +755,7 @@ Deliver your official oral Viva Voce verdict to the candidate in 3 concise sente
         timestamp: Date.now(),
         turnType: 'verdict',
         reaction: avgScore >= 80 ? 'impressed' : 'satisfied',
-        reactionNote: `Oral defense passed with ${grade}.`,
+        reactionNote: avgScore >= 60 ? `Oral defense passed with ${grade}.` : `Oral defense ended: ${grade}.`,
         jargonDetected: detectedJargon,
       },
       verdict,
@@ -1063,6 +1072,9 @@ Return ONLY a valid JSON object with this exact structure:
 
         const text = await this.generateText(prompt, 'application/json', true, STUDY_SESSION_GENERATION_SCHEMA);
         const parsed = this.safeParseJSON<Record<string, any>>(text || '', {});
+        if (!Array.isArray(parsed.concepts) || parsed.concepts.length === 0) {
+          throw new Error('The AI reply had no study concepts in it.');
+        }
 
         const concepts: ConceptCheckpoint[] = (parsed.concepts || []).map((c: Partial<ConceptCheckpoint>, idx: number) => {
           const conceptId = `c-${sessionId}-${idx + 1}`;
@@ -1147,7 +1159,10 @@ Return ONLY a valid JSON object with this exact structure:
           languageCode: targetLang.code,
         };
       } catch (err) {
-        console.warn('Gemini generation failed, using intelligent topic synthesizer:', err);
+        // With AI set up, a failure is reported so the student can retry; a template deck passed off as the
+        // AI's work would be worse than no deck.
+        console.warn('Gemini generation failed:', err);
+        throw err instanceof Error ? err : new Error(String(err));
       }
     }
 

@@ -68,6 +68,7 @@ npm run server
 | `GEMINI_API_KEY` | For shared AI | Enables the AI proxy. Only signed-in users can use it. |
 | `AI_DAILY_QUOTA` | No (default 200) | Shared AI requests per user per day. |
 | `AI_IP_DAILY_QUOTA`, `AI_GLOBAL_DAILY_QUOTA` | No (400, 5000) | Shared AI requests per network and for the whole service per day, a ceiling on the Gemini bill. |
+| `GEMINI_MODELS` | No | Comma-separated Gemini models to try in order. Defaults to `gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.6-flash`. |
 | `DATABASE_URL` | **Production** | PostgreSQL connection string. Without it, development uses an embedded database in `server/data/pgdata`. |
 | `ALLOWED_ORIGINS` | No | Comma-separated browser origins allowed to call the API. Defaults to the local dev and preview ports. |
 | `PORT` | No | Server port (3001). |
