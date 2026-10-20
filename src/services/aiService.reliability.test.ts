@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AIService } from './aiService';
+import { AIService, describeGeminiError } from './aiService';
 import { ApiConfig } from './apiConfig';
 import { StorageService } from './storageService';
 
@@ -116,5 +116,24 @@ describe('AI reliability', () => {
     vi.spyOn(ApiConfig, 'request').mockResolvedValue({ ok: false, status: 429, error: 'Daily AI limit reached.' });
     vi.spyOn(StorageService, 'getApiKey').mockReturnValue(null as unknown as string);
     await expect(AIService.generateText('hi')).rejects.toThrow('Daily AI limit reached.');
+  });
+});
+
+describe('describeGeminiError', () => {
+  it('turns raw SDK errors into sentences a student can act on', () => {
+    const sdk = (code: number, status: string) => new Error(JSON.stringify({ error: { code, message: 'x', status } }));
+    expect(describeGeminiError(sdk(429, 'RESOURCE_EXHAUSTED'))).toMatch(/usage limit/);
+    expect(describeGeminiError(new Error('API key not valid. Please pass a valid API key.'))).toMatch(/refused your Gemini API key/);
+    expect(describeGeminiError(sdk(404, 'NOT_FOUND'))).toMatch(/None of Studify's AI models/);
+    expect(describeGeminiError(sdk(503, 'UNAVAILABLE'))).toMatch(/busy/);
+    expect(describeGeminiError(new TypeError('Failed to fetch'))).toMatch(/connection/);
+    expect(describeGeminiError(new Error('Something else'))).toBe('Something else');
+  });
+
+  it('is what a failing client key reports', async () => {
+    vi.spyOn(ApiConfig, 'canUseServerAi').mockResolvedValue(false);
+    vi.spyOn(StorageService, 'getApiKey').mockReturnValue('test-key');
+    vi.spyOn(AIService as any, 'generateContentWithFallback').mockRejectedValue(new Error('{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}'));
+    await expect(AIService.generateText('hi')).rejects.toThrow(/usage limit/);
   });
 });

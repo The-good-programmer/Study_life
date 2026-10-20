@@ -25,6 +25,51 @@ import { FEYNMAN_EVALUATION_SCHEMA, VIVA_VOCE_TURN_SCHEMA, LEECH_ANALYSIS_SCHEMA
 /** Source text sent for deck generation; the shared AI service refuses prompts over 200,000 characters. */
 const MAX_SOURCE_CHARS = 150_000;
 
+/**
+ * A multiple-choice card is only answerable if its answer is one of the options. The model sometimes words the
+ * answer slightly differently from its option, so a near match takes the option's wording, and a missing answer
+ * replaces the last option.
+ */
+export const optionsContaining = (options: string[] | undefined, answer: string): string[] | undefined => {
+  if (!options || options.length === 0) return options;
+  const norm = (t: string) => t.replace(/^[a-d1-4][).\s-]+\s*/i, '').replace(/[\s.,;:!?]+$/, '').trim().toLowerCase();
+  const target = norm(answer);
+  if (options.some(o => o === answer)) return options;
+  const close = options.findIndex(o => norm(o) === target);
+  const fixed = [...options];
+  if (close >= 0) fixed[close] = answer;
+  else if (fixed.length >= 4) fixed[fixed.length - 1] = answer;
+  else fixed.push(answer);
+  return fixed;
+};
+
+/**
+ * Gemini SDK errors arrive as raw JSON such as {"error":{"code":429,...}}. This turns the common ones into a
+ * sentence a student can act on.
+ */
+export const describeGeminiError = (err: unknown): string => {
+  const raw = err instanceof Error ? err.message : String(err);
+  if (/\b429\b|RESOURCE_EXHAUSTED|quota/i.test(raw)) {
+    return 'Your Gemini API key has hit its usage limit. Wait a minute and try again, or check its quota in Google AI Studio.';
+  }
+  if (/API_KEY_INVALID|API key not valid|\b401\b|UNAUTHENTICATED/i.test(raw)) {
+    return 'Google refused your Gemini API key. Check it in Settings.';
+  }
+  if (/\b403\b|PERMISSION_DENIED/i.test(raw)) {
+    return "Your Gemini API key isn't allowed to use these models. Check its permissions in Google AI Studio.";
+  }
+  if (/\b404\b|NOT_FOUND|no longer available/i.test(raw)) {
+    return "None of Studify's AI models are available to your Gemini API key.";
+  }
+  if (/\b50[0-4]\b|UNAVAILABLE|overloaded|INTERNAL/i.test(raw)) {
+    return 'Gemini is busy right now. Try again in a moment.';
+  }
+  if (/Failed to fetch|NetworkError|network/i.test(raw)) {
+    return "Couldn't reach Gemini. Check your connection.";
+  }
+  return raw.length > 200 ? `${raw.slice(0, 200)}…` : raw;
+};
+
 export interface VivaVoceTurnResponse {
   nextTurn: SocraticTurn;
   verdict?: VivaDefenseVerdict;
@@ -84,8 +129,12 @@ export class AIService {
     // 2. Try client-side API key with candidate models
     const client = this.getClient();
     if (client) {
-      const response = await this.generateContentWithFallback(client, contents, responseMimeType, enableThinking, responseSchema);
-      return response.text || '';
+      try {
+        const response = await this.generateContentWithFallback(client, contents, responseMimeType, enableThinking, responseSchema);
+        return response.text || '';
+      } catch (err) {
+        throw new Error(describeGeminiError(err));
+      }
     }
 
     // Pass on the server's reason (a spent daily quota, say) rather than claiming it is offline.
@@ -1076,72 +1125,7 @@ Return ONLY a valid JSON object with this exact structure:
           throw new Error('The AI reply had no study concepts in it.');
         }
 
-        const concepts: ConceptCheckpoint[] = (parsed.concepts || []).map((c: Partial<ConceptCheckpoint>, idx: number) => {
-          const conceptId = `c-${sessionId}-${idx + 1}`;
-          const cards: RetrievalCard[] = ((c.retrievalCards as unknown as Partial<RetrievalCard>[]) || []).map((rc, cIdx) => {
-            let question = rc.question || 'What is the key takeaway?';
-            let answer = rc.answer || 'Core concept answer';
-            let clozeTemplate = rc.clozeTemplate;
-
-            // Auto-mask cloze if missing {{}} and answer is inside question
-            const isCloze = rc.cardType === 'cloze' || (cIdx === 1 && !rc.options?.length);
-            if (isCloze && !question.includes('{{') && answer.trim().length > 2) {
-              const escapedAnswer = answer.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              const regex = new RegExp(`\\b${escapedAnswer}\\b`, 'i');
-              if (regex.test(question)) {
-                question = question.replace(regex, `{{${answer.trim()}}}`);
-                clozeTemplate = question;
-              }
-            }
-
-            const cardSourceAnchor = rc.sourceAnchor?.pageNumber ? {
-              pageNumber: Number(rc.sourceAnchor.pageNumber),
-              snippet: rc.sourceAnchor.snippet || '',
-              sourceName: rc.sourceAnchor.sourceName,
-              relevanceReason: rc.sourceAnchor.relevanceReason,
-            } : undefined;
-
-            return {
-              id: `rc-${conceptId}-${cIdx + 1}`,
-              conceptId: conceptId,
-              cardType: rc.cardType || (clozeTemplate || (question && question.includes('{{')) ? 'cloze' : (rc.options && rc.options.length > 0 ? 'multiple-choice' : (cIdx === 1 ? 'cloze' : (cIdx === 2 ? 'multiple-choice' : 'standard')))),
-              question,
-              answer,
-              hint: rc.hint || '',
-              explanation: rc.explanation || '',
-              options: rc.options,
-              diagnosticDistractors: rc.diagnosticDistractors,
-              socraticHintLadder: rc.socraticHintLadder,
-              clozeTemplate: clozeTemplate || (question && question.includes('{{') ? question : undefined),
-              sourceAnchor: cardSourceAnchor,
-              stability: 1,
-              difficulty: 5,
-              reps: 0,
-              lapses: 0,
-            };
-          });
-
-          const conceptSourceAnchor = c.sourceAnchor?.pageNumber ? {
-            pageNumber: Number(c.sourceAnchor.pageNumber),
-            snippet: c.sourceAnchor.snippet || '',
-            sourceName: c.sourceAnchor.sourceName,
-            relevanceReason: c.sourceAnchor.relevanceReason,
-          } : undefined;
-
-          return {
-            id: conceptId,
-            order: idx + 1,
-            title: c.title || `Concept ${idx + 1}`,
-            estimatedMinutes: c.estimatedMinutes || 12,
-            mentalModel: c.mentalModel || `An interconnected mental framework of ${c.title || input}.`,
-            coreTakeaways: c.coreTakeaways || ['Essential rule 1', 'Essential rule 2'],
-            keyTerms: c.keyTerms || [],
-            feynmanPrompt: c.feynmanPrompt || 'Explain this concept simply without reading notes.',
-            sampleMasteryExplanation: c.sampleMasteryExplanation || '',
-            sourceAnchor: conceptSourceAnchor,
-            retrievalCards: cards,
-          };
-        });
+        const concepts = this.conceptsFromGeneratedJson(parsed.concepts, sessionId, input);
 
         return {
           id: sessionId,
@@ -1170,6 +1154,83 @@ Return ONLY a valid JSON object with this exact structure:
     const fallbackSession = this.synthesizeLocalSession(input, isRawNotes, sessionId, effectiveTier, targetLang.code, effectiveGradeLevel);
     fallbackSession.studentProfile = studentProfile;
     return fallbackSession;
+  }
+
+  /**
+   * Turns the concepts of a STUDY_SESSION_GENERATION_SCHEMA reply into checkpoints with fresh ids and new-card
+   * scheduling, masking cloze answers the model forgot to wrap. `topic` names concepts that came back untitled.
+   */
+  public static conceptsFromGeneratedJson(
+    generated: Partial<ConceptCheckpoint>[] | undefined,
+    sessionId: string,
+    topic: string
+  ): ConceptCheckpoint[] {
+    return (generated || []).map((c: Partial<ConceptCheckpoint>, idx: number) => {
+      const conceptId = `c-${sessionId}-${idx + 1}`;
+      const cards: RetrievalCard[] = ((c.retrievalCards as unknown as Partial<RetrievalCard>[]) || []).map((rc, cIdx) => {
+        let question = rc.question || 'What is the key takeaway?';
+        let answer = rc.answer || 'Core concept answer';
+        let clozeTemplate = rc.clozeTemplate;
+
+        // Auto-mask cloze if missing {{}} and answer is inside question
+        const isCloze = rc.cardType === 'cloze' || (cIdx === 1 && !rc.options?.length);
+        if (isCloze && !question.includes('{{') && answer.trim().length > 2) {
+          const escapedAnswer = answer.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp(`\\b${escapedAnswer}\\b`, 'i');
+          if (regex.test(question)) {
+            question = question.replace(regex, `{{${answer.trim()}}}`);
+            clozeTemplate = question;
+          }
+        }
+
+        const cardSourceAnchor = rc.sourceAnchor?.pageNumber ? {
+          pageNumber: Number(rc.sourceAnchor.pageNumber),
+          snippet: rc.sourceAnchor.snippet || '',
+          sourceName: rc.sourceAnchor.sourceName,
+          relevanceReason: rc.sourceAnchor.relevanceReason,
+        } : undefined;
+
+        return {
+          id: `rc-${conceptId}-${cIdx + 1}`,
+          conceptId: conceptId,
+          cardType: rc.cardType || (clozeTemplate || (question && question.includes('{{')) ? 'cloze' : (rc.options && rc.options.length > 0 ? 'multiple-choice' : (cIdx === 1 ? 'cloze' : (cIdx === 2 ? 'multiple-choice' : 'standard')))),
+          question,
+          answer,
+          hint: rc.hint || '',
+          explanation: rc.explanation || '',
+          options: optionsContaining(rc.options, answer),
+          diagnosticDistractors: rc.diagnosticDistractors,
+          socraticHintLadder: rc.socraticHintLadder,
+          clozeTemplate: clozeTemplate || (question && question.includes('{{') ? question : undefined),
+          sourceAnchor: cardSourceAnchor,
+          stability: 1,
+          difficulty: 5,
+          reps: 0,
+          lapses: 0,
+        };
+      });
+
+      const conceptSourceAnchor = c.sourceAnchor?.pageNumber ? {
+        pageNumber: Number(c.sourceAnchor.pageNumber),
+        snippet: c.sourceAnchor.snippet || '',
+        sourceName: c.sourceAnchor.sourceName,
+        relevanceReason: c.sourceAnchor.relevanceReason,
+      } : undefined;
+
+      return {
+        id: conceptId,
+        order: idx + 1,
+        title: c.title || `Concept ${idx + 1}`,
+        estimatedMinutes: c.estimatedMinutes || 12,
+        mentalModel: c.mentalModel || `An interconnected mental framework of ${c.title || topic}.`,
+        coreTakeaways: c.coreTakeaways || ['Essential rule 1', 'Essential rule 2'],
+        keyTerms: c.keyTerms || [],
+        feynmanPrompt: c.feynmanPrompt || 'Explain this concept simply without reading notes.',
+        sampleMasteryExplanation: c.sampleMasteryExplanation || '',
+        sourceAnchor: conceptSourceAnchor,
+        retrievalCards: cards,
+      };
+    });
   }
 
   /**
