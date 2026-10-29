@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ArrowLeft, ArrowRight, Building2, Check, GraduationCap, Repeat, Sparkles, X } from 'lucide-react';
 import { soundEngine } from '../../services/soundEngine';
+import { WORLD_3D_ENABLED } from '../../services/features';
 import { cn } from '../../utils/cn';
 import { Dialog, DialogFooter, DialogPanel } from '../common/Dialog';
 import { BrandMark, Button, CoinIcon, IconButton } from '../ui/primitives';
@@ -79,16 +80,21 @@ const STEPS: TourStep[] = [
       </ol>
     ),
   },
-  {
-    title: 'Optional: a campus to spend on',
-    body: 'Studying also earns tokens you can spend on an avatar and a home on campus. It is just for fun; ignore it if you only want to study.',
-    points: [
-      'Sessions, exams and games earn tokens; reviews earn XP.',
-      'Each card pays once a day per activity, with daily limits.',
-      'Find Campus and your avatar under Extras in the menu.',
-    ],
-    visual: <Flow items={[{ label: 'Study', icon: GraduationCap }, { label: 'Earn tokens', coin: true }, { label: 'Campus', icon: Building2 }]} />,
-  },
+  // Only builds with the 3D world have a Campus to tell people about.
+  ...(WORLD_3D_ENABLED
+    ? [
+        {
+          title: 'Optional: a campus to spend on',
+          body: 'Studying also earns tokens you can spend on an avatar and a home on campus. It is just for fun; ignore it if you only want to study.',
+          points: [
+            'Sessions, exams and games earn tokens; reviews earn XP.',
+            'Each card pays once a day per activity, with daily limits.',
+            'Find Campus and your avatar under Extras in the menu.',
+          ],
+          visual: <Flow items={[{ label: 'Study', icon: GraduationCap }, { label: 'Earn tokens', coin: true }, { label: 'Campus', icon: Building2 }]} />,
+        },
+      ]
+    : []),
 ];
 
 /** The welcome tour for new students: what Studify is and how a day works. */

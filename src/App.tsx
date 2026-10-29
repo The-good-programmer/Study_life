@@ -10,6 +10,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { MobileTabBar } from './components/layout/MobileTabBar';
 import { NotificationService } from './services/notificationService';
 import { WagePayoutBanner } from './components/lifesim/WagePayoutBanner';
+import { WORLD_3D_ENABLED } from './services/features';
 
 // Lazy-loaded heavy modules and modals for optimal initial bundle performance
 const IngestionHub = lazy(() => import('./components/ingestion/IngestionHub').then(m => ({ default: m.IngestionHub })));
@@ -25,10 +26,11 @@ const MatchArena = lazy(() => import('./components/game/MatchArena').then(m => (
 const AudioBriefingBar = lazy(() => import('./components/audio/AudioBriefingBar').then(m => ({ default: m.AudioBriefingBar })));
 const DeckStationModal = lazy(() => import('./components/studio/DeckStationModal').then(m => ({ default: m.DeckStationModal })));
 const AuthModal = lazy(() => import('./components/auth/AuthModal').then(m => ({ default: m.AuthModal })));
-const StudyEstateCampus = lazy(() => import('./components/mascot/AxolotlStudyHabitat').then(m => ({ default: m.StudyEstateCampus })));
+// The 3D world (Campus and the avatar editor) is left out of the build unless its flag is on.
+const StudyEstateCampus = WORLD_3D_ENABLED ? lazy(() => import('./components/mascot/AxolotlStudyHabitat').then(m => ({ default: m.StudyEstateCampus }))) : null;
 const DailyMissionHome = lazy(() => import('./components/home/DailyMissionHome').then(m => ({ default: m.DailyMissionHome })));
 const FoldersPage = lazy(() => import('./components/folders/FoldersPage').then(m => ({ default: m.FoldersPage })));
-const CharacterCustomizerModal = lazy(() => import('./components/character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal })));
+const CharacterCustomizerModal = WORLD_3D_ENABLED ? lazy(() => import('./components/character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal }))) : null;
 
 const LazyLoadingFallback = () => (
   <div className="flex min-h-[350px] w-full flex-col items-center justify-center p-8 animate-fadeIn" role="status">
@@ -177,6 +179,8 @@ export function App() {
     setView(targetView);
     setStats(StorageService.getStats());
   };
+  const openCampus = WORLD_3D_ENABLED ? () => handleNavigate('sanctuary') : undefined;
+  const openCharacterCustomizer = WORLD_3D_ENABLED ? () => setIsCharacterCustomizerOpen(true) : undefined;
 
   // If in an active match game arena, display full-screen Quizlet-style Match Arena
   if (matchSession) {
@@ -264,7 +268,7 @@ export function App() {
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={handleToggleSidebarCollapse}
-        onOpenCharacterCustomizer={() => setIsCharacterCustomizerOpen(true)}
+        onOpenCharacterCustomizer={openCharacterCustomizer}
       />
 
       {/* Main App Column */}
@@ -286,8 +290,8 @@ export function App() {
             onOpenStarterCatalog={() => setIsStarterCatalogOpen(true)}
             onOpenExam={() => handleNavigate('exam')}
             onOpenInterleaving={() => handleNavigate('interleave')}
-            onOpenSanctuary={() => handleNavigate('sanctuary')}
-            onOpenCharacterCustomizer={() => setIsCharacterCustomizerOpen(true)}
+            onOpenSanctuary={openCampus}
+            onOpenCharacterCustomizer={openCharacterCustomizer}
             onLogoClick={() => handleNavigate('home')}
             onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
             isSidebarCollapsed={isSidebarCollapsed}
@@ -323,7 +327,7 @@ export function App() {
                 }}
                 onOpenStarterCatalog={() => setIsStarterCatalogOpen(true)}
                 onOpenDashboard={() => handleNavigate('dashboard')}
-                onOpenSanctuary={() => handleNavigate('sanctuary')}
+                onOpenSanctuary={openCampus}
                 onOpenExam={() => handleNavigate('exam')}
                 onOpenFolders={() => handleNavigate('folders')}
                 onOpenLibrary={() => handleNavigate('studio')}
@@ -340,7 +344,7 @@ export function App() {
                 onOpenDashboard={() => handleNavigate('dashboard')}
                 onOpenExam={() => handleNavigate('exam')}
                 onOpenInterleaving={() => handleNavigate('interleave')}
-                onOpenSanctuary={() => handleNavigate('sanctuary')}
+                onOpenSanctuary={openCampus}
               />
             )}
             {view === 'dashboard' && (
@@ -369,7 +373,7 @@ export function App() {
                 }}
               />
             )}
-            {view === 'sanctuary' && (
+            {view === 'sanctuary' && StudyEstateCampus && (
               <StudyEstateCampus
                 onStartSession={handleStartSession}
                 onOpenStarterCatalog={() => setIsStarterCatalogOpen(true)}
@@ -481,7 +485,7 @@ export function App() {
             }}
             onOpenExam={() => handleNavigate('exam')}
             onOpenInterleaving={() => handleNavigate('interleave')}
-            onOpenSanctuary={() => handleNavigate('sanctuary')}
+            onOpenSanctuary={openCampus}
             onOpenToday={() => handleNavigate('home')}
             onOpenLibrary={() => handleNavigate('studio')}
             onOpenSubjects={() => handleNavigate('folders')}
@@ -554,7 +558,7 @@ export function App() {
       )}
 
       {/* Global 3D Character Customizer Studio */}
-      {isCharacterCustomizerOpen && (
+      {isCharacterCustomizerOpen && CharacterCustomizerModal && (
         <Suspense fallback={null}>
           <CharacterCustomizerModal
             isOpen={isCharacterCustomizerOpen}

@@ -26,6 +26,7 @@ import { soundEngine } from '../../services/soundEngine';
 import { StorageService } from '../../services/storageService';
 import { lifeSimService } from '../../services/lifeSimService';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
+import { WORLD_3D_ENABLED } from '../../services/features';
 import { BrandMark, CoinIcon } from '../ui/primitives';
 import { cn } from '../../utils/cn';
 
@@ -322,49 +323,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <NavItem icon={Compass} label="Explore decks" collapsed={collapsed} onClick={go(onOpenStarterCatalog)} />
         </div>
 
-        <GroupLabel collapsed={collapsed}>Extras</GroupLabel>
-        <div className="space-y-0.5">
-          <NavItem
-            icon={Building2}
-            label="Campus"
-            collapsed={collapsed}
-            active={activeView === 'sanctuary'}
-            onClick={go(() => onNavigate('sanctuary'))}
-            trailing={
-              <span className="flex shrink-0 items-center gap-1 text-xs font-medium tabular-nums text-gold">
-                <CoinIcon className="h-3.5 w-3.5" />
-                {walletCoins.toLocaleString()}
-              </span>
-            }
-            tooltip={`Campus (${walletCoins.toLocaleString()} tokens)`}
-          />
-          {onOpenCharacterCustomizer && (
-            <button
-              type="button"
-              onClick={go(onOpenCharacterCustomizer)}
-              aria-label="Avatar"
-              className={cn(
-                'group relative flex h-9 w-full items-center rounded-lg text-[13px] text-ink-muted transition-colors hover:bg-surface hover:text-ink cursor-pointer',
-                collapsed ? 'justify-center' : 'gap-2.5 px-2.5',
+        {WORLD_3D_ENABLED && (
+          <>
+            <GroupLabel collapsed={collapsed}>Extras</GroupLabel>
+            <div className="space-y-0.5">
+              <NavItem
+                icon={Building2}
+                label="Campus"
+                collapsed={collapsed}
+                active={activeView === 'sanctuary'}
+                onClick={go(() => onNavigate('sanctuary'))}
+                trailing={
+                  <span className="flex shrink-0 items-center gap-1 text-xs font-medium tabular-nums text-gold">
+                    <CoinIcon className="h-3.5 w-3.5" />
+                    {walletCoins.toLocaleString()}
+                  </span>
+                }
+                tooltip={`Campus (${walletCoins.toLocaleString()} tokens)`}
+              />
+              {onOpenCharacterCustomizer && (
+                <button
+                  type="button"
+                  onClick={go(onOpenCharacterCustomizer)}
+                  aria-label="Avatar"
+                  className={cn(
+                    'group relative flex h-9 w-full items-center rounded-lg text-[13px] text-ink-muted transition-colors hover:bg-surface hover:text-ink cursor-pointer',
+                    collapsed ? 'justify-center' : 'gap-2.5 px-2.5',
+                  )}
+                >
+                  <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center overflow-hidden rounded-[5px]">
+                    <UserAvatarBadge size="xs" showBorder={false} className="h-[22px]! w-[22px]!" />
+                  </span>
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 truncate text-left">Avatar</span>
+                      <ChevronRight className="h-3.5 w-3.5 text-ink-subtle opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
+                    </>
+                  )}
+                  {collapsed && (
+                    <span className="pointer-events-none absolute left-full z-50 ml-3 whitespace-nowrap rounded-md border border-line-strong bg-surface-solid px-2 py-1 text-xs font-medium text-ink opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                      Avatar
+                    </span>
+                  )}
+                </button>
               )}
-            >
-              <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center overflow-hidden rounded-[5px]">
-                <UserAvatarBadge size="xs" showBorder={false} className="h-[22px]! w-[22px]!" />
-              </span>
-              {!collapsed && (
-                <>
-                  <span className="flex-1 truncate text-left">Avatar</span>
-                  <ChevronRight className="h-3.5 w-3.5 text-ink-subtle opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
-                </>
-              )}
-              {collapsed && (
-                <span className="pointer-events-none absolute left-full z-50 ml-3 whitespace-nowrap rounded-md border border-line-strong bg-surface-solid px-2 py-1 text-xs font-medium text-ink opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
-                  Avatar
-                </span>
-              )}
-            </button>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </nav>
 
       {/* Footer: status, account, settings */}
