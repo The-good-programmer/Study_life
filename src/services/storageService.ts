@@ -1,4 +1,4 @@
-import type { EarningEntry, ExamReport, InterleavingSessionReport, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
+import type { EarningEntry, ExamReport, InterleavingSessionReport, PlannerItem, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
 import { deckWithSavedProgress, withSavedProgress } from '../utils/cardProgress';
 import { STARTING_COINS, guestEarningsAllowance, transferableGuestCoins } from './economy/wallet';
 import { IndexedDbService } from './indexedDbService';
@@ -18,6 +18,7 @@ const STORAGE_KEYS = {
   EARNINGS: 'studify_earnings_v1',
   COMPLETIONS: 'studify_paid_completions_v1',
   WEEKLY_XP: 'studify_weekly_xp_v1',
+  PLANNER: 'studify_planner_v1',
 };
 
 /** The Monday a date's week starts on, as YYYY-MM-DD in UTC. */
@@ -59,6 +60,7 @@ const PROFILE_DATA_KEYS = [
   STORAGE_KEYS.FOLDERS,
   STORAGE_KEYS.COMPLETIONS,
   STORAGE_KEYS.WEEKLY_XP,
+  STORAGE_KEYS.PLANNER,
 ];
 
 const LEVEL_TITLES = [
@@ -1018,6 +1020,23 @@ export class StorageService {
     this.notifyMutation();
   }
 
+  /** Exams, homework and other dated items in the planner. */
+  public static getPlannerItems(): PlannerItem[] {
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.PLANNER));
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public static savePlannerItems(items: PlannerItem[]): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.PLANNER), JSON.stringify(items));
+    this.notifyMutation();
+  }
+
   public static createFolder(name: string, color: string = 'indigo', icon: string = '📚', description: string = ''): SubjectFolder {
     const trimmed = name.trim();
     if (!trimmed) throw new Error('Folder name cannot be empty');
@@ -1126,6 +1145,7 @@ export class StorageService {
       cards: this.getAllCards(),
       sessions: this.getSessions(),
       folders: this.getFolders(),
+      planner: this.getPlannerItems(),
     };
     return JSON.stringify(data, null, 2);
   }
@@ -1139,7 +1159,7 @@ export class StorageService {
   public static importDataFromJSON(jsonString: string): { success: boolean; message: string } {
     try {
       const data = JSON.parse(jsonString);
-      if (!data.cards && !data.stats && !data.sessions && !data.folders) {
+      if (!data.cards && !data.stats && !data.sessions && !data.folders && !data.planner) {
         return { success: false, message: 'Invalid backup format.' };
       }
       if (data.stats) this.saveStats(data.stats);
@@ -1161,6 +1181,9 @@ export class StorageService {
       }
       if (data.folders && Array.isArray(data.folders)) {
         this.saveFolders(data.folders);
+      }
+      if (Array.isArray(data.planner)) {
+        this.savePlannerItems(data.planner);
       }
       return { 
         success: true, 
@@ -1321,6 +1344,7 @@ export class StorageService {
     const guestDiagramsRaw = this.readRaw(STORAGE_KEYS.DIAGRAMS);
     const guestFoldersRaw = this.readRaw(STORAGE_KEYS.FOLDERS);
     const guestEarningsRaw = this.readRaw(STORAGE_KEYS.EARNINGS);
+    const guestPlannerRaw = this.readRaw(STORAGE_KEYS.PLANNER);
     // What the guest's earnings come to under the account's own daily caps. Worked out
     // before the logs are merged below (see transferableGuestCoins).
     const guestAllowance = guestEarningsAllowance(
@@ -1570,9 +1594,11 @@ export class StorageService {
 
     // 8. Merge subject folders, so migrated decks keep their subject
     // 9. Merge the earnings log, so daily pay caps still count what was earned as a guest
+    // 9b. Merge the planner's exams and homework
     for (const [base, raw] of [
       [STORAGE_KEYS.FOLDERS, guestFoldersRaw],
       [STORAGE_KEYS.EARNINGS, guestEarningsRaw],
+      [STORAGE_KEYS.PLANNER, guestPlannerRaw],
     ] as const) {
       if (!raw) continue;
       try {

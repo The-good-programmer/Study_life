@@ -11,6 +11,7 @@ import { MobileTabBar } from './components/layout/MobileTabBar';
 import { NotificationService } from './services/notificationService';
 import { WagePayoutBanner } from './components/lifesim/WagePayoutBanner';
 import { WORLD_3D_ENABLED } from './services/features';
+import { CalendarFeedService } from './services/calendarFeedService';
 
 // Lazy-loaded heavy modules and modals for optimal initial bundle performance
 const IngestionHub = lazy(() => import('./components/ingestion/IngestionHub').then(m => ({ default: m.IngestionHub })));
@@ -29,6 +30,7 @@ const AuthModal = lazy(() => import('./components/auth/AuthModal').then(m => ({ 
 // The 3D world (Campus and the avatar editor) is left out of the build unless its flag is on.
 const StudyEstateCampus = WORLD_3D_ENABLED ? lazy(() => import('./components/mascot/AxolotlStudyHabitat').then(m => ({ default: m.StudyEstateCampus }))) : null;
 const DailyMissionHome = lazy(() => import('./components/home/DailyMissionHome').then(m => ({ default: m.DailyMissionHome })));
+const PlannerPage = lazy(() => import('./components/planner/PlannerPage').then(m => ({ default: m.PlannerPage })));
 const FoldersPage = lazy(() => import('./components/folders/FoldersPage').then(m => ({ default: m.FoldersPage })));
 const CharacterCustomizerModal = WORLD_3D_ENABLED ? lazy(() => import('./components/character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal }))) : null;
 
@@ -62,7 +64,7 @@ export function App() {
   const [stationSession, setStationSession] = useState<StudySession | null>(null);
   const [isStationOpen, setIsStationOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<StudySession | null>(null);
-  const [view, setView] = useState<'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders'>('home');
+  const [view, setView] = useState<'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner'>('home');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isDeckStudioOpen, setIsDeckStudioOpen] = useState(false);
@@ -93,6 +95,9 @@ export function App() {
       return next;
     });
   };
+
+  // Keep a subscribed calendar up to date with the planner.
+  useEffect(() => CalendarFeedService.startAutoPublish(), []);
 
   // Keep user and stats synchronized with AuthService
   useEffect(() => {
@@ -175,7 +180,7 @@ export function App() {
     setStats(StorageService.getStats());
   };
 
-  const handleNavigate = (targetView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders') => {
+  const handleNavigate = (targetView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner') => {
     setView(targetView);
     setStats(StorageService.getStats());
   };
@@ -330,6 +335,7 @@ export function App() {
                 onOpenSanctuary={openCampus}
                 onOpenExam={() => handleNavigate('exam')}
                 onOpenFolders={() => handleNavigate('folders')}
+                onOpenPlanner={() => handleNavigate('planner')}
                 onOpenLibrary={() => handleNavigate('studio')}
               />
             )}
@@ -380,6 +386,7 @@ export function App() {
                 onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
               />
             )}
+            {view === 'planner' && <PlannerPage onStartSession={handleStartSession} onOpenAuth={() => handleOpenAuth()} />}
             {view === 'folders' && (
               <FoldersPage
                 onBack={() => handleNavigate('home')}
@@ -489,6 +496,7 @@ export function App() {
             onOpenToday={() => handleNavigate('home')}
             onOpenLibrary={() => handleNavigate('studio')}
             onOpenSubjects={() => handleNavigate('folders')}
+            onOpenPlanner={() => handleNavigate('planner')}
           />
         </Suspense>
       )}

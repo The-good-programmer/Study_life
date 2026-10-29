@@ -23,7 +23,7 @@ import { WORLD_3D_ENABLED } from '../../services/features';
 import { BrandMark, CoinIcon, IconButton, Kbd } from '../ui/primitives';
 import { cn } from '../../utils/cn';
 
-type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders';
+type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner';
 
 interface NavbarProps {
   stats: UserStats;
@@ -52,6 +52,7 @@ const VIEW_TITLES: Record<View, string> = {
   home: 'Today',
   studio: 'Library',
   folders: 'Subjects',
+  planner: 'Planner',
   dashboard: 'Insights',
   exam: 'Mock exam',
   interleave: 'Mix decks',

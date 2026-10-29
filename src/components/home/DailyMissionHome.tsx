@@ -46,6 +46,7 @@ import { Badge, Button, Card, CoinIcon, IconButton, ProgressBar, ProgressRing, S
 import { cn } from '../../utils/cn';
 import { deckCardIds } from '../../utils/cardProgress';
 import { WORLD_3D_ENABLED } from '../../services/features';
+import { UpcomingPlanCard } from '../planner/UpcomingPlanCard';
 
 // The customizer pulls in three.js; load it only when the user opens it, and only in builds with the 3D world.
 const CharacterCustomizerModal = WORLD_3D_ENABLED
@@ -73,6 +74,7 @@ interface DailyMissionHomeProps {
   onOpenSanctuary?: () => void;
   onOpenExam?: () => void;
   onOpenFolders?: () => void;
+  onOpenPlanner?: () => void;
   onOpenLibrary?: () => void;
 }
 
@@ -101,6 +103,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   onOpenSanctuary,
   onOpenExam,
   onOpenFolders,
+  onOpenPlanner,
   onOpenLibrary,
 }) => {
   const [stats, setStats] = useState<UserStats>(() => StorageService.getStats());
@@ -429,6 +432,9 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
               onClick={onOpenDashboard}
             />
           </div>
+
+          {/* Exams and homework from the planner */}
+          {onOpenPlanner && <UpcomingPlanCard onStartSession={onStartSession} onOpenPlanner={onOpenPlanner} />}
 
           {/* Decks */}
           <section aria-labelledby="decks-title" className="space-y-3">

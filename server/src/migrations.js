@@ -137,4 +137,29 @@ export const MIGRATIONS = [
       END $$;
     `,
   },
+  {
+    // A student's planner as a calendar feed, so Google, Apple and Outlook calendars can subscribe to it. The
+    // token in the feed's link is the only key to it: whoever has the link can read the feed, and resetting
+    // the token cuts them off.
+    id: '004_calendar_feeds',
+    sql: `
+      CREATE TABLE calendar_feeds (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        ics TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+
+      ALTER TABLE calendar_feeds ENABLE ROW LEVEL SECURITY;
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+          REVOKE ALL ON calendar_feeds FROM anon;
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          REVOKE ALL ON calendar_feeds FROM authenticated;
+        END IF;
+      END $$;
+    `,
+  },
 ];

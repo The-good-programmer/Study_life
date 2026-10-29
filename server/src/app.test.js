@@ -273,7 +273,7 @@ describe('security headers', () => {
 describe('database', () => {
   it('applies its migrations once and reports healthy', async () => {
     const applied = await db.all('SELECT id FROM schema_migrations');
-    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports']);
+    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds']);
 
     const health = await api('/api/health');
     expect(health.status).toBe(200);
@@ -627,5 +627,54 @@ describe('community deck moderation', () => {
 
     for (let i = 0; i < 20; i++) expect((await publish(author, `Deck ${i}`)).status).toBe(201);
     expect((await publish(author, 'One too many')).status).toBe(429);
+  });
+});
+
+describe('calendar feed', () => {
+  const ICS = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Studify//Planner//EN\r\nEND:VCALENDAR\r\n';
+  const feedUrl = (token) => `${baseUrl}/api/calendar/feed.ics?token=${encodeURIComponent(token)}`;
+
+  it('serves the latest planner at a private link until it is reset or turned off', async () => {
+    const student = await register('planner@example.com');
+    expect((await api('/api/calendar/feed', { token: student.token })).data.token).toBeNull();
+
+    const first = await api('/api/calendar/feed', { method: 'PUT', token: student.token, body: { ics: ICS } });
+    expect(first.status).toBe(200);
+    const token = first.data.token;
+    expect(token).toMatch(/^[A-Za-z0-9_-]{32}$/);
+
+    const updated = ICS.replace('END:VCALENDAR', 'X-WR-CALNAME:Updated\r\nEND:VCALENDAR');
+    const second = await api('/api/calendar/feed', { method: 'PUT', token: student.token, body: { ics: updated } });
+    expect(second.data.token).toBe(token);
+
+    const feed = await fetch(feedUrl(token));
+    expect(feed.status).toBe(200);
+    expect(feed.headers.get('content-type')).toBe('text/calendar; charset=utf-8');
+    expect(await feed.text()).toBe(updated);
+
+    const reset = await api('/api/calendar/feed/reset', { method: 'POST', token: student.token });
+    expect(reset.data.token).not.toBe(token);
+    expect((await fetch(feedUrl(token))).status).toBe(404);
+    expect((await fetch(feedUrl(reset.data.token))).status).toBe(200);
+
+    expect((await api('/api/calendar/feed', { method: 'DELETE', token: student.token })).status).toBe(200);
+    expect((await fetch(feedUrl(reset.data.token))).status).toBe(404);
+  });
+
+  it('needs an account to change the feed, and takes only a calendar file', async () => {
+    expect((await api('/api/calendar/feed', { method: 'PUT', body: { ics: ICS } })).status).toBe(401);
+    const student = await register('planner-checks@example.com');
+    const put = (ics) => api('/api/calendar/feed', { method: 'PUT', token: student.token, body: { ics } });
+    expect((await put('<html>hi</html>')).status).toBe(400);
+    expect((await put(ICS.replace('VERSION', 'X'.repeat(600 * 1024)))).status).toBe(400);
+    expect((await fetch(feedUrl(''))).status).toBe(404);
+    expect((await fetch(feedUrl('not-a-token'))).status).toBe(404);
+  });
+
+  it('goes with the account', async () => {
+    const student = await register('planner-leaving@example.com');
+    const { data } = await api('/api/calendar/feed', { method: 'PUT', token: student.token, body: { ics: ICS } });
+    expect((await api('/api/auth/me', { method: 'DELETE', token: student.token, body: { confirm: 'DELETE', password: 'correct-horse' } })).status).toBe(200);
+    expect((await fetch(feedUrl(data.token))).status).toBe(404);
   });
 });

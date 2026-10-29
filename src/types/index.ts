@@ -121,6 +121,30 @@ export interface DiagnosticReport {
   completedAt: string;
 }
 
+export type PlannerItemKind = 'exam' | 'homework' | 'other';
+
+/** A dated item in the planner: an exam to prepare for, homework to hand in, or anything else. */
+export interface PlannerItem {
+  id: string;
+  kind: PlannerItemKind;
+  title: string;
+  /** Local calendar day, YYYY-MM-DD. */
+  date: string;
+  /** Local time of day, HH:MM. Without it the item lasts the whole day. */
+  time?: string;
+  /** The subject it belongs to; an exam's plan studies that subject's decks. */
+  folderId?: string;
+  /** What it covers, as the syllabus or the student put it. */
+  topics?: string[];
+  notes?: string;
+  /** Handed in or sat. */
+  done?: boolean;
+  /** Typed in, or read from a syllabus by the AI. */
+  source?: 'manual' | 'syllabus';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SubjectFolder {
   id: string;
   name: string;

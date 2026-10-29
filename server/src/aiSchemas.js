@@ -258,3 +258,34 @@ export const STUDY_SESSION_GENERATION_SCHEMA = {
   },
   required: ['title', 'category', 'description', 'concepts'],
 };
+
+export const PLANNER_EXTRACTION_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    items: {
+      type: Type.ARRAY,
+      description: 'Every exam, test, quiz, assignment or other dated deadline in the material, in date order.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          kind: {
+            type: Type.STRING,
+            enum: ['exam', 'homework', 'other'],
+            description: 'exam for exams, tests and quizzes; homework for anything to hand in; other for the rest.',
+          },
+          title: { type: Type.STRING, description: 'Short name, e.g. "Midterm 1" or "Lab report 3".' },
+          date: { type: Type.STRING, description: 'YYYY-MM-DD. Only dates the material states; never guess one.' },
+          time: { type: Type.STRING, description: 'HH:MM in 24-hour time, only if the material gives one.' },
+          subject: { type: Type.STRING, description: 'The course or subject it belongs to, if the material says.' },
+          topics: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: 'What it covers, as the material lists it (chapters, units, topics).',
+          },
+        },
+        required: ['kind', 'title', 'date'],
+      },
+    },
+  },
+  required: ['items'],
+};

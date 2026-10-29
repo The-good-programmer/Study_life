@@ -11,6 +11,7 @@ import { getAuthUser } from './auth.js';
 import { handleAuthRoutes } from './routes/authRoutes.js';
 import { handleSyncRoutes } from './routes/syncRoutes.js';
 import { handleDeckRoutes } from './routes/deckRoutes.js';
+import { handleCalendarRoutes } from './routes/calendarRoutes.js';
 import * as defaultAi from './ai.js';
 import { checkAiRequest } from './aiGuard.js';
 import { clientIp } from './rateLimit.js';
@@ -212,6 +213,11 @@ export function createApp({ ai = defaultAi } = {}) {
 
       // 5. COMMUNITY DECK ROUTES
       if (await handleDeckRoutes(req, res, pathname, body, searchParams)) {
+        return;
+      }
+
+      // 6. CALENDAR FEED ROUTES
+      if (await handleCalendarRoutes(req, res, pathname, body, searchParams)) {
         return;
       }
 
