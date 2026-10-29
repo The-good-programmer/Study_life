@@ -84,6 +84,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
+          // Every lazy import() calls Vite's preload helper. Left unassigned, the
+          // bundler drops it into one of the vendor chunks below (it picked
+          // pdf.js), and that whole chunk then loads with the start page.
+          if (id === '\0vite/preload-helper.js') {
+            return 'preload-helper';
+          }
           if (id.includes('node_modules')) {
             if (id.includes('react') || id.includes('react-dom')) {
               return 'vendor-react';

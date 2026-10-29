@@ -22,6 +22,15 @@
         "5174"
       ],
       "port": 5174
+    },
+    {
+      "name": "studify-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "preview"
+      ],
+      "port": 5175
     }
   ]
 }
