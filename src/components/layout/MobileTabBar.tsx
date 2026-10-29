@@ -3,7 +3,7 @@ import { Home, Layers, Award, LineChart, Shuffle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
-type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders';
+type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner';
 
 interface MobileTabBarProps {
   activeView: View;
