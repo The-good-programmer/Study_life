@@ -6,11 +6,12 @@ import { characterService } from '../../services/characterService';
 import { type CharacterCustomization } from '../../types/character';
 import { UserAvatarBadge } from './UserAvatarBadge';
 import { useStudyLevel } from '../../hooks/useStudyLevel';
+import { WORLD_3D_ENABLED } from '../../services/features';
 
-// The customizer pulls in three.js; load it only when the user opens it.
-const CharacterCustomizerModal = lazy(() =>
-  import('./CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal }))
-);
+// The customizer pulls in three.js; load it only when the user opens it, and only in builds with the 3D world.
+const CharacterCustomizerModal = WORLD_3D_ENABLED
+  ? lazy(() => import('./CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal })))
+  : null;
 
 export interface CharacterCompanionProps {
   variant?: 'avatar' | 'badge' | 'compact' | 'card' | 'breathing';
@@ -96,17 +97,17 @@ export const CharacterCompanion: React.FC<CharacterCompanionProps> = ({
           onClick={() => {
             if (onOpenSanctuary) {
               onOpenSanctuary();
-            } else {
+            } else if (CharacterCustomizerModal) {
               handleOpenStudio();
             }
           }}
-          className={`relative group cursor-pointer inline-flex items-center justify-center shrink-0 ${className}`}
-          title={`${character.name} — Customize your 3D Student Avatar`}
+          className={`relative group inline-flex items-center justify-center shrink-0 ${onOpenSanctuary || CharacterCustomizerModal ? 'cursor-pointer' : ''} ${className}`}
+          title={CharacterCustomizerModal ? `${character.name} — Customize your 3D Student Avatar` : character.name}
         >
           <UserAvatarBadge size={size} customization={character} />
         </div>
 
-        {isModalOpen && (
+        {isModalOpen && CharacterCustomizerModal && (
           <Suspense fallback={null}>
             <CharacterCustomizerModal
               isOpen={isModalOpen}
@@ -136,22 +137,24 @@ export const CharacterCompanion: React.FC<CharacterCompanionProps> = ({
                 <span className="truncate">{character.name}</span>
                 <span className="shrink-0 tabular-nums text-ink-subtle">Level {studyLevel.level}</span>
               </span>
-              <button
-                type="button"
-                onClick={handleOpenStudio}
-                className="inline-flex shrink-0 items-center gap-1 text-xs text-ink-subtle transition-colors hover:text-ink cursor-pointer"
-                title="Change your avatar"
-              >
-                <Sliders className="h-3 w-3" aria-hidden="true" />
-                Edit
-              </button>
+              {CharacterCustomizerModal && (
+                <button
+                  type="button"
+                  onClick={handleOpenStudio}
+                  className="inline-flex shrink-0 items-center gap-1 text-xs text-ink-subtle transition-colors hover:text-ink cursor-pointer"
+                  title="Change your avatar"
+                >
+                  <Sliders className="h-3 w-3" aria-hidden="true" />
+                  Edit
+                </button>
+              )}
             </div>
             <p className="text-[13px] leading-snug text-ink-muted">{currentSpeech}</p>
           </div>
         )}
       </div>
 
-      {isModalOpen && (
+      {isModalOpen && CharacterCustomizerModal && (
         <Suspense fallback={null}>
           <CharacterCustomizerModal
             isOpen={isModalOpen}

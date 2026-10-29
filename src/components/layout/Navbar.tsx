@@ -19,6 +19,7 @@ import type { UserStats, UserAccount } from '../../types';
 import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
 import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
 import { lifeSimService } from '../../services/lifeSimService';
+import { WORLD_3D_ENABLED } from '../../services/features';
 import { BrandMark, CoinIcon, IconButton, Kbd } from '../ui/primitives';
 import { cn } from '../../utils/cn';
 
@@ -260,16 +261,27 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           {/* Wallet */}
-          <button
-            type="button"
-            onClick={() => (onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.())}
-            title="Wallet: open Campus"
-            aria-label={`${walletCoins} tokens, open Campus`}
-            className="flex h-9 items-center gap-1.5 rounded-lg px-2 text-[13px] font-semibold tabular-nums text-gold transition-colors hover:bg-gold-soft cursor-pointer"
-          >
-            <CoinIcon className="h-4 w-4" />
-            {walletCoins.toLocaleString()}
-          </button>
+          {WORLD_3D_ENABLED ? (
+            <button
+              type="button"
+              onClick={() => (onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.())}
+              title="Wallet: open Campus"
+              aria-label={`${walletCoins} tokens, open Campus`}
+              className="flex h-9 items-center gap-1.5 rounded-lg px-2 text-[13px] font-semibold tabular-nums text-gold transition-colors hover:bg-gold-soft cursor-pointer"
+            >
+              <CoinIcon className="h-4 w-4" />
+              {walletCoins.toLocaleString()}
+            </button>
+          ) : (
+            <span
+              title="Wallet"
+              aria-label={`${walletCoins} tokens`}
+              className="flex h-9 items-center gap-1.5 px-2 text-[13px] font-semibold tabular-nums text-gold"
+            >
+              <CoinIcon className="h-4 w-4" />
+              {walletCoins.toLocaleString()}
+            </span>
+          )}
 
           <div className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden="true" />
 

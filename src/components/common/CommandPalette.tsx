@@ -122,7 +122,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       { id: 'go-new-deck', title: 'New deck', subtitle: 'Write cards or generate them', keywords: 'create studio', icon: Plus, group: 'Go to', run: run(onOpenDeckStudio) },
       { id: 'go-import', title: 'Import cards', subtitle: 'From Anki, Quizlet or a CSV file', keywords: 'anki quizlet csv tsv', icon: Upload, group: 'Go to', searchOnly: true, run: run(onOpenDeckStudio) },
       { id: 'go-diagram', title: 'Diagram cards', subtitle: 'Hide labels on an image and quiz yourself', keywords: 'image occlusion', icon: ImageIcon, group: 'Go to', searchOnly: true, run: run(onOpenImageOcclusion ?? onOpenDeckStudio) },
-      { id: 'go-campus', title: 'Campus', subtitle: 'Your home, wallet and room', keywords: 'room home life', icon: Sparkles, group: 'Go to', run: run(onOpenSanctuary) },
+      ...(onOpenSanctuary ? [{ id: 'go-campus', title: 'Campus', subtitle: 'Your home, wallet and room', keywords: 'room home life', icon: Sparkles, group: 'Go to' as const, run: run(onOpenSanctuary) }] : []),
       { id: 'go-account', title: 'Account', subtitle: 'Sign in, switch profile or change your level', keywords: 'login profile', icon: User, group: 'Go to', run: run(() => onOpenAuth?.()) },
       { id: 'go-settings', title: 'Settings', subtitle: 'Goal, AI key, reminders and backups', keywords: 'preferences api key', icon: Settings, group: 'Go to', run: run(onOpenSettings) },
     ];

@@ -56,7 +56,7 @@ export const UserAvatarBadge: React.FC<UserAvatarBadgeProps> = ({
       className={`relative inline-flex items-center justify-center shrink-0 ${
         onClick ? 'cursor-pointer hover:scale-105 active:scale-95 transition-transform' : ''
       } ${className}`}
-      title={`${character.name || 'Student Avatar'} (Click to customize)`}
+      title={onClick ? `${character.name || 'Student Avatar'} (Click to customize)` : character.name || 'Student Avatar'}
       style={{ width: w, height: h }}
     >
       {portrait ? (

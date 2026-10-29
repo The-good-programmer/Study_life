@@ -45,11 +45,12 @@ import { MoveToFolderModal } from '../studio/MoveToFolderModal';
 import { Badge, Button, Card, CoinIcon, IconButton, ProgressBar, ProgressRing, SectionHeader, Tokens } from '../ui/primitives';
 import { cn } from '../../utils/cn';
 import { deckCardIds } from '../../utils/cardProgress';
+import { WORLD_3D_ENABLED } from '../../services/features';
 
-// The customizer pulls in three.js; load it only when the user opens it.
-const CharacterCustomizerModal = lazy(() =>
-  import('../character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal })),
-);
+// The customizer pulls in three.js; load it only when the user opens it, and only in builds with the 3D world.
+const CharacterCustomizerModal = WORLD_3D_ENABLED
+  ? lazy(() => import('../character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal })))
+  : null;
 
 /** Reviews per day that count as hitting the daily goal. */
 const DAILY_REVIEW_GOAL = 15;
@@ -68,7 +69,8 @@ interface DailyMissionHomeProps {
   onOpenDeckStudio: () => void;
   onOpenStarterCatalog: () => void;
   onOpenDashboard: () => void;
-  onOpenSanctuary: () => void;
+  /** Missing when the build has no Campus; its links are hidden. */
+  onOpenSanctuary?: () => void;
   onOpenExam?: () => void;
   onOpenFolders?: () => void;
   onOpenLibrary?: () => void;
@@ -588,9 +590,11 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
           <Card className="space-y-5">
             <div className="flex items-center justify-between">
               <h2 className="text-[15px] font-semibold text-ink">Wallet</h2>
-              <Button variant="ghost" size="sm" trailingIcon={ArrowRight} onClick={onOpenSanctuary}>
-                Campus
-              </Button>
+              {onOpenSanctuary && (
+                <Button variant="ghost" size="sm" trailingIcon={ArrowRight} onClick={onOpenSanctuary}>
+                  Campus
+                </Button>
+              )}
             </div>
 
             <div>
@@ -652,7 +656,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                   You need {housing.rentPerDay - wallet} more tokens to turn on today's bonus. A short review session covers it.
                 </p>
               )}
-              {homeBonus === 0 && (
+              {homeBonus === 0 && onOpenSanctuary && (
                 <p className="mt-2.5 text-xs leading-relaxed text-ink-subtle">
                   Bigger homes raise your pay on days you pay their rent. Upgrade yours in Campus.
                 </p>
@@ -700,14 +704,18 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
 
           <Card className="space-y-4">
             <div className="flex items-center gap-3.5">
-              <button
-                type="button"
-                onClick={() => setIsCustomizerOpen(true)}
-                aria-label="Customize avatar"
-                className="shrink-0 rounded-2xl transition-transform hover:scale-[1.03] cursor-pointer"
-              >
+              {CharacterCustomizerModal ? (
+                <button
+                  type="button"
+                  onClick={() => setIsCustomizerOpen(true)}
+                  aria-label="Customize avatar"
+                  className="shrink-0 rounded-2xl transition-transform hover:scale-[1.03] cursor-pointer"
+                >
+                  <UserAvatarBadge size="sm" />
+                </button>
+              ) : (
                 <UserAvatarBadge size="sm" />
-              </button>
+              )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[15px] font-semibold text-ink">{character.name}</p>
                 <p className="truncate text-[13px] text-ink-subtle">{role.title}</p>
@@ -730,14 +738,18 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
             ) : (
               <p className="text-xs text-ink-subtle">You hold the top academic role.</p>
             )}
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm" className="flex-1" onClick={() => setIsCustomizerOpen(true)}>
-                Edit avatar
-              </Button>
-              <Button variant="secondary" size="sm" className="flex-1" onClick={onOpenSanctuary}>
-                Visit campus
-              </Button>
-            </div>
+            {CharacterCustomizerModal && (
+              <div className="flex gap-2">
+                <Button variant="secondary" size="sm" className="flex-1" onClick={() => setIsCustomizerOpen(true)}>
+                  Edit avatar
+                </Button>
+                {onOpenSanctuary && (
+                  <Button variant="secondary" size="sm" className="flex-1" onClick={onOpenSanctuary}>
+                    Visit campus
+                  </Button>
+                )}
+              </div>
+            )}
           </Card>
         </aside>
       </div>
@@ -782,7 +794,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
         }}
       />
 
-      {isCustomizerOpen && (
+      {isCustomizerOpen && CharacterCustomizerModal && (
         <Suspense fallback={null}>
           <CharacterCustomizerModal isOpen={isCustomizerOpen} onClose={() => setIsCustomizerOpen(false)} />
         </Suspense>
