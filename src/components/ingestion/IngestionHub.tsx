@@ -34,7 +34,8 @@ import {
   GraduationCap,
   ChevronDown,
   FolderPlus,
-  FolderInput
+  FolderInput,
+  Flame
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { StudySession, StarterDeckMetadata, RetrievalCard, DepthTier, SubjectFolder } from '../../types';
@@ -58,6 +59,7 @@ import { fillCloze } from '../../utils/cloze';
 
 const StarterCatalogModal = React.lazy(() => import('../catalog/StarterCatalogModal').then(m => ({ default: m.StarterCatalogModal })));
 const DeckStudioModal = React.lazy(() => import('../studio/DeckStudioModal').then(m => ({ default: m.DeckStudioModal })));
+const ExamRoastPanel = React.lazy(() => import('../roast/ExamRoastPanel').then(m => ({ default: m.ExamRoastPanel })));
 
 function createClonedStarterSession(deck: StarterDeckMetadata): StudySession {
   return {
@@ -120,8 +122,8 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   onOpenInterleaving,
   initialLibraryTab,
 }) => {
-  // Ingestion studio mode: pdf | topic | notes | occlusion
-  const [ingestMode, setIngestMode] = useState<'pdf' | 'topic' | 'notes' | 'occlusion'>('topic');
+  // Ingestion studio mode: pdf | topic | notes | roast | occlusion
+  const [ingestMode, setIngestMode] = useState<'pdf' | 'topic' | 'notes' | 'roast' | 'occlusion'>('topic');
   const [topicInput, setTopicInput] = useState('');
   const [notesInput, setNotesInput] = useState('');
   const [isStarterCatalogModalOpen, setIsStarterCatalogModalOpen] = useState(false);
@@ -328,7 +330,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-[26px] font-semibold tracking-tight text-ink sm:text-[30px]">Library</h1>
-          <p className="mt-1 text-[15px] text-ink-muted">Turn any topic, notes or PDF into a deck, then study it your way.</p>
+          <p className="mt-1 text-[15px] text-ink-muted">Turn any topic, notes, PDF or marked exam into a deck, then study it your way.</p>
         </div>
         {dueCards.length > 0 && (
           <Button variant="secondary" size="sm" icon={Layers} onClick={onOpenDashboard}>
@@ -359,20 +361,25 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
             <h2 id="create-deck-title" className="text-[15px] font-semibold text-ink">Create a deck</h2>
             <p className="mt-0.5 text-[13px] text-ink-subtle">The AI writes the cards and pitches them at your level.</p>
           </div>
-          <div role="tablist" aria-label="Source" className="inline-flex shrink-0 self-start rounded-xl border border-line bg-canvas p-1">
-            {SOURCE_TABS.map(({ mode, label, icon: Icon }) => (
+          <div role="tablist" aria-label="Source" className="flex w-full shrink-0 self-start rounded-xl border border-line bg-canvas p-1 sm:inline-flex sm:w-auto">
+            {SOURCE_TABS.map(({ mode, label, shortLabel, icon: Icon }) => (
               <button
                 key={mode}
                 type="button"
                 role="tab"
                 aria-selected={ingestMode === mode}
                 onClick={() => setIngestMode(mode)}
-                className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-colors cursor-pointer ${
+                className={`inline-flex h-8 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-[13px] font-medium transition-colors cursor-pointer sm:flex-none sm:px-3 ${
                   ingestMode === mode ? 'bg-surface-hover text-ink shadow-sm' : 'text-ink-subtle hover:text-ink'
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                {label}
+                {shortLabel ? (
+                  <>
+                    <span className="sm:hidden">{shortLabel}</span>
+                    <span className="hidden sm:inline">{label}</span>
+                  </>
+                ) : label}
               </button>
             ))}
           </div>
@@ -602,6 +609,20 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
               </p>
             )}
           </div>
+        )}
+
+        {/* Roast my exam */}
+        {ingestMode === 'roast' && (
+          <React.Suspense fallback={null}>
+            <ExamRoastPanel
+              profile={effectiveProfile}
+              onDeckBuilt={(session) => {
+                StorageService.saveSession(session);
+                setSavedSessions(StorageService.getSessions());
+                onStartSession(session);
+              }}
+            />
+          </React.Suspense>
         )}
 
         <div className="flex flex-wrap items-center gap-1 border-t border-line pt-4 text-[13px]">
@@ -1118,10 +1139,11 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   );
 };
 
-const SOURCE_TABS: { mode: 'topic' | 'notes' | 'pdf'; label: string; icon: LucideIcon }[] = [
+const SOURCE_TABS: { mode: 'topic' | 'notes' | 'pdf' | 'roast'; label: string; shortLabel?: string; icon: LucideIcon }[] = [
   { mode: 'topic', label: 'Topic', icon: Sparkles },
   { mode: 'notes', label: 'Notes', icon: FileText },
   { mode: 'pdf', label: 'PDF', icon: FileUp },
+  { mode: 'roast', label: 'Roast exam', shortLabel: 'Roast', icon: Flame },
 ];
 
 interface StudyModeCardProps {
