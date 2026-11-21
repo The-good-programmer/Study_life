@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { ECONOMY_VISIBLE } from '../../services/features';
 import {
   Clock,
   RotateCcw,
@@ -479,7 +480,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                 </div>
               ))}
             </dl>
-            <p className="mt-3 border-t border-line pt-3 text-xs text-ink-subtle">Your score is paid out in tokens, up to a daily limit.</p>
+            {ECONOMY_VISIBLE && <p className="mt-3 border-t border-line pt-3 text-xs text-ink-subtle">Your score is paid out in tokens, up to a daily limit.</p>}
           </div>
 
           <div className="flex items-center justify-between gap-3">
@@ -768,7 +769,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                   ? 'You knew what you knew, and no answer was confidently wrong.'
                   : 'Turn your guesses and gaps into answers you are sure of before the real exam.'}
             </p>
-            <p className="mt-2 flex items-center gap-1.5 text-[13px] text-ink-subtle">
+            {ECONOMY_VISIBLE && <p className="mt-2 flex items-center gap-1.5 text-[13px] text-ink-subtle">
               <CoinIcon className="h-4 w-4" />
               {examPay && examPay.tokens > 0
                 ? <>You earned <span className="font-medium tabular-nums text-gold">{examPay.tokens}</span> tokens{examPay.capped ? ' (daily limit applied)' : ''}{examPay.repeats > 0 ? `. ${examPay.repeats} ${examPay.repeats === 1 ? 'question was' : 'questions were'} already counted today` : ''}.</>
@@ -779,7 +780,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                     : examPay?.capped
                       ? 'No tokens: you have reached today’s exam pay limit.'
                       : 'No tokens: the questions not yet counted today scored zero or below.'}
-            </p>
+            </p>}
           </div>
           <Button
             variant="secondary"

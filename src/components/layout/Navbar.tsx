@@ -19,7 +19,7 @@ import type { UserStats, UserAccount } from '../../types';
 import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
 import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
 import { lifeSimService } from '../../services/lifeSimService';
-import { WORLD_3D_ENABLED } from '../../services/features';
+import { ECONOMY_VISIBLE, WORLD_3D_ENABLED } from '../../services/features';
 import { BrandMark, CoinIcon, IconButton, Kbd } from '../ui/primitives';
 import { cn } from '../../utils/cn';
 import { FocusTimerPill } from '../focus/FocusTimerPill';
@@ -257,8 +257,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             {stats.currentStreak}
           </button>
 
-          {/* Wallet */}
-          {WORLD_3D_ENABLED ? (
+          {/* Wallet (only while tokens are shown) */}
+          {!ECONOMY_VISIBLE ? null : WORLD_3D_ENABLED ? (
             <button
               type="button"
               onClick={() => (onNavigate ? onNavigate('sanctuary') : onOpenSanctuary?.())}

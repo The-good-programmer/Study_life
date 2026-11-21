@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ECONOMY_VISIBLE } from '../../services/features';
 import confetti from 'canvas-confetti';
 import {
   Layers,
@@ -139,6 +140,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
     soundEngine.playCompletionChime();
     haptics.celebrate();
     const coinTimer = setTimeout(() => {
+      if (!ECONOMY_VISIBLE) return;
       soundEngine.playCoinCascade();
       haptics.coin();
     }, 650);
@@ -223,7 +225,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
         <p className="mx-auto mt-1.5 max-w-md text-[15px] text-ink-muted">{session.title}</p>
       </header>
 
-      {wageEarned ? (
+      {!ECONOMY_VISIBLE ? null : wageEarned ? (
         <Card className="space-y-4">
           <div className="flex items-end justify-between gap-4">
             <div>

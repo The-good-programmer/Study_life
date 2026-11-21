@@ -1,4 +1,5 @@
 import React, { useId } from 'react';
+import { ECONOMY_VISIBLE } from '../../services/features';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
@@ -42,18 +43,20 @@ export const CoinIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-
 );
 
 /** Token amount with the coin glyph, in tabular figures. */
+/** A token amount. Renders nothing while tokens are hidden (see ECONOMY_VISIBLE). */
 export const Tokens: React.FC<{ amount: number; className?: string; iconClassName?: string; signed?: boolean }> = ({
   amount,
   className,
   iconClassName = 'w-3.5 h-3.5',
   signed = false,
-}) => (
-  <span className={cn('inline-flex items-center gap-1 font-medium tabular-nums', className)}>
-    <CoinIcon className={iconClassName} />
-    {signed && amount > 0 ? '+' : ''}
-    {amount.toLocaleString()}
-  </span>
-);
+}) =>
+  ECONOMY_VISIBLE ? (
+    <span className={cn('inline-flex items-center gap-1 font-medium tabular-nums', className)}>
+      <CoinIcon className={iconClassName} />
+      {signed && amount > 0 ? '+' : ''}
+      {amount.toLocaleString()}
+    </span>
+  ) : null;
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'gold' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';

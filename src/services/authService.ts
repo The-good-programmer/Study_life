@@ -397,6 +397,31 @@ export class AuthService {
     };
   }
 
+  /** Asks the server to email a password reset link. Resolves with the message to show. */
+  public static async requestPasswordReset(email: string): Promise<{ ok: boolean; message: string }> {
+    const res = await ApiConfig.request<{ message: string }>('/auth/forgot', {
+      method: 'POST',
+      body: JSON.stringify({ email: email.trim() }),
+    });
+    if (res.ok) return { ok: true, message: res.data?.message || 'If that email has a Studify password, we sent a reset link.' };
+    if (res.status === 0 || (res.status >= 500 && res.status !== 503)) {
+      return { ok: false, message: "Couldn't reach the server. Check your connection and try again." };
+    }
+    return { ok: false, message: res.error || "Couldn't send a reset link." };
+  }
+
+  /** Sets a new password with the token from the reset email, and signs in. */
+  public static async resetPassword(token: string, password: string): Promise<AuthResponse> {
+    const res = await ApiConfig.request<{ user: UserAccount; token: string }>('/auth/reset', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    });
+    if (res.ok && res.data?.user && res.data?.token) {
+      return { success: true, user: this.adoptServerSession(res.data.user, res.data.token) };
+    }
+    return { success: false, error: res.error || "Couldn't reset your password. Try again." };
+  }
+
   /**
    * Quick-switch to another registered account on this browser.
    * If the target account is password-protected, a valid password is required.

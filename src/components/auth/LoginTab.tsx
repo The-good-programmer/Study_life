@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import type { GoogleProfilePayload, UserAccount } from '../../types';
 import { AuthService } from '../../services/authService';
+import { ForgotPasswordForm } from './PasswordResetForms';
 import {
   AccountAvatar,
   ErrorBanner,
@@ -43,6 +44,7 @@ export const LoginTab: React.FC<LoginTabProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(prefill?.error ?? null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isForgotOpen, setIsForgotOpen] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +78,8 @@ export const LoginTab: React.FC<LoginTabProps> = ({
     }
   };
 
+
+  if (isForgotOpen) return <ForgotPasswordForm initialEmail={email} onBack={() => setIsForgotOpen(false)} />;
   return (
     <div className="space-y-4">
       <ErrorBanner message={error} />
@@ -101,10 +105,15 @@ export const LoginTab: React.FC<LoginTabProps> = ({
         </div>
 
         <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
-            <Lock className="h-3.5 w-3.5 text-ink-subtle" />
-            Password
-          </label>
+          <div className="flex items-center justify-between gap-2">
+            <label className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+              <Lock className="h-3.5 w-3.5 text-ink-subtle" />
+              Password
+            </label>
+            <button type="button" onClick={() => setIsForgotOpen(true)} className="text-xs font-medium text-brand-text hover:underline cursor-pointer">
+              Forgot password?
+            </button>
+          </div>
           <div className="relative">
             <input
               type={showPassword ? 'text' : 'password'}

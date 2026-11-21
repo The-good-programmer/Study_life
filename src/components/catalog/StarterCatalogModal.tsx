@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ECONOMY_VISIBLE } from '../../services/features';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeft,
@@ -448,7 +449,7 @@ const DeckCard: React.FC<DeckCardProps> = ({ deck, pay, isAdded, isJustAdded, on
           <span className="inline-flex items-center gap-1">
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />~{deck.estimatedMinutes} min
           </span>
-          {pay > 0 && (
+          {ECONOMY_VISIBLE && pay > 0 && (
             <span className="ml-auto text-ink-muted" title="About what one full session pays today">
               <Tokens amount={pay} />
             </span>
@@ -524,7 +525,7 @@ const DeckPreview: React.FC<DeckPreviewProps> = ({ deck, pay, isAdded, isJustAdd
             <PreviewStat label="Concepts" value={deck.conceptCount} />
             <PreviewStat label="Cards" value={deck.cardCount} />
             <PreviewStat label="Session" value={`~${deck.estimatedMinutes} min`} />
-            <PreviewStat label="Pays about" value={<Tokens amount={pay} iconClassName="h-4 w-4" />} />
+            {ECONOMY_VISIBLE && <PreviewStat label="Pays about" value={<Tokens amount={pay} iconClassName="h-4 w-4" />} />}
           </dl>
 
           <div className="mt-4">

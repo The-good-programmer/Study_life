@@ -244,6 +244,8 @@ export interface UserStats {
   conceptsMastered: number;
   currentStreak: number;
   lastActiveDate: string; // YYYY-MM-DD
+  /** When the student last studied (ISO time), so reminders can tell whether they studied today where they are. */
+  lastStudiedAt?: string;
   cardsDueCount: number;
   // Habit & XP metrics
   xp: number;

@@ -316,14 +316,18 @@ const AiSection: React.FC = () => {
     StorageService.setApiKey('');
     setSavedKey('');
     setDraft('');
-    showNotice({ tone: 'info', text: 'Key removed. Studify will use its built-in generator.' });
+    showNotice({ tone: 'info', text: AuthService.getCurrentUser() ? 'Key removed. Studify will use the AI included with your account.' : 'Key removed. Sign in to keep using AI.' });
   };
 
   return (
     <div>
       <SettingGroup
         title="Gemini API key"
-        description="Studify makes decks without a key. Add your own free Gemini key for unlimited decks from notes and PDFs, and AI feedback when you explain a concept."
+        description={
+          AuthService.getCurrentUser()
+            ? 'AI is included with your account, up to a daily limit. Add your own free Gemini key to go past it.'
+            : 'AI (decks from topics, notes and PDFs, and feedback on your explanations) needs a free account, or your own free Gemini key here.'
+        }
         aside={savedKey ? <Badge tone="success">Key added</Badge> : <Badge>Not set</Badge>}
       >
         <form onSubmit={save} className="space-y-2">
@@ -388,11 +392,26 @@ const RemindersSection: React.FC = () => {
   const [notice, showNotice] = useNotice();
   const isSupported = NotificationService.isSupported();
   const isOn = settings.enabled && permission === 'granted';
+  // Signed-in students get reminders from the server, so they arrive with Studify closed.
+  const canPush = Boolean(AuthService.getCurrentUser()) && NotificationService.isPushSupported();
 
   const toggle = async () => {
     if (isOn) {
+      await NotificationService.disablePushReminders();
       setSettings(NotificationService.saveSettings({ enabled: false }));
       showNotice({ tone: 'info', text: 'Reminders are off.' });
+      return;
+    }
+    if (canPush) {
+      const result = await NotificationService.enablePushReminders();
+      setPermission(NotificationService.getPermission());
+      setSettings(NotificationService.getSettings());
+      if (result.ok) {
+        soundEngine.playSuccess();
+        showNotice({ tone: 'success', text: 'Reminders are on, even when Studify is closed.' });
+      } else {
+        showNotice({ tone: 'error', text: result.message ?? 'Couldn’t turn on reminders.' });
+      }
       return;
     }
     const granted = await NotificationService.requestPermission();
@@ -419,7 +438,13 @@ const RemindersSection: React.FC = () => {
     <div>
       <SettingGroup
         title="Daily reminder"
-        description="A nudge on this device when you have cards due, before your streak resets."
+        description={
+          canPush
+            ? "A notification at your chosen time on days you haven't studied yet, even when Studify is closed. On iPhone, add Studify to your Home Screen first (Share, then Add to Home Screen)."
+            : AuthService.getCurrentUser()
+              ? "A nudge at your chosen time if you haven't studied yet. This browser can't get notifications when Studify is closed, so it only arrives while Studify is open."
+              : "A nudge at your chosen time if you haven't studied yet. Without an account it only arrives while Studify is open in a tab; sign in to get it even when Studify is closed."
+        }
         aside={
           isOn ? <Badge tone="success">On</Badge> : permission === 'denied' ? <Badge tone="danger">Blocked</Badge> : <Badge>Off</Badge>
         }
@@ -449,12 +474,17 @@ const RemindersSection: React.FC = () => {
       </SettingGroup>
 
       {isSupported && (
-        <SettingGroup title="Reminder time" description="Studify checks for due cards at this time each day.">
+        <SettingGroup title="Reminder time" description="If you haven't studied by this time, you get a reminder.">
           <OptionGrid
             label="Reminder time"
             options={REMINDER_HOURS}
             value={settings.reminderHour}
-            onChange={(hour) => setSettings(NotificationService.saveSettings({ reminderHour: hour }))}
+            onChange={(hour) => {
+              setSettings(NotificationService.saveSettings({ reminderHour: hour }));
+              NotificationService.updatePushReminderTime().catch(() => {
+                showNotice({ tone: 'error', text: 'Couldn’t save the new time on the server. Try again when you’re online.' });
+              });
+            }}
             className="grid-cols-3 sm:grid-cols-5"
           />
         </SettingGroup>

@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNeedsSignInForAi } from '../../hooks/useAiAccess';
+import { AiUnavailableNotice } from '../common/AiUnavailableNotice';
 import {
   AlertTriangle,
   ArrowRight,
@@ -103,6 +105,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete,
   );
   const [examinerName] = useState(() => characterService.getCharacter().name || 'Your study partner');
   const [isAiAvailable] = useState(() => AIService.isAvailable());
+  const needsSignInForAi = useNeedsSignInForAi();
 
   // Speech
   const [isListening, setIsListening] = useState(false);
@@ -636,6 +639,7 @@ export const FeynmanPhase: React.FC<FeynmanPhaseProps> = ({ concept, onComplete,
       {/* ---------------- Write it out ---------------- */}
       {mode === 'written' && (
         <div className="space-y-4 animate-fadeIn">
+          {needsSignInForAi && !evaluation && <AiUnavailableNotice action="get feedback on your explanation" />}
           {!evaluation ? (
             <form onSubmit={handleWrittenSubmit} className="rounded-3xl border border-line bg-surface p-4 sm:p-5">
               <label htmlFor={`written-input-${concept.id}`} className="sr-only">

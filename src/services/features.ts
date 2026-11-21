@@ -9,3 +9,10 @@
  * avatar assets are never downloaded and the 2D avatar badge stays.
  */
 export const WORLD_3D_ENABLED = (import.meta.env.VITE_ENABLE_3D_WORLD as string | undefined) === 'true';
+
+/**
+ * Whether tokens show anywhere. They are spent in Campus, so they stay hidden while the 3D
+ * world is off. Studying still earns them in the background, so nothing is lost if Campus is
+ * turned on later.
+ */
+export const ECONOMY_VISIBLE = WORLD_3D_ENABLED;

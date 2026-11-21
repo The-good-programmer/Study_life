@@ -39,6 +39,14 @@ export class AIService {
     return Boolean(StorageService.getApiKey()) || ApiConfig.canUseServerAiSync();
   }
 
+  /**
+   * Whether AI can't work until the student signs in: a guest with no key of their own.
+   * (A signed-in student has AI even while the server is still waking up.)
+   */
+  public static needsSignIn(): boolean {
+    return !StorageService.getApiKey() && !ApiConfig.getToken();
+  }
+
   private static getClient(customKey?: string): GoogleGenAI | null {
     // Strictly rely on user-configured key in browser storage, never bake keys into client bundle
     const key = customKey || StorageService.getApiKey();

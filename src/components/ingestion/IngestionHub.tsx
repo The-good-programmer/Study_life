@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { ECONOMY_VISIBLE } from '../../services/features';
+import { useNeedsSignInForAi } from '../../hooks/useAiAccess';
+import { AiUnavailableNotice } from '../common/AiUnavailableNotice';
 import { 
   X,
   Sparkles, 
@@ -110,6 +113,8 @@ interface IngestionHubProps {
   initialLibraryTab?: 'my-decks' | 'starred' | 'curated';
   /** Opens on "make a deck from notes" with these notes filled in (from Focus). */
   initialNotes?: string;
+  /** Opens sign-in; AI decks need an account (or the student's own key). */
+  onOpenAuth?: () => void;
 }
 
 export const IngestionHub: React.FC<IngestionHubProps> = ({ 
@@ -122,7 +127,9 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   onOpenInterleaving,
   initialLibraryTab,
   initialNotes,
+  onOpenAuth,
 }) => {
+  const needsSignInForAi = useNeedsSignInForAi();
   // Ingestion studio mode: pdf | topic | notes | occlusion
   const [ingestMode, setIngestMode] = useState<'pdf' | 'topic' | 'notes' | 'occlusion'>(initialNotes ? 'notes' : 'topic');
   const [topicInput, setTopicInput] = useState('');
@@ -265,12 +272,21 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
     }
   };
 
+  /** Making a deck needs AI: a guest without a key is asked to sign in instead of seeing it fail. */
+  const generate: typeof generation.generate = request => {
+    if (needsSignInForAi) {
+      onOpenAuth?.();
+      return;
+    }
+    generation.generate(request);
+  };
+
   const handleLaunchPDFSession = () => {
-    if (extractedPdf) generation.generate({ kind: 'pdf', pdf: extractedPdf });
+    if (extractedPdf) generate({ kind: 'pdf', pdf: extractedPdf });
   };
 
   const handleGenerateTopic = (topicToUse?: string) => {
-    generation.generate({
+    generate({
       kind: 'topic',
       text: topicToUse || topicInput,
       depthTier: effectiveTier,
@@ -279,7 +295,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   };
 
   const handleDecomposeNotes = () => {
-    generation.generate({ kind: 'notes', text: notesInput });
+    generate({ kind: 'notes', text: notesInput });
   };
 
   const handleDeleteDeck = (id: string, e: React.MouseEvent) => {
@@ -380,6 +396,8 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
             ))}
           </div>
         </div>
+
+        {needsSignInForAi && ingestMode !== 'occlusion' && <AiUnavailableNotice action="make decks" onSignIn={onOpenAuth} />}
 
         {/* Topic */}
         {ingestMode === 'topic' && (
@@ -670,7 +688,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
             icon={Award}
             title="Mock exam"
             description="Timed questions scored on accuracy and confidence."
-            meta="Pays for correct answers"
+            meta={ECONOMY_VISIBLE ? 'Pays for correct answers' : 'Timed, like the real thing'}
             onClick={onOpenExam}
           />
           <StudyModeCard

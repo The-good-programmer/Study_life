@@ -12,7 +12,8 @@
 
 import './env.js'; // Must stay first: loads server/.env before other modules read process.env
 import http from 'node:http';
-import { createApp } from './app.js';
+import { createApp, getAllowedOrigins, siteUrlFrom } from './app.js';
+import { startReminderSchedule } from './reminders.js';
 import { db } from './db.js';
 import { isAiConfigured } from './ai.js';
 
@@ -36,11 +37,17 @@ server.listen(PORT, '0.0.0.0', () => {
   `);
 });
 
+// Study reminders, every few minutes while the server is up (the keep-alive workflow keeps it up).
+// Push services want a contact for the sender: the site's address, or a mailto.
+const site = siteUrlFrom(getAllowedOrigins());
+const stopReminders = startReminderSchedule({ subject: site.startsWith('https://') ? site : 'mailto:reminders@studify.invalid' });
+
 // Render stops a service by sending SIGTERM before replacing it: finish open requests, then close the database.
 let stopping = false;
 function shutdown(signal) {
   if (stopping) return;
   stopping = true;
+  stopReminders();
   console.log(`[Server] ${signal} received, shutting down.`);
   server.close(async () => {
     await db.close().catch(() => {});

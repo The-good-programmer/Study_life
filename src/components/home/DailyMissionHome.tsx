@@ -45,7 +45,7 @@ import { MoveToFolderModal } from '../studio/MoveToFolderModal';
 import { Badge, Button, Card, CoinIcon, IconButton, ProgressBar, ProgressRing, SectionHeader, Tokens } from '../ui/primitives';
 import { cn } from '../../utils/cn';
 import { deckCardIds } from '../../utils/cardProgress';
-import { WORLD_3D_ENABLED } from '../../services/features';
+import { ECONOMY_VISIBLE, WORLD_3D_ENABLED } from '../../services/features';
 import { UpcomingPlanCard } from '../planner/UpcomingPlanCard';
 
 // The customizer pulls in three.js; load it only when the user opens it, and only in builds with the 3D world.
@@ -54,7 +54,6 @@ const CharacterCustomizerModal = WORLD_3D_ENABLED
   : null;
 
 /** Reviews per day that count as hitting the daily goal. */
-const DAILY_REVIEW_GOAL = 15;
 /** Rough time per flashcard, for session length estimates. */
 const SECONDS_PER_CARD = 20;
 /** Decks shown on Today before linking to the full library. */
@@ -202,8 +201,12 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
     ? Math.round(estimateReward({ kind: 'sprint', cardIds: deckCardIds(primarySession), minutes: estimatedMinutes }).tokens * multiplier)
     : 0;
 
-  const goalPercent = Math.min(100, Math.round((reviewedToday / DAILY_REVIEW_GOAL) * 100));
-  const goalDone = reviewedToday >= DAILY_REVIEW_GOAL;
+  // The same daily goal as the top bar: minutes studied today (reviews and focus sessions).
+  const goalMinutes = stats.dailyGoalMinutes || 25;
+  const todayMinutes = stats.todayMinutes || 0;
+  const goalPercent = Math.min(100, Math.round((todayMinutes / goalMinutes) * 100));
+  const goalDone = todayMinutes >= goalMinutes;
+  const reviewsLine = `${reviewedToday} ${reviewedToday === 1 ? 'review' : 'reviews'} today`;
 
   const displayedSessions = useMemo(() => {
     if (selectedFolderId === 'all') return savedSessions;
@@ -283,7 +286,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
         </Button>
       </header>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_336px]">
+      <div className={cn('grid gap-6', ECONOMY_VISIBLE && 'xl:grid-cols-[minmax(0,1fr)_336px]')}>
         {/* Main column */}
         <div className="min-w-0 space-y-6">
           {/* Today's session */}
@@ -317,6 +320,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                       <Clock className="h-4 w-4 text-ink-subtle" aria-hidden="true" />
                       <dd>About {estimatedMinutes} min</dd>
                     </div>
+                    {ECONOMY_VISIBLE && (
                     <div className="flex items-center gap-1.5">
                       <dt className="sr-only">Pay</dt>
                       <CoinIcon className="h-4 w-4" />
@@ -330,6 +334,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                         )}
                       </dd>
                     </div>
+                    )}
                   </dl>
                 )}
 
@@ -377,7 +382,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                   <div className="flex items-center justify-between text-[13px]">
                     <span className="text-ink-subtle">Daily goal</span>
                     <span className="tabular-nums text-ink-muted">
-                      {Math.min(reviewedToday, DAILY_REVIEW_GOAL)} of {DAILY_REVIEW_GOAL} reviews
+                      {Math.min(todayMinutes, goalMinutes)} of {goalMinutes} min · {reviewsLine}
                     </span>
                   </div>
                   <ProgressBar value={goalPercent} tone={goalDone ? 'success' : 'brand'} label="Daily goal" />
@@ -390,13 +395,16 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                     {goalDone ? (
                       <Check className="h-8 w-8 text-success" aria-hidden="true" />
                     ) : (
-                      <span className="text-[30px] font-semibold leading-none tabular-nums text-ink">{reviewedToday}</span>
+                      <span className="text-[30px] font-semibold leading-none tabular-nums text-ink">{todayMinutes}</span>
                     )}
                     <span className="mt-1.5 text-xs text-ink-subtle">
-                      {goalDone ? 'Goal met' : `of ${DAILY_REVIEW_GOAL} reviews`}
+                      {goalDone ? 'Goal met' : `of ${goalMinutes} min`}
                     </span>
                   </ProgressRing>
-                  <span className="text-xs font-medium text-ink-subtle">Daily goal</span>
+                  <span className="text-center text-xs text-ink-subtle">
+                    <span className="block font-medium">Daily goal</span>
+                    <span className="block tabular-nums">{reviewsLine}</span>
+                  </span>
                 </div>
               )}
             </div>
@@ -591,7 +599,8 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
           </section>
         </div>
 
-        {/* Side column: life and money */}
+        {/* Side column: life and money (only while tokens are shown) */}
+        {ECONOMY_VISIBLE && (
         <aside className="grid content-start gap-6 md:grid-cols-2 xl:grid-cols-1" aria-label="Wallet and progress">
           <Card className="space-y-5">
             <div className="flex items-center justify-between">
@@ -758,6 +767,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
             )}
           </Card>
         </aside>
+        )}
       </div>
 
       <ScienceExplainerModal isOpen={showScienceModal} onClose={() => setShowScienceModal(false)} initialTopic="fsrs" />

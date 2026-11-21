@@ -13,6 +13,29 @@ const TOO_MANY = 'Too many attempts. Please wait a few minutes and try again.';
 // Hashed for an unknown email, so a missing account takes as long to reject as a wrong password.
 const DUMMY_SALT = generateSalt();
 
+/** How long a password reset link works. */
+export const RESET_TTL_MS = 30 * 60_000;
+const RESET_SENT = 'If that email has a Studify password, we sent a link to reset it. Check your inbox (and spam folder).';
+const RESET_NOT_SET_UP = "Password reset by email isn't set up yet. If you signed up with Google, sign in with Google instead.";
+const RESET_LINK_BAD = 'This reset link has expired or was already used. Ask for a new one.';
+
+export const hashResetToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
+/** The same rules as sign-up. Returns an error message, or null when the password is fine. */
+function passwordProblem(password) {
+  if (typeof password !== 'string' || password.length < 6) return 'Password must be at least 6 characters long.';
+  if (password.length > 200) return 'Password must be at most 200 characters long.';
+  return null;
+}
+
+function resetEmail(link) {
+  const text = `Someone (hopefully you) asked to reset your Studify password.\n\nChoose a new password here (the link works for 30 minutes):\n${link}\n\nIf you didn't ask for this, ignore this email; your password stays the same.`;
+  const html = `<p>Someone (hopefully you) asked to reset your Studify password.</p>
+<p><a href="${link}" style="display:inline-block;padding:10px 18px;border-radius:10px;background:#5b5bd6;color:#fff;text-decoration:none;font-weight:600">Choose a new password</a></p>
+<p>The link works for 30 minutes. If you didn't ask for this, ignore this email; your password stays the same.</p>`;
+  return { subject: 'Reset your Studify password', text, html };
+}
+
 function send(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   return res.end(JSON.stringify(payload));
@@ -43,7 +66,66 @@ function publicUser(row, lastLoginAt = row.last_login_at) {
   };
 }
 
-export async function handleAuthRoutes(req, res, pathname, body) {
+/**
+ * @param {{ mailer?: { send: (mail: object) => Promise<void> } | null, siteUrl?: string }} [ctx]
+ *   The email sender for reset links (null when email isn't set up) and the site the links open.
+ */
+export async function handleAuthRoutes(req, res, pathname, body, ctx = {}) {
+  // FORGOT PASSWORD: emails a one-time link. The answer is the same whether or not the email has an
+  // account, so it can't be used to find out who has one.
+  if (pathname === '/api/auth/forgot' && req.method === 'POST') {
+    if (!limiters.forgot.take(clientIp(req))) return tooManyAttempts(res);
+    const cleanEmail = (typeof body?.email === 'string' ? body.email : '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) return send(res, 400, { error: 'Please enter a valid email address.' });
+    if (!ctx.mailer) return send(res, 503, { error: RESET_NOT_SET_UP });
+    if (!limiters.forgotEmail.take(cleanEmail)) return send(res, 200, { success: true, message: RESET_SENT });
+
+    const user = await db.one('SELECT id, email, password_hash FROM users WHERE email = $1', [cleanEmail]);
+    if (user?.password_hash) {
+      const token = crypto.randomBytes(32).toString('base64url');
+      const now = Date.now();
+      await db.run('INSERT INTO password_resets (token_hash, user_id, expires_at, created_at) VALUES ($1, $2, $3, $4)', [
+        hashResetToken(token),
+        user.id,
+        new Date(now + RESET_TTL_MS).toISOString(),
+        new Date(now).toISOString(),
+      ]);
+      const link = `${ctx.siteUrl || ''}/?reset=${token}`;
+      try {
+        await ctx.mailer.send({ to: user.email, ...resetEmail(link) });
+      } catch (err) {
+        console.error('[Auth] Could not send a reset email:', err.message);
+      }
+    }
+    return send(res, 200, { success: true, message: RESET_SENT });
+  }
+
+  // RESET PASSWORD: a new password with the emailed token, then signed in.
+  if (pathname === '/api/auth/reset' && req.method === 'POST') {
+    if (!limiters.reset.take(clientIp(req))) return tooManyAttempts(res);
+    const { token, password } = body || {};
+    if (typeof token !== 'string' || token.length < 20 || token.length > 200) return send(res, 400, { error: RESET_LINK_BAD });
+    const problem = passwordProblem(password);
+    if (problem) return send(res, 400, { error: problem });
+
+    const reset = await db.one(
+      'SELECT user_id FROM password_resets WHERE token_hash = $1 AND used_at IS NULL AND expires_at > $2',
+      [hashResetToken(token), new Date().toISOString()],
+    );
+    if (!reset) return send(res, 400, { error: RESET_LINK_BAD });
+
+    const salt = generateSalt();
+    const passHash = await hashPassword(password, salt);
+    const now = new Date().toISOString();
+    await db.tx(async (t) => {
+      await t.run('UPDATE users SET password_hash = $1, password_salt = $2, last_login_at = $3 WHERE id = $4', [passHash, salt, now, reset.user_id]);
+      // This link, and any others still out, stop working.
+      await t.run('UPDATE password_resets SET used_at = $1 WHERE user_id = $2 AND used_at IS NULL', [now, reset.user_id]);
+    });
+    const user = publicUser(await db.one('SELECT * FROM users WHERE id = $1', [reset.user_id]));
+    return send(res, 200, { success: true, user, token: createToken(user) });
+  }
+
   // 1. REGISTER
   if (pathname === '/api/auth/register' && req.method === 'POST') {
     if (!limiters.register.take(clientIp(req))) return tooManyAttempts(res);
@@ -60,12 +142,8 @@ export async function handleAuthRoutes(req, res, pathname, body) {
       return send(res, 400, { error: 'Please enter a valid email address.' });
     }
 
-    if (typeof password !== 'string' || password.length < 6) {
-      return send(res, 400, { error: 'Password must be at least 6 characters long.' });
-    }
-    if (password.length > 200) {
-      return send(res, 400, { error: 'Password must be at most 200 characters long.' });
-    }
+    const problem = passwordProblem(password);
+    if (problem) return send(res, 400, { error: problem });
 
     const alreadyRegistered = { error: 'An account with this email address already exists. Please log in.' };
     if (await db.one('SELECT id FROM users WHERE email = $1', [cleanEmail])) {

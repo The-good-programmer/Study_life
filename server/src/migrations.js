@@ -187,4 +187,49 @@ export const MIGRATIONS = [
       END $$;
     `,
   },
+  {
+    // Password reset links (only a hash of each token is kept), push subscriptions for study reminders, and
+    // secrets the server makes for itself (its Web Push keys), so nothing needs setting up by hand.
+    id: '006_resets_and_reminders',
+    sql: `
+      CREATE TABLE password_resets (
+        token_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX idx_password_resets_user ON password_resets (user_id);
+
+      CREATE TABLE push_subscriptions (
+        endpoint TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        keys_json TEXT NOT NULL,
+        time_zone TEXT NOT NULL,
+        remind_at TEXT NOT NULL,
+        last_sent_day TEXT,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX idx_push_subscriptions_user ON push_subscriptions (user_id);
+
+      CREATE TABLE app_secrets (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      ALTER TABLE password_resets ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE app_secrets ENABLE ROW LEVEL SECURITY;
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+          REVOKE ALL ON password_resets, push_subscriptions, app_secrets FROM anon;
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          REVOKE ALL ON password_resets, push_subscriptions, app_secrets FROM authenticated;
+        END IF;
+      END $$;
+    `,
+  },
 ];

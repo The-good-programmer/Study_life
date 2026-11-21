@@ -4,13 +4,28 @@
  */
 
 import { StorageService } from './storageService';
+import { ApiConfig } from './apiConfig';
 
 export interface NotificationSettings {
   enabled: boolean;
   reminderHour: number; // 0 - 23, e.g. 19 for 7 PM
   reminderMinute: number; // 0 - 59
   sound: boolean;
+  /** Reminders come from the server as push notifications, so they arrive with Studify closed. */
+  push?: boolean;
 }
+
+/** A Web Push key (base64url) as the bytes the browser's push manager wants. */
+const keyBytes = (base64url: string): Uint8Array<ArrayBuffer> => {
+  const base64 = (base64url + '='.repeat((4 - (base64url.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const bytes = new Uint8Array(new ArrayBuffer(raw.length));
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes;
+};
+
+const remindAtOf = (settings: NotificationSettings) =>
+  `${String(settings.reminderHour).padStart(2, '0')}:${String(settings.reminderMinute).padStart(2, '0')}`;
 
 const SETTINGS_KEY = 'studify_notification_settings';
 const LAST_NOTIF_KEY = 'studify_last_notification_date';
@@ -117,6 +132,73 @@ export class NotificationService {
     }
   }
 
+  /** Whether this browser can get push notifications (on iPhone, only once added to the Home Screen). */
+  public static isPushSupported(): boolean {
+    return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+
+  /** Tells the server this browser's subscription, time zone and reminder time. */
+  private static async sendSubscription(subscription: PushSubscription, settings: NotificationSettings): Promise<void> {
+    const res = await ApiConfig.request('/reminders/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({
+        subscription: subscription.toJSON(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        remindAt: remindAtOf(settings),
+      }),
+    });
+    if (!res.ok) throw new Error(res.error || 'The server did not accept the reminder.');
+  }
+
+  /**
+   * Turns on reminders that arrive with Studify closed (signed-in students): asks for permission,
+   * subscribes this browser to push, and registers it with the server. Resolves with a message to
+   * show when it couldn't.
+   */
+  public static async enablePushReminders(): Promise<{ ok: boolean; message?: string }> {
+    if (!this.isPushSupported()) return { ok: false, message: 'This browser can’t get notifications when Studify is closed.' };
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return { ok: false, message: 'Your browser blocked notifications for Studify.' };
+    try {
+      const keyRes = await ApiConfig.request<{ publicKey: string }>('/reminders/key');
+      if (!keyRes.ok || !keyRes.data?.publicKey) throw new Error('Couldn’t reach the server.');
+      const registration = await navigator.serviceWorker.ready;
+      const subscription =
+        (await registration.pushManager.getSubscription()) ??
+        (await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(keyRes.data.publicKey) }));
+      const settings = this.saveSettings({ enabled: true, push: true });
+      await this.sendSubscription(subscription, settings);
+      return { ok: true };
+    } catch (err) {
+      this.saveSettings({ push: false });
+      return { ok: false, message: err instanceof Error ? err.message : 'Couldn’t turn on reminders.' };
+    }
+  }
+
+  /** Sends the new reminder time to the server, when reminders come from it. */
+  public static async updatePushReminderTime(): Promise<void> {
+    const settings = this.getSettings();
+    if (!settings.push || !this.isPushSupported()) return;
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (subscription) await this.sendSubscription(subscription, settings);
+  }
+
+  /** Stops server reminders for this browser (on turning reminders off, and on signing out). */
+  public static async disablePushReminders(): Promise<void> {
+    this.saveSettings({ push: false });
+    if (!this.isPushSupported()) return;
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription) return;
+      await ApiConfig.request('/reminders/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint: subscription.endpoint }) });
+      await subscription.unsubscribe();
+    } catch {
+      // Offline: the server drops the subscription once the browser stops answering.
+    }
+  }
+
   /**
    * Trigger a test notification so the user immediately experiences the coaching
    */
@@ -124,8 +206,8 @@ export class NotificationService {
     const granted = await this.requestPermission();
     if (!granted) return false;
 
-    return this.showNotification("Momentum Guard Active! 🎯", {
-      body: "High five! Streak notifications are now active. We'll remind you to do a quick 3-minute study session before your streak breaks!",
+    return this.showNotification('Reminders are on', {
+      body: "This is what a reminder looks like. You'll get one at your chosen time on days you haven't studied yet.",
       data: { url: '/' },
     });
   }
@@ -135,7 +217,8 @@ export class NotificationService {
    */
   public static async checkDailyReminder(todayMinutes: number, currentStreak: number): Promise<void> {
     const settings = this.getSettings();
-    if (!settings.enabled || Notification.permission !== 'granted') return;
+    // With push on, the server sends the reminder (even with Studify closed); don't send a second one.
+    if (!settings.enabled || settings.push || Notification.permission !== 'granted') return;
 
     // If student has already studied today, streak is safe!
     if (todayMinutes > 0) return;
@@ -157,7 +240,7 @@ export class NotificationService {
         : `Keep your study momentum alive today! ✨`;
 
       const success = await this.showNotification(streakText, {
-        body: `Just 3 minutes of quick flashcard practice will lock in today's progress. Your 3D study partner is ready! 🎯`,
+        body: `A few minutes of flashcards keeps your streak going.`,
         data: { url: '/?launch=quick_sprint' },
         requireInteraction: true,
       });

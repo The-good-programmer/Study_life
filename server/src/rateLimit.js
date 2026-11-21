@@ -49,6 +49,10 @@ const DEFAULTS = {
   login: { max: 20, windowMs: 10 * MINUTE }, // per IP
   loginEmail: { max: 8, windowMs: 10 * MINUTE }, // per IP + email: stops guessing one account's password
   google: { max: 40, windowMs: 10 * MINUTE }, // per IP
+  forgot: { max: 5, windowMs: 60 * MINUTE }, // per IP
+  forgotEmail: { max: 3, windowMs: 60 * MINUTE }, // per email: stops flooding one inbox
+  reset: { max: 20, windowMs: 60 * MINUTE }, // per IP
+  reminders: { max: 30, windowMs: 10 * MINUTE }, // per IP
 };
 
 export const limiters = {};

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ResetPasswordForm } from './PasswordResetForms';
 import { X, User, UserPlus, LogIn, RefreshCw, Edit3 } from 'lucide-react';
 import type { UserAccount, GoogleProfilePayload } from '../../types';
 import { AuthService } from '../../services/authService';
@@ -17,17 +18,19 @@ import { EditProfileTab } from './EditProfileTab';
 import { SwitchAccountTab } from './SwitchAccountTab';
 import { GoogleClientIdDialog } from './GoogleClientIdDialog';
 
-type AuthTab = 'login' | 'register' | 'profile' | 'switch' | 'edit' | 'google-setup';
+type AuthTab = 'login' | 'register' | 'profile' | 'switch' | 'edit' | 'google-setup' | 'reset';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialTab?: 'login' | 'register' | 'profile';
   onUserChanged?: (user: UserAccount | null) => void;
+  /** From a password reset email: opens on "choose a new password". */
+  resetToken?: string | null;
 }
 
-const defaultTab = (user: UserAccount | null, initialTab: AuthModalProps['initialTab']): AuthTab =>
-  user ? 'profile' : initialTab === 'register' ? 'register' : 'login';
+const defaultTab = (user: UserAccount | null, initialTab: AuthModalProps['initialTab'], resetToken?: string | null): AuthTab =>
+  resetToken ? 'reset' : user ? 'profile' : initialTab === 'register' ? 'register' : 'login';
 
 /**
  * Account modal shell. It owns navigation, the signed-in user and the shared Google
@@ -38,10 +41,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   initialTab = 'login',
   onUserChanged,
+  resetToken,
 }) => {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => AuthService.getCurrentUser());
   const [allAccounts, setAllAccounts] = useState<UserAccount[]>(() => AuthService.getAllAccounts());
-  const [tab, setTab] = useState<AuthTab>(() => defaultTab(AuthService.getCurrentUser(), initialTab));
+  const [tab, setTab] = useState<AuthTab>(() => defaultTab(AuthService.getCurrentUser(), initialTab, resetToken));
   const [loginPrefill, setLoginPrefill] = useState<LoginPrefill | null>(null);
 
   // Google sign-in is shared by the login and register tabs
@@ -61,7 +65,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setAllAccounts(AuthService.getAllAccounts());
       setLoginPrefill(null);
       setGoogleError(null);
-      setTab(defaultTab(user, initialTab));
+      setTab(defaultTab(user, initialTab, resetToken));
     }
   }
 
@@ -242,6 +246,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
+          {tab === 'reset' && resetToken && (
+            <ResetPasswordForm
+              token={resetToken}
+              onDone={user => {
+                setCurrentUser(user);
+                onUserChanged?.(user);
+                onClose();
+              }}
+              onAskAgain={() => setTab('login')}
+            />
+          )}
+
           {tab === 'login' && !currentUser && (
             <LoginTab
               key={loginPrefill?.email ?? 'login'}

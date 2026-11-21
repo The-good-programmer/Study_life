@@ -12,6 +12,8 @@ import { handleAuthRoutes } from './routes/authRoutes.js';
 import { handleSyncRoutes } from './routes/syncRoutes.js';
 import { handleDeckRoutes } from './routes/deckRoutes.js';
 import { handleCalendarRoutes } from './routes/calendarRoutes.js';
+import { handleReminderRoutes } from './routes/reminderRoutes.js';
+import { createResendMailer } from './mailer.js';
 import * as defaultAi from './ai.js';
 import { checkAiRequest } from './aiGuard.js';
 import { clientIp } from './rateLimit.js';
@@ -20,7 +22,7 @@ const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5MB
 
 const DEFAULT_ALLOWED_ORIGINS = ['http://localhost:5173', 'http://localhost:5175'];
 
-function getAllowedOrigins() {
+export function getAllowedOrigins() {
   const configured = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
     .map((o) => o.trim().replace(/\/+$/, ''))
@@ -92,8 +94,15 @@ const QUOTA_MESSAGES = {
   all: 'The shared AI service has reached its daily limit.',
 };
 
-export function createApp({ ai = defaultAi } = {}) {
+/** The site the app is served from (for links in emails): the first allowed origin that isn't local. */
+export function siteUrlFrom(origins) {
+  const list = [...origins];
+  return list.find((o) => !/localhost|127\.0\.0\.1/.test(o)) || list[0] || '';
+}
+
+export function createApp({ ai = defaultAi, mailer = createResendMailer() } = {}) {
   const allowedOrigins = getAllowedOrigins();
+  const siteUrl = siteUrlFrom(allowedOrigins);
 
   return async function handleRequest(req, res) {
     const startTime = Date.now();
@@ -202,7 +211,7 @@ export function createApp({ ai = defaultAi } = {}) {
       }
 
       // 3. AUTHENTICATION ROUTES
-      if (await handleAuthRoutes(req, res, pathname, body)) {
+      if (await handleAuthRoutes(req, res, pathname, body, { mailer, siteUrl })) {
         return;
       }
 
@@ -216,7 +225,12 @@ export function createApp({ ai = defaultAi } = {}) {
         return;
       }
 
-      // 6. CALENDAR FEED ROUTES
+      // 6. STUDY REMINDER ROUTES
+      if (await handleReminderRoutes(req, res, pathname, body)) {
+        return;
+      }
+
+      // 7. CALENDAR FEED ROUTES
       if (await handleCalendarRoutes(req, res, pathname, body, searchParams)) {
         return;
       }
