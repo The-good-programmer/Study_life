@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FocusLogEntry, FocusTask, PlannerItem } from '../types';
-import { FocusService, LATE_AFTER_MS, completionMessage, plannerSuggestions, summarize } from './focusService';
+import { AWAY_AFTER_MS, FocusService, completionMessage, plannerSuggestions, summarize } from './focusService';
 import { PlannerService, dayKey } from './plannerService';
 import { StorageService } from './storageService';
 
@@ -44,7 +44,7 @@ describe('finishing a focus session', () => {
 
   it("doesn't start the next phase when the ending is noticed long after", () => {
     FocusService.start(T0);
-    const done = FocusService.tick(T0 + 25 * MIN + LATE_AFTER_MS + 1)!;
+    const done = FocusService.tick(T0 + 25 * MIN + AWAY_AFTER_MS + 1)!;
     expect(done.late).toBe(true);
     expect(done.next.status).toBe('idle');
     // The session itself still counts, at the time it ended.
@@ -56,6 +56,82 @@ describe('finishing a focus session', () => {
     FocusService.start(T0);
     expect(FocusService.tick(T0 + 5 * MIN)?.finished).toBe('short-break');
     expect(FocusService.getLog()).toHaveLength(0);
+  });
+});
+
+describe('noticing the end late', () => {
+  it('still counts a student as there when a background tab noticed the end a minute late', () => {
+    FocusService.start(T0);
+    const done = FocusService.tick(T0 + 25 * MIN + 70_000)!;
+    expect(done.late).toBe(false);
+    expect(done.endedAt).toBe(T0 + 25 * MIN);
+    expect(done.next.status).toBe('running');
+  });
+});
+
+describe('finishing early', () => {
+  it('counts the minutes focused, and the session when most of it was done', () => {
+    const task = FocusService.addTask('Essay')!;
+    FocusService.start(T0);
+    expect(FocusService.canFinishEarly(T0 + 30_000)).toBe(false);
+    expect(FocusService.finishEarly(T0 + 30_000)).toBeNull();
+
+    const entry = FocusService.finishEarly(T0 + 18 * MIN + 20_000)!;
+    expect(entry.minutes).toBe(18);
+    expect(FocusService.getTasks().find(t => t.id === task.id)!.pomodoros).toBe(1);
+    expect(FocusService.getTimer()).toMatchObject({ phase: 'short-break', status: 'running', completedInCycle: 1 });
+  });
+
+  it("logs a short session's minutes without counting it as a session", () => {
+    const task = FocusService.addTask('Essay')!;
+    FocusService.start(T0);
+    FocusService.pause(T0 + 5 * MIN);
+    // Time spent paused doesn't count.
+    const entry = FocusService.finishEarly(T0 + 60 * MIN)!;
+    expect(entry.minutes).toBe(5);
+    expect(FocusService.getTasks().find(t => t.id === task.id)!.pomodoros).toBe(0);
+    expect(FocusService.getTimer()).toMatchObject({ phase: 'short-break', status: 'idle', completedInCycle: 0 });
+  });
+
+  it("can't finish a break early", () => {
+    FocusService.choosePhase('short-break');
+    FocusService.start(T0);
+    expect(FocusService.finishEarly(T0 + 3 * MIN)).toBeNull();
+  });
+});
+
+describe('the daily goal', () => {
+  it('adds finished focus time to today\'s minutes and the streak', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0 + 25 * MIN);
+    FocusService.start(T0);
+    FocusService.tick(T0 + 25 * MIN);
+    const stats = StorageService.getStats();
+    expect(stats.todayMinutes).toBe(25);
+    expect(stats.currentStreak).toBe(1);
+  });
+
+  it('counts a review done during a focus session once', () => {
+    vi.useFakeTimers();
+    // A 10-minute review ends 20 minutes into the focus session.
+    vi.setSystemTime(T0 + 20 * MIN);
+    StorageService.recordStudyMinutes(10);
+    expect(StorageService.getStats().todayMinutes).toBe(10);
+    vi.setSystemTime(T0 + 25 * MIN);
+    FocusService.start(T0);
+    FocusService.tick(T0 + 25 * MIN);
+    expect(StorageService.getStats().todayMinutes).toBe(25);
+  });
+
+  it('counts a review that ends after the focus session once too', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0 + 25 * MIN);
+    FocusService.start(T0);
+    FocusService.tick(T0 + 25 * MIN);
+    // A 15-minute review from minute 15 to minute 30: only its last 5 minutes are new.
+    vi.setSystemTime(T0 + 30 * MIN);
+    StorageService.recordStudyMinutes(15);
+    expect(StorageService.getStats().todayMinutes).toBe(30);
   });
 });
 

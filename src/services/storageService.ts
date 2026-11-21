@@ -2,6 +2,7 @@ import type { EarningEntry, ExamReport, FocusLogEntry, FocusTask, InterleavingSe
 import { deckWithSavedProgress, withSavedProgress } from '../utils/cardProgress';
 import { STARTING_COINS, guestEarningsAllowance, transferableGuestCoins } from './economy/wallet';
 import { IndexedDbService } from './indexedDbService';
+import { uncoveredMs, type StudyInterval } from '../utils/studyIntervals';
 
 const STORAGE_KEYS = {
   SESSIONS: 'studify_sessions_v1',
@@ -22,6 +23,7 @@ const STORAGE_KEYS = {
   FOCUS_TASKS: 'studify_focus_tasks_v1',
   FOCUS_LOG: 'studify_focus_log_v1',
   FOCUS_NOTES: 'studify_focus_notes_v1',
+  STUDY_INTERVALS: 'studify_study_intervals_v1',
 };
 
 /** The Monday a date's week starts on, as YYYY-MM-DD in UTC. */
@@ -67,6 +69,7 @@ const PROFILE_DATA_KEYS = [
   STORAGE_KEYS.FOCUS_TASKS,
   STORAGE_KEYS.FOCUS_LOG,
   STORAGE_KEYS.FOCUS_NOTES,
+  STORAGE_KEYS.STUDY_INTERVALS,
 ];
 
 const LEVEL_TITLES = [
@@ -514,9 +517,36 @@ export class StorageService {
     return stats;
   }
 
-  public static recordStudyMinutes(minutes: number) {
+  /** How long recent study intervals are kept, to tell when new study time overlaps them. */
+  private static readonly STUDY_INTERVAL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+  /** Study time recorded in the last day, from reviews and focus sessions. */
+  private static getRecentStudyIntervals(now: number): StudyInterval[] {
+    const cutoff = now - this.STUDY_INTERVAL_WINDOW_MS;
+    return this.readArray<StudyInterval>(STORAGE_KEYS.STUDY_INTERVALS).filter(
+      i => typeof i?.start === 'number' && typeof i?.end === 'number' && i.end > cutoff,
+    );
+  }
+
+  /**
+   * Adds study time to today's minutes, the streak and the activity history. `interval` is when
+   * the time was spent (by default, the `minutes` just before now). Time already recorded for an
+   * overlapping interval (reviewing during a focus session, say) counts once, not twice.
+   */
+  public static recordStudyMinutes(minutes: number, interval?: StudyInterval) {
+    const now = Date.now();
+    const span = interval ?? { start: now - Math.max(0, minutes) * 60_000, end: now };
+    const recent = this.getRecentStudyIntervals(now);
+    const uncovered = uncoveredMs(recent, span);
+    const overlapped = uncovered < span.end - span.start;
+    if (span.end > span.start) {
+      this.safeSetItem(this.getKey(STORAGE_KEYS.STUDY_INTERVALS), JSON.stringify([...recent, { start: span.start, end: span.end }]));
+    }
+
     const stats = this.recordActiveStudyDay();
-    const added = Math.max(1, Math.round(minutes));
+    // A session with no overlap counts at least a minute, as it always has.
+    const added = overlapped ? Math.round(uncovered / 60_000) : Math.max(1, Math.round(minutes));
+    if (added <= 0) return;
     stats.totalStudyMinutes += added;
     stats.todayMinutes = (stats.todayMinutes || 0) + added;
     this.saveStats(stats);

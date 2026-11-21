@@ -4,6 +4,7 @@ import { PlannerService, dayKey, daysBetween, type DayPlan } from './plannerServ
 import {
   choosePhase,
   cleanSettings,
+  elapsedAt,
   cleanTimerState,
   finish,
   isDue,
@@ -28,9 +29,13 @@ const TIMER_KEY = 'studify_focus_timer_v1';
 
 /**
  * A phase noticed this long after it ended (a closed laptop, a page reopened hours later)
- * doesn't start the next phase on its own, and doesn't chime.
+ * doesn't start the next phase on its own, and doesn't chime. Browsers check timers in
+ * hidden tabs as rarely as once a minute, so anything shorter would count a student who
+ * was there all along as away.
  */
-export const LATE_AFTER_MS = 60_000;
+export const AWAY_AFTER_MS = 120_000;
+/** Stopping a focus session earlier than this counts nothing. */
+export const MIN_COUNTED_MS = 60_000;
 /** Finished sessions older than this are dropped from the log. */
 export const LOG_RETENTION_DAYS = 120;
 export const MAX_TASKS = 200;
@@ -41,6 +46,8 @@ export const MAX_SUGGESTIONS = 5;
 
 export interface FocusCompletion {
   finished: FocusPhase;
+  /** When the finished phase ended (epoch ms). */
+  endedAt: number;
   next: TimerState;
   /** Noticed well after it ended: say so quietly instead of chiming. */
   late: boolean;
@@ -124,27 +131,38 @@ const currentTask = (): FocusTask | undefined => {
   return taskId ? StorageService.getFocusTasks().find(t => t.id === taskId && !t.done) : undefined;
 };
 
+/** Whether the current focus session has run long enough to be finished early and counted. */
+const canFinishEarly = (now: number = Date.now()): boolean => {
+  const timer = getTimer();
+  return timer.phase === 'focus' && timer.status !== 'idle' && elapsedAt(timer, now) >= MIN_COUNTED_MS;
+};
+
 const saveTasks = (tasks: FocusTask[]) => {
   StorageService.saveFocusTasks(tasks);
   notify();
 };
 
-/** Saves a finished focus session and counts it for its task. */
-const recordFocus = (timer: TimerState, endedAtMs: number): FocusLogEntry => {
+/**
+ * Saves focus time: in the focus log, for its task (when `countForTask`), and towards the
+ * daily goal and streak (time also spent reviewing cards is counted once).
+ */
+const recordFocus = (timer: TimerState, focusedMs: number, endedAtMs: number, countForTask: boolean): FocusLogEntry => {
   const ended = new Date(endedAtMs);
+  const minutes = Math.max(1, Math.floor(focusedMs / 60_000 + 0.001));
   const tasks = StorageService.getFocusTasks();
   const task = timer.taskId ? tasks.find(t => t.id === timer.taskId) : undefined;
   const entry: FocusLogEntry = {
     id: newId('focus'),
     day: dayKey(ended),
     endedAt: ended.toISOString(),
-    minutes: Math.max(1, Math.round(timer.durationMs / 60_000)),
+    minutes,
     ...(task ? { taskId: task.id, taskTitle: task.title } : {}),
   };
   const today = dayKey(ended);
   const kept = StorageService.getFocusLog().filter(e => daysBetween(e.day, today) <= LOG_RETENTION_DAYS);
   StorageService.saveFocusLog([...kept, entry]);
-  if (task) StorageService.saveFocusTasks(tasks.map(t => (t.id === task.id ? { ...t, pomodoros: t.pomodoros + 1 } : t)));
+  if (task && countForTask) StorageService.saveFocusTasks(tasks.map(t => (t.id === task.id ? { ...t, pomodoros: t.pomodoros + 1 } : t)));
+  StorageService.recordStudyMinutes(minutes, { start: endedAtMs - focusedMs, end: endedAtMs });
   return entry;
 };
 
@@ -211,12 +229,29 @@ export const FocusService = {
   tick(now: number = Date.now()): FocusCompletion | null {
     const timer = getTimer();
     if (!isDue(timer, now) || timer.endsAt === null) return null;
-    const late = now - timer.endsAt > LATE_AFTER_MS;
+    const late = now - timer.endsAt > AWAY_AFTER_MS;
     const next = finish(timer, getSettings(), now, !late);
     writeJson(TIMER_KEY, next);
-    const entry = timer.phase === 'focus' ? recordFocus(timer, timer.endsAt) : undefined;
+    const entry = timer.phase === 'focus' ? recordFocus(timer, timer.durationMs, timer.endsAt, true) : undefined;
     notify();
-    return { finished: timer.phase, next, late, entry };
+    return { finished: timer.phase, endedAt: timer.endsAt, next, late, entry };
+  },
+
+  canFinishEarly,
+
+  /**
+   * Ends a focus session before its time and counts the minutes focused. It counts as a
+   * session for its task and the long-break cycle when at least half of it was done.
+   */
+  finishEarly(now: number = Date.now()): FocusLogEntry | null {
+    if (!canFinishEarly(now)) return null;
+    const timer = getTimer();
+    const settings = getSettings();
+    const focusedMs = elapsedAt(timer, now);
+    const mostly = focusedMs * 2 >= timer.durationMs;
+    const entry = recordFocus(timer, focusedMs, now, mostly);
+    setTimer(mostly ? finish(timer, settings, now) : skip(timer, settings));
+    return entry;
   },
 
   getTasks(): FocusTask[] {

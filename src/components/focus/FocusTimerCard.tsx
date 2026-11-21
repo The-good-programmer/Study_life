@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Pause, Play, RotateCcw, Settings2, SkipForward } from 'lucide-react';
+import { CircleCheck, Pause, Play, RotateCcw, Settings2, SkipForward } from 'lucide-react';
 import type { FocusTask } from '../../types';
-import { FocusService } from '../../services/focusService';
-import { PHASES, formatClock, progressAt, remainingAt, type FocusSettings, type TimerState } from '../../services/focusTimer';
+import { FocusService, MIN_COUNTED_MS } from '../../services/focusService';
+import { PHASES, elapsedAt, formatClock, progressAt, remainingAt, type FocusSettings, type TimerState } from '../../services/focusTimer';
 import { soundEngine } from '../../services/soundEngine';
 import { PHASE_LABELS } from '../../hooks/useFocusTimer';
 import { cn } from '../../utils/cn';
@@ -40,6 +40,9 @@ export const FocusTimerCard: React.FC<FocusTimerCardProps> = ({ timer, settings,
   const openTasks = tasks.filter(t => !t.done);
   const current = openTasks.find(t => t.id === timer.taskId);
   const untilLong = Math.max(0, settings.longBreakEvery - timer.completedInCycle);
+  const elapsed = elapsedAt(timer, now);
+  const canFinish = timer.phase === 'focus' && timer.status !== 'idle' && elapsed >= MIN_COUNTED_MS;
+  const focusedMinutes = Math.floor(elapsed / 60_000);
 
   // Space starts and pauses, unless the student is typing.
   useEffect(() => {
@@ -105,12 +108,22 @@ export const FocusTimerCard: React.FC<FocusTimerCardProps> = ({ timer, settings,
           >
             {mainLabel}
           </Button>
-          <IconButton icon={SkipForward} label={isBreak ? 'Skip the break' : 'Skip to the break'} onClick={() => FocusService.skip()} />
+          <IconButton
+            icon={SkipForward}
+            label={isBreak ? 'Skip the break' : 'Skip to the break (this session is not counted)'}
+            onClick={() => FocusService.skip()}
+          />
         </div>
 
-        <p className="hidden items-center gap-1.5 text-xs text-ink-subtle sm:flex">
-          <Kbd>Space</Kbd> to start or pause
-        </p>
+        {canFinish ? (
+          <Button size="sm" variant="ghost" icon={CircleCheck} onClick={() => FocusService.finishEarly()}>
+            Finish now and count {focusedMinutes} min
+          </Button>
+        ) : (
+          <p className="hidden h-8 items-center gap-1.5 text-xs text-ink-subtle sm:flex">
+            <Kbd>Space</Kbd> to start or pause
+          </p>
+        )}
       </div>
 
       {isBreak ? (
