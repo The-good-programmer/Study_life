@@ -418,7 +418,7 @@
   --line-strong: rgb(20 20 30 / 0.17);
   --ink: #15161c;
   --ink-muted: #4a4d59;
-  --ink-subtle: #7b7e8a;
+  --ink-subtle: #676a76; /* 4.8:1 or better on every light background (WCAG AA for small text) */
   --brand: oklch(0.53 0.2 276);
   --brand-hover: oklch(0.48 0.2 276);
   --brand-soft: oklch(0.53 0.2 276 / 0.1);

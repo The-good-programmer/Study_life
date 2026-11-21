@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { GoogleAuthService } from '../../services/googleAuthService';
 import { Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import type { GoogleProfilePayload, UserAccount } from '../../types';
 import { AuthService } from '../../services/authService';
@@ -85,8 +86,12 @@ export const LoginTab: React.FC<LoginTabProps> = ({
       <ErrorBanner message={error} />
       <ErrorBanner message={googleError} />
 
-      <GoogleSignInButton label="Continue with Google" loading={isGoogleLoading} onClick={onGoogleClick} />
-      <OrDivider label="or sign in with email" />
+      {GoogleAuthService.isGoogleConfigured() && (
+        <>
+          <GoogleSignInButton label="Continue with Google" loading={isGoogleLoading} onClick={onGoogleClick} />
+          <OrDivider label="or sign in with email" />
+        </>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">

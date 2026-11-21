@@ -185,7 +185,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     ? `Signed in as ${currentUser.name}`
     : tab === 'google-setup'
     ? 'Tell us your level so Studify can pitch your decks at the right difficulty.'
-    : 'Your account and study data are saved in this browser.';
+    : tab === 'reset'
+    ? 'Choose a new password for your account.'
+    : 'Free. Keeps your decks, planner and Focus the same on all your devices.';
 
   return (
     <Dialog isOpen={isOpen} onClose={onClose} titleId="auth-modal-title" className="max-w-lg">

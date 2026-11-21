@@ -21,6 +21,7 @@ import {
   ChevronRight,
   CalendarDays,
   Timer,
+  Download,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { UserStats, UserAccount } from '../../types';
@@ -56,6 +57,8 @@ interface SidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: (collapsed: boolean) => void;
   onOpenCharacterCustomizer?: () => void;
+  /** Installs Studify as an app; left out when it is installed or can't be. */
+  onInstallApp?: () => void;
 }
 
 interface NavItemProps {
@@ -132,6 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed: propIsCollapsed,
   onToggleCollapse,
   onOpenCharacterCustomizer,
+  onInstallApp,
 }) => {
   // Local collapsed state fallback if not controlled from parent
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
@@ -172,6 +176,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleCollapse]);
+
+  // The phone menu closes with Escape, like other dialogs.
+  useEffect(() => {
+    if (!isOpenMobile || !onCloseMobile) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) onCloseMobile();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpenMobile, onCloseMobile]);
 
   const [foldersCount, setFoldersCount] = useState<number>(() => StorageService.getFolders().length);
   const [walletCoins, setWalletCoins] = useState<number>(() => lifeSimService.getWalletBalance());
@@ -401,6 +415,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             {!collapsed && <span>Working offline</span>}
           </div>
+        )}
+
+        {onInstallApp && (
+          <NavItem icon={Download} label="Install app" collapsed={collapsed} active={false} onClick={go(onInstallApp)} tooltip="Install Studify as an app" />
         )}
 
         <NavItem
