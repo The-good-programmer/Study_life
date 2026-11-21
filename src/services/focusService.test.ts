@@ -235,3 +235,31 @@ describe('completionMessage', () => {
     expect(completionMessage(breakDone, FocusService.getSettings()).title).toBe("Break's over");
   });
 });
+
+describe('moveTask', () => {
+  const titles = () => FocusService.getTasks().map(t => t.title);
+
+  it('reorders open tasks and keeps done ones last', () => {
+    const a = FocusService.addTask('A')!;
+    FocusService.addTask('B');
+    const c = FocusService.addTask('C')!;
+    const d = FocusService.addTask('D')!;
+    FocusService.updateTask(d.id, { done: true });
+
+    FocusService.moveTask(c.id, 0);
+    expect(titles()).toEqual(['C', 'A', 'B', 'D']);
+    FocusService.moveTask(a.id, 99);
+    expect(titles()).toEqual(['C', 'B', 'A', 'D']);
+    // Done tasks don't move, and unknown ids change nothing.
+    FocusService.moveTask(d.id, 0);
+    FocusService.moveTask('nope', 0);
+    expect(titles()).toEqual(['C', 'B', 'A', 'D']);
+  });
+});
+
+describe('presets', () => {
+  it('give a waiting timer the preset length at once', () => {
+    FocusService.saveSettings({ focusMinutes: 50, shortBreakMinutes: 10, longBreakMinutes: 20 });
+    expect(FocusService.getTimer().durationMs).toBe(50 * MIN);
+  });
+});

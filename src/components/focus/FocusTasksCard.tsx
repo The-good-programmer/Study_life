@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { CalendarDays, Crosshair, Plus, Timer, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, CalendarDays, GripVertical, Pencil, Plus, Timer, Trash2 } from 'lucide-react';
 import type { FocusTask, PlannerItem } from '../../types';
 import { FocusService, MAX_TASK_TITLE } from '../../services/focusService';
 import { dayKey, daysBetween, relativeDay } from '../../services/plannerService';
 import { cn } from '../../utils/cn';
+import { ActionMenu } from '../ui/ActionMenu';
 import { Badge, Button, Card, IconButton, SectionHeader } from '../ui/primitives';
 
 interface FocusTasksCardProps {
@@ -12,64 +13,167 @@ interface FocusTasksCardProps {
   suggestions: PlannerItem[];
 }
 
-const TaskRow: React.FC<{ task: FocusTask; current: boolean }> = ({ task, current }) => (
-  <li
-    className={cn(
-      'group flex items-center gap-3 rounded-xl border bg-canvas px-3 py-2',
-      current ? 'border-brand/50 bg-brand-soft' : 'border-line',
-      task.done && 'opacity-60',
-    )}
-  >
+/** Shown on hover or keyboard focus where there is a mouse; always shown on touch screens. */
+const REVEAL = '[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100';
+
+const RenameField: React.FC<{ task: FocusTask; onDone: () => void }> = ({ task, onDone }) => {
+  const [value, setValue] = useState(task.title);
+  const save = () => {
+    if (value.trim() && value !== task.title) FocusService.updateTask(task.id, { title: value });
+    onDone();
+  };
+  return (
     <input
-      type="checkbox"
-      checked={task.done}
-      onChange={e => FocusService.updateTask(task.id, { done: e.target.checked })}
-      aria-label={task.done ? `Mark ${task.title} as not done` : `Mark ${task.title} as done`}
-      className="h-4 w-4 shrink-0 accent-[var(--brand)] cursor-pointer"
+      autoFocus
+      value={value}
+      maxLength={MAX_TASK_TITLE}
+      aria-label={`Rename ${task.title}`}
+      onChange={e => setValue(e.target.value)}
+      onBlur={save}
+      onKeyDown={e => {
+        if (e.key === 'Enter') save();
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onDone();
+        }
+      }}
+      onFocus={e => e.target.select()}
+      className="h-8 min-w-0 flex-1 rounded-lg border border-brand bg-canvas px-2 text-[13px] text-ink focus:outline-none"
     />
-    <span className="min-w-0 flex-1">
-      <span className={cn('block truncate text-[13px] font-medium text-ink', task.done && 'line-through')}>{task.title}</span>
-      {(current || task.plannerItemId) && (
-        <span className="block truncate text-[11px] text-ink-subtle">
-          {current ? 'Working on this now' : 'From your planner'}
+  );
+};
+
+interface TaskRowProps {
+  task: FocusTask;
+  index: number;
+  count: number;
+  current: boolean;
+  dragOver: boolean;
+  onDragStart: () => void;
+  onDragOver: () => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
+}
+
+const TaskRow: React.FC<TaskRowProps> = ({ task, index, count, current, dragOver, onDragStart, onDragOver, onDrop, onDragEnd }) => {
+  const [renaming, setRenaming] = useState(false);
+  const movable = !task.done && count > 1;
+
+  // Tapping a task works on it; tapping the one already being worked on renames it.
+  const onTitleClick = () => {
+    if (task.done) return;
+    if (current) setRenaming(true);
+    else FocusService.setTimerTask(task.id);
+  };
+
+  return (
+    <li
+      draggable={movable && !renaming}
+      onDragStart={e => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', task.id);
+        onDragStart();
+      }}
+      onDragOver={e => {
+        if (!movable) return;
+        e.preventDefault();
+        onDragOver();
+      }}
+      onDrop={e => {
+        e.preventDefault();
+        onDrop();
+      }}
+      onDragEnd={onDragEnd}
+      className={cn(
+        'group relative flex items-center gap-2 rounded-xl border py-1.5 pl-1.5 pr-1.5 transition-colors',
+        current ? 'border-brand/50 bg-brand-soft' : 'border-line bg-canvas hover:border-line-strong',
+        task.done && 'opacity-60',
+        dragOver && 'ring-2 ring-brand/60',
+      )}
+    >
+      {movable ? (
+        <span className={cn('hidden cursor-grab text-ink-subtle active:cursor-grabbing [@media(hover:hover)]:block', REVEAL)} aria-hidden="true">
+          <GripVertical className="h-4 w-4" />
+        </span>
+      ) : (
+        <span className="hidden w-4 [@media(hover:hover)]:block" aria-hidden="true" />
+      )}
+      <input
+        type="checkbox"
+        checked={task.done}
+        onChange={e => FocusService.updateTask(task.id, { done: e.target.checked })}
+        aria-label={task.done ? `Mark ${task.title} as not done` : `Mark ${task.title} as done`}
+        className="ml-1 h-4 w-4 shrink-0 accent-[var(--brand)] cursor-pointer"
+      />
+      {renaming ? (
+        <RenameField task={task} onDone={() => setRenaming(false)} />
+      ) : (
+        <button
+          type="button"
+          onClick={onTitleClick}
+          onDoubleClick={() => setRenaming(true)}
+          disabled={task.done}
+          aria-label={task.done ? task.title : current ? `${task.title}, working on it now. Rename` : `Work on ${task.title}`}
+          className="flex min-h-9 min-w-0 flex-1 flex-col justify-center rounded-lg px-1.5 text-left cursor-pointer disabled:cursor-default"
+        >
+          <span className={cn('block truncate text-[13px] font-medium text-ink', task.done && 'line-through')}>{task.title}</span>
+          {current && <span className="block text-[11px] font-medium text-brand-text">Working on this now</span>}
+          {!current && task.plannerItemId && !task.done && <span className="block text-[11px] text-ink-subtle">From your planner</span>}
+        </button>
+      )}
+      {task.pomodoros > 0 && !renaming && (
+        <span className="flex shrink-0 items-center gap-1 px-1 text-xs tabular-nums text-ink-subtle" title={`${task.pomodoros} focus sessions`}>
+          <Timer className="h-3.5 w-3.5" aria-hidden="true" />
+          {task.pomodoros}
+          <span className="sr-only">focus sessions</span>
         </span>
       )}
-    </span>
-    {task.pomodoros > 0 && (
-      <span className="flex shrink-0 items-center gap-1 text-xs tabular-nums text-ink-subtle" title={`${task.pomodoros} focus sessions`}>
-        <Timer className="h-3.5 w-3.5" aria-hidden="true" />
-        {task.pomodoros}
-        <span className="sr-only">focus sessions</span>
-      </span>
-    )}
-    {!task.done && !current && (
-      <IconButton icon={Crosshair} label={`Work on ${task.title}`} onClick={() => FocusService.setTimerTask(task.id)} className="h-8 w-8" />
-    )}
-    <IconButton
-      icon={Trash2}
-      label={`Delete ${task.title}`}
-      onClick={() => FocusService.removeTask(task.id)}
-      className="h-8 w-8 hover:text-danger"
-    />
-  </li>
-);
+      {!renaming && (
+        <div className={cn('flex shrink-0 items-center transition-opacity', REVEAL)}>
+          <IconButton icon={Trash2} label={`Delete ${task.title}`} onClick={() => FocusService.removeTask(task.id)} className="h-8 w-8 hover:text-danger" />
+          {!task.done && (
+            <ActionMenu
+              label={`More actions for ${task.title}`}
+              items={[
+                { label: 'Rename', icon: Pencil, onSelect: () => setRenaming(true) },
+                ...(index > 0 ? [{ label: 'Move up', icon: ArrowUp, onSelect: () => FocusService.moveTask(task.id, index - 1) }] : []),
+                ...(index < count - 1 ? [{ label: 'Move down', icon: ArrowDown, onSelect: () => FocusService.moveTask(task.id, index + 1) }] : []),
+                { label: 'Delete', icon: Trash2, tone: 'danger' as const, onSelect: () => FocusService.removeTask(task.id) },
+              ]}
+            />
+          )}
+        </div>
+      )}
+    </li>
+  );
+};
 
 /** The tasks for this study session, with homework from the planner offered as tasks. */
 export const FocusTasksCard: React.FC<FocusTasksCardProps> = ({ tasks, currentTaskId, suggestions }) => {
   const [title, setTitle] = useState('');
-  const open = tasks.filter(t => !t.done);
-  const done = tasks.filter(t => t.done);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
   // The day the page opened on, for the due dates below.
   const [today] = useState(() => dayKey(new Date()));
+  const open = tasks.filter(t => !t.done);
+  const done = tasks.filter(t => t.done);
 
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     if (FocusService.addTask(title)) setTitle('');
   };
 
+  const endDrag = () => {
+    setDragId(null);
+    setOverIndex(null);
+  };
+
   return (
     <Card className="space-y-4">
-      <SectionHeader title="Tasks" description="What you'll get done this session." />
+      <SectionHeader
+        title="Tasks"
+        description={open.length > 1 ? 'Tap a task to work on it. Drag to reorder.' : "What you'll get done this session."}
+      />
 
       <form onSubmit={add} className="flex gap-2">
         <label className="sr-only" htmlFor="focus-new-task">
@@ -80,23 +184,37 @@ export const FocusTasksCard: React.FC<FocusTasksCardProps> = ({ tasks, currentTa
           value={title}
           onChange={e => setTitle(e.target.value)}
           maxLength={MAX_TASK_TITLE}
-          placeholder="e.g. Finish chemistry worksheet"
+          placeholder="Add a task, e.g. Chemistry worksheet"
           className="h-10 min-w-0 flex-1 rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
         />
-        <Button type="submit" icon={Plus} disabled={!title.trim()}>
-          Add
+        <Button type="submit" icon={Plus} disabled={!title.trim()} aria-label="Add task">
+          <span className="hidden sm:inline">Add</span>
         </Button>
       </form>
 
       {open.length > 0 ? (
         <ul className="space-y-1.5">
-          {open.map(task => (
-            <TaskRow key={task.id} task={task} current={task.id === currentTaskId} />
+          {open.map((task, index) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              index={index}
+              count={open.length}
+              current={task.id === currentTaskId}
+              dragOver={dragId !== null && dragId !== task.id && overIndex === index}
+              onDragStart={() => setDragId(task.id)}
+              onDragOver={() => setOverIndex(index)}
+              onDrop={() => {
+                if (dragId) FocusService.moveTask(dragId, index);
+                endDrag();
+              }}
+              onDragEnd={endDrag}
+            />
           ))}
         </ul>
       ) : (
-        <p className="rounded-xl border border-dashed border-line px-3 py-4 text-center text-[13px] text-ink-subtle">
-          {done.length > 0 ? 'All done. Add another task or take a break.' : 'Add what you want to work on, then start the timer.'}
+        <p className="rounded-xl border border-dashed border-line px-3 py-5 text-center text-[13px] text-ink-subtle">
+          {done.length > 0 ? 'All done. Add another task, or take a break.' : 'Add what you want to work on, then start the timer.'}
         </p>
       )}
 
@@ -110,10 +228,17 @@ export const FocusTasksCard: React.FC<FocusTasksCardProps> = ({ tasks, currentTa
             {suggestions.map(item => {
               const days = daysBetween(today, item.date);
               return (
-                <li key={item.id} className="flex items-center gap-3 rounded-xl border border-dashed border-line px-3 py-2">
-                  <span className="min-w-0 flex-1 truncate text-[13px] text-ink-muted">{item.title}</span>
-                  <Badge tone={days < 0 ? 'danger' : days <= 2 ? 'due' : 'neutral'}>{days < 0 ? 'Overdue' : `Due ${relativeDay(days)}`}</Badge>
-                  <IconButton icon={Plus} label={`Add ${item.title} as a task`} onClick={() => FocusService.addTask(item.title, item.id)} className="h-8 w-8" />
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => FocusService.addTask(item.title, item.id)}
+                    aria-label={`Add ${item.title} as a task`}
+                    className="flex w-full items-center gap-3 rounded-xl border border-dashed border-line px-3 py-2 text-left transition-colors hover:border-line-strong hover:bg-surface-hover cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5 shrink-0 text-ink-subtle" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-ink-muted">{item.title}</span>
+                    <Badge tone={days < 0 ? 'danger' : days <= 2 ? 'due' : 'neutral'}>{days < 0 ? 'Overdue' : `Due ${relativeDay(days)}`}</Badge>
+                  </button>
                 </li>
               );
             })}
@@ -129,8 +254,19 @@ export const FocusTasksCard: React.FC<FocusTasksCardProps> = ({ tasks, currentTa
             <span className="hidden group-open/done:inline">Hide</span>
           </summary>
           <ul className="mt-2 space-y-1.5">
-            {done.map(task => (
-              <TaskRow key={task.id} task={task} current={false} />
+            {done.map((task, index) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                index={index}
+                count={done.length}
+                current={false}
+                dragOver={false}
+                onDragStart={() => {}}
+                onDragOver={() => {}}
+                onDrop={() => {}}
+                onDragEnd={() => {}}
+              />
             ))}
           </ul>
           <Button size="sm" variant="ghost" onClick={() => FocusService.clearDone()} className="mt-2">

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_FOCUS_SETTINGS,
+  FOCUS_PRESETS,
+  matchingPreset,
+  presetSettings,
   choosePhase,
   cleanSettings,
   cleanTimerState,
@@ -142,5 +145,13 @@ describe('formatClock', () => {
     expect(formatClock(400)).toBe('0:01');
     expect(formatClock(0)).toBe('0:00');
     expect(formatClock(105 * MIN)).toBe('105:00');
+  });
+});
+
+describe('presets', () => {
+  it('knows which preset the settings match', () => {
+    expect(matchingPreset(S)).toBe('classic');
+    for (const preset of FOCUS_PRESETS) expect(matchingPreset({ ...S, ...presetSettings(preset) })).toBe(preset.id);
+    expect(matchingPreset({ ...S, focusMinutes: 40 })).toBeNull();
   });
 });
