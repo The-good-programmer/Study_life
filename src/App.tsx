@@ -14,6 +14,7 @@ import { WORLD_3D_ENABLED } from './services/features';
 import { CalendarFeedService } from './services/calendarFeedService';
 import { useFocusTimerAlerts } from './hooks/useFocusTimer';
 import { FocusToast } from './components/focus/FocusToast';
+import { ApiConfig } from './services/apiConfig';
 
 // Lazy-loaded heavy modules and modals for optimal initial bundle performance
 const IngestionHub = lazy(() => import('./components/ingestion/IngestionHub').then(m => ({ default: m.IngestionHub })));
@@ -101,6 +102,9 @@ export function App() {
 
   // The focus timer runs on every page: it chimes and says so when a phase ends.
   const focusAlerts = useFocusTimerAlerts();
+
+  // Start waking the server (it sleeps when idle) so it is ready by the time anyone signs in.
+  useEffect(() => ApiConfig.warmUp(), []);
 
   // Keep a subscribed calendar up to date with the planner.
   useEffect(() => CalendarFeedService.startAutoPublish(), []);

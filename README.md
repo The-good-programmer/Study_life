@@ -109,6 +109,10 @@ Both halves run on [Render](https://render.com), deployed from `fix/audit-harden
 - **CI gate:** `.github/workflows/ci.yml` runs lint, types, tests, the build and `check:build` on every
   PR and push. Set both Render services to *Auto-Deploy: After CI checks pass* so a failing build
   never ships.
+- **Keeping it awake:** `.github/workflows/keep-alive.yml` calls the API's `/api/health` every 14 minutes, so the
+  free Render API is usually awake and the free Supabase database never pauses for inactivity. GitHub pauses scheduled
+  workflows after 60 days without commits; if that happens, re-enable it under *Actions → Keep alive*. The site also
+  wakes the API as soon as it opens.
 - **Rollback:** in Render, open the service's *Events*, pick the last good deploy and choose
   *Rollback*.
 - **Caching:** the service worker (`public/sw.js`, routing in `public/sw-routes.js`) never caches the
