@@ -79,7 +79,18 @@ export function App() {
   const [libraryTab, setLibraryTab] = useState<'my-decks' | 'starred' | 'curated'>('my-decks');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => AuthService.getCurrentUser());
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  // A password reset link (/?reset=<token>) opens sign-in on "choose a new password".
+  const [resetToken, setResetToken] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const token = new URLSearchParams(window.location.search).get('reset');
+    if (token) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('reset');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+    return token;
+  });
+  const [isAuthOpen, setIsAuthOpen] = useState(() => Boolean(resetToken));
   const [authInitialTab, setAuthInitialTab] = useState<'login' | 'register' | 'profile'>('login');
   const [stats, setStats] = useState<UserStats>(StorageService.getStats());
   // Notes from Focus to make a deck from, opened in the Library (with a key to open it afresh).
@@ -122,6 +133,8 @@ export function App() {
   // Keep user and stats synchronized with AuthService
   useEffect(() => {
     const unsubscribe = AuthService.subscribe((user) => {
+      // Signing out stops this browser's reminders for that account.
+      if (!user && NotificationService.getSettings().push) void NotificationService.disablePushReminders();
       setCurrentUser(user);
       setStats(StorageService.getStats());
     });
@@ -602,7 +615,11 @@ export function App() {
           <AuthModal
             isOpen={isAuthOpen}
             initialTab={authInitialTab}
-            onClose={() => setIsAuthOpen(false)}
+            resetToken={resetToken}
+            onClose={() => {
+              setIsAuthOpen(false);
+              setResetToken(null);
+            }}
             onUserChanged={(user) => {
               setCurrentUser(user);
               setStats(StorageService.getStats());

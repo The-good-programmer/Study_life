@@ -500,8 +500,13 @@ export class StorageService {
    * Records active study for today, advancing streak if consecutive day
    */
   public static recordActiveStudyDay(): UserStats {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
     const stats = this.getStats();
+    // Kept at most a minute stale, so studying doesn't save stats on every card.
+    const previous = Date.parse(stats.lastStudiedAt ?? '');
+    const touch = !Number.isFinite(previous) || now.getTime() - previous > 60_000;
+    if (touch) stats.lastStudiedAt = now.toISOString();
 
     if (stats.lastActiveDate !== today) {
       if (stats.lastActiveDate) {
@@ -518,6 +523,8 @@ export class StorageService {
         stats.currentStreak = 1;
       }
       stats.lastActiveDate = today;
+      this.saveStats(stats);
+    } else if (touch) {
       this.saveStats(stats);
     }
 

@@ -75,6 +75,8 @@ npm run server
 | `GEMINI_MODELS` | No | Comma-separated Gemini models to try in order. Defaults to `gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.6-flash`. |
 | `DATABASE_URL` | **Production** | PostgreSQL connection string. Without it, development uses an embedded database in `server/data/pgdata`. |
 | `ALLOWED_ORIGINS` | No | Comma-separated browser origins allowed to call the API. Defaults to the local dev and preview ports. |
+| `RESEND_API_KEY` | For password reset | Sends "Forgot password?" emails through [Resend](https://resend.com). Without it, reset is off and the app says so. |
+| `MAIL_FROM` | No | Sender for those emails, e.g. `Studify <hello@yourdomain.com>` (a domain verified in Resend). Defaults to Resend's test sender, which only delivers to the Resend account's own address. |
 | `PORT` | No | Server port (3001). |
 
 ### Tests, types and lint
@@ -109,6 +111,9 @@ Both halves run on [Render](https://render.com), deployed from `fix/audit-harden
 - **CI gate:** `.github/workflows/ci.yml` runs lint, types, tests, the build and `check:build` on every
   PR and push. Set both Render services to *Auto-Deploy: After CI checks pass* so a failing build
   never ships.
+- **Study reminders:** signed-in students get push notifications at their chosen time on days they haven't studied,
+  even with Studify closed. The API sends them every few minutes (kept awake by the keep-alive workflow) and makes its own
+  Web Push keys on first use (stored in `app_secrets`), so there is nothing to configure.
 - **Keeping it awake:** `.github/workflows/keep-alive.yml` calls the API's `/api/health` every 14 minutes, so the
   free Render API is usually awake and the free Supabase database never pauses for inactivity. GitHub pauses scheduled
   workflows after 60 days without commits; if that happens, re-enable it under *Actions → Keep alive*. The site also

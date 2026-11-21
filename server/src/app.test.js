@@ -41,6 +41,11 @@ function signGoogleToken(claims, { key = privateKey, kid = KID } = {}) {
   return `${header}.${payload}.${b64url(signature)}`;
 }
 
+/** Stands in for the email service: keeps what would have been sent. */
+const sentMail = [];
+const fakeMailer = { send: async (mail) => void sentMail.push(mail) };
+const linkIn = (mail) => mail.text.match(/\?reset=([\w-]+)/)?.[1];
+
 async function api(path, { method = 'GET', token, body, headers: extraHeaders } = {}) {
   const headers = { 'Content-Type': 'application/json', ...extraHeaders };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -90,7 +95,7 @@ beforeAll(async () => {
   });
   fakeAi.consumeDailyQuota = ai.consumeDailyQuota;
 
-  server = http.createServer(createApp({ ai: fakeAi }));
+  server = http.createServer(createApp({ ai: fakeAi, mailer: fakeMailer }));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 }, 60_000); // Starting the embedded database can take a while when the whole suite runs in parallel.
@@ -253,6 +258,134 @@ describe('cloud sync', () => {
   });
 });
 
+describe('forgot password', () => {
+  it('emails a one-time link that sets a new password and signs in', async () => {
+    await register('forgetful@example.com');
+    sentMail.length = 0;
+    const asked = await api('/api/auth/forgot', { method: 'POST', body: { email: 'Forgetful@Example.com' } });
+    expect(asked.status).toBe(200);
+    expect(sentMail).toHaveLength(1);
+    expect(sentMail[0].to).toBe('forgetful@example.com');
+    const token = linkIn(sentMail[0]);
+    expect(token).toBeTruthy();
+
+    // Only a hash of the token is stored.
+    const stored = await db.all('SELECT token_hash FROM password_resets');
+    expect(stored.some((row) => row.token_hash === token)).toBe(false);
+
+    const weak = await api('/api/auth/reset', { method: 'POST', body: { token, password: '123' } });
+    expect(weak.status).toBe(400);
+    const reset = await api('/api/auth/reset', { method: 'POST', body: { token, password: 'brand-new-pass' } });
+    expect(reset.status).toBe(200);
+    expect(reset.data.token).toBeTruthy();
+    expect(reset.data.user.email).toBe('forgetful@example.com');
+
+    // The new password works, the old one doesn't, and the link can't be used twice.
+    expect((await api('/api/auth/login', { method: 'POST', body: { email: 'forgetful@example.com', password: 'brand-new-pass' } })).status).toBe(200);
+    expect((await api('/api/auth/login', { method: 'POST', body: { email: 'forgetful@example.com', password: 'correct-horse' } })).status).toBe(401);
+    expect((await api('/api/auth/reset', { method: 'POST', body: { token, password: 'another-pass' } })).status).toBe(400);
+  });
+
+  it("answers the same for an unknown email, and sends nothing", async () => {
+    sentMail.length = 0;
+    const res = await api('/api/auth/forgot', { method: 'POST', body: { email: 'nobody-here@example.com' } });
+    expect(res.status).toBe(200);
+    expect(res.data.message).toMatch(/If that email has a Studify password/);
+    expect(sentMail).toHaveLength(0);
+  });
+
+  it('refuses an expired link', async () => {
+    await register('slow@example.com');
+    sentMail.length = 0;
+    await api('/api/auth/forgot', { method: 'POST', body: { email: 'slow@example.com' } });
+    const token = linkIn(sentMail[0]);
+    await db.run("UPDATE password_resets SET expires_at = '2000-01-01T00:00:00Z'");
+    expect((await api('/api/auth/reset', { method: 'POST', body: { token, password: 'brand-new-pass' } })).status).toBe(400);
+  });
+
+  it('says so when email is not set up', async () => {
+    const { createApp } = await import('./app.js');
+    const instance = http.createServer(createApp({ ai: fakeAi, mailer: null }));
+    await new Promise((resolve) => instance.listen(0, '127.0.0.1', resolve));
+    try {
+      const res = await fetch(`http://127.0.0.1:${instance.address().port}/api/auth/forgot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'someone@example.com' }),
+      });
+      expect(res.status).toBe(503);
+    } finally {
+      await new Promise((resolve) => instance.close(resolve));
+    }
+  });
+});
+
+describe('study reminders', () => {
+  const subscription = (n) => ({ endpoint: `https://push.example.com/send/${n}`, keys: { p256dh: 'p'.repeat(87), auth: 'a'.repeat(22) } });
+
+  it('gives out a push key, and needs sign-in and valid details to subscribe', async () => {
+    const key = await api('/api/reminders/key');
+    expect(key.status).toBe(200);
+    expect(key.data.publicKey.length).toBeGreaterThan(40);
+    // The same key every time.
+    expect((await api('/api/reminders/key')).data.publicKey).toBe(key.data.publicKey);
+
+    const body = { subscription: subscription(1), timeZone: 'Europe/Sofia', remindAt: '19:00' };
+    expect((await api('/api/reminders/subscribe', { method: 'POST', body })).status).toBe(401);
+    const me = await register('remind-me@example.com');
+    expect((await api('/api/reminders/subscribe', { method: 'POST', token: me.token, body: { ...body, timeZone: 'Mars/Base' } })).status).toBe(400);
+    expect((await api('/api/reminders/subscribe', { method: 'POST', token: me.token, body: { ...body, remindAt: '7pm' } })).status).toBe(400);
+    expect((await api('/api/reminders/subscribe', { method: 'POST', token: me.token, body })).status).toBe(200);
+    expect((await api('/api/reminders/unsubscribe', { method: 'POST', token: me.token, body: { endpoint: body.subscription.endpoint } })).status).toBe(200);
+    expect(await db.one('SELECT endpoint FROM push_subscriptions WHERE endpoint = $1', [body.subscription.endpoint])).toBeNull();
+  });
+
+  it('sends once a day at the local time, to students who have not studied yet', async () => {
+    const { runReminders } = await import('./reminders.js');
+    const lazy = await register('lazy@example.com');
+    const keen = await register('keen@example.com');
+    await db.run('DELETE FROM push_subscriptions');
+    for (const [account, n] of [[lazy, 10], [keen, 11]]) {
+      await api('/api/reminders/subscribe', { method: 'POST', token: account.token, body: { subscription: subscription(n), timeZone: 'Asia/Tokyo', remindAt: '19:00' } });
+    }
+    // Lazy has a due card and a 3-day streak; keen studied today.
+    const yesterday = '2026-11-20T09:00:00.000Z';
+    await api('/api/sync/push', {
+      method: 'POST',
+      token: lazy.token,
+      body: {
+        stats: { currentStreak: 3, lastActiveDate: '2026-11-20', lastStudiedAt: '2026-11-20T12:00:00.000Z' },
+        sessions: [{ id: 'lazy-deck', title: 'Bio', concepts: [{ retrievalCards: [{ id: 'c1', reps: 2, nextReviewDate: yesterday }, { id: 'c2', reps: 0 }] }] }],
+      },
+    });
+    // Keen studied at 08:00 in Tokyo today (23:00 UTC the day before).
+    await api('/api/sync/push', { method: 'POST', token: keen.token, body: { stats: { currentStreak: 9, lastActiveDate: '2026-11-20', lastStudiedAt: '2026-11-20T23:00:00.000Z' } } });
+
+    const sent = [];
+    const send = async (sub, message) => void sent.push({ endpoint: sub.endpoint, message });
+    // 18:59 in Tokyo (09:59 UTC): too early.
+    await runReminders({ now: new Date('2026-11-21T09:59:00Z'), send });
+    expect(sent).toHaveLength(0);
+    // 19:05 in Tokyo: lazy gets one, keen doesn't.
+    await runReminders({ now: new Date('2026-11-21T10:05:00Z'), send });
+    expect(sent.map((s) => s.endpoint)).toEqual([subscription(10).endpoint]);
+    expect(sent[0].message.title).toBe('Your 3-day streak ends at midnight');
+    expect(sent[0].message.body).toMatch(/^1 card is due/);
+    // Not again the same day.
+    await runReminders({ now: new Date('2026-11-21T12:00:00Z'), send });
+    expect(sent).toHaveLength(1);
+  });
+
+  it('drops a subscription the browser has given up', async () => {
+    const { runReminders } = await import('./reminders.js');
+    const gone = await register('push-gone@example.com');
+    await db.run('DELETE FROM push_subscriptions');
+    await api('/api/reminders/subscribe', { method: 'POST', token: gone.token, body: { subscription: subscription(20), timeZone: 'UTC', remindAt: '00:00' } });
+    await runReminders({ now: new Date(), send: async () => { throw Object.assign(new Error('Gone'), { statusCode: 410 }); } });
+    expect(await db.one('SELECT endpoint FROM push_subscriptions WHERE endpoint = $1', [subscription(20).endpoint])).toBeNull();
+  });
+});
+
 describe('AI proxy', () => {
   it('requires sign-in', async () => {
     const res = await api('/api/ai/generate', { method: 'POST', body: { contents: 'hi' } });
@@ -324,7 +457,7 @@ describe('security headers', () => {
 describe('database', () => {
   it('applies its migrations once and reports healthy', async () => {
     const applied = await db.all('SELECT id FROM schema_migrations');
-    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds', '005_user_documents']);
+    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds', '005_user_documents', '006_resets_and_reminders']);
 
     const health = await api('/api/health');
     expect(health.status).toBe(200);
