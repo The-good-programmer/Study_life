@@ -297,6 +297,22 @@ export const FocusService = {
     return updated;
   },
 
+  /**
+   * Moves an open task to a new place among the open tasks (0 is the top). Done tasks keep
+   * their order after the open ones.
+   */
+  moveTask(id: string, toIndex: number): void {
+    const tasks = StorageService.getFocusTasks();
+    const open = tasks.filter(t => !t.done);
+    const from = open.findIndex(t => t.id === id);
+    if (from === -1) return;
+    const to = Math.max(0, Math.min(open.length - 1, Math.round(toIndex)));
+    if (to === from) return;
+    const [moved] = open.splice(from, 1);
+    open.splice(to, 0, moved);
+    saveTasks([...open, ...tasks.filter(t => t.done)]);
+  },
+
   removeTask(id: string): void {
     saveTasks(StorageService.getFocusTasks().filter(t => t.id !== id));
     if (getTimer().taskId === id) setTimer({ ...getTimer(), taskId: null });

@@ -10,7 +10,7 @@ interface FocusToastProps {
 
 /** Says on screen that a focus session or break has ended. */
 export const FocusToast: React.FC<FocusToastProps> = ({ message, onDismiss, onOpen }) => (
-  <div className="pointer-events-none fixed inset-x-0 top-16 z-50 flex justify-center px-4" role="status" aria-live="polite">
+  <div className="pointer-events-none fixed inset-x-0 top-16 z-[70] flex justify-center px-4" role="status" aria-live="polite">
     {message && (
       <div className="pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-2xl border border-line-strong bg-surface-solid py-2.5 pl-3 pr-2 shadow-[0_18px_40px_-16px_rgb(0_0_0/0.6)] animate-rise">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand-text">

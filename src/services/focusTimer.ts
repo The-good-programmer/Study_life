@@ -34,6 +34,31 @@ export const DEFAULT_FOCUS_SETTINGS: FocusSettings = {
   keepAwake: true,
 };
 
+export interface FocusPreset {
+  id: string;
+  /** "25 / 5": focus and short-break minutes. */
+  label: string;
+  focusMinutes: number;
+  shortBreakMinutes: number;
+  longBreakMinutes: number;
+}
+
+/** Common session lengths, one tap away. */
+export const FOCUS_PRESETS: readonly FocusPreset[] = [
+  { id: 'classic', label: '25 / 5', focusMinutes: 25, shortBreakMinutes: 5, longBreakMinutes: 15 },
+  { id: 'deep', label: '50 / 10', focusMinutes: 50, shortBreakMinutes: 10, longBreakMinutes: 20 },
+  { id: 'long', label: '90 / 20', focusMinutes: 90, shortBreakMinutes: 20, longBreakMinutes: 30 },
+];
+
+/** The preset the settings match, or null for custom lengths. */
+export const matchingPreset = (settings: Pick<FocusSettings, 'focusMinutes' | 'shortBreakMinutes' | 'longBreakMinutes'>): string | null =>
+  FOCUS_PRESETS.find(
+    p => p.focusMinutes === settings.focusMinutes && p.shortBreakMinutes === settings.shortBreakMinutes && p.longBreakMinutes === settings.longBreakMinutes,
+  )?.id ?? null;
+
+/** The lengths a preset sets. */
+export const presetSettings = ({ focusMinutes, shortBreakMinutes, longBreakMinutes }: FocusPreset) => ({ focusMinutes, shortBreakMinutes, longBreakMinutes });
+
 type NumericSetting = 'focusMinutes' | 'shortBreakMinutes' | 'longBreakMinutes' | 'longBreakEvery';
 
 /** Allowed range of each number setting, inclusive. */

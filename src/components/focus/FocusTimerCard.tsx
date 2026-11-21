@@ -1,76 +1,69 @@
-import React, { useEffect, useState } from 'react';
-import { CircleCheck, Pause, Play, RotateCcw, Settings2, SkipForward } from 'lucide-react';
+import React, { useState, useSyncExternalStore } from 'react';
+import { Maximize2, Settings2 } from 'lucide-react';
 import type { FocusTask } from '../../types';
-import { FocusService, MIN_COUNTED_MS } from '../../services/focusService';
-import { PHASES, elapsedAt, formatClock, progressAt, remainingAt, type FocusSettings, type TimerState } from '../../services/focusTimer';
-import { soundEngine } from '../../services/soundEngine';
+import { FocusService } from '../../services/focusService';
+import { PHASES, formatClock, progressAt, remainingAt, type FocusSettings, type TimerState } from '../../services/focusTimer';
 import { PHASE_LABELS } from '../../hooks/useFocusTimer';
 import { cn } from '../../utils/cn';
-import { Button, Card, IconButton, Kbd, ProgressRing } from '../ui/primitives';
-import { FocusSettingsPanel } from './FocusSettingsPanel';
+import { Card, IconButton, Kbd, ProgressRing } from '../ui/primitives';
+import { FocusControls } from './FocusControls';
+import { FocusPresetChips } from './FocusPresetChips';
+import { FocusSettingsDialog } from './FocusSettingsDialog';
+import { FocusSoundMenu } from './FocusSoundMenu';
+import { FocusTaskPicker } from './FocusTaskPicker';
+import { BREAK_TIPS } from './focusUi';
 
-const BREAK_TIPS = {
-  'short-break': 'Stand up, stretch, and look at something far away for a bit.',
-  'long-break': 'Take a proper rest: walk around, drink some water, step away from screens.',
-} as const;
+const WIDE = '(min-width: 640px)';
+const subscribeWide = (onChange: () => void) => {
+  const query = window.matchMedia(WIDE);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+};
+/** Whether the screen is at least phone-landscape wide. */
+const useWide = () => useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE).matches, () => true);
 
 interface FocusTimerCardProps {
   timer: TimerState;
   settings: FocusSettings;
   tasks: FocusTask[];
   now: number;
+  onFullscreen: () => void;
 }
 
-const isTyping = (target: EventTarget | null) => {
-  const el = target as HTMLElement | null;
-  return Boolean(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable));
-};
-
-/** Starts or pauses the timer, from a click or a key press (which also lets the chime play later). */
-const toggle = () => {
-  soundEngine.unlock();
-  FocusService.toggle();
-};
-
-export const FocusTimerCard: React.FC<FocusTimerCardProps> = ({ timer, settings, tasks, now }) => {
-  const [showSettings, setShowSettings] = useState(false);
+/** The timer: phase, clock, the task it is for, controls, the long-break cycle and background sound. */
+export const FocusTimerCard: React.FC<FocusTimerCardProps> = ({ timer, settings, tasks, now, onFullscreen }) => {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const wide = useWide();
   const remaining = remainingAt(timer, now);
-  const progress = progressAt(timer, now) * 100;
   const isBreak = timer.phase !== 'focus';
-  const openTasks = tasks.filter(t => !t.done);
-  const current = openTasks.find(t => t.id === timer.taskId);
+  const running = timer.status === 'running';
   const untilLong = Math.max(0, settings.longBreakEvery - timer.completedInCycle);
-  const elapsed = elapsedAt(timer, now);
-  const canFinish = timer.phase === 'focus' && timer.status !== 'idle' && elapsed >= MIN_COUNTED_MS;
-  const focusedMinutes = Math.floor(elapsed / 60_000);
-
-  // Space starts and pauses, unless the student is typing.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code !== 'Space' || e.repeat || e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
-      if ((e.target as HTMLElement | null)?.closest('button, a, [role="switch"]')) return;
-      e.preventDefault();
-      toggle();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
-  const mainLabel = timer.status === 'running' ? 'Pause' : timer.status === 'paused' ? 'Resume' : 'Start';
 
   return (
-    <Card className="flex flex-col gap-5">
-      <div className="flex items-center justify-between gap-3">
-        <div role="group" aria-label="Timer phase" className="flex min-w-0 rounded-xl border border-line bg-canvas p-1">
+    <Card className="relative flex flex-col gap-5 overflow-hidden p-4 sm:p-5">
+      {/* A soft glow in the phase's colour while the timer runs. */}
+      <div
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute inset-0 transition-opacity duration-700',
+          isBreak
+            ? 'bg-[radial-gradient(ellipse_at_50%_0%,var(--success-soft),transparent_70%)]'
+            : 'bg-[radial-gradient(ellipse_at_50%_0%,var(--brand-soft),transparent_70%)]',
+          running ? 'opacity-100' : 'opacity-0',
+        )}
+      />
+
+      <div className="relative flex items-center justify-between gap-2">
+        <div role="group" aria-label="Timer phase" className="flex min-w-0 rounded-full border border-line bg-canvas p-1">
           {PHASES.map(phase => (
             <button
               key={phase}
               type="button"
               onClick={() => FocusService.choosePhase(phase)}
-              disabled={timer.status === 'running'}
+              disabled={running}
               aria-pressed={timer.phase === phase}
               className={cn(
-                'h-8 rounded-lg px-2.5 text-xs font-medium transition-colors sm:px-3 sm:text-[13px] cursor-pointer disabled:cursor-not-allowed',
+                'h-8 whitespace-nowrap rounded-full px-2 text-xs font-medium transition-colors min-[380px]:px-2.5 sm:px-3.5 sm:text-[13px] cursor-pointer disabled:cursor-not-allowed',
                 timer.phase === phase ? 'bg-surface-hover text-ink' : 'text-ink-subtle hover:text-ink-muted disabled:hover:text-ink-subtle',
               )}
             >
@@ -78,88 +71,68 @@ export const FocusTimerCard: React.FC<FocusTimerCardProps> = ({ timer, settings,
             </button>
           ))}
         </div>
-        <IconButton icon={Settings2} label="Timer settings" active={showSettings} onClick={() => setShowSettings(v => !v)} aria-expanded={showSettings} />
+        <div className="flex shrink-0 items-center">
+          <IconButton icon={Maximize2} label="Full screen (F)" onClick={onFullscreen} className="h-8 w-8 sm:h-9 sm:w-9" />
+          <IconButton icon={Settings2} label="Timer settings" onClick={() => setSettingsOpen(true)} className="h-8 w-8 sm:h-9 sm:w-9" />
+        </div>
       </div>
 
-      {showSettings && <FocusSettingsPanel settings={settings} />}
-
-      <div className="flex flex-col items-center gap-4 py-2">
-        <ProgressRing value={progress} size={232} stroke={12} tone={isBreak ? 'success' : 'brand'}>
-          <span
-            className="text-[56px] font-semibold leading-none tracking-tight text-ink tabular-nums"
-            role="timer"
-            aria-label={`${formatClock(remaining)} left`}
-          >
-            {formatClock(remaining)}
-          </span>
-          <span className={cn('mt-2 text-[13px] font-medium', isBreak ? 'text-success' : 'text-brand-text')}>
-            {timer.status === 'paused' ? `${PHASE_LABELS[timer.phase]} · paused` : PHASE_LABELS[timer.phase]}
-          </span>
-        </ProgressRing>
-
-        <div className="flex items-center gap-2">
-          <IconButton icon={RotateCcw} label="Reset" onClick={() => FocusService.reset()} disabled={timer.status === 'idle'} className="disabled:opacity-40 disabled:pointer-events-none" />
-          <Button
-            variant="primary"
-            size="lg"
-            icon={timer.status === 'running' ? Pause : Play}
-            onClick={toggle}
-            className="min-w-36"
-          >
-            {mainLabel}
-          </Button>
-          <IconButton
-            icon={SkipForward}
-            label={isBreak ? 'Skip the break' : 'Skip to the break (this session is not counted)'}
-            onClick={() => FocusService.skip()}
-          />
+      <div className="relative flex flex-col items-center gap-5 pt-1">
+        <div className={cn('rounded-full transition-[filter] duration-700', running && (isBreak ? 'drop-shadow-[0_0_28px_var(--success-soft)]' : 'drop-shadow-[0_0_28px_var(--brand-soft)]'))}>
+          <ProgressRing value={progressAt(timer, now) * 100} size={wide ? 288 : 248} stroke={wide ? 12 : 11} tone={isBreak ? 'success' : 'brand'}>
+            <span
+              className="text-[60px] font-semibold leading-none tracking-tight text-ink tabular-nums sm:text-[72px]"
+              role="timer"
+              aria-label={`${formatClock(remaining)} left`}
+            >
+              {formatClock(remaining)}
+            </span>
+            <span className={cn('mt-2.5 text-[13px] font-medium', isBreak ? 'text-success' : 'text-brand-text')}>
+              {timer.status === 'paused' ? `${PHASE_LABELS[timer.phase]} · paused` : PHASE_LABELS[timer.phase]}
+            </span>
+          </ProgressRing>
         </div>
 
-        {canFinish ? (
-          <Button size="sm" variant="ghost" icon={CircleCheck} onClick={() => FocusService.finishEarly()}>
-            Finish now and count {focusedMinutes} min
-          </Button>
+        {isBreak ? (
+          <p className="max-w-sm text-center text-[13px] text-ink-muted">{BREAK_TIPS[timer.phase as keyof typeof BREAK_TIPS]}</p>
         ) : (
-          <p className="hidden h-8 items-center gap-1.5 text-xs text-ink-subtle sm:flex">
-            <Kbd>Space</Kbd> to start or pause
-          </p>
+          <FocusTaskPicker tasks={tasks} currentId={timer.taskId} />
         )}
+
+        <FocusControls
+          timer={timer}
+          now={now}
+          footer={
+            timer.status === 'idle' ? (
+              <FocusPresetChips settings={settings} />
+            ) : (
+              <p className="hidden h-8 items-center gap-1.5 text-xs text-ink-subtle sm:flex">
+                <Kbd>Space</Kbd> start or pause · <Kbd>F</Kbd> full screen
+              </p>
+            )
+          }
+        />
       </div>
 
-      {isBreak ? (
-        <p className="rounded-xl bg-success-soft px-3 py-2.5 text-center text-[13px] text-ink-muted">
-          {BREAK_TIPS[timer.phase as keyof typeof BREAK_TIPS]}
-        </p>
-      ) : (
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-ink-subtle">Working on</span>
-          <select
-            value={current?.id ?? ''}
-            onChange={e => FocusService.setTimerTask(e.target.value || null)}
-            className="h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink transition-colors focus:border-brand focus:outline-none cursor-pointer"
-          >
-            <option value="">{openTasks.length > 0 ? 'No task picked' : 'Add a task to pick one'}</option>
-            {openTasks.map(task => (
-              <option key={task.id} value={task.id}>
-                {task.title}
-              </option>
+      <div className="relative flex items-center justify-between gap-3 border-t border-line pt-4">
+        <div className="flex min-w-0 items-center gap-2.5 text-xs text-ink-subtle">
+          <div className="flex shrink-0 items-center gap-1" aria-hidden="true">
+            {Array.from({ length: settings.longBreakEvery }, (_, i) => (
+              <span key={i} className={cn('h-2 w-2 rounded-full', i < timer.completedInCycle ? 'bg-brand' : 'bg-line-strong')} />
             ))}
-          </select>
-        </label>
-      )}
-
-      <div className="flex items-center justify-between gap-3 border-t border-line pt-4 text-xs text-ink-subtle">
-        <div className="flex items-center gap-1.5" aria-hidden="true">
-          {Array.from({ length: settings.longBreakEvery }, (_, i) => (
-            <span key={i} className={cn('h-2 w-2 rounded-full', i < timer.completedInCycle ? 'bg-brand' : 'bg-line-strong')} />
-          ))}
+          </div>
+          <span className="truncate">
+            {timer.phase === 'long-break'
+              ? 'Long break'
+              : untilLong === 0
+                ? 'Long break next'
+                : `${untilLong} more ${untilLong === 1 ? 'session' : 'sessions'} until a long break`}
+          </span>
         </div>
-        <span>
-          {untilLong === 0
-            ? 'Long break time'
-            : `${timer.completedInCycle} of ${settings.longBreakEvery} sessions, then a long break`}
-        </span>
+        <FocusSoundMenu />
       </div>
+
+      <FocusSettingsDialog isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} settings={settings} />
     </Card>
   );
 };
