@@ -13,7 +13,7 @@ import {
   CircleHelp,
   Check,
 } from 'lucide-react';
-import { soundEngine } from '../../services/soundEngine';
+import { FOCUS_SOUNDS, soundEngine } from '../../services/soundEngine';
 import type { SoundType } from '../../services/soundEngine';
 import type { UserStats, UserAccount } from '../../types';
 import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
@@ -22,8 +22,9 @@ import { lifeSimService } from '../../services/lifeSimService';
 import { WORLD_3D_ENABLED } from '../../services/features';
 import { BrandMark, CoinIcon, IconButton, Kbd } from '../ui/primitives';
 import { cn } from '../../utils/cn';
+import { FocusTimerPill } from '../focus/FocusTimerPill';
 
-type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner';
+type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus';
 
 interface NavbarProps {
   stats: UserStats;
@@ -53,21 +54,14 @@ const VIEW_TITLES: Record<View, string> = {
   studio: 'Library',
   folders: 'Subjects',
   planner: 'Planner',
+  focus: 'Focus',
   dashboard: 'Insights',
   exam: 'Mock exam',
   interleave: 'Mix decks',
   sanctuary: 'Campus',
 };
 
-const SOUND_PRESETS: { id: SoundType; label: string; desc: string }[] = [
-  { id: 'off', label: 'Off', desc: 'No background sound' },
-  { id: 'binaural-40hz', label: '40 Hz tone', desc: 'Steady background tone' },
-  { id: 'binaural-alpha-10hz', label: 'Alpha waves', desc: 'Calm, relaxed focus' },
-  { id: 'brown-noise', label: 'Brown noise', desc: 'Masks speech and background noise' },
-  { id: 'pink-noise', label: 'Pink noise', desc: 'Balanced, softer than white noise' },
-  { id: 'rain', label: 'Rain', desc: 'Gentle, steady rainfall' },
-  { id: 'ambient-drone', label: 'Ambient pad', desc: 'Warm, slow chord' },
-];
+const SOUND_PRESETS = FOCUS_SOUNDS;
 
 const THEME_STORAGE_KEY = 'axon_theme';
 
@@ -221,6 +215,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           <div className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden="true" />
+
+          {onNavigate && activeView !== 'focus' && <FocusTimerPill onOpen={() => onNavigate('focus')} />}
 
           {/* Daily goal */}
           <div

@@ -32,6 +32,10 @@ Open Studify, pick a starter deck or turn your own notes or a lecture PDF into f
 - **Leech Hunter** — finds cards you keep failing and helps split them into simpler ones.
 - **Gamepad review** — flip and grade cards with a Bluetooth controller (HTML5 Gamepad API).
 
+### Focus workspace
+
+A Pomodoro timer (25-minute focus sessions, short breaks, a long break after every fourth; all adjustable) with the session's tasks, a notes pad, background sound and today's focus time. Homework due soon in the Planner is offered as a task, and ticking it off marks it done in the Planner too. The timer keeps running on other pages (the time left shows in the top bar and the tab title), chimes when a phase ends and can send a notification. Focus time is shown on its own and is not added to the daily study goal, which counts review time.
+
 ### Focus audio (optional)
 
 Built-in background audio generated with the Web Audio API: brown noise, rain, and steady tones. Steady noise can mask distracting speech nearby. Claims that 40 Hz tones or binaural beats improve memory are not well established, so treat these as a comfort setting.

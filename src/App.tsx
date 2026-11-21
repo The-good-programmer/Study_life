@@ -12,6 +12,8 @@ import { NotificationService } from './services/notificationService';
 import { WagePayoutBanner } from './components/lifesim/WagePayoutBanner';
 import { WORLD_3D_ENABLED } from './services/features';
 import { CalendarFeedService } from './services/calendarFeedService';
+import { useFocusTimerAlerts } from './hooks/useFocusTimer';
+import { FocusToast } from './components/focus/FocusToast';
 
 // Lazy-loaded heavy modules and modals for optimal initial bundle performance
 const IngestionHub = lazy(() => import('./components/ingestion/IngestionHub').then(m => ({ default: m.IngestionHub })));
@@ -31,6 +33,7 @@ const AuthModal = lazy(() => import('./components/auth/AuthModal').then(m => ({ 
 const StudyEstateCampus = WORLD_3D_ENABLED ? lazy(() => import('./components/mascot/AxolotlStudyHabitat').then(m => ({ default: m.StudyEstateCampus }))) : null;
 const DailyMissionHome = lazy(() => import('./components/home/DailyMissionHome').then(m => ({ default: m.DailyMissionHome })));
 const PlannerPage = lazy(() => import('./components/planner/PlannerPage').then(m => ({ default: m.PlannerPage })));
+const FocusPage = lazy(() => import('./components/focus/FocusPage').then(m => ({ default: m.FocusPage })));
 const FoldersPage = lazy(() => import('./components/folders/FoldersPage').then(m => ({ default: m.FoldersPage })));
 const CharacterCustomizerModal = WORLD_3D_ENABLED ? lazy(() => import('./components/character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal }))) : null;
 
@@ -64,7 +67,7 @@ export function App() {
   const [stationSession, setStationSession] = useState<StudySession | null>(null);
   const [isStationOpen, setIsStationOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<StudySession | null>(null);
-  const [view, setView] = useState<'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner'>('home');
+  const [view, setView] = useState<'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus'>('home');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isDeckStudioOpen, setIsDeckStudioOpen] = useState(false);
@@ -95,6 +98,9 @@ export function App() {
       return next;
     });
   };
+
+  // The focus timer runs on every page: it chimes and says so when a phase ends.
+  const focusAlerts = useFocusTimerAlerts();
 
   // Keep a subscribed calendar up to date with the planner.
   useEffect(() => CalendarFeedService.startAutoPublish(), []);
@@ -180,11 +186,18 @@ export function App() {
     setStats(StorageService.getStats());
   };
 
-  const handleNavigate = (targetView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner') => {
+  const handleNavigate = (targetView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus') => {
     setView(targetView);
     setStats(StorageService.getStats());
   };
   const openCampus = WORLD_3D_ENABLED ? () => handleNavigate('sanctuary') : undefined;
+  const focusToast = (
+    <FocusToast
+      message={focusAlerts.message}
+      onDismiss={focusAlerts.dismiss}
+      onOpen={!matchSession && !activeSession && view !== 'focus' ? () => handleNavigate('focus') : undefined}
+    />
+  );
   const openCharacterCustomizer = WORLD_3D_ENABLED ? () => setIsCharacterCustomizerOpen(true) : undefined;
 
   // If in an active match game arena, display full-screen Quizlet-style Match Arena
@@ -205,6 +218,7 @@ export function App() {
             }}
           />
         </div>
+        {focusToast}
       </Suspense>
     );
   }
@@ -221,6 +235,7 @@ export function App() {
             handleNavigate('dashboard');
           }}
         />
+        {focusToast}
       </Suspense>
     );
   }
@@ -386,6 +401,7 @@ export function App() {
                 onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
               />
             )}
+            {view === 'focus' && <FocusPage />}
             {view === 'planner' && <PlannerPage onStartSession={handleStartSession} onOpenAuth={() => handleOpenAuth()} />}
             {view === 'folders' && (
               <FoldersPage
@@ -497,6 +513,7 @@ export function App() {
             onOpenLibrary={() => handleNavigate('studio')}
             onOpenSubjects={() => handleNavigate('folders')}
             onOpenPlanner={() => handleNavigate('planner')}
+            onOpenFocus={() => handleNavigate('focus')}
           />
         </Suspense>
       )}
@@ -574,6 +591,8 @@ export function App() {
           />
         </Suspense>
       )}
+
+      {focusToast}
 
       {/* Global Study Wage Deposited Banner */}
       <WagePayoutBanner />

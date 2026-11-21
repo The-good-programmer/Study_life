@@ -9,6 +9,17 @@ export type SoundType =
   | 'rain' 
   | 'ambient-drone';
 
+/** The background sounds, as offered in the sound menu and the Focus workspace. */
+export const FOCUS_SOUNDS: { id: SoundType; label: string; desc: string }[] = [
+  { id: 'off', label: 'Off', desc: 'No background sound' },
+  { id: 'binaural-40hz', label: '40 Hz tone', desc: 'Steady background tone' },
+  { id: 'binaural-alpha-10hz', label: 'Alpha waves', desc: 'Calm, relaxed focus' },
+  { id: 'brown-noise', label: 'Brown noise', desc: 'Masks speech and background noise' },
+  { id: 'pink-noise', label: 'Pink noise', desc: 'Balanced, softer than white noise' },
+  { id: 'rain', label: 'Rain', desc: 'Gentle, steady rainfall' },
+  { id: 'ambient-drone', label: 'Ambient pad', desc: 'Warm, slow chord' },
+];
+
 type SoundChangeListener = (sound: SoundType, volume: number) => void;
 
 class SoundEngine {
@@ -50,6 +61,18 @@ class SoundEngine {
       this.ctx.resume().catch((err) => {
         console.debug('[SoundEngine] AudioContext resume deferred until user interaction:', err);
       });
+    }
+  }
+
+  /**
+   * Sets up audio during a click or key press. Browsers only allow sound that a user action
+   * started, so call this before a sound that plays later on its own (a timer's chime).
+   */
+  public unlock(): void {
+    try {
+      this.initContext();
+    } catch {
+      // No Web Audio: the chime is skipped.
     }
   }
 

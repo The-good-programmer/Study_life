@@ -1,9 +1,9 @@
 import React from 'react';
-import { Home, Layers, Award, LineChart, Shuffle } from 'lucide-react';
+import { Home, Layers, Award, LineChart, Timer } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
-type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner';
+type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus';
 
 interface MobileTabBarProps {
   activeView: View;
@@ -14,12 +14,12 @@ interface MobileTabBarProps {
 const TABS: { view: View; label: string; icon: LucideIcon }[] = [
   { view: 'home', label: 'Today', icon: Home },
   { view: 'studio', label: 'Library', icon: Layers },
+  { view: 'focus', label: 'Focus', icon: Timer },
   { view: 'exam', label: 'Exam', icon: Award },
   { view: 'dashboard', label: 'Insights', icon: LineChart },
-  { view: 'interleave', label: 'Mix', icon: Shuffle },
 ];
 
-/** Bottom tab bar for phones; the sidebar takes over from the md breakpoint. Extras such as Campus live in the menu. */
+/** Bottom tab bar for phones; the sidebar takes over from the md breakpoint. Mix decks, Campus and the rest live in the menu. */
 export const MobileTabBar: React.FC<MobileTabBarProps> = ({ activeView, onNavigate, dueCardsCount }) => (
   <nav
     aria-label="Primary"

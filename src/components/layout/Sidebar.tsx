@@ -20,6 +20,7 @@ import {
   Building2,
   ChevronRight,
   CalendarDays,
+  Timer,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { UserStats, UserAccount } from '../../types';
@@ -31,7 +32,7 @@ import { WORLD_3D_ENABLED } from '../../services/features';
 import { BrandMark, CoinIcon } from '../ui/primitives';
 import { cn } from '../../utils/cn';
 
-type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner';
+type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus';
 
 interface SidebarProps {
   activeView: View;
@@ -298,6 +299,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             active={activeView === 'folders'}
             onClick={go(() => onNavigate('folders'))}
             trailing={<CountText value={foldersCount} />}
+          />
+          <NavItem
+            icon={Timer}
+            label="Focus"
+            collapsed={collapsed}
+            active={activeView === 'focus'}
+            onClick={go(() => onNavigate('focus'))}
           />
           <NavItem
             icon={CalendarDays}
