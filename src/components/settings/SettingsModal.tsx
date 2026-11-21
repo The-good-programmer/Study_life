@@ -32,6 +32,8 @@ interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onStatsReset: () => void;
+  /** Shows how to add Studify to the Home Screen (iPhone and iPad, where reminders need it). */
+  onShowInstallHelp?: () => void;
 }
 
 type SectionId = 'study' | 'ai' | 'reminders' | 'sound' | 'sync' | 'data';
@@ -91,7 +93,7 @@ const fileDate = () => {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 };
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onStatsReset }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onStatsReset, onShowInstallHelp }) => {
   const [section, setSection] = useState<SectionId>('study');
   const idPrefix = useId();
 
@@ -136,7 +138,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
           >
             {section === 'study' && <StudySection onStatsReset={onStatsReset} />}
             {section === 'ai' && <AiSection />}
-            {section === 'reminders' && <RemindersSection />}
+            {section === 'reminders' && <RemindersSection onShowInstallHelp={onShowInstallHelp} />}
             {section === 'sound' && <SoundSection />}
             {section === 'sync' && <SyncSection onStatsReset={onStatsReset} />}
             {section === 'data' && <DataSection />}
@@ -386,7 +388,7 @@ const AiSection: React.FC = () => {
   );
 };
 
-const RemindersSection: React.FC = () => {
+const RemindersSection: React.FC<{ onShowInstallHelp?: () => void }> = ({ onShowInstallHelp }) => {
   const [settings, setSettings] = useState<NotificationSettings>(() => NotificationService.getSettings());
   const [permission, setPermission] = useState<NotificationPermission>(() => NotificationService.getPermission());
   const [notice, showNotice] = useNotice();
@@ -449,6 +451,11 @@ const RemindersSection: React.FC = () => {
           isOn ? <Badge tone="success">On</Badge> : permission === 'denied' ? <Badge tone="danger">Blocked</Badge> : <Badge>Off</Badge>
         }
       >
+        {onShowInstallHelp && (
+          <button type="button" onClick={onShowInstallHelp} className="mb-3 text-[13px] font-medium text-brand-text hover:underline cursor-pointer">
+            How to add Studify to your Home Screen
+          </button>
+        )}
         {!isSupported ? (
           <p className="text-[13px] text-ink-muted">This browser does not support notifications.</p>
         ) : (

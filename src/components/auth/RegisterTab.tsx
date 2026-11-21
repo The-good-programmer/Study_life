@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { GoogleAuthService } from '../../services/googleAuthService';
 import { User, Mail, Lock, Eye, EyeOff, School, UserPlus } from 'lucide-react';
 import type { UserAccount } from '../../types';
 import { AuthService } from '../../services/authService';
@@ -79,11 +80,14 @@ export const RegisterTab: React.FC<RegisterTabProps> = ({
       <ErrorBanner message={error} />
       <ErrorBanner message={googleError} />
 
-      <GoogleSignInButton label="Sign up with Google" loading={isGoogleLoading} onClick={onGoogleClick} />
-      <OrDivider label="or register with email" />
+      {GoogleAuthService.isGoogleConfigured() && (
+        <>
+          <GoogleSignInButton label="Sign up with Google" loading={isGoogleLoading} onClick={onGoogleClick} />
+          <OrDivider label="or register with email" />
+        </>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <AvatarPicker label="Choose Profile Avatar" value={avatar} onChange={setAvatar} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
@@ -155,21 +159,31 @@ export const RegisterTab: React.FC<RegisterTabProps> = ({
           )}
         </div>
 
-        <EducationFields value={edu} onChange={setEdu} />
+        {/* Only name, email and password are needed; the rest can wait (the Library asks for the grade when it needs it). */}
+        <details className="group/more rounded-xl border border-line bg-canvas">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-3.5 py-3 text-[13px] font-medium text-ink-muted hover:text-ink">
+            Tell us about you (optional)
+            <span className="text-xs text-ink-subtle group-open/more:hidden">Grade, country, school, avatar</span>
+          </summary>
+          <div className="space-y-4 border-t border-line px-3.5 pb-4 pt-3.5">
+            <AvatarPicker label="Avatar" value={avatar} onChange={setAvatar} />
+            <EducationFields value={edu} onChange={setEdu} />
 
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
-            <School className="h-3.5 w-3.5 text-ink-subtle" />
-            School (optional)
-          </label>
-          <input
-            type="text"
-            placeholder="e.g. Stanford University, Lincoln High, or Self-Taught"
-            value={institution}
-            onChange={e => setInstitution(e.target.value)}
-            className="h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
-          />
-        </div>
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+                <School className="h-3.5 w-3.5 text-ink-subtle" />
+                School (optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Stanford University, Lincoln High, or Self-Taught"
+                value={institution}
+                onChange={e => setInstitution(e.target.value)}
+                className="h-10 w-full rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
+              />
+            </div>
+          </div>
+        </details>
 
         {guest.hasData && (
           <GuestMigrationToggle

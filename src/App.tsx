@@ -14,6 +14,7 @@ import { ECONOMY_VISIBLE, WORLD_3D_ENABLED } from './services/features';
 import { CalendarFeedService } from './services/calendarFeedService';
 import { useFocusTimerAlerts } from './hooks/useFocusTimer';
 import { FocusToast } from './components/focus/FocusToast';
+import { InstallAppDialog } from './components/common/InstallAppDialog';
 import { ApiConfig } from './services/apiConfig';
 import { CloudSyncService } from './services/cloudSyncService';
 
@@ -69,7 +70,10 @@ export function App() {
   const [stationSession, setStationSession] = useState<StudySession | null>(null);
   const [isStationOpen, setIsStationOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<StudySession | null>(null);
-  const [view, setView] = useState<'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus'>('home');
+  // The Home Screen shortcut "Focus" opens /?view=focus.
+  const [view, setView] = useState<'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus'>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'focus' ? 'focus' : 'home',
+  );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isDeckStudioOpen, setIsDeckStudioOpen] = useState(false);
@@ -95,7 +99,10 @@ export function App() {
   const [stats, setStats] = useState<UserStats>(StorageService.getStats());
   // Notes from Focus to make a deck from, opened in the Library (with a key to open it afresh).
   const [libraryNotes, setLibraryNotes] = useState<{ text: string; key: number } | null>(null);
-  const { isOnline, isInstallable, promptInstall } = usePwaInstall();
+  const { isOnline, isInstallable, isIos, promptInstall } = usePwaInstall();
+  const [isInstallHelpOpen, setIsInstallHelpOpen] = useState(false);
+  // Install: the browser's own prompt where there is one (Android, desktop); on iPhone and iPad, the steps.
+  const installApp = isInstallable ? () => void promptInstall() : isIos ? () => setIsInstallHelpOpen(true) : undefined;
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('axon_sidebar_collapsed') === 'true';
@@ -293,6 +300,12 @@ export function App() {
 
   return (
     <div className="relative flex min-h-screen bg-canvas bg-ambient-mesh font-sans text-ink">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[80] focus:rounded-lg focus:bg-brand focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-brand-ink"
+      >
+        Skip to content
+      </a>
       {/* Desktop Sidebar & Mobile Drawer */}
       <Sidebar
         activeView={view}
@@ -321,6 +334,7 @@ export function App() {
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={handleToggleSidebarCollapse}
         onOpenCharacterCustomizer={openCharacterCustomizer}
+        onInstallApp={installApp}
       />
 
       {/* Main App Column */}
@@ -360,7 +374,7 @@ export function App() {
         )}
 
         {/* Main Content Area */}
-        <main className={`flex-1 w-full ${
+        <main id="main" tabIndex={-1} className={`flex-1 w-full outline-none ${
           view === 'sanctuary'
             ? 'h-full max-w-none p-0 overflow-hidden flex flex-col'
             : 'max-w-7xl mx-auto px-4 pt-5 pb-24 sm:px-6 sm:pt-7 md:pb-10 lg:px-8'
@@ -567,6 +581,7 @@ export function App() {
             isOpen={isSettingsOpen}
             onClose={() => setIsSettingsOpen(false)}
             onStatsReset={handleResetStats}
+            onShowInstallHelp={isIos ? () => setIsInstallHelpOpen(true) : undefined}
           />
         </Suspense>
       )}
@@ -639,6 +654,8 @@ export function App() {
       )}
 
       {focusToast}
+
+      <InstallAppDialog isOpen={isInstallHelpOpen} onClose={() => setIsInstallHelpOpen(false)} />
 
       {/* Global Study Wage Deposited Banner */}
       {ECONOMY_VISIBLE && <WagePayoutBanner />}

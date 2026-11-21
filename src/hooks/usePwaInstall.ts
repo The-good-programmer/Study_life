@@ -9,6 +9,15 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
+/** Whether this is an iPhone or iPad browser (iPadOS reports itself as a Mac with a touch screen). */
+const isIosBrowser = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  const iPadOs = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+  const standalone = (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return (/iPhone|iPad|iPod/.test(ua) || iPadOs) && !standalone;
+};
+
 export function usePwaInstall() {
   const [isOnline, setIsOnline] = useState<boolean>(() => 
     typeof navigator !== 'undefined' ? navigator.onLine : true
@@ -60,6 +69,8 @@ export function usePwaInstall() {
     isOnline,
     isInstallable: !!deferredPrompt,
     isInstalled,
+    /** iPhone or iPad, not yet added to the Home Screen: no install prompt there, only Share → Add to Home Screen. */
+    isIos: !isInstalled && isIosBrowser(),
     promptInstall,
   };
 }

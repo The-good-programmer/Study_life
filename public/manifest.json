@@ -53,6 +53,19 @@
           "type": "image/png"
         }
       ]
+    },
+    {
+      "name": "Focus timer",
+      "short_name": "Focus",
+      "description": "Pomodoro timer, tasks and notes",
+      "url": "/?view=focus",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }
