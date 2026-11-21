@@ -1,4 +1,4 @@
-import type { EarningEntry, ExamReport, InterleavingSessionReport, PlannerItem, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
+import type { EarningEntry, ExamReport, FocusLogEntry, FocusTask, InterleavingSessionReport, PlannerItem, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
 import { deckWithSavedProgress, withSavedProgress } from '../utils/cardProgress';
 import { STARTING_COINS, guestEarningsAllowance, transferableGuestCoins } from './economy/wallet';
 import { IndexedDbService } from './indexedDbService';
@@ -19,6 +19,9 @@ const STORAGE_KEYS = {
   COMPLETIONS: 'studify_paid_completions_v1',
   WEEKLY_XP: 'studify_weekly_xp_v1',
   PLANNER: 'studify_planner_v1',
+  FOCUS_TASKS: 'studify_focus_tasks_v1',
+  FOCUS_LOG: 'studify_focus_log_v1',
+  FOCUS_NOTES: 'studify_focus_notes_v1',
 };
 
 /** The Monday a date's week starts on, as YYYY-MM-DD in UTC. */
@@ -61,6 +64,9 @@ const PROFILE_DATA_KEYS = [
   STORAGE_KEYS.COMPLETIONS,
   STORAGE_KEYS.WEEKLY_XP,
   STORAGE_KEYS.PLANNER,
+  STORAGE_KEYS.FOCUS_TASKS,
+  STORAGE_KEYS.FOCUS_LOG,
+  STORAGE_KEYS.FOCUS_NOTES,
 ];
 
 const LEVEL_TITLES = [
@@ -1037,6 +1043,52 @@ export class StorageService {
     this.notifyMutation();
   }
 
+  /** A JSON array saved under a profile key, or empty when missing or unreadable. */
+  private static readArray<T>(baseKey: string): T[] {
+    const raw = this.readRaw(this.getKey(baseKey));
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /*
+   * Focus workspace data. It isn't part of cloud sync, so saving it doesn't notify the
+   * mutation listeners (which would start a sync); FocusService tells its own listeners.
+   */
+
+  public static getFocusTasks(): FocusTask[] {
+    return this.readArray<FocusTask>(STORAGE_KEYS.FOCUS_TASKS);
+  }
+
+  public static saveFocusTasks(tasks: FocusTask[]): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.FOCUS_TASKS), JSON.stringify(tasks));
+  }
+
+  public static getFocusLog(): FocusLogEntry[] {
+    return this.readArray<FocusLogEntry>(STORAGE_KEYS.FOCUS_LOG);
+  }
+
+  public static saveFocusLog(entries: FocusLogEntry[]): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.FOCUS_LOG), JSON.stringify(entries));
+  }
+
+  public static getFocusNotes(): string {
+    return this.readRaw(this.getKey(STORAGE_KEYS.FOCUS_NOTES)) ?? '';
+  }
+
+  public static saveFocusNotes(notes: string): void {
+    const key = this.getKey(STORAGE_KEYS.FOCUS_NOTES);
+    if (notes) this.safeSetItem(key, notes);
+    else {
+      localStorage.removeItem(key);
+      this.dropOverflow(key);
+    }
+  }
+
   public static createFolder(name: string, color: string = 'indigo', icon: string = '📚', description: string = ''): SubjectFolder {
     const trimmed = name.trim();
     if (!trimmed) throw new Error('Folder name cannot be empty');
@@ -1345,6 +1397,9 @@ export class StorageService {
     const guestFoldersRaw = this.readRaw(STORAGE_KEYS.FOLDERS);
     const guestEarningsRaw = this.readRaw(STORAGE_KEYS.EARNINGS);
     const guestPlannerRaw = this.readRaw(STORAGE_KEYS.PLANNER);
+    const guestFocusTasksRaw = this.readRaw(STORAGE_KEYS.FOCUS_TASKS);
+    const guestFocusLogRaw = this.readRaw(STORAGE_KEYS.FOCUS_LOG);
+    const guestFocusNotes = this.readRaw(STORAGE_KEYS.FOCUS_NOTES);
     // What the guest's earnings come to under the account's own daily caps. Worked out
     // before the logs are merged below (see transferableGuestCoins).
     const guestAllowance = guestEarningsAllowance(
@@ -1595,10 +1650,13 @@ export class StorageService {
     // 8. Merge subject folders, so migrated decks keep their subject
     // 9. Merge the earnings log, so daily pay caps still count what was earned as a guest
     // 9b. Merge the planner's exams and homework
+    // 9c. Merge the Focus workspace's tasks and session log
     for (const [base, raw] of [
       [STORAGE_KEYS.FOLDERS, guestFoldersRaw],
       [STORAGE_KEYS.EARNINGS, guestEarningsRaw],
       [STORAGE_KEYS.PLANNER, guestPlannerRaw],
+      [STORAGE_KEYS.FOCUS_TASKS, guestFocusTasksRaw],
+      [STORAGE_KEYS.FOCUS_LOG, guestFocusLogRaw],
     ] as const) {
       if (!raw) continue;
       try {
@@ -1616,6 +1674,14 @@ export class StorageService {
         });
         this.safeSetItem(userKey, JSON.stringify(Array.from(merged.values())));
       } catch {}
+    }
+
+    // 9d. Focus notes: the guest's notes follow the account's own, unless the account already has them.
+    if (guestFocusNotes && guestFocusNotes.trim()) {
+      const userNotesKey = `${STORAGE_KEYS.FOCUS_NOTES}_${userId}`;
+      const userNotes = this.readRaw(userNotesKey) ?? '';
+      if (!userNotes.trim()) this.safeSetItem(userNotesKey, guestFocusNotes);
+      else if (!userNotes.includes(guestFocusNotes.trim())) this.safeSetItem(userNotesKey, `${userNotes.trimEnd()}\n\n${guestFocusNotes}`);
     }
 
     // 10. Life-sim data: the wallet, home and avatar. Only when the guest copy is cleared,

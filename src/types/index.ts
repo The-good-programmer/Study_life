@@ -145,6 +145,32 @@ export interface PlannerItem {
   updatedAt: string;
 }
 
+/** Something to work on in the Focus workspace. */
+export interface FocusTask {
+  id: string;
+  title: string;
+  done: boolean;
+  /** Focus sessions finished while it was the current task. */
+  pomodoros: number;
+  /** The planner homework it was added from; marking it done marks that done too. */
+  plannerItemId?: string;
+  createdAt: string;
+  doneAt?: string;
+}
+
+/** One focus session that ran to its end. */
+export interface FocusLogEntry {
+  id: string;
+  /** Local calendar day (YYYY-MM-DD) it ended on. */
+  day: string;
+  /** ISO timestamp it ended at. */
+  endedAt: string;
+  minutes: number;
+  taskId?: string;
+  /** Kept so the log still reads well after the task is deleted. */
+  taskTitle?: string;
+}
+
 export interface SubjectFolder {
   id: string;
   name: string;

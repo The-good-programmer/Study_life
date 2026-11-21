@@ -5,6 +5,7 @@ import {
   BarChart3,
   BookMarked,
   CalendarDays,
+  Timer,
   Compass,
   CornerDownLeft,
   Headphones,
@@ -51,6 +52,7 @@ interface CommandPaletteProps {
   onOpenLibrary?: () => void;
   onOpenSubjects?: () => void;
   onOpenPlanner?: () => void;
+  onOpenFocus?: () => void;
 }
 
 type Group = 'Go to' | 'Your decks' | 'Starter decks' | 'Study a deck' | 'Focus sound';
@@ -98,6 +100,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onOpenLibrary,
   onOpenSubjects,
   onOpenPlanner,
+  onOpenFocus,
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -115,6 +118,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     const goTo: PaletteItem[] = [
       { id: 'go-today', title: 'Today', subtitle: 'Your session and due cards', keywords: 'home', icon: Home, group: 'Go to', run: run(onOpenToday) },
       { id: 'go-library', title: 'Library', subtitle: 'All your decks', keywords: 'decks', icon: BookMarked, group: 'Go to', run: run(onOpenLibrary) },
+      { id: 'go-focus', title: 'Focus', subtitle: 'Pomodoro timer, tasks and notes', keywords: 'pomodoro timer workspace tasks notes concentrate', icon: Timer, group: 'Go to', run: run(onOpenFocus) },
       { id: 'go-planner', title: 'Planner', subtitle: 'Exams, homework and a plan for each day', keywords: 'calendar schedule syllabus deadlines homework exams', icon: CalendarDays, group: 'Go to', run: run(onOpenPlanner) },
       { id: 'go-subjects', title: 'Subjects', subtitle: 'Decks grouped by class or exam', keywords: 'folders', icon: Layers, group: 'Go to', run: run(onOpenSubjects) },
       { id: 'go-insights', title: 'Insights', subtitle: 'Memory, streaks and due reviews', keywords: 'dashboard stats retention', icon: BarChart3, group: 'Go to', run: run(onOpenDashboard) },
@@ -179,6 +183,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     onOpenLibrary,
     onOpenSubjects,
     onOpenPlanner,
+    onOpenFocus,
   ]);
 
   const q = query.trim().toLowerCase();
