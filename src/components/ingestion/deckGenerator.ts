@@ -32,6 +32,9 @@ export const buildSession = async (
 
 /** A message a student can act on, instead of a silent failure. */
 export const describeGenerationError = (err: unknown): string => {
-  const detail = err instanceof Error && err.message ? ` (${err.message})` : '';
-  return `We couldn't build your deck right now${detail}. Check your connection and Gemini API key in Settings, then try again.`;
+  const reason = err instanceof Error ? err.message : '';
+  // A daily limit is worth saying as it is; other reasons are technical and stay in the console.
+  if (/limit/i.test(reason)) return `We couldn't build your deck: ${reason.replace(/\.$/, '')}. Try again tomorrow, or add your own Gemini key in Settings → AI.`;
+  if (reason) console.warn('[Deck generation]', reason);
+  return "We couldn't build your deck just now. Check your connection and try again in a moment.";
 };

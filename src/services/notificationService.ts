@@ -124,8 +124,8 @@ export class NotificationService {
     const granted = await this.requestPermission();
     if (!granted) return false;
 
-    return this.showNotification("Momentum Guard Active! 🎯", {
-      body: "High five! Streak notifications are now active. We'll remind you to do a quick 3-minute study session before your streak breaks!",
+    return this.showNotification('Reminders are on', {
+      body: "This is what a reminder looks like. You'll get one at your chosen time on days you haven't studied yet.",
       data: { url: '/' },
     });
   }
@@ -157,7 +157,7 @@ export class NotificationService {
         : `Keep your study momentum alive today! ✨`;
 
       const success = await this.showNotification(streakText, {
-        body: `Just 3 minutes of quick flashcard practice will lock in today's progress. Your 3D study partner is ready! 🎯`,
+        body: `A few minutes of flashcards keeps your streak going.`,
         data: { url: '/?launch=quick_sprint' },
         requireInteraction: true,
       });

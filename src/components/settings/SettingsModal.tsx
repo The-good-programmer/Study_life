@@ -316,14 +316,18 @@ const AiSection: React.FC = () => {
     StorageService.setApiKey('');
     setSavedKey('');
     setDraft('');
-    showNotice({ tone: 'info', text: 'Key removed. Studify will use its built-in generator.' });
+    showNotice({ tone: 'info', text: AuthService.getCurrentUser() ? 'Key removed. Studify will use the AI included with your account.' : 'Key removed. Sign in to keep using AI.' });
   };
 
   return (
     <div>
       <SettingGroup
         title="Gemini API key"
-        description="Studify makes decks without a key. Add your own free Gemini key for unlimited decks from notes and PDFs, and AI feedback when you explain a concept."
+        description={
+          AuthService.getCurrentUser()
+            ? 'AI is included with your account, up to a daily limit. Add your own free Gemini key to go past it.'
+            : 'AI (decks from topics, notes and PDFs, and feedback on your explanations) needs a free account, or your own free Gemini key here.'
+        }
         aside={savedKey ? <Badge tone="success">Key added</Badge> : <Badge>Not set</Badge>}
       >
         <form onSubmit={save} className="space-y-2">
@@ -419,7 +423,7 @@ const RemindersSection: React.FC = () => {
     <div>
       <SettingGroup
         title="Daily reminder"
-        description="A nudge on this device when you have cards due, before your streak resets."
+        description="A nudge at your chosen time if you haven't studied yet. For now it only arrives while Studify is open in a browser tab."
         aside={
           isOn ? <Badge tone="success">On</Badge> : permission === 'denied' ? <Badge tone="danger">Blocked</Badge> : <Badge>Off</Badge>
         }

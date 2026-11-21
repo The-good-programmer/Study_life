@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ECONOMY_VISIBLE } from '../../services/features';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowRight,
@@ -302,7 +303,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                       Learn each concept step by step, then lock it in with flashcards. The best way to study a new deck.
                     </p>
                   </div>
-                  {guidedPay > 0 && (
+                  {ECONOMY_VISIBLE && guidedPay > 0 && (
                     <div className="sm:text-right">
                       <p className="text-xs text-ink-subtle">Pays about</p>
                       <Tokens amount={guidedPay} className="text-[15px] font-semibold text-ink" iconClassName="h-4 w-4" />

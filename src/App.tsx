@@ -10,7 +10,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { MobileTabBar } from './components/layout/MobileTabBar';
 import { NotificationService } from './services/notificationService';
 import { WagePayoutBanner } from './components/lifesim/WagePayoutBanner';
-import { WORLD_3D_ENABLED } from './services/features';
+import { ECONOMY_VISIBLE, WORLD_3D_ENABLED } from './services/features';
 import { CalendarFeedService } from './services/calendarFeedService';
 import { useFocusTimerAlerts } from './hooks/useFocusTimer';
 import { FocusToast } from './components/focus/FocusToast';
@@ -378,6 +378,7 @@ export function App() {
                 key={`${currentUser?.id || 'guest'}-${libraryNotes?.key ?? 0}`}
                 initialLibraryTab={libraryTab}
                 initialNotes={libraryNotes?.text}
+                onOpenAuth={() => handleOpenAuth()}
                 onStartSession={handleStartSession}
                 onOpenDeckStation={handleOpenDeckStation}
                 onStartMatch={handleStartMatch}
@@ -623,7 +624,7 @@ export function App() {
       {focusToast}
 
       {/* Global Study Wage Deposited Banner */}
-      <WagePayoutBanner />
+      {ECONOMY_VISIBLE && <WagePayoutBanner />}
     </div>
   );
 }

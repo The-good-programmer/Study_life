@@ -101,11 +101,15 @@ describe('hasContent', () => {
 });
 
 describe('describeGenerationError', () => {
-  it('gives an actionable message and includes the underlying reason', () => {
-    const message = describeGenerationError(new Error('quota exceeded'));
-    expect(message).toMatch(/couldn't build your deck/i);
-    expect(message).toContain('quota exceeded');
-    expect(message).toMatch(/Settings/);
+  it('passes on a daily limit, and keeps technical reasons out of sight', () => {
+    const limit = describeGenerationError(new Error('Daily AI limit reached.'));
+    expect(limit).toMatch(/couldn't build your deck/i);
+    expect(limit).toContain('Daily AI limit reached');
+    expect(limit).toMatch(/tomorrow/);
+
+    const technical = describeGenerationError(new Error('No AI provider available (server offline and no client API key configured).'));
+    expect(technical).toMatch(/couldn't build your deck/i);
+    expect(technical).not.toMatch(/provider|API key/);
   });
 
   it('copes with non-Error values', () => {

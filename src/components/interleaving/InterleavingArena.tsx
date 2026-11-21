@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { ECONOMY_VISIBLE } from '../../services/features';
 import { Shuffle, X, Flame, Timer, Lightbulb, Eye, Check, ArrowRight, RotateCcw } from 'lucide-react';
 import type {
   StudySession,
@@ -607,7 +608,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
           </h1>
         </header>
 
-        {sessionPay && (
+        {ECONOMY_VISIBLE && sessionPay && (
           <Card className="flex items-center justify-between gap-4">
             <div>
               <p className="text-[13px] text-ink-subtle">Session bonus</p>

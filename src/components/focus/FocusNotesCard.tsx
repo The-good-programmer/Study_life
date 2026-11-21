@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FocusService, MAX_NOTES_LENGTH } from '../../services/focusService';
 import { Layers } from 'lucide-react';
+import { useNeedsSignInForAi } from '../../hooks/useAiAccess';
 import { Button, Card, SectionHeader } from '../ui/primitives';
 
 const SAVE_DELAY_MS = 400;
@@ -8,6 +9,7 @@ const SAVE_DELAY_MS = 400;
 /** A notes pad that saves as you type, for questions and stray thoughts during a session. */
 export const FocusNotesCard: React.FC<{ onMakeFlashcards?: (notes: string) => void }> = ({ onMakeFlashcards }) => {
   const [notes, setNotes] = useState(() => FocusService.getNotes());
+  const needsSignInForAi = useNeedsSignInForAi();
   const [status, setStatus] = useState<'saved' | 'saving'>('saved');
   const pending = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -80,7 +82,9 @@ export const FocusNotesCard: React.FC<{ onMakeFlashcards?: (notes: string) => vo
       />
       {onMakeFlashcards && (
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-ink-subtle">Turn what you wrote into a deck to review later.</p>
+          <p className="text-xs text-ink-subtle">
+            {needsSignInForAi ? 'Making flashcards uses AI: sign in (free) first.' : 'Turn what you wrote into a deck to review later.'}
+          </p>
           <Button
             size="sm"
             icon={Layers}
