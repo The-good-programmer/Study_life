@@ -162,4 +162,29 @@ export const MIGRATIONS = [
       END $$;
     `,
   },
+  {
+    // Synced study data other than decks, one JSON document per kind (subjects, planner, Focus tasks, the focus
+    // log, Focus notes, and the record of what was deleted). The app merges them; the server only stores them.
+    id: '005_user_documents',
+    sql: `
+      CREATE TABLE user_documents (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        data_json TEXT NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (user_id, kind)
+      );
+
+      ALTER TABLE user_documents ENABLE ROW LEVEL SECURITY;
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+          REVOKE ALL ON user_documents FROM anon;
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          REVOKE ALL ON user_documents FROM authenticated;
+        END IF;
+      END $$;
+    `,
+  },
 ];

@@ -154,7 +154,13 @@ export interface FocusTask {
   pomodoros: number;
   /** The planner homework it was added from; marking it done marks that done too. */
   plannerItemId?: string;
+  /** The deck to study for it (an exam's work for the day); the task gets a Study button. */
+  deckId?: string;
+  /** The day (YYYY-MM-DD) it is for: an exam's work is offered again each day. */
+  plannedFor?: string;
   createdAt: string;
+  /** Last change, so account sync keeps the newer copy. */
+  updatedAt?: string;
   doneAt?: string;
 }
 
@@ -178,6 +184,8 @@ export interface SubjectFolder {
   icon?: string;
   description?: string;
   createdAt: string;
+  /** Last change, so account sync keeps the newer copy. */
+  updatedAt?: string;
 }
 
 export interface StudySession {

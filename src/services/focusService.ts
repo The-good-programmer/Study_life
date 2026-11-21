@@ -1,6 +1,6 @@
 import type { FocusLogEntry, FocusTask, PlannerItem } from '../types';
 import { StorageService } from './storageService';
-import { PlannerService, dayKey, daysBetween, type DayPlan } from './plannerService';
+import { PlannerService, dayKey, daysBetween, type DayPlan, type ExamPlan } from './plannerService';
 import {
   choosePhase,
   cleanSettings,
@@ -64,6 +64,8 @@ export interface FocusSummary {
 }
 
 const listeners = new Set<() => void>();
+/** Told when the notes are saved (account sync), which ordinary listeners aren't. */
+const notesListeners = new Set<() => void>();
 const notify = () =>
   listeners.forEach(fn => {
     try {
@@ -111,10 +113,39 @@ export function summarize(log: readonly FocusLogEntry[], now: Date = new Date())
   return summary;
 }
 
-/** Overdue and upcoming homework from the planner that isn't a task yet, most urgent first. */
-export function plannerSuggestions(plan: Pick<DayPlan, 'overdue' | 'dueSoon'>, tasks: readonly FocusTask[]): PlannerItem[] {
-  const linked = new Set(tasks.map(task => task.plannerItemId).filter(Boolean));
-  return [...plan.overdue, ...plan.dueSoon].filter(item => !linked.has(item.id)).slice(0, MAX_SUGGESTIONS);
+/** Something from the planner that could become a task. */
+export type FocusSuggestion =
+  | { kind: 'homework'; item: PlannerItem }
+  /** Today's study for an exam, with the deck to start from. */
+  | { kind: 'exam'; item: PlannerItem; title: string; deckId: string; daysLeft: number };
+
+const cards = (n: number) => `${n} ${n === 1 ? 'card' : 'cards'}`;
+
+/** "Biology midterm: learn 12 new cards", or null when the exam has nothing to do today. */
+export function examTaskTitle(plan: ExamPlan): string | null {
+  if (plan.coveredBy || !plan.nextDeck) return null;
+  let work: string | null = null;
+  if (plan.phase === 'learn' && plan.newToday > 0) work = `learn ${plan.newToday} new ${plan.newToday === 1 ? 'card' : 'cards'}`;
+  else if (plan.phase === 'review' && plan.newCards + plan.dueCards > 0) work = `review ${cards(plan.newCards + plan.dueCards)}`;
+  else if (plan.phase === 'exam-day' && plan.dueCards > 0) work = `last look at ${cards(plan.dueCards)}`;
+  return work ? `${plan.exam.title}: ${work}` : null;
+}
+
+/**
+ * What the planner suggests working on: today's study for each exam (once a day), then overdue
+ * and upcoming homework that isn't a task yet, most urgent first.
+ */
+export function plannerSuggestions(plan: Pick<DayPlan, 'overdue' | 'dueSoon'> & Partial<Pick<DayPlan, 'exams'>>, tasks: readonly FocusTask[], today: string = dayKey(new Date())): FocusSuggestion[] {
+  const linked = new Set(tasks.filter(t => !t.plannedFor).map(task => task.plannerItemId).filter(Boolean));
+  const plannedToday = new Set(tasks.filter(t => t.plannedFor === today).map(t => t.plannerItemId));
+  const exams: FocusSuggestion[] = [];
+  for (const examPlan of plan.exams ?? []) {
+    const title = examTaskTitle(examPlan);
+    if (!title || plannedToday.has(examPlan.exam.id)) continue;
+    exams.push({ kind: 'exam', item: examPlan.exam, title, deckId: examPlan.nextDeck!.id, daysLeft: examPlan.daysLeft });
+  }
+  const homework: FocusSuggestion[] = [...plan.overdue, ...plan.dueSoon].filter(item => !linked.has(item.id)).map(item => ({ kind: 'homework', item }));
+  return [...exams, ...homework].slice(0, MAX_SUGGESTIONS);
 }
 
 const getSettings = (): FocusSettings => cleanSettings(readJson(SETTINGS_KEY));
@@ -161,7 +192,10 @@ const recordFocus = (timer: TimerState, focusedMs: number, endedAtMs: number, co
   const today = dayKey(ended);
   const kept = StorageService.getFocusLog().filter(e => daysBetween(e.day, today) <= LOG_RETENTION_DAYS);
   StorageService.saveFocusLog([...kept, entry]);
-  if (task && countForTask) StorageService.saveFocusTasks(tasks.map(t => (t.id === task.id ? { ...t, pomodoros: t.pomodoros + 1 } : t)));
+  if (task && countForTask) {
+    const updatedAt = new Date().toISOString();
+    StorageService.saveFocusTasks(tasks.map(t => (t.id === task.id ? { ...t, pomodoros: t.pomodoros + 1, updatedAt } : t)));
+  }
   StorageService.recordStudyMinutes(minutes, { start: endedAtMs - focusedMs, end: endedAtMs });
   return entry;
 };
@@ -260,12 +294,15 @@ export const FocusService = {
 
   currentTask,
 
-  /** Adds a task. With nothing to work on yet, it becomes the timer's task. */
-  addTask(title: string, plannerItemId?: string): FocusTask | null {
+  /**
+   * Adds a task. With nothing to work on yet, it becomes the timer's task. A planner item is
+   * added once (once a day, for an exam's daily work: `plannedFor`).
+   */
+  addTask(title: string, plannerItemId?: string, extra: { deckId?: string; plannedFor?: string } = {}): FocusTask | null {
     const clean = cleanTaskTitle(title);
     if (!clean) return null;
     const tasks = StorageService.getFocusTasks();
-    const existing = plannerItemId ? tasks.find(t => t.plannerItemId === plannerItemId) : undefined;
+    const existing = plannerItemId ? tasks.find(t => t.plannerItemId === plannerItemId && t.plannedFor === extra.plannedFor) : undefined;
     if (existing) return existing;
     if (tasks.length >= MAX_TASKS) return null;
     const task: FocusTask = {
@@ -274,7 +311,10 @@ export const FocusService = {
       done: false,
       pomodoros: 0,
       ...(plannerItemId ? { plannerItemId } : {}),
+      ...(extra.deckId ? { deckId: extra.deckId } : {}),
+      ...(extra.plannedFor ? { plannedFor: extra.plannedFor } : {}),
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     StorageService.saveFocusTasks([...tasks, task]);
     if (!currentTask()) writeJson(TIMER_KEY, { ...getTimer(), taskId: task.id });
@@ -288,11 +328,12 @@ export const FocusService = {
     if (!current) return null;
     const title = changes.title !== undefined ? cleanTaskTitle(changes.title) || current.title : current.title;
     const done = changes.done ?? current.done;
-    const updated: FocusTask = { ...current, title, done };
+    const updated: FocusTask = { ...current, title, done, updatedAt: new Date().toISOString() };
     if (done && !current.done) updated.doneAt = new Date().toISOString();
     if (!done) delete updated.doneAt;
     saveTasks(tasks.map(t => (t.id === id ? updated : t)));
-    if (done !== current.done) syncPlannerItem(current.plannerItemId, done);
+    // Homework is handed in when its task is done; an exam isn't sat because a day's study is.
+    if (done !== current.done && !current.plannedFor) syncPlannerItem(current.plannerItemId, done);
     if (done && getTimer().taskId === id) setTimer({ ...getTimer(), taskId: null });
     return updated;
   },
@@ -314,17 +355,27 @@ export const FocusService = {
   },
 
   removeTask(id: string): void {
+    StorageService.recordDeletion('focus_tasks', id);
     saveTasks(StorageService.getFocusTasks().filter(t => t.id !== id));
     if (getTimer().taskId === id) setTimer({ ...getTimer(), taskId: null });
   },
 
   clearDone(): void {
-    saveTasks(StorageService.getFocusTasks().filter(t => !t.done));
+    const tasks = StorageService.getFocusTasks();
+    StorageService.recordDeletion('focus_tasks', tasks.filter(t => t.done).map(t => t.id));
+    saveTasks(tasks.filter(t => !t.done));
   },
 
-  /** Homework from the planner that could be added as tasks. */
-  suggestions(now: Date = new Date()): PlannerItem[] {
-    return plannerSuggestions(PlannerService.today(now), StorageService.getFocusTasks());
+  /** Exam study and homework from the planner that could be added as tasks. */
+  suggestions(now: Date = new Date()): FocusSuggestion[] {
+    return plannerSuggestions(PlannerService.today(now), StorageService.getFocusTasks(), dayKey(now));
+  },
+
+  /** Adds a planner suggestion as a task (or finds the one already added). */
+  addSuggestion(suggestion: FocusSuggestion, now: Date = new Date()): FocusTask | null {
+    return suggestion.kind === 'exam'
+      ? FocusService.addTask(suggestion.title, suggestion.item.id, { deckId: suggestion.deckId, plannedFor: dayKey(now) })
+      : FocusService.addTask(suggestion.item.title, suggestion.item.id);
   },
 
   getNotes(): string {
@@ -334,6 +385,18 @@ export const FocusService = {
   /** Saves the notes. Listeners aren't told: only the notes pad shows them. */
   saveNotes(notes: string): void {
     StorageService.saveFocusNotes(notes.slice(0, MAX_NOTES_LENGTH));
+    notesListeners.forEach(fn => fn());
+  },
+
+  /** Calls back after the notes are saved. */
+  onNotesSaved(listener: () => void): () => void {
+    notesListeners.add(listener);
+    return () => notesListeners.delete(listener);
+  },
+
+  /** Tells listeners that Focus data changed outside this service (account sync brought it in). */
+  notifyChanged(): void {
+    notify();
   },
 
   getLog(): FocusLogEntry[] {

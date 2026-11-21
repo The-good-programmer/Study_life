@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, Maximize2, Minimize2, EyeOff, Volume2, VolumeX, PenTool, FileText } from 'lucide-react';
+import { FocusTimerPill } from '../focus/FocusTimerPill';
 import type { StudyPhase, StudySession } from '../../types';
 import { DiagnosticPhase } from './DiagnosticPhase';
 import { PrimingPhase } from './PrimingPhase';
@@ -20,6 +21,8 @@ interface StudyPilotProps {
   initialSession: StudySession;
   onExit: () => void;
   onOpenDashboard: () => void;
+  /** Leaves the review for the Focus page (from the focus timer in the header). */
+  onOpenFocus?: () => void;
 }
 
 type AmbientTheme = 'obsidian' | 'library' | 'indigo-flow' | 'nordic-frost';
@@ -33,7 +36,7 @@ const toStored = (session: StudySession): StudySession => (session.currentPhase 
 /** When a pass finishes; it names the completion its summary pays for. */
 const timestamp = () => new Date().toISOString();
 
-export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, onOpenDashboard }) => {
+export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, onOpenDashboard, onOpenFocus }) => {
   const [session, setSession] = useState<StudySession>(() => {
     // Decks saved before reviews were kept in them can hold older copies of their cards.
     const latest = StorageService.deckWithLatestProgress(initialSession);
@@ -421,6 +424,8 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
               <IconButton icon={PenTool} label="Whiteboard" onClick={() => setIsGlobalWhiteboardOpen(true)} />
               <IconButton icon={isFullscreen ? Minimize2 : Maximize2} label={isFullscreen ? 'Exit full screen' : 'Full screen'} onClick={toggleFullscreen} />
             </div>
+
+            {onOpenFocus && <FocusTimerPill onOpen={onOpenFocus} />}
 
             <span
               className="ml-1 inline-flex h-8 items-center gap-1.5 rounded-lg bg-surface-hover px-2.5 font-mono text-[13px] font-medium tabular-nums text-ink"

@@ -79,6 +79,23 @@ export class ApiConfig {
   }
 
   /**
+   * Wakes the server without waiting for it. The free host puts it to sleep when idle and
+   * waking takes up to a minute, so this runs when the app opens, before anyone signs in.
+   * Unlike isServerReachable it has no short timeout, and it only ever records success.
+   */
+  public static warmUp(): void {
+    if (typeof fetch === 'undefined') return;
+    fetch(`${this.getBaseUrl()}/health`, { method: 'GET', headers: { Accept: 'application/json' } })
+      .then(res => {
+        if (res.ok) {
+          this.cachedIsReachable = true;
+          this.lastCheckTime = Date.now();
+        }
+      })
+      .catch(() => {});
+  }
+
+  /**
    * Synchronously returns whether the server is known to be up. Unknown counts as
    * unavailable; a background check is started so the next call has an answer.
    */

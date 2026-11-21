@@ -109,6 +109,10 @@ Both halves run on [Render](https://render.com), deployed from `fix/audit-harden
 - **CI gate:** `.github/workflows/ci.yml` runs lint, types, tests, the build and `check:build` on every
   PR and push. Set both Render services to *Auto-Deploy: After CI checks pass* so a failing build
   never ships.
+- **Keeping it awake:** `.github/workflows/keep-alive.yml` calls the API's `/api/health` every 14 minutes, so the
+  free Render API is usually awake and the free Supabase database never pauses for inactivity. GitHub pauses scheduled
+  workflows after 60 days without commits; if that happens, re-enable it under *Actions → Keep alive*. The site also
+  wakes the API as soon as it opens.
 - **Rollback:** in Render, open the service's *Events*, pick the last good deploy and choose
   *Rollback*.
 - **Caching:** the service worker (`public/sw.js`, routing in `public/sw-routes.js`) never caches the
@@ -149,5 +153,9 @@ npx cap open android
 - **Scheduling:** `ts-fsrs` (Free Spaced Repetition Scheduler)
 - **AI:** Google Gemini via `@google/genai` (`gemini-2.5-flash` with fallbacks), plus an offline heuristic fallback
 - **Storage:** local-first (`localStorage` + IndexedDB); optional Node + PostgreSQL backend for accounts and sync
+- **Account sync:** signed-in students' decks (with review progress), subjects, planner, Focus tasks, notes and history,
+  stats and avatar look sync through `/api/sync/pull` and `/api/sync/push` a few seconds after each change and when the
+  app comes back into view. Edits merge item by item (newer wins) and deletions are remembered, so nothing deleted comes
+  back (`src/services/cloudSyncService.ts`, `src/services/syncMerge.ts`). Tokens and the campus home stay on each device.
 - **3D (Extras only, lazy-loaded):** Three.js; procedural signed-distance-field sculpting meshed with surface nets, a real skeleton with two-bone IK, baked ambient occlusion, and GTAO post-processing in the home designer
 - **Portability:** round-trip `.json`, `.md`, `.tsv` deck export and import

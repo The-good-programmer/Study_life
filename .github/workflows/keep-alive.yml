@@ -1,0 +1,23 @@
+# Keeps the free hosting awake. The API on Render's free plan sleeps after 15 minutes without
+# traffic (the first sign-in after that waits up to a minute), and Supabase pauses a free
+# database after a week without use (sign-in then fails until it is restored by hand).
+# /api/health wakes the API and runs a query on the database, so this covers both.
+#
+# GitHub runs schedules late when it is busy, which is fine here. It also pauses scheduled
+# workflows in a repository with no commits for 60 days: re-enable it in the Actions tab.
+name: Keep alive
+
+on:
+  schedule:
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake the API and the database
+        run: curl -fsS --retry 3 --retry-delay 20 --retry-all-errors --max-time 90 https://studify-api-8orm.onrender.com/api/health

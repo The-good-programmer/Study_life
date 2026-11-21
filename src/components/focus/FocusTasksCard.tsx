@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ArrowDown, ArrowUp, CalendarDays, GripVertical, Pencil, Plus, Timer, Trash2 } from 'lucide-react';
-import type { FocusTask, PlannerItem } from '../../types';
-import { FocusService, MAX_TASK_TITLE } from '../../services/focusService';
+import { ArrowDown, ArrowUp, CalendarDays, GraduationCap, GripVertical, Pencil, Play, Plus, Timer, Trash2 } from 'lucide-react';
+import type { FocusTask } from '../../types';
+import { FocusService, MAX_TASK_TITLE, type FocusSuggestion } from '../../services/focusService';
 import { dayKey, daysBetween, relativeDay } from '../../services/plannerService';
 import { cn } from '../../utils/cn';
 import { ActionMenu } from '../ui/ActionMenu';
@@ -10,7 +10,11 @@ import { Badge, Button, Card, IconButton, SectionHeader } from '../ui/primitives
 interface FocusTasksCardProps {
   tasks: FocusTask[];
   currentTaskId: string | null;
-  suggestions: PlannerItem[];
+  suggestions: FocusSuggestion[];
+  /** Opens the task's deck to study, when it has one that still exists. */
+  onStudy?: (task: FocusTask) => void;
+  /** Ids of the decks there are, for the Study buttons. */
+  deckIds?: ReadonlySet<string>;
 }
 
 /** Shown on hover or keyboard focus where there is a mouse; always shown on touch screens. */
@@ -45,6 +49,7 @@ const RenameField: React.FC<{ task: FocusTask; onDone: () => void }> = ({ task, 
 
 interface TaskRowProps {
   task: FocusTask;
+  onStudy?: () => void;
   index: number;
   count: number;
   current: boolean;
@@ -55,7 +60,7 @@ interface TaskRowProps {
   onDragEnd: () => void;
 }
 
-const TaskRow: React.FC<TaskRowProps> = ({ task, index, count, current, dragOver, onDragStart, onDragOver, onDrop, onDragEnd }) => {
+const TaskRow: React.FC<TaskRowProps> = ({ task, onStudy, index, count, current, dragOver, onDragStart, onDragOver, onDrop, onDragEnd }) => {
   const [renaming, setRenaming] = useState(false);
   const movable = !task.done && count > 1;
 
@@ -116,7 +121,7 @@ const TaskRow: React.FC<TaskRowProps> = ({ task, index, count, current, dragOver
           aria-label={task.done ? task.title : current ? `${task.title}, working on it now. Rename` : `Work on ${task.title}`}
           className="flex min-h-9 min-w-0 flex-1 flex-col justify-center rounded-lg px-1.5 text-left cursor-pointer disabled:cursor-default"
         >
-          <span className={cn('block truncate text-[13px] font-medium text-ink', task.done && 'line-through')}>{task.title}</span>
+          <span className={cn('line-clamp-2 break-words text-[13px] font-medium text-ink', task.done && 'line-through')}>{task.title}</span>
           {current && <span className="block text-[11px] font-medium text-brand-text">Working on this now</span>}
           {!current && task.plannerItemId && !task.done && <span className="block text-[11px] text-ink-subtle">From your planner</span>}
         </button>
@@ -127,6 +132,11 @@ const TaskRow: React.FC<TaskRowProps> = ({ task, index, count, current, dragOver
           {task.pomodoros}
           <span className="sr-only">focus sessions</span>
         </span>
+      )}
+      {onStudy && !task.done && !renaming && (
+        <Button size="sm" variant={current ? 'primary' : 'secondary'} icon={Play} onClick={onStudy} aria-label={`Study ${task.title}`} className="shrink-0">
+          Study
+        </Button>
       )}
       {!renaming && (
         <div className={cn('flex shrink-0 items-center transition-opacity', REVEAL)}>
@@ -149,7 +159,7 @@ const TaskRow: React.FC<TaskRowProps> = ({ task, index, count, current, dragOver
 };
 
 /** The tasks for this study session, with homework from the planner offered as tasks. */
-export const FocusTasksCard: React.FC<FocusTasksCardProps> = ({ tasks, currentTaskId, suggestions }) => {
+export const FocusTasksCard: React.FC<FocusTasksCardProps> = ({ tasks, currentTaskId, suggestions, onStudy, deckIds }) => {
   const [title, setTitle] = useState('');
   const [dragId, setDragId] = useState<string | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
@@ -198,6 +208,7 @@ export const FocusTasksCard: React.FC<FocusTasksCardProps> = ({ tasks, currentTa
             <TaskRow
               key={task.id}
               task={task}
+              onStudy={onStudy && task.deckId && deckIds?.has(task.deckId) ? () => onStudy(task) : undefined}
               index={index}
               count={open.length}
               current={task.id === currentTaskId}
@@ -225,19 +236,26 @@ export const FocusTasksCard: React.FC<FocusTasksCardProps> = ({ tasks, currentTa
             From your planner
           </h3>
           <ul className="space-y-1.5">
-            {suggestions.map(item => {
+            {suggestions.map(suggestion => {
+              const { item } = suggestion;
+              const title = suggestion.kind === 'exam' ? suggestion.title : item.title;
               const days = daysBetween(today, item.date);
+              const Icon = suggestion.kind === 'exam' ? GraduationCap : Plus;
               return (
-                <li key={item.id}>
+                <li key={`${suggestion.kind}-${item.id}`}>
                   <button
                     type="button"
-                    onClick={() => FocusService.addTask(item.title, item.id)}
-                    aria-label={`Add ${item.title} as a task`}
+                    onClick={() => FocusService.addSuggestion(suggestion)}
+                    aria-label={`Add ${title} as a task`}
                     className="flex w-full items-center gap-3 rounded-xl border border-dashed border-line px-3 py-2 text-left transition-colors hover:border-line-strong hover:bg-surface-hover cursor-pointer"
                   >
-                    <Plus className="h-3.5 w-3.5 shrink-0 text-ink-subtle" aria-hidden="true" />
-                    <span className="min-w-0 flex-1 truncate text-[13px] text-ink-muted">{item.title}</span>
-                    <Badge tone={days < 0 ? 'danger' : days <= 2 ? 'due' : 'neutral'}>{days < 0 ? 'Overdue' : `Due ${relativeDay(days)}`}</Badge>
+                    <Icon className={cn('h-3.5 w-3.5 shrink-0', suggestion.kind === 'exam' ? 'text-danger' : 'text-ink-subtle')} aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-ink-muted">{title}</span>
+                    {suggestion.kind === 'exam' ? (
+                      <Badge tone={days <= 2 ? 'due' : 'neutral'}>{days === 0 ? 'Exam today' : `Exam ${relativeDay(days)}`}</Badge>
+                    ) : (
+                      <Badge tone={days < 0 ? 'danger' : days <= 2 ? 'due' : 'neutral'}>{days < 0 ? 'Overdue' : `Due ${relativeDay(days)}`}</Badge>
+                    )}
                   </button>
                 </li>
               );

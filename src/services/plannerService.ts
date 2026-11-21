@@ -227,6 +227,7 @@ export const PlannerService = {
   },
 
   remove(id: string): void {
+    StorageService.recordDeletion('planner', id);
     StorageService.savePlannerItems(StorageService.getPlannerItems().filter(item => item.id !== id));
   },
 

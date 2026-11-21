@@ -108,6 +108,8 @@ interface IngestionHubProps {
   onOpenInterleaving?: () => void;
   onOpenSanctuary?: () => void;
   initialLibraryTab?: 'my-decks' | 'starred' | 'curated';
+  /** Opens on "make a deck from notes" with these notes filled in (from Focus). */
+  initialNotes?: string;
 }
 
 export const IngestionHub: React.FC<IngestionHubProps> = ({ 
@@ -119,11 +121,12 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   onOpenExam,
   onOpenInterleaving,
   initialLibraryTab,
+  initialNotes,
 }) => {
   // Ingestion studio mode: pdf | topic | notes | occlusion
-  const [ingestMode, setIngestMode] = useState<'pdf' | 'topic' | 'notes' | 'occlusion'>('topic');
+  const [ingestMode, setIngestMode] = useState<'pdf' | 'topic' | 'notes' | 'occlusion'>(initialNotes ? 'notes' : 'topic');
   const [topicInput, setTopicInput] = useState('');
-  const [notesInput, setNotesInput] = useState('');
+  const [notesInput, setNotesInput] = useState(initialNotes ?? '');
   const [isStarterCatalogModalOpen, setIsStarterCatalogModalOpen] = useState(false);
   const [justImportedId, setJustImportedId] = useState<string | null>(null);
   const [isTourModalOpen, setIsTourModalOpen] = useState(false);
