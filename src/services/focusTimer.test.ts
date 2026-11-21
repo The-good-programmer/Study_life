@@ -4,6 +4,7 @@ import {
   choosePhase,
   cleanSettings,
   cleanTimerState,
+  elapsedAt,
   finish,
   formatClock,
   idleState,
@@ -31,6 +32,8 @@ describe('settings', () => {
     expect(s.longBreakEvery).toBe(4);
     expect(s.chime).toBe(false);
     expect(s.notify).toBe(S.notify);
+    expect(s.keepAwake).toBe(true);
+    expect(cleanSettings({ keepAwake: false }).keepAwake).toBe(false);
   });
 });
 
@@ -53,6 +56,14 @@ describe('running the timer', () => {
     expect(resumed.endsAt).toBe(T0 + 75 * MIN);
     expect(isDue(resumed, T0 + 75 * MIN - 1)).toBe(false);
     expect(isDue(resumed, T0 + 75 * MIN)).toBe(true);
+  });
+
+  it('knows how long a phase has actually run, leaving out paused time', () => {
+    const running = start(idleState('focus', S), T0);
+    const paused = pause(running, T0 + 7 * MIN);
+    expect(elapsedAt(paused, T0 + 60 * MIN)).toBe(7 * MIN);
+    expect(elapsedAt(start(paused, T0 + 60 * MIN), T0 + 63 * MIN)).toBe(10 * MIN);
+    expect(elapsedAt(idleState('focus', S), T0)).toBe(0);
   });
 
   it('starting or pausing twice changes nothing', () => {

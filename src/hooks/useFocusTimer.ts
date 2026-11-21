@@ -3,6 +3,7 @@ import { FocusService, completionMessage, type FocusCompletion } from '../servic
 import { formatClock, remainingAt, type FocusPhase } from '../services/focusTimer';
 import { NotificationService } from '../services/notificationService';
 import { soundEngine } from '../services/soundEngine';
+import { useWakeLock } from './useWakeLock';
 
 export const PHASE_LABELS: Record<FocusPhase, string> = {
   focus: 'Focus',
@@ -32,13 +33,19 @@ export function useFocusState() {
 /** How long a phase-change message stays on screen. */
 const MESSAGE_MS = 8_000;
 
+/** Whether the screen should be kept on: the timer is running and the setting is on. */
+const wantsAwake = () => FocusService.getTimer().status === 'running' && FocusService.getSettings().keepAwake;
+
 /**
- * Runs the timer for the whole app: notices when a phase ends (on any page), chimes, sends
- * the notification if it is turned on, and shows the time left in the tab's title. Returns
- * the latest phase change to show on screen, and a way to dismiss it.
+ * Runs the timer for the whole app: notices when a phase ends (on any page), chimes (on
+ * time, even in a background tab), sends the notification if it is turned on, keeps the
+ * screen on while it runs, and shows the time left in the tab's title. Returns the latest
+ * phase change to show on screen, and a way to dismiss it.
  */
 export function useFocusTimerAlerts(): { message: { title: string; body: string } | null; dismiss: () => void } {
   const [message, setMessage] = useState<{ title: string; body: string } | null>(null);
+  const [keepAwake, setKeepAwake] = useState(wantsAwake);
+  useWakeLock(keepAwake);
 
   useEffect(() => {
     const originalTitle = document.title;
@@ -47,7 +54,8 @@ export function useFocusTimerAlerts(): { message: { title: string; body: string 
     const announce = (completion: FocusCompletion) => {
       const settings = FocusService.getSettings();
       const text = completionMessage(completion, settings);
-      if (settings.chime && !completion.late) soundEngine.playCompletionChime();
+      // The chime is normally scheduled ahead (see syncChime); play it now only if it didn't ring.
+      if (settings.chime && !completion.late && !soundEngine.timerChimeRang(completion.endedAt)) soundEngine.playTimerChime();
       if (settings.notify && NotificationService.getPermission() === 'granted') {
         void NotificationService.showNotification(text.title, { body: text.body, tag: 'studify-focus', data: { url: '/' } });
       }
@@ -66,6 +74,15 @@ export function useFocusTimerAlerts(): { message: { title: string; body: string 
       document.title = `${timer.status === 'paused' ? 'Paused' : clock} · ${PHASE_LABELS[timer.phase]} | Studify`;
     };
 
+    /** Schedules the chime for the end of a running phase, or cancels it. */
+    const syncChime = () => {
+      const timer = FocusService.getTimer();
+      const wanted = timer.status === 'running' && timer.endsAt !== null && FocusService.getSettings().chime ? timer.endsAt : null;
+      if (wanted === soundEngine.getTimerChimeAt()) return;
+      if (wanted === null) soundEngine.cancelTimerChime();
+      else soundEngine.scheduleTimerChime(wanted);
+    };
+
     const check = () => {
       const completion = FocusService.tick();
       if (completion) announce(completion);
@@ -73,14 +90,20 @@ export function useFocusTimerAlerts(): { message: { title: string; body: string 
     };
 
     check();
+    syncChime();
     const id = setInterval(check, 1000);
     document.addEventListener('visibilitychange', check);
-    const unsubscribe = FocusService.subscribe(showTitle);
+    const unsubscribe = FocusService.subscribe(() => {
+      showTitle();
+      syncChime();
+      setKeepAwake(wantsAwake());
+    });
     return () => {
       clearInterval(id);
       clearTimeout(hideTimer);
       document.removeEventListener('visibilitychange', check);
       unsubscribe();
+      soundEngine.cancelTimerChime();
       document.title = originalTitle;
     };
   }, []);

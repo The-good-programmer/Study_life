@@ -20,10 +20,10 @@ const Figure: React.FC<{ label: string; value: string; detail: string }> = ({ la
   </div>
 );
 
-/** Focus time from the sessions that ran to their end. */
+/** Focus time from finished sessions (including ones finished early). */
 export const FocusTodayCard: React.FC<{ summary: FocusSummary }> = ({ summary }) => (
   <Card className="space-y-4">
-    <SectionHeader title="Focus time" description="Counted from focus sessions you finish." />
+    <SectionHeader title="Focus time" description="Sessions you finish also count toward your daily goal and streak." />
     <div className="grid grid-cols-2 gap-3">
       <Figure label="Today" value={formatMinutes(summary.todayMinutes)} detail={plural(summary.todaySessions, 'session')} />
       <Figure label="Last 7 days" value={formatMinutes(summary.weekMinutes)} detail={plural(summary.weekSessions, 'session')} />

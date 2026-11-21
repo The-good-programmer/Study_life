@@ -78,6 +78,7 @@ export const FocusSettingsPanel: React.FC<{ settings: FocusSettings }> = ({ sett
         <Toggle checked={settings.autoStartFocus} onChange={on => FocusService.saveSettings({ autoStartFocus: on })} label="Start focus sessions on their own" className="-ml-2" />
         <Toggle checked={settings.chime} onChange={on => FocusService.saveSettings({ chime: on })} label="Chime when time's up" className="-ml-2" />
         <Toggle checked={settings.notify} onChange={on => void setNotify(on)} label="Notify me when time's up" className="-ml-2" />
+        <Toggle checked={settings.keepAwake} onChange={on => FocusService.saveSettings({ keepAwake: on })} label="Keep the screen on while the timer runs" className="-ml-2" />
         {notifyNote && <p className="pl-1 text-xs text-danger">{notifyNote}</p>}
       </div>
       <p className="text-xs text-ink-subtle">New lengths apply to the next session; one already going keeps its own.</p>

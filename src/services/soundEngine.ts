@@ -373,6 +373,96 @@ class SoundEngine {
     this.scheduleTransientCleanup(chimeGain, oscs, 3500);
   }
 
+  /** The focus timer's chime, scheduled ahead on the audio clock (see scheduleTimerChime). */
+  private timerChime: { atEpochMs: number; startTime: number; gain: GainNode; oscillators: OscillatorNode[] } | null = null;
+  /** The moment of the last scheduled chime that rang before it was let go. */
+  private rungTimerChimeAt: number | null = null;
+
+  /** Builds the timer chime to start at `startTime` on the audio clock, at a fixed level. */
+  private buildTimerChime(startTime: number): { gain: GainNode; oscillators: OscillatorNode[] } | null {
+    if (!this.ctx) return null;
+    // Straight to the speakers, not through the background-sound volume: turning the
+    // background sound down mustn't silence the timer.
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+    gain.gain.setValueAtTime(0.18, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 3.0);
+    gain.connect(this.ctx.destination);
+    const oscillators = [528, 792, 1056].map((freq, idx) => {
+      const osc = this.ctx!.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+      osc.connect(gain);
+      osc.start(startTime);
+      osc.stop(startTime + 3.2 + idx * 0.1);
+      return osc;
+    });
+    return { gain, oscillators };
+  }
+
+  /** Plays the focus timer's chime now. */
+  public playTimerChime(): void {
+    this.initContext();
+    if (!this.ctx) return;
+    const chime = this.buildTimerChime(this.ctx.currentTime);
+    if (chime) this.scheduleTransientCleanup(chime.gain, chime.oscillators, 3500);
+  }
+
+  /**
+   * Schedules the timer chime for a moment in the future. The audio clock keeps time in
+   * background tabs, where browsers slow ordinary timers to once a minute, so the chime
+   * rings on time. Replaces any chime already scheduled. Does nothing until audio has been
+   * unlocked by a user action.
+   */
+  public scheduleTimerChime(atEpochMs: number): void {
+    if (this.timerChime?.atEpochMs === atEpochMs) return;
+    this.cancelTimerChime();
+    // Only once audio was switched on by a click (see unlock): browsers block it otherwise.
+    if (!this.ctx || this.ctx.state === 'closed') return;
+    if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+    const startTime = this.ctx.currentTime + Math.max(0, (atEpochMs - Date.now()) / 1000);
+    const chime = this.buildTimerChime(startTime);
+    if (chime) this.timerChime = { atEpochMs, startTime, ...chime };
+  }
+
+  /** Cancels the scheduled timer chime, unless it has already started ringing. */
+  public cancelTimerChime(): void {
+    const chime = this.timerChime;
+    this.timerChime = null;
+    if (!chime || !this.ctx) return;
+    if (this.ctx.state === 'running' && this.ctx.currentTime >= chime.startTime) {
+      // Already ringing: let it finish.
+      this.rungTimerChimeAt = chime.atEpochMs;
+      this.scheduleTransientCleanup(chime.gain, chime.oscillators, 3500);
+      return;
+    }
+    chime.oscillators.forEach(osc => {
+      try {
+        osc.stop();
+        osc.disconnect();
+      } catch {
+        // already stopped
+      }
+    });
+    try {
+      chime.gain.disconnect();
+    } catch {
+      // ignore
+    }
+  }
+
+  /** Whether the chime scheduled for this moment has rung (it can't while audio is suspended). */
+  public timerChimeRang(atEpochMs: number): boolean {
+    if (this.rungTimerChimeAt !== null && Math.abs(this.rungTimerChimeAt - atEpochMs) < 1000) return true;
+    const chime = this.timerChime;
+    return Boolean(chime && this.ctx && this.ctx.state === 'running' && Math.abs(chime.atEpochMs - atEpochMs) < 1000 && this.ctx.currentTime >= chime.startTime);
+  }
+
+  /** When the timer chime is scheduled for, if it is. */
+  public getTimerChimeAt(): number | null {
+    return this.timerChime?.atEpochMs ?? null;
+  }
+
   /**
    * Duolingo-grade crisp bubble pop for option selection and radio taps
    */

@@ -34,7 +34,7 @@ Open Studify, pick a starter deck or turn your own notes or a lecture PDF into f
 
 ### Focus workspace
 
-A Pomodoro timer (25-minute focus sessions, short breaks, a long break after every fourth; all adjustable) with the session's tasks, a notes pad, background sound and today's focus time. Homework due soon in the Planner is offered as a task, and ticking it off marks it done in the Planner too. The timer keeps running on other pages (the time left shows in the top bar and the tab title), chimes when a phase ends and can send a notification. Focus time is shown on its own and is not added to the daily study goal, which counts review time.
+A Pomodoro timer (25-minute focus sessions, short breaks, a long break after every fourth; all adjustable) with the session's tasks, a notes pad, background sound and today's focus time. Homework due soon in the Planner is offered as a task, and ticking it off marks it done in the Planner too. The timer keeps running on other pages (the time left shows in the top bar and the tab title), chimes when a phase ends and can send a notification. Finished focus sessions (or ones finished early with "Finish now") count toward the daily goal and streak; time spent reviewing cards during a session is counted once, not twice. Alerts ring on time in background tabs, and the screen stays on while the timer runs (where the browser supports it).
 
 ### Focus audio (optional)
 

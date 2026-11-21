@@ -18,6 +18,8 @@ export interface FocusSettings {
   chime: boolean;
   /** Show a system notification when a phase ends. */
   notify: boolean;
+  /** Keep the screen from going to sleep while the timer runs (phones and tablets). */
+  keepAwake: boolean;
 }
 
 export const DEFAULT_FOCUS_SETTINGS: FocusSettings = {
@@ -29,6 +31,7 @@ export const DEFAULT_FOCUS_SETTINGS: FocusSettings = {
   autoStartFocus: false,
   chime: true,
   notify: false,
+  keepAwake: true,
 };
 
 type NumericSetting = 'focusMinutes' | 'shortBreakMinutes' | 'longBreakMinutes' | 'longBreakEvery';
@@ -62,6 +65,7 @@ export function cleanSettings(raw: unknown): FocusSettings {
     autoStartFocus: bool('autoStartFocus'),
     chime: bool('chime'),
     notify: bool('notify'),
+    keepAwake: bool('keepAwake'),
   };
 }
 
@@ -124,6 +128,9 @@ export const remainingAt = (state: TimerState, now: number): number => {
   if (state.status === 'paused' && state.remainingMs !== null) return state.remainingMs;
   return state.durationMs;
 };
+
+/** Ms of the current phase actually run so far (the clock only moves while running). */
+export const elapsedAt = (state: TimerState, now: number): number => Math.max(0, state.durationMs - remainingAt(state, now));
 
 /** Share of the phase gone by, 0 to 1. */
 export const progressAt = (state: TimerState, now: number): number =>
