@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FocusService, MAX_NOTES_LENGTH } from '../../services/focusService';
-import { Card, SectionHeader } from '../ui/primitives';
+import { Layers } from 'lucide-react';
+import { Button, Card, SectionHeader } from '../ui/primitives';
 
 const SAVE_DELAY_MS = 400;
 
 /** A notes pad that saves as you type, for questions and stray thoughts during a session. */
-export const FocusNotesCard: React.FC = () => {
+export const FocusNotesCard: React.FC<{ onMakeFlashcards?: (notes: string) => void }> = ({ onMakeFlashcards }) => {
   const [notes, setNotes] = useState(() => FocusService.getNotes());
   const [status, setStatus] = useState<'saved' | 'saving'>('saved');
   const pending = useRef<string | null>(null);
@@ -77,6 +78,23 @@ export const FocusNotesCard: React.FC = () => {
         placeholder="Ask the teacher about question 3…"
         className="min-h-48 w-full resize-y rounded-xl border border-line-strong bg-canvas px-3 py-2.5 text-sm leading-relaxed text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
       />
+      {onMakeFlashcards && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-ink-subtle">Turn what you wrote into a deck to review later.</p>
+          <Button
+            size="sm"
+            icon={Layers}
+            disabled={notes.trim().length < 20}
+            title={notes.trim().length < 20 ? 'Write a little more first' : undefined}
+            onClick={() => {
+              flush();
+              onMakeFlashcards(notes);
+            }}
+          >
+            Make flashcards
+          </Button>
+        </div>
+      )}
     </Card>
   );
 };

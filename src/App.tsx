@@ -82,6 +82,8 @@ export function App() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authInitialTab, setAuthInitialTab] = useState<'login' | 'register' | 'profile'>('login');
   const [stats, setStats] = useState<UserStats>(StorageService.getStats());
+  // Notes from Focus to make a deck from, opened in the Library (with a key to open it afresh).
+  const [libraryNotes, setLibraryNotes] = useState<{ text: string; key: number } | null>(null);
   const { isOnline, isInstallable, promptInstall } = usePwaInstall();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -199,6 +201,7 @@ export function App() {
   };
 
   const handleNavigate = (targetView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus') => {
+    setLibraryNotes(null);
     setView(targetView);
     setStats(StorageService.getStats());
   };
@@ -242,6 +245,10 @@ export function App() {
         <StudyPilot
           initialSession={activeSession}
           onExit={handleExitSession}
+          onOpenFocus={() => {
+            setActiveSession(null);
+            handleNavigate('focus');
+          }}
           onOpenDashboard={() => {
             setActiveSession(null);
             handleNavigate('dashboard');
@@ -368,8 +375,9 @@ export function App() {
             )}
             {view === 'studio' && (
               <IngestionHub
-                key={currentUser?.id || 'guest'}
+                key={`${currentUser?.id || 'guest'}-${libraryNotes?.key ?? 0}`}
                 initialLibraryTab={libraryTab}
+                initialNotes={libraryNotes?.text}
                 onStartSession={handleStartSession}
                 onOpenDeckStation={handleOpenDeckStation}
                 onStartMatch={handleStartMatch}
@@ -413,7 +421,15 @@ export function App() {
                 onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
               />
             )}
-            {view === 'focus' && <FocusPage />}
+            {view === 'focus' && (
+              <FocusPage
+                onStartSession={handleStartSession}
+                onMakeFlashcards={text => {
+                  setLibraryNotes({ text, key: Date.now() });
+                  setView('studio');
+                }}
+              />
+            )}
             {view === 'planner' && <PlannerPage onStartSession={handleStartSession} onOpenAuth={() => handleOpenAuth()} />}
             {view === 'folders' && (
               <FoldersPage

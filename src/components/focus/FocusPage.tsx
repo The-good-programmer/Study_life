@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import type { FocusTask, StudySession } from '../../types';
 import { FocusService, type FocusSummary } from '../../services/focusService';
+import { StorageService } from '../../services/storageService';
 import { useFocusState } from '../../hooks/useFocusTimer';
 import { FocusFullscreen } from './FocusFullscreen';
 import { FocusNotesCard } from './FocusNotesCard';
@@ -7,7 +9,11 @@ import { FocusTasksCard } from './FocusTasksCard';
 import { FocusTimerCard } from './FocusTimerCard';
 import { formatMinutes, plural, toggleTimer } from './focusUi';
 
-const readExtras = () => ({ summary: FocusService.summary(), suggestions: FocusService.suggestions() });
+const readExtras = () => ({
+  summary: FocusService.summary(),
+  suggestions: FocusService.suggestions(),
+  deckIds: new Set(StorageService.getSessions().map(d => d.id)),
+});
 
 const isTyping = (target: EventTarget | null) => {
   const el = target as HTMLElement | null;
@@ -34,14 +40,30 @@ const FocusTimeLine: React.FC<{ summary: FocusSummary }> = ({ summary }) => (
  * The Focus workspace: a Pomodoro timer (with background sound) beside the session's tasks
  * and a notes pad. The timer keeps running on other pages.
  */
-export const FocusPage: React.FC = () => {
+interface FocusPageProps {
+  /** Opens a deck to review (from a task's Study button). */
+  onStartSession?: (session: StudySession) => void;
+  /** Opens the Library to make a deck from the notes. */
+  onMakeFlashcards?: (notes: string) => void;
+}
+
+export const FocusPage: React.FC<FocusPageProps> = ({ onStartSession, onMakeFlashcards }) => {
   const { timer, settings, tasks, now } = useFocusState();
   // Read on changes only, not on every tick of the clock.
-  const [{ summary, suggestions }, setExtras] = useState(readExtras);
+  const [{ summary, suggestions, deckIds }, setExtras] = useState(readExtras);
   useEffect(() => FocusService.subscribe(() => setExtras(readExtras())), []);
   const [fullscreen, setFullscreen] = useState(false);
   const closeFullscreen = useCallback(() => setFullscreen(false), []);
   const currentTaskId = tasks.some(t => t.id === timer.taskId && !t.done) ? timer.taskId : null;
+
+  // Study: work on the task, start a focus session if none is going, and open its deck.
+  const study = (task: FocusTask) => {
+    const deck = StorageService.getSessions().find(d => d.id === task.deckId);
+    if (!deck || !onStartSession) return;
+    FocusService.setTimerTask(task.id);
+    if (timer.status === 'idle' && timer.phase === 'focus') toggleTimer();
+    onStartSession(StorageService.deckWithLatestProgress(deck));
+  };
 
   // Space starts and pauses; F opens and closes full screen. Not while typing, and not when a
   // dialog or menu is open.
@@ -77,8 +99,14 @@ export const FocusPage: React.FC = () => {
           <FocusTimerCard timer={timer} settings={settings} tasks={tasks} now={now} onFullscreen={() => setFullscreen(true)} />
         </div>
         <div className="flex min-w-0 flex-col gap-5 lg:col-span-5">
-          <FocusTasksCard tasks={tasks} currentTaskId={currentTaskId} suggestions={suggestions} />
-          <FocusNotesCard />
+          <FocusTasksCard
+            tasks={tasks}
+            currentTaskId={currentTaskId}
+            suggestions={suggestions}
+            onStudy={onStartSession ? study : undefined}
+            deckIds={deckIds}
+          />
+          <FocusNotesCard onMakeFlashcards={onMakeFlashcards} />
         </div>
       </div>
 

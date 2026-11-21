@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FocusLogEntry, FocusTask, PlannerItem } from '../types';
-import { AWAY_AFTER_MS, FocusService, completionMessage, plannerSuggestions, summarize } from './focusService';
-import { PlannerService, dayKey } from './plannerService';
+import type { FocusLogEntry, FocusTask, PlannerItem, StudySession } from '../types';
+import { AWAY_AFTER_MS, FocusService, completionMessage, examTaskTitle, plannerSuggestions, summarize } from './focusService';
+import { PlannerService, dayKey, type ExamPlan } from './plannerService';
 import { StorageService } from './storageService';
 
 const MIN = 60_000;
@@ -219,7 +219,58 @@ describe('plannerSuggestions', () => {
 
   it('offers overdue homework first, leaving out what is already a task', () => {
     const plan = { overdue: [item('late')], dueSoon: [item('a'), item('b')] };
-    expect(plannerSuggestions(plan, [task('a')]).map(i => i.id)).toEqual(['late', 'b']);
+    expect(plannerSuggestions(plan, [task('a')]).map(s => s.item.id)).toEqual(['late', 'b']);
+  });
+
+  const examPlan = (overrides: Partial<ExamPlan>): ExamPlan =>
+    ({
+      exam: { ...item('exam-1'), kind: 'exam', title: 'Biology midterm' },
+      daysLeft: 10,
+      phase: 'learn',
+      decks: [],
+      totalCards: 40,
+      newCards: 36,
+      dueCards: 3,
+      newToday: 12,
+      pace: 'on-track',
+      nextDeck: { id: 'deck-bio' } as StudySession,
+      ...overrides,
+    }) as ExamPlan;
+
+  it("offers each exam's work for today first, with the deck to study", () => {
+    const plan = { exams: [examPlan({})], overdue: [item('late')], dueSoon: [] };
+    const [first, second] = plannerSuggestions(plan, [], '2026-11-21');
+    expect(first).toMatchObject({ kind: 'exam', title: 'Biology midterm: learn 12 new cards', deckId: 'deck-bio' });
+    expect(second).toMatchObject({ kind: 'homework' });
+  });
+
+  it("offers an exam's work once a day, and not when another exam's plan covers it", () => {
+    const today: FocusTask = { ...task('exam-1'), plannedFor: '2026-11-21' };
+    expect(plannerSuggestions({ exams: [examPlan({})], overdue: [], dueSoon: [] }, [today], '2026-11-21')).toEqual([]);
+    expect(plannerSuggestions({ exams: [examPlan({})], overdue: [], dueSoon: [] }, [today], '2026-11-22')).toHaveLength(1);
+    const covered = examPlan({ coveredBy: item('other-exam') });
+    expect(plannerSuggestions({ exams: [covered], overdue: [], dueSoon: [] }, [], '2026-11-21')).toEqual([]);
+  });
+
+  it('words review days and the exam day', () => {
+    expect(examTaskTitle(examPlan({ phase: 'review', newCards: 0, dueCards: 1 }))).toBe('Biology midterm: review 1 card');
+    expect(examTaskTitle(examPlan({ phase: 'exam-day', dueCards: 4 }))).toBe('Biology midterm: last look at 4 cards');
+    expect(examTaskTitle(examPlan({ phase: 'exam-day', dueCards: 0 }))).toBeNull();
+  });
+});
+
+describe('exam study tasks', () => {
+  it("don't mark the exam as sat when the day's study is done", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const exam = PlannerService.add({ kind: 'exam', title: 'Biology midterm', date: '2026-12-01' });
+    const suggestion = { kind: 'exam' as const, item: exam, title: 'Biology midterm: learn 12 new cards', deckId: 'deck-bio', daysLeft: 10 };
+    const task = FocusService.addSuggestion(suggestion, NOW)!;
+    expect(task).toMatchObject({ deckId: 'deck-bio', plannedFor: dayKey(NOW) });
+    // Adding it again the same day finds the same task.
+    expect(FocusService.addSuggestion(suggestion, NOW)!.id).toBe(task.id);
+    FocusService.updateTask(task.id, { done: true });
+    expect(PlannerService.getItems()[0].done).toBeFalsy();
   });
 });
 
