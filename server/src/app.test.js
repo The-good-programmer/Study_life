@@ -200,6 +200,57 @@ describe('cloud sync', () => {
     expect(pulled.status).toBe(200);
     expect(pulled.data.sessions[0].title).toBe('Original');
   });
+
+  it('stores documents for each account and sends them back', async () => {
+    const a = await register('docs-a@example.com');
+    const b = await register('docs-b@example.com');
+    const planner = { items: [{ id: 'plan-1', title: 'Biology midterm' }] };
+    const push = await api('/api/sync/push', { method: 'POST', token: a.token, body: { documents: { planner, focus_notes: { text: 'hi', updatedAt: 1 } } } });
+    expect(push.status).toBe(200);
+
+    const mine = await api('/api/sync/pull', { token: a.token });
+    expect(mine.data.documents).toEqual({ planner, focus_notes: { text: 'hi', updatedAt: 1 } });
+    expect(typeof mine.data.serverTime).toBe('number');
+    // Another account sees none of it.
+    const theirs = await api('/api/sync/pull', { token: b.token });
+    expect(theirs.data.documents).toEqual({});
+
+    // A later push replaces the document.
+    await api('/api/sync/push', { method: 'POST', token: a.token, body: { documents: { planner: { items: [] } } } });
+    expect((await api('/api/sync/pull', { token: a.token })).data.documents.planner).toEqual({ items: [] });
+  });
+
+  it('refuses unknown document kinds and oversized documents', async () => {
+    const a = await register('docs-bad@example.com');
+    const unknown = await api('/api/sync/push', { method: 'POST', token: a.token, body: { documents: { wallet: { coins: 1e9 } } } });
+    expect(unknown.status).toBe(400);
+    const big = await api('/api/sync/push', { method: 'POST', token: a.token, body: { documents: { focus_log: { entries: 'x'.repeat(2.1 * 1024 * 1024) } } } });
+    expect(big.status).toBe(400);
+  });
+
+  it('deletes decks the app deleted, and only that account\'s', async () => {
+    const a = await register('del-a@example.com');
+    const b = await register('del-b@example.com');
+    await api('/api/sync/push', { method: 'POST', token: a.token, body: { sessions: [{ id: 'deck-a1', title: 'A1' }, { id: 'deck-a2', title: 'A2' }] } });
+    await api('/api/sync/push', { method: 'POST', token: b.token, body: { sessions: [{ id: 'deck-b1', title: 'B1' }] } });
+
+    await api('/api/sync/push', { method: 'POST', token: a.token, body: { deletedSessionIds: ['deck-a1'] } });
+    await api('/api/sync/push', { method: 'POST', token: a.token, body: { deletedSessionIds: ['deck-b1'] } });
+
+    expect((await api('/api/sync/pull', { token: a.token })).data.sessions.map((s) => s.id)).toEqual(['deck-a2']);
+    expect((await api('/api/sync/pull', { token: b.token })).data.sessions.map((s) => s.id)).toEqual(['deck-b1']);
+  });
+
+  it('sends only decks saved since the last pull', async () => {
+    const a = await register('since@example.com');
+    await api('/api/sync/push', { method: 'POST', token: a.token, body: { sessions: [{ id: 'old-deck', title: 'Old' }] } });
+    const first = await api('/api/sync/pull', { token: a.token });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await api('/api/sync/push', { method: 'POST', token: a.token, body: { sessions: [{ id: 'new-deck', title: 'New' }] } });
+
+    const next = await api(`/api/sync/pull?since=${first.data.serverTime}`, { token: a.token });
+    expect(next.data.sessions.map((s) => s.id)).toEqual(['new-deck']);
+  });
 });
 
 describe('AI proxy', () => {
@@ -273,7 +324,7 @@ describe('security headers', () => {
 describe('database', () => {
   it('applies its migrations once and reports healthy', async () => {
     const applied = await db.all('SELECT id FROM schema_migrations');
-    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds']);
+    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds', '005_user_documents']);
 
     const health = await api('/api/health');
     expect(health.status).toBe(200);

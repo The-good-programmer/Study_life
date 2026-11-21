@@ -153,5 +153,9 @@ npx cap open android
 - **Scheduling:** `ts-fsrs` (Free Spaced Repetition Scheduler)
 - **AI:** Google Gemini via `@google/genai` (`gemini-2.5-flash` with fallbacks), plus an offline heuristic fallback
 - **Storage:** local-first (`localStorage` + IndexedDB); optional Node + PostgreSQL backend for accounts and sync
+- **Account sync:** signed-in students' decks (with review progress), subjects, planner, Focus tasks, notes and history,
+  stats and avatar look sync through `/api/sync/pull` and `/api/sync/push` a few seconds after each change and when the
+  app comes back into view. Edits merge item by item (newer wins) and deletions are remembered, so nothing deleted comes
+  back (`src/services/cloudSyncService.ts`, `src/services/syncMerge.ts`). Tokens and the campus home stay on each device.
 - **3D (Extras only, lazy-loaded):** Three.js; procedural signed-distance-field sculpting meshed with surface nets, a real skeleton with two-bone IK, baked ambient occlusion, and GTAO post-processing in the home designer
 - **Portability:** round-trip `.json`, `.md`, `.tsv` deck export and import

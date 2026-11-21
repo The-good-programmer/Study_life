@@ -20,6 +20,15 @@ export const FocusNotesCard: React.FC = () => {
     setStatus('saved');
   };
 
+  // Show notes synced from another device, unless something typed here is still being saved.
+  useEffect(
+    () =>
+      FocusService.subscribe(() => {
+        if (pending.current === null && document.activeElement?.id !== 'focus-notes') setNotes(FocusService.getNotes());
+      }),
+    [],
+  );
+
   // Save what's typed when the page is left or hidden.
   useEffect(() => {
     const onHide = () => {

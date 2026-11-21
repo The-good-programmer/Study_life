@@ -3,6 +3,7 @@ import { deckWithSavedProgress, withSavedProgress } from '../utils/cardProgress'
 import { STARTING_COINS, guestEarningsAllowance, transferableGuestCoins } from './economy/wallet';
 import { IndexedDbService } from './indexedDbService';
 import { uncoveredMs, type StudyInterval } from '../utils/studyIntervals';
+import { cleanDeletionLog, newerProgress, type DeletionKind, type DeletionLog } from './syncMerge';
 
 const STORAGE_KEYS = {
   SESSIONS: 'studify_sessions_v1',
@@ -24,6 +25,9 @@ const STORAGE_KEYS = {
   FOCUS_LOG: 'studify_focus_log_v1',
   FOCUS_NOTES: 'studify_focus_notes_v1',
   STUDY_INTERVALS: 'studify_study_intervals_v1',
+  FOCUS_NOTES_SAVED: 'studify_focus_notes_saved_v1',
+  DELETIONS: 'studify_deletions_v1',
+  SYNC_STATE: 'studify_sync_state_v1',
 };
 
 /** The Monday a date's week starts on, as YYYY-MM-DD in UTC. */
@@ -70,6 +74,9 @@ const PROFILE_DATA_KEYS = [
   STORAGE_KEYS.FOCUS_LOG,
   STORAGE_KEYS.FOCUS_NOTES,
   STORAGE_KEYS.STUDY_INTERVALS,
+  STORAGE_KEYS.FOCUS_NOTES_SAVED,
+  STORAGE_KEYS.DELETIONS,
+  STORAGE_KEYS.SYNC_STATE,
 ];
 
 const LEVEL_TITLES = [
@@ -1020,6 +1027,7 @@ export class StorageService {
     const sessions = this.getSessions();
     const sessionToDelete = sessions.find(s => s.id === id);
     const updatedSessions = sessions.filter(s => s.id !== id);
+    this.recordDeletion('decks', id);
     this.safeSetItem(this.getKey(STORAGE_KEYS.SESSIONS), JSON.stringify(updatedSessions));
     IndexedDbService.removeItem(`pdf_${id}`).catch(() => {});
 
@@ -1110,13 +1118,75 @@ export class StorageService {
     return this.readRaw(this.getKey(STORAGE_KEYS.FOCUS_NOTES)) ?? '';
   }
 
-  public static saveFocusNotes(notes: string): void {
+  /** When the Focus notes were last changed (epoch ms; 0 if never), for account sync. */
+  public static getFocusNotesUpdatedAt(): number {
+    return Number(this.readRaw(this.getKey(STORAGE_KEYS.FOCUS_NOTES_SAVED))) || 0;
+  }
+
+  public static saveFocusNotes(notes: string, updatedAt: number = Date.now()): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.FOCUS_NOTES_SAVED), String(updatedAt));
     const key = this.getKey(STORAGE_KEYS.FOCUS_NOTES);
     if (notes) this.safeSetItem(key, notes);
     else {
       localStorage.removeItem(key);
       this.dropOverflow(key);
     }
+  }
+
+  /** What was deleted on this profile, and when, so account sync deletes it on other devices too. */
+  public static getDeletions(): DeletionLog {
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.DELETIONS));
+    try {
+      return cleanDeletionLog(raw ? JSON.parse(raw) : null);
+    } catch {
+      return cleanDeletionLog(null);
+    }
+  }
+
+  public static saveDeletions(log: DeletionLog): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.DELETIONS), JSON.stringify(log));
+  }
+
+  public static recordDeletion(kind: DeletionKind, ids: string | readonly string[]): void {
+    const list = typeof ids === 'string' ? [ids] : ids;
+    if (list.length === 0) return;
+    const log = this.getDeletions();
+    const at = new Date().toISOString();
+    for (const id of list) log[kind][id] = at;
+    this.saveDeletions(log);
+  }
+
+  /** Account sync's own bookkeeping for this profile (what was last sent, and when it last pulled). */
+  public static getSyncState<T>(): T | null {
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.SYNC_STATE));
+    try {
+      return raw ? (JSON.parse(raw) as T) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  public static saveSyncState(state: unknown): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.SYNC_STATE), JSON.stringify(state));
+  }
+
+  /**
+   * Takes review progress from another device's copies of cards, where it is newer than what
+   * is saved here (see newerProgress). Card content and stars stay as they are on this device.
+   */
+  public static mergeCardProgress(cards: readonly RetrievalCard[]): void {
+    if (cards.length === 0) return;
+    const saved = this.savedCardsById();
+    let changed = false;
+    for (const card of cards) {
+      if (!card || typeof card.id !== 'string') continue;
+      const updated = newerProgress(saved.get(card.id), card);
+      if (updated) {
+        saved.set(card.id, updated);
+        changed = true;
+      }
+    }
+    if (changed) this.safeSetItem(this.getKey(STORAGE_KEYS.CARDS), JSON.stringify(Array.from(saved.values())));
   }
 
   public static createFolder(name: string, color: string = 'indigo', icon: string = '📚', description: string = ''): SubjectFolder {
@@ -1130,6 +1200,7 @@ export class StorageService {
       icon,
       description: description.trim(),
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     folders.push(newFolder);
     this.saveFolders(folders);
@@ -1144,6 +1215,7 @@ export class StorageService {
       ...folders[idx],
       ...updates,
       name: updates.name !== undefined ? updates.name.trim() : folders[idx].name,
+      updatedAt: new Date().toISOString(),
     };
     folders[idx] = updated;
     this.saveFolders(folders);
@@ -1151,6 +1223,7 @@ export class StorageService {
   }
 
   public static deleteFolder(id: string): void {
+    this.recordDeletion('folders', id);
     const folders = this.getFolders().filter(f => f.id !== id);
     this.saveFolders(folders);
 

@@ -15,6 +15,7 @@ import { CalendarFeedService } from './services/calendarFeedService';
 import { useFocusTimerAlerts } from './hooks/useFocusTimer';
 import { FocusToast } from './components/focus/FocusToast';
 import { ApiConfig } from './services/apiConfig';
+import { CloudSyncService } from './services/cloudSyncService';
 
 // Lazy-loaded heavy modules and modals for optimal initial bundle performance
 const IngestionHub = lazy(() => import('./components/ingestion/IngestionHub').then(m => ({ default: m.IngestionHub })));
@@ -105,6 +106,13 @@ export function App() {
 
   // Start waking the server (it sleeps when idle) so it is ready by the time anyone signs in.
   useEffect(() => ApiConfig.warmUp(), []);
+
+  // Account sync: keeps a signed-in student's data the same on all their devices.
+  useEffect(() => CloudSyncService.start(), []);
+  const currentUserId = currentUser?.id;
+  useEffect(() => {
+    if (currentUserId) CloudSyncService.requestSync();
+  }, [currentUserId]);
 
   // Keep a subscribed calendar up to date with the planner.
   useEffect(() => CalendarFeedService.startAutoPublish(), []);

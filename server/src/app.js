@@ -207,7 +207,7 @@ export function createApp({ ai = defaultAi } = {}) {
       }
 
       // 4. CLOUD SYNC ROUTES
-      if (await handleSyncRoutes(req, res, pathname, body)) {
+      if (await handleSyncRoutes(req, res, pathname, body, searchParams)) {
         return;
       }
 

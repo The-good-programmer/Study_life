@@ -155,6 +155,8 @@ export interface FocusTask {
   /** The planner homework it was added from; marking it done marks that done too. */
   plannerItemId?: string;
   createdAt: string;
+  /** Last change, so account sync keeps the newer copy. */
+  updatedAt?: string;
   doneAt?: string;
 }
 
@@ -178,6 +180,8 @@ export interface SubjectFolder {
   icon?: string;
   description?: string;
   createdAt: string;
+  /** Last change, so account sync keeps the newer copy. */
+  updatedAt?: string;
 }
 
 export interface StudySession {

@@ -16,6 +16,37 @@ const UNAUTHORIZED = 'Unauthorized. Please provide valid Bearer token.';
 const MAX_SESSIONS_PER_USER = 2000;
 const MAX_SESSION_BYTES_PER_USER = 25 * 1024 * 1024;
 const MAX_STATS_BYTES = 1024 * 1024;
+const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
+const MAX_DELETED_SESSIONS = 2000;
+
+/** The kinds of synced document an account can hold (see migration 005). */
+export const DOCUMENT_KINDS = ['folders', 'planner', 'focus_tasks', 'focus_log', 'focus_notes', 'deletions'];
+
+class BadRequest extends Error {}
+
+/** The documents in a push, checked: known kinds, JSON objects or arrays, within the size limit. */
+function readDocuments(documents) {
+  if (documents === undefined || documents === null) return new Map();
+  if (typeof documents !== 'object' || Array.isArray(documents)) throw new BadRequest('documents must be an object.');
+  const out = new Map();
+  for (const [kind, value] of Object.entries(documents)) {
+    if (!DOCUMENT_KINDS.includes(kind)) throw new BadRequest(`Unknown document kind: ${kind}.`);
+    if (!value || typeof value !== 'object') throw new BadRequest(`Document ${kind} must be an object or array.`);
+    const json = JSON.stringify(value);
+    if (Buffer.byteLength(json) > MAX_DOCUMENT_BYTES) throw new BadRequest(`Document ${kind} is too large to sync.`);
+    out.set(kind, json);
+  }
+  return out;
+}
+
+/** Deck ids to delete from the account, checked. */
+function readDeletedSessionIds(ids) {
+  if (ids === undefined || ids === null) return [];
+  if (!Array.isArray(ids) || ids.length > MAX_DELETED_SESSIONS || ids.some((id) => typeof id !== 'string' || !id || id.length > 200)) {
+    throw new BadRequest('deletedSessionIds must be a list of deck ids.');
+  }
+  return ids;
+}
 
 class OverLimit extends Error {}
 
@@ -84,7 +115,7 @@ async function saveSync(t, user, sessions, statsJson, characterState, now) {
   }
 }
 
-export async function handleSyncRoutes(req, res, pathname, body) {
+export async function handleSyncRoutes(req, res, pathname, body, searchParams) {
   // 1. SYNC PUSH
   if (pathname === '/api/sync/push' && req.method === 'POST') {
     const user = await getAuthUser(req);
@@ -92,8 +123,18 @@ export async function handleSyncRoutes(req, res, pathname, body) {
 
     const { sessions, stats, characterState } = body || {};
 
-    if (!Array.isArray(sessions) && !stats) {
-      return send(res, 400, { error: 'Payload must contain sessions array or stats object.' });
+    let documents;
+    let deletedSessionIds;
+    try {
+      documents = readDocuments(body?.documents);
+      deletedSessionIds = readDeletedSessionIds(body?.deletedSessionIds);
+    } catch (err) {
+      if (err instanceof BadRequest) return send(res, 400, { error: err.message });
+      throw err;
+    }
+
+    if (!Array.isArray(sessions) && !stats && documents.size === 0 && deletedSessionIds.length === 0) {
+      return send(res, 400, { error: 'Payload must contain sessions, stats, documents or deletedSessionIds.' });
     }
 
     const now = new Date().toISOString();
@@ -122,6 +163,17 @@ export async function handleSyncRoutes(req, res, pathname, body) {
           if (count > MAX_SESSIONS_PER_USER || bytes > MAX_SESSION_BYTES_PER_USER) throw new OverLimit();
         }
         await saveSync(t, user, incoming, stats ? statsJson : null, characterState, now);
+        if (deletedSessionIds.length > 0) {
+          await t.run('DELETE FROM study_sessions WHERE user_id = $1 AND id = ANY($2::text[])', [user.id, deletedSessionIds]);
+        }
+        for (const [kind, json] of documents) {
+          await t.run(
+            `INSERT INTO user_documents (user_id, kind, data_json, updated_at)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (user_id, kind) DO UPDATE SET data_json = excluded.data_json, updated_at = excluded.updated_at`,
+            [user.id, kind, json, now],
+          );
+        }
       });
     } catch (err) {
       if (!(err instanceof OverLimit)) throw err;
@@ -143,7 +195,13 @@ export async function handleSyncRoutes(req, res, pathname, body) {
     const user = await getAuthUser(req);
     if (!user) return send(res, 401, { error: UNAUTHORIZED });
 
-    const sessionsRows = await db.all('SELECT data_json FROM study_sessions WHERE user_id = $1 ORDER BY updated_at DESC', [user.id]);
+    // The time is read before the decks, so a deck saved while this runs is sent again next time, not missed.
+    const serverTime = Date.now();
+    // With ?since=<ms>, only decks saved since then (from the previous pull's serverTime).
+    const since = Number(searchParams?.get('since'));
+    const sessionsRows = Number.isFinite(since) && since > 0
+      ? await db.all('SELECT data_json FROM study_sessions WHERE user_id = $1 AND updated_at > $2 ORDER BY updated_at DESC', [user.id, new Date(since).toISOString()])
+      : await db.all('SELECT data_json FROM study_sessions WHERE user_id = $1 ORDER BY updated_at DESC', [user.id]);
     const sessions = sessionsRows
       .map((row) => {
         try {
@@ -162,13 +220,20 @@ export async function handleSyncRoutes(req, res, pathname, body) {
       try { characterState = JSON.parse(statsRow.character_json); } catch {}
     }
 
+    const documents = {};
+    for (const row of await db.all('SELECT kind, data_json FROM user_documents WHERE user_id = $1', [user.id])) {
+      try { documents[row.kind] = JSON.parse(row.data_json); } catch {}
+    }
+
     return send(res, 200, {
       success: true,
-      syncedAt: Date.now(),
+      syncedAt: serverTime,
+      serverTime,
       userId: user.id,
       sessions,
       stats,
       characterState,
+      documents,
     });
   }
 

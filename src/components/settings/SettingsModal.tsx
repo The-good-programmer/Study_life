@@ -2,9 +2,7 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Bell,
-  Check,
   Cloud,
-  Copy,
   Database,
   Download,
   Eye,
@@ -21,6 +19,7 @@ import {
 import { StorageService } from '../../services/storageService';
 import { ExportService } from '../../services/exportService';
 import { CloudSyncService, type CloudSyncConfig } from '../../services/cloudSyncService';
+import { AuthService } from '../../services/authService';
 import { NotificationService, type NotificationSettings } from '../../services/notificationService';
 import { soundEngine } from '../../services/soundEngine';
 import { haptics } from '../../services/hapticsService';
@@ -517,69 +516,26 @@ const SoundSection: React.FC = () => {
 const SYNC_STATUS: Record<CloudSyncConfig['status'], { label: string; tone: 'success' | 'brand' | 'gold' | 'danger' | 'neutral' }> = {
   synced: { label: 'Synced', tone: 'success' },
   syncing: { label: 'Syncing', tone: 'brand' },
-  queued: { label: 'Waiting to sync', tone: 'gold' },
+  queued: { label: 'Waiting for a connection', tone: 'gold' },
   error: { label: 'Sync failed', tone: 'danger' },
   idle: { label: 'Not synced yet', tone: 'neutral' },
 };
 
 const SyncSection: React.FC<{ onStatsReset: () => void }> = ({ onStatsReset }) => {
   const [config, setConfig] = useState<CloudSyncConfig>(() => CloudSyncService.getConfig());
-  const [endpoint, setEndpoint] = useState(() => CloudSyncService.getConfig().endpointUrl || '');
-  const [token, setToken] = useState(() => CloudSyncService.getConfig().cloudToken || '');
+  const [signedIn, setSignedIn] = useState(() => Boolean(AuthService.getCurrentUser()));
   const [isSyncing, setIsSyncing] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [notice, showNotice] = useNotice();
-  const fieldId = useId();
 
-  // Follow sync status changes made elsewhere (auto-sync after reviews).
-  useEffect(
-    () =>
-      CloudSyncService.subscribe(next => {
-        setConfig(next);
-        setEndpoint(next.endpointUrl || '');
-        setToken(next.cloudToken || '');
-      }),
-    [],
-  );
+  // Follow sync status changes made elsewhere (syncs after reviews and edits), and sign-in.
+  useEffect(() => CloudSyncService.subscribe(setConfig), []);
+  useEffect(() => AuthService.subscribe(user => setSignedIn(Boolean(user))), []);
 
-  const canSync = config.enabled && !!config.endpointUrl && !!config.cloudToken;
-  const status = config.enabled ? SYNC_STATUS[config.status] ?? SYNC_STATUS.idle : null;
-
-  const handleEndpointChange = (value: string) => {
-    setEndpoint(value);
-    setConfig(CloudSyncService.saveConfig({ endpointUrl: value.trim() }));
-  };
-
-  const handleTokenChange = (value: string) => {
-    setToken(value);
-    setConfig(CloudSyncService.saveConfig({ cloudToken: value.trim() }));
-  };
-
-  const handleNewToken = () => {
-    const next = CloudSyncService.generateSyncToken();
-    setToken(next);
-    setConfig(CloudSyncService.saveConfig({ cloudToken: next }));
-    soundEngine.playSuccess();
-  };
-
-  const handleCopy = () => {
-    if (!token || !navigator.clipboard) return;
-    navigator.clipboard.writeText(token).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      },
-      () => showNotice({ tone: 'error', text: 'Could not copy. Select the code and copy it instead.' }),
-    );
-  };
+  const status = signedIn && config.enabled ? SYNC_STATUS[config.status] ?? SYNC_STATUS.idle : null;
 
   const handleToggle = (enabled: boolean) => {
-    let nextToken = token;
-    if (enabled && !nextToken) {
-      nextToken = CloudSyncService.generateSyncToken();
-      setToken(nextToken);
-    }
-    setConfig(CloudSyncService.saveConfig({ enabled, cloudToken: nextToken, endpointUrl: endpoint.trim() }));
+    setConfig(CloudSyncService.saveConfig({ enabled }));
+    if (enabled) CloudSyncService.requestSync();
   };
 
   const handleSyncNow = async () => {
@@ -592,83 +548,48 @@ const SyncSection: React.FC<{ onStatsReset: () => void }> = ({ onStatsReset }) =
       }
       showNotice({ tone: res.success ? 'success' : 'error', text: res.message });
     } catch {
-      showNotice({ tone: 'error', text: 'Sync failed. Check the server URL and try again.' });
+      showNotice({ tone: 'error', text: 'Sync failed. Try again in a moment.' });
     } finally {
       setIsSyncing(false);
     }
   };
 
+  const lastSynced = config.lastSyncAt
+    ? `Last synced ${new Date(config.lastSyncAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.`
+    : 'Not synced yet.';
+
   return (
     <div>
       <SettingGroup
-        title="Sync between devices"
-        description="Your study data is saved in this browser. To use Studify on more than one device, connect a sync server you run, such as a Cloudflare Worker. Decks, reviews and your avatar's look sync; tokens and your campus home stay on each device."
-        aside={
-          <Switch label="Sync this device" checked={config.enabled} onChange={handleToggle} />
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <label htmlFor={`${fieldId}-url`} className="text-[13px] font-medium text-ink">
-              Server URL
-            </label>
-            <input
-              id={`${fieldId}-url`}
-              type="url"
-              value={endpoint}
-              onChange={(e) => handleEndpointChange(e.target.value)}
-              placeholder="https://sync.example.com/api"
-              spellCheck={false}
-              className={cn(INPUT_CLASS, 'mt-1.5 font-mono')}
-            />
-          </div>
-          <div>
-            <label htmlFor={`${fieldId}-token`} className="text-[13px] font-medium text-ink">
-              Pairing code
-            </label>
-            <p className="text-xs text-ink-subtle">Use the same code on each device you want to keep in sync.</p>
-            <div className="mt-1.5 flex gap-2">
-              <input
-                id={`${fieldId}-token`}
-                type="text"
-                value={token}
-                onChange={(e) => handleTokenChange(e.target.value)}
-                placeholder="Paste a code or make a new one"
-                spellCheck={false}
-                autoComplete="off"
-                className={cn(INPUT_CLASS, 'font-mono')}
-              />
-              {token && (
-                <Button icon={copied ? Check : Copy} onClick={handleCopy}>
-                  {copied ? 'Copied' : 'Copy'}
-                </Button>
-              )}
-              <Button onClick={handleNewToken}>New code</Button>
-            </div>
-          </div>
-        </div>
-      </SettingGroup>
-
-      <SettingGroup
-        title="Sync now"
+        title="Sync with your account"
         description={
-          !config.enabled
-            ? 'Turn on sync above first.'
-            : !config.endpointUrl || !config.cloudToken
-              ? 'Add a server URL and a pairing code first.'
-              : config.lastSyncAt
-                ? `Last synced ${new Date(config.lastSyncAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}. Syncs after each review too.`
-                : 'Syncs after each review too.'
+          signedIn
+            ? 'Your decks and review progress, subjects, planner, Focus tasks, notes and history, stats and avatar look stay the same on every device you sign in on. Tokens and your campus home stay on each device.'
+            : 'Sign in (the account button at the bottom of the menu) to keep your decks, planner and Focus the same on all your devices. Until then, everything is saved in this browser only.'
         }
-        aside={status && <Badge tone={status.tone}>{status.label}</Badge>}
-      >
-        <div className="space-y-3">
-          <Button icon={RefreshCw} onClick={handleSyncNow} disabled={!canSync || isSyncing} className={cn(isSyncing && '[&>svg]:animate-spin')}>
-            {isSyncing ? 'Syncing…' : 'Sync now'}
-          </Button>
-          <NoticeLine notice={notice} />
-        </div>
-      </SettingGroup>
+        aside={signedIn && <Switch label="Sync this device" checked={config.enabled} onChange={handleToggle} />}
+      />
+
+      {signedIn && (
+        <SettingGroup
+          title="Sync now"
+          description={
+            !config.enabled
+              ? 'Turn on sync above first.'
+              : config.status === 'error' && config.errorMessage
+                ? config.errorMessage
+                : `${lastSynced} It also syncs a few seconds after each change, and when you come back to the app.`
+          }
+          aside={status && <Badge tone={status.tone}>{status.label}</Badge>}
+        >
+          <div className="space-y-3">
+            <Button icon={RefreshCw} onClick={handleSyncNow} disabled={!config.enabled || isSyncing} className={cn(isSyncing && '[&>svg]:animate-spin')}>
+              {isSyncing ? 'Syncing…' : 'Sync now'}
+            </Button>
+            <NoticeLine notice={notice} />
+          </div>
+        </SettingGroup>
+      )}
     </div>
   );
 };

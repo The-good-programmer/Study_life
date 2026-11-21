@@ -64,6 +64,8 @@ export interface FocusSummary {
 }
 
 const listeners = new Set<() => void>();
+/** Told when the notes are saved (account sync), which ordinary listeners aren't. */
+const notesListeners = new Set<() => void>();
 const notify = () =>
   listeners.forEach(fn => {
     try {
@@ -161,7 +163,10 @@ const recordFocus = (timer: TimerState, focusedMs: number, endedAtMs: number, co
   const today = dayKey(ended);
   const kept = StorageService.getFocusLog().filter(e => daysBetween(e.day, today) <= LOG_RETENTION_DAYS);
   StorageService.saveFocusLog([...kept, entry]);
-  if (task && countForTask) StorageService.saveFocusTasks(tasks.map(t => (t.id === task.id ? { ...t, pomodoros: t.pomodoros + 1 } : t)));
+  if (task && countForTask) {
+    const updatedAt = new Date().toISOString();
+    StorageService.saveFocusTasks(tasks.map(t => (t.id === task.id ? { ...t, pomodoros: t.pomodoros + 1, updatedAt } : t)));
+  }
   StorageService.recordStudyMinutes(minutes, { start: endedAtMs - focusedMs, end: endedAtMs });
   return entry;
 };
@@ -275,6 +280,7 @@ export const FocusService = {
       pomodoros: 0,
       ...(plannerItemId ? { plannerItemId } : {}),
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     StorageService.saveFocusTasks([...tasks, task]);
     if (!currentTask()) writeJson(TIMER_KEY, { ...getTimer(), taskId: task.id });
@@ -288,7 +294,7 @@ export const FocusService = {
     if (!current) return null;
     const title = changes.title !== undefined ? cleanTaskTitle(changes.title) || current.title : current.title;
     const done = changes.done ?? current.done;
-    const updated: FocusTask = { ...current, title, done };
+    const updated: FocusTask = { ...current, title, done, updatedAt: new Date().toISOString() };
     if (done && !current.done) updated.doneAt = new Date().toISOString();
     if (!done) delete updated.doneAt;
     saveTasks(tasks.map(t => (t.id === id ? updated : t)));
@@ -314,12 +320,15 @@ export const FocusService = {
   },
 
   removeTask(id: string): void {
+    StorageService.recordDeletion('focus_tasks', id);
     saveTasks(StorageService.getFocusTasks().filter(t => t.id !== id));
     if (getTimer().taskId === id) setTimer({ ...getTimer(), taskId: null });
   },
 
   clearDone(): void {
-    saveTasks(StorageService.getFocusTasks().filter(t => !t.done));
+    const tasks = StorageService.getFocusTasks();
+    StorageService.recordDeletion('focus_tasks', tasks.filter(t => t.done).map(t => t.id));
+    saveTasks(tasks.filter(t => !t.done));
   },
 
   /** Homework from the planner that could be added as tasks. */
@@ -334,6 +343,18 @@ export const FocusService = {
   /** Saves the notes. Listeners aren't told: only the notes pad shows them. */
   saveNotes(notes: string): void {
     StorageService.saveFocusNotes(notes.slice(0, MAX_NOTES_LENGTH));
+    notesListeners.forEach(fn => fn());
+  },
+
+  /** Calls back after the notes are saved. */
+  onNotesSaved(listener: () => void): () => void {
+    notesListeners.add(listener);
+    return () => notesListeners.delete(listener);
+  },
+
+  /** Tells listeners that Focus data changed outside this service (account sync brought it in). */
+  notifyChanged(): void {
+    notify();
   },
 
   getLog(): FocusLogEntry[] {
