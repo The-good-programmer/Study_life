@@ -116,6 +116,7 @@ export default defineConfig({
   test: {
     setupFiles: ['./src/test-setup.ts'],
     // Worktrees under .claude/ are other checkouts of this repo; their tests aren't this one's.
-    exclude: [...configDefaults.exclude, '.claude/**'],
+    // e2e/ holds the browser tests, run by Playwright (npm run e2e).
+    exclude: [...configDefaults.exclude, '.claude/**', 'e2e/**'],
   },
 })

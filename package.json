@@ -13,7 +13,8 @@
     "test:server": "vitest run server",
     "preview": "vite preview",
     "avatar:compress": "node tools/avatar-pipeline/compress.mjs",
-    "check:build": "node scripts/check-build.mjs"
+    "check:build": "node scripts/check-build.mjs",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@google/genai": "^2.25.0",
@@ -30,6 +31,7 @@
     "@gltf-transform/core": "4.5.1",
     "@gltf-transform/extensions": "4.5.1",
     "@gltf-transform/functions": "4.5.1",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^24.13.3",

@@ -85,6 +85,12 @@ npm test
 npx tsc -b
 npm run lint
 ```
+Browser smoke tests (the built app and the API with an in-memory database; the AI is stood in for):
+```bash
+npm run build && npm run e2e
+```
+CI runs all of these, plus `check:build`, which also fails if a first visit downloads more than 200 KB of
+JavaScript (compressed). Errors students run into are sent to the API and logged as `[ClientError]` lines.
 
 ### Build for production
 ```bash
