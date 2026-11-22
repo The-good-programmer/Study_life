@@ -207,6 +207,8 @@ export interface StudySession {
   /** Cards rated in the current pass; its summary pays for these. */
   passRatedCardIds?: string[];
   sourceDocument?: SourceDocument;
+  /** The AI's second check of a new deck: cards looked at, fixed and removed. Missing when it wasn't checked. */
+  quality?: { checked: number; fixed: number; removed: number };
   casualFlashcardMode?: boolean;
   /** Made for one sitting (today's review across decks): never saved as a deck. */
   ephemeral?: boolean;

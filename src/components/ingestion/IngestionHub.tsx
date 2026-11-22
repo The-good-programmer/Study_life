@@ -431,7 +431,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 trailingIcon={isLoading ? undefined : ArrowRight}
                 className={`absolute right-2 ${isLoading ? '[&>svg:first-child]:animate-spin' : ''}`}
               >
-                {isLoading ? 'Building' : 'Create'}
+                {isLoading ? (generation.stage === 'checking' ? 'Checking' : 'Building') : 'Create'}
               </Button>
             </form>
 
@@ -556,7 +556,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 icon={isLoading ? RefreshCw : Sparkles}
                 className={`w-full sm:w-auto ${isLoading ? '[&>svg:first-child]:animate-spin' : ''}`}
               >
-                {isLoading ? 'Building your deck' : 'Create deck from notes'}
+                {isLoading ? (generation.stage === 'checking' ? 'Checking the cards' : 'Building your deck') : 'Create deck from notes'}
               </Button>
             </div>
           </div>
@@ -615,7 +615,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                     icon={isLoading ? RefreshCw : Sparkles}
                     className={isLoading ? '[&>svg:first-child]:animate-spin' : ''}
                   >
-                    {isLoading ? 'Building your deck' : 'Create deck'}
+                    {isLoading ? (generation.stage === 'checking' ? 'Checking the cards' : 'Building your deck') : 'Create deck'}
                   </Button>
                 </div>
               </div>

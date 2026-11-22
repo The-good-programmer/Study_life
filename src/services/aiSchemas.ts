@@ -289,3 +289,35 @@ export const PLANNER_EXTRACTION_SCHEMA = {
   },
   required: ['items'],
 };
+
+/** The second check of a new deck: a verdict for each card, with corrections. */
+export const DECK_REVIEW_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    cards: {
+      type: Type.ARRAY,
+      description: 'One entry per flashcard, by its id.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          verdict: {
+            type: Type.STRING,
+            enum: ['ok', 'fix', 'remove'],
+            description: 'ok if correct and clear; fix if it can be corrected; remove only if it cannot be saved.',
+          },
+          question: { type: Type.STRING, description: 'The corrected question, only when it changes.' },
+          answer: { type: Type.STRING, description: 'The corrected answer, only when it changes.' },
+          options: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: 'Corrected choices for a multiple-choice card (the answer and three wrong ones), only when they change.',
+          },
+          reason: { type: Type.STRING, description: 'What was wrong, in one short sentence.' },
+        },
+        required: ['id', 'verdict'],
+      },
+    },
+  },
+  required: ['cards'],
+};

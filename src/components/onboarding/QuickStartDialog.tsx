@@ -31,7 +31,7 @@ export const QuickStartDialog: React.FC<{
   const inputId = useId();
   const [topic, setTopic] = useState(initialTopic ?? '');
   const generation = useDeckGeneration({ onSessionReady: onStartSession });
-  const { isLoading, error, effectiveProfile, profileModal } = generation;
+  const { isLoading, stage, error, effectiveProfile, profileModal } = generation;
   const needsSignIn = AIService.needsSignIn();
   // Ranked for the student's level, the gentlest first: a first deck should feel doable.
   const readyMade = useMemo(() => {
@@ -93,12 +93,12 @@ export const QuickStartDialog: React.FC<{
                   className="h-11 min-w-0 flex-1 rounded-xl border border-line-strong bg-canvas px-3.5 text-[15px] text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
                 />
                 <Button type="submit" variant="primary" icon={isLoading ? RefreshCw : Sparkles} disabled={!topic.trim() || isLoading} className={isLoading ? '[&>svg:first-child]:animate-spin' : ''}>
-                  {isLoading ? 'Writing your cards' : needsSignIn ? 'Sign up free to make it' : 'Make my deck'}
+                  {isLoading ? (stage === 'checking' ? 'Checking the cards' : 'Writing your cards') : needsSignIn ? 'Sign up free to make it' : 'Make my deck'}
                 </Button>
               </div>
               {isLoading ? (
                 <p className="text-xs text-ink-subtle" role="status">
-                  The AI is writing cards for your level. This takes about 20 seconds.
+                  {stage === 'checking' ? 'A second check makes sure every card is right.' : 'The AI is writing cards for your level. This takes about 20 seconds.'}
                 </p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">

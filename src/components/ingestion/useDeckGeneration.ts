@@ -3,7 +3,7 @@ import type { StudentEducationProfile, StudySession, UserAccount } from '../../t
 import { AuthService } from '../../services/authService';
 import { StorageService } from '../../services/storageService';
 import { buildSession, describeGenerationError, hasContent } from './deckGenerator';
-import type { GenerationRequest } from './deckGenerator';
+import type { GenerationRequest, GenerationStage } from './deckGenerator';
 
 interface UseDeckGenerationOptions {
   /** Called with the saved session once generation succeeds. */
@@ -29,6 +29,7 @@ export const useDeckGeneration = ({ onSessionReady, onSessionSaved }: UseDeckGen
     StorageService.getGuestEducationProfile(),
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [stage, setStage] = useState<GenerationStage>('writing');
   const [error, setError] = useState<string | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<GenerationRequest | null>(null);
@@ -45,7 +46,7 @@ export const useDeckGeneration = ({ onSessionReady, onSessionSaved }: UseDeckGen
       setError(null);
       setIsLoading(true);
       try {
-        const session = await buildSession(request, profile);
+        const session = await buildSession(request, profile, setStage);
         StorageService.saveSession(session);
         onSessionSaved?.();
         onSessionReady(session);
@@ -102,6 +103,8 @@ export const useDeckGeneration = ({ onSessionReady, onSessionSaved }: UseDeckGen
 
   return {
     isLoading,
+    /** While loading: writing the cards, or checking them. */
+    stage,
     error,
     dismissError: () => setError(null),
     effectiveProfile,

@@ -117,3 +117,19 @@ describe('describeGenerationError', () => {
     expect(describeGenerationError(undefined)).not.toContain('()');
   });
 });
+
+describe('checking a new deck', () => {
+  it('has the AI check the cards against the notes, and says which step it is on', async () => {
+    vi.spyOn(AIService, 'generateStudySession').mockImplementation(async () => session());
+    vi.spyOn(AIService, 'needsSignIn').mockReturnValue(false);
+    const review = vi.spyOn(AIService, 'generateText').mockResolvedValue(JSON.stringify({ cards: [{ id: 'c2', verdict: 'fix', answer: 'DNA', reason: 'Ribosomes build proteins' }] }));
+    const stages: string[] = [];
+    const result = await buildSession({ kind: 'notes', text: 'my notes about cells' }, profile, stage => stages.push(stage));
+    expect(stages).toEqual(['writing', 'checking']);
+    expect(String(review.mock.calls[0][0])).toContain('my notes about cells');
+    expect(result.concepts[0].retrievalCards[1].answer).toBe('DNA');
+    expect(result.quality).toEqual({ checked: 1, fixed: 1, removed: 0 });
+    vi.restoreAllMocks();
+  });
+});
+

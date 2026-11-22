@@ -20,6 +20,7 @@ import { FSRSService } from './fsrsService';
 import { KnowledgeGraphService } from './knowledgeGraphService';
 import { DepthEstimationService, SUPPORTED_LANGUAGES } from './depthEstimationService';
 import { ApiConfig } from './apiConfig';
+import { cleanGeneratedDeck } from './deckQuality';
 import { FEYNMAN_EVALUATION_SCHEMA, VIVA_VOCE_TURN_SCHEMA, LEECH_ANALYSIS_SCHEMA, STUDY_SESSION_GENERATION_SCHEMA } from './aiSchemas';
 
 /** Source text sent for deck generation; the shared AI service refuses prompts over 200,000 characters. */
@@ -1089,13 +1090,13 @@ Return ONLY a valid JSON object with this exact structure:
         const concepts: ConceptCheckpoint[] = (parsed.concepts || []).map((c: Partial<ConceptCheckpoint>, idx: number) => {
           const conceptId = `c-${sessionId}-${idx + 1}`;
           const cards: RetrievalCard[] = ((c.retrievalCards as unknown as Partial<RetrievalCard>[]) || []).map((rc, cIdx) => {
-            let question = rc.question || 'What is the key takeaway?';
-            let answer = rc.answer || 'Core concept answer';
+            // Missing text stays missing: cleanGeneratedDeck drops such a card instead of inventing one.
+            let question = rc.question || '';
+            const answer = rc.answer || '';
             let clozeTemplate = rc.clozeTemplate;
 
-            // Auto-mask cloze if missing {{}} and answer is inside question
-            const isCloze = rc.cardType === 'cloze' || (cIdx === 1 && !rc.options?.length);
-            if (isCloze && !question.includes('{{') && answer.trim().length > 2) {
+            // A fill-in-the-blank card the AI wrote without braces: hide the answer where the sentence has it.
+            if (rc.cardType === 'cloze' && !question.includes('{{') && answer.trim().length > 2) {
               const escapedAnswer = answer.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
               const regex = new RegExp(`\\b${escapedAnswer}\\b`, 'i');
               if (regex.test(question)) {
@@ -1114,7 +1115,8 @@ Return ONLY a valid JSON object with this exact structure:
             return {
               id: `rc-${conceptId}-${cIdx + 1}`,
               conceptId: conceptId,
-              cardType: rc.cardType || (clozeTemplate || (question && question.includes('{{')) ? 'cloze' : (rc.options && rc.options.length > 0 ? 'multiple-choice' : (cIdx === 1 ? 'cloze' : (cIdx === 2 ? 'multiple-choice' : 'standard')))),
+              // Set from the card's content by cleanGeneratedDeck.
+              cardType: rc.cardType,
               question,
               answer,
               hint: rc.hint || '',
@@ -1143,8 +1145,8 @@ Return ONLY a valid JSON object with this exact structure:
             order: idx + 1,
             title: c.title || `Concept ${idx + 1}`,
             estimatedMinutes: c.estimatedMinutes || 12,
-            mentalModel: c.mentalModel || `An interconnected mental framework of ${c.title || input}.`,
-            coreTakeaways: c.coreTakeaways || ['Essential rule 1', 'Essential rule 2'],
+            mentalModel: c.mentalModel || '',
+            coreTakeaways: (c.coreTakeaways || []).filter(Boolean),
             keyTerms: c.keyTerms || [],
             feynmanPrompt: c.feynmanPrompt || 'Explain this concept simply without reading notes.',
             sampleMasteryExplanation: c.sampleMasteryExplanation || '',
@@ -1153,7 +1155,7 @@ Return ONLY a valid JSON object with this exact structure:
           };
         });
 
-        return {
+        return cleanGeneratedDeck({
           id: sessionId,
           title: parsed.title || input.slice(0, 50),
           category: parsed.category || 'General Studies',
@@ -1167,7 +1169,7 @@ Return ONLY a valid JSON object with this exact structure:
           gradeLevel: effectiveGradeLevel,
           studentProfile,
           languageCode: targetLang.code,
-        };
+        });
       } catch (err) {
         // With AI set up, a failure is reported so the student can retry; a template deck passed off as the
         // AI's work would be worse than no deck.
