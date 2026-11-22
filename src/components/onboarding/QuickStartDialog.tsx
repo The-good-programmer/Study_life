@@ -1,11 +1,10 @@
 import React, { useId, useMemo, useState } from 'react';
 import { ArrowRight, Camera, FileText, RefreshCw, Sparkles } from 'lucide-react';
 import type { StudySession } from '../../types';
-import { CURATED_STARTER_DECKS, rankStarterDecksForGrade } from '../../data/curatedStarterCatalog';
 import { AuthService } from '../../services/authService';
 import { AIService } from '../../services/aiService';
 import { soundEngine } from '../../services/soundEngine';
-import { addStarterDeck } from '../catalog/starterDeckCopy';
+import { gentleStarterDecks, readyMadeSession } from './readyMadeDecks';
 import { useDeckGeneration } from '../ingestion/useDeckGeneration';
 import { EducationProfileModal } from '../ingestion/EducationProfileModal';
 import { Dialog, DialogFooter, DialogHeader, DialogPanel } from '../common/Dialog';
@@ -34,11 +33,7 @@ export const QuickStartDialog: React.FC<{
   const { isLoading, stage, error, effectiveProfile, profileModal } = generation;
   const needsSignIn = AIService.needsSignIn();
   // Ranked for the student's level, the gentlest first: a first deck should feel doable.
-  const readyMade = useMemo(() => {
-    const ranked = rankStarterDecksForGrade(CURATED_STARTER_DECKS, AuthService.getCurrentUser()?.grade);
-    const gentle = (difficulty: string) => (difficulty === 'Foundational' ? 0 : difficulty === 'Intermediate' ? 1 : 2);
-    return [...ranked].sort((a, b) => gentle(a.difficulty) - gentle(b.difficulty)).slice(0, READY_MADE);
-  }, []);
+  const readyMade = useMemo(() => gentleStarterDecks(READY_MADE, AuthService.getCurrentUser()?.grade), []);
 
   const make = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -59,10 +54,10 @@ export const QuickStartDialog: React.FC<{
   };
 
   const startReadyMade = (index: number) => {
-    const deck = addStarterDeck(readyMade[index]);
+    const session = readyMadeSession(readyMade[index]);
     soundEngine.playStart();
     // Straight into the flashcards: studying in seconds.
-    onStartSession({ ...deck, casualFlashcardMode: true, currentPhase: 'retrieval', currentConceptIndex: 0 });
+    onStartSession(session);
   };
 
   return (
