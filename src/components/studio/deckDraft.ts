@@ -138,10 +138,23 @@ export const buildDeckFromDraft = (
   existing?: StudySession | null,
   now: Date = new Date(),
 ): StudySession => {
+  // Cards whose text (or hidden) changed are marked with the time, so this edit wins over older copies.
+  const before = new Map((existing?.concepts ?? []).flatMap(concept => concept.retrievalCards.map(card => [card.id, card] as const)));
+  const markEdited = (card: RetrievalCard): RetrievalCard => {
+    const old = before.get(card.id);
+    if (!old) return card;
+    const changed =
+      old.question !== card.question ||
+      old.answer !== card.answer ||
+      (old.hint || undefined) !== card.hint ||
+      (old.clozeTemplate || undefined) !== (card.clozeTemplate || undefined) ||
+      !!old.hidden !== !!card.hidden;
+    return changed ? { ...card, updatedAt: now.toISOString() } : card;
+  };
   const cleanConcepts = concepts
     .map((concept, index) => {
       const title = concept.title.trim() || `Part ${index + 1}`;
-      const cards = concept.retrievalCards.filter(card => !isUntouched(card)).map(card => normalizeCard(card, concept.id));
+      const cards = concept.retrievalCards.filter(card => !isUntouched(card)).map(card => markEdited(normalizeCard(card, concept.id)));
       const mentalModel = concept.mentalModel.trim();
       return {
         ...concept,

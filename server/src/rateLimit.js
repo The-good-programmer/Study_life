@@ -53,6 +53,8 @@ const DEFAULTS = {
   forgotEmail: { max: 3, windowMs: 60 * MINUTE }, // per email: stops flooding one inbox
   reset: { max: 20, windowMs: 60 * MINUTE }, // per IP
   reminders: { max: 30, windowMs: 10 * MINUTE }, // per IP
+  friends: { max: 20, windowMs: 10 * MINUTE }, // per IP: adding by code, so codes can't be guessed
+  digest: { max: 30, windowMs: 10 * MINUTE }, // per IP
 };
 
 export const limiters = {};

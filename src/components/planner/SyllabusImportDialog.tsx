@@ -7,6 +7,7 @@ import { readSyllabus, type SyllabusItem, type SyllabusSource } from '../../serv
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
 import { cn } from '../../utils/cn';
+import { photoForAi } from '../../utils/photoForAi';
 import { Dialog, DialogFooter, DialogHeader, DialogPanel } from '../common/Dialog';
 import { Badge, Button } from '../ui/primitives';
 import { INPUT_CLASS, KIND_STYLES } from './plannerUi';
@@ -17,21 +18,6 @@ export interface SyllabusImportDialogProps {
   folders: SubjectFolder[];
   /** Called with how many items were added. */
   onAdded?: (count: number) => void;
-}
-
-/** Photos are scaled to this many pixels on the long side: enough to read, and under the AI's 4 MB limit. */
-const MAX_PHOTO_SIDE = 2000;
-
-/** A photo as a JPEG for the AI, whatever it was taken as (HEIC on iPhones, say). */
-async function photoForAi(file: File): Promise<{ mimeType: string; data: string }> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_PHOTO_SIDE / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  return { mimeType: 'image/jpeg', data: canvas.toDataURL('image/jpeg', 0.85).split(',')[1] };
 }
 
 /** A new subject to make when the items are added, named as the syllabus names it. */

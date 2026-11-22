@@ -37,7 +37,8 @@ import {
   GraduationCap,
   ChevronDown,
   FolderPlus,
-  FolderInput
+  FolderInput,
+  Camera,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { StudySession, StarterDeckMetadata, RetrievalCard, DepthTier, SubjectFolder } from '../../types';
@@ -58,6 +59,8 @@ import { SubjectFolderModal } from '../studio/SubjectFolderModal';
 import { FOLDER_COLORS } from '../studio/folderOptions';
 import { MoveToFolderModal } from '../studio/MoveToFolderModal';
 import { fillCloze } from '../../utils/cloze';
+import { photoForAi } from '../../utils/photoForAi';
+import { MAX_NOTE_PHOTOS, NoTextInPhotoError, appendNotes, readNotesFromPhoto } from '../../services/photoNotes';
 
 const StarterCatalogModal = React.lazy(() => import('../catalog/StarterCatalogModal').then(m => ({ default: m.StarterCatalogModal })));
 const DeckStudioModal = React.lazy(() => import('../studio/DeckStudioModal').then(m => ({ default: m.DeckStudioModal })));
@@ -137,6 +140,9 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   const [ingestMode, setIngestMode] = useState<'pdf' | 'topic' | 'notes' | 'occlusion'>(initialNotes ? 'notes' : 'topic');
   const [topicInput, setTopicInput] = useState('');
   const [notesInput, setNotesInput] = useState(initialNotes ?? '');
+  const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [isStarterCatalogModalOpen, setIsStarterCatalogModalOpen] = useState(false);
   const [justImportedId, setJustImportedId] = useState<string | null>(null);
   const [isTourModalOpen, setIsTourModalOpen] = useState(false);
@@ -248,7 +254,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
       });
 
       if (!extracted.text.trim()) {
-        setPdfError('Could not find readable text in this PDF. It may be a scanned image without OCR.');
+        setPdfError('This PDF has no text to read: it is probably scanned pages. Take photos of the pages instead, under Notes → Add photos.');
         setExtractedPdf(null);
       } else {
         setExtractedPdf(extracted);
@@ -296,6 +302,38 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
       depthTier: effectiveTier,
       languageCode: effectiveLanguage.code,
     });
+  };
+
+  /** Photos of notes or a textbook: the AI writes out their text into the notes box, one photo at a time. */
+  const handleNotePhotos = async (fileList: FileList | null) => {
+    const files = Array.from(fileList ?? []).filter(f => f.type.startsWith('image/'));
+    if (photoInputRef.current) photoInputRef.current.value = '';
+    if (files.length === 0) return;
+    if (needsSignInForAi) {
+      onOpenAuth?.();
+      return;
+    }
+    const chosen = files.slice(0, MAX_NOTE_PHOTOS);
+    setPhotoError(files.length > MAX_NOTE_PHOTOS ? `Only the first ${MAX_NOTE_PHOTOS} photos were read. Add the rest after these.` : null);
+    let unread = 0;
+    for (let i = 0; i < chosen.length; i++) {
+      setPhotoProgress({ done: i, total: chosen.length });
+      try {
+        const text = await readNotesFromPhoto(await photoForAi(chosen[i]));
+        setNotesInput(current => appendNotes(current, text));
+      } catch (err) {
+        unread++;
+        if (!(err instanceof NoTextInPhotoError)) console.error('[Notes photo]', err);
+        setPhotoError(
+          err instanceof NoTextInPhotoError
+            ? err.message
+            : chosen.length > 1
+              ? `${unread} of ${chosen.length} photos couldn't be read. Check your connection and try those again.`
+              : "That photo couldn't be read. Check your connection and try again.",
+        );
+      }
+    }
+    setPhotoProgress(null);
   };
 
   const handleDecomposeNotes = () => {
@@ -529,7 +567,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 rows={7}
                 value={notesInput}
                 onChange={(e) => setNotesInput(e.target.value)}
-                placeholder="Paste lecture notes, slide bullet points, a textbook passage or a syllabus outline."
+                placeholder="Paste lecture notes, slide bullet points, a textbook passage or a syllabus outline, or add photos of them below."
                 aria-label="Your notes"
                 className="w-full resize-y rounded-2xl border border-line-strong bg-canvas p-4 text-[15px] leading-relaxed text-ink outline-none transition-[border-color,box-shadow] placeholder:text-ink-subtle focus:border-brand focus:ring-4 focus:ring-brand/15"
               />
@@ -537,11 +575,43 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 {notesInput.trim() ? notesInput.trim().split(/\s+/).length : 0} words
               </span>
             </div>
-            <div className="flex justify-end">
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => void handleNotePhotos(e.target.files)}
+              className="hidden"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+            {photoError && (
+              <p role="alert" className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger-soft px-3 py-2 text-[13px] text-danger">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                {photoError}
+              </p>
+            )}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={isLoading || !!photoProgress}
+                  icon={photoProgress ? RefreshCw : Camera}
+                  className={`w-full sm:w-auto ${photoProgress ? '[&>svg:first-child]:animate-spin' : ''}`}
+                >
+                  {photoProgress
+                    ? photoProgress.total > 1 ? `Reading photo ${photoProgress.done + 1} of ${photoProgress.total}` : 'Reading your photo'
+                    : 'Add photos'}
+                </Button>
+                <span className="text-center text-xs text-ink-subtle sm:text-left" aria-live="polite">
+                  {photoProgress ? 'The text appears above so you can check it.' : `Notes or a textbook page, up to ${MAX_NOTE_PHOTOS} at a time.`}
+                </span>
+              </div>
               <Button
                 variant="primary"
                 onClick={handleDecomposeNotes}
-                disabled={isLoading || !notesInput.trim()}
+                disabled={isLoading || !!photoProgress || !notesInput.trim()}
                 icon={isLoading ? RefreshCw : Sparkles}
                 className={`w-full sm:w-auto ${isLoading ? '[&>svg:first-child]:animate-spin' : ''}`}
               >

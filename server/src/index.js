@@ -14,6 +14,8 @@ import './env.js'; // Must stay first: loads server/.env before other modules re
 import http from 'node:http';
 import { createApp, getAllowedOrigins, siteUrlFrom } from './app.js';
 import { startReminderSchedule } from './reminders.js';
+import { startDigestSchedule } from './digest.js';
+import { createResendMailer } from './mailer.js';
 import { db } from './db.js';
 import { isAiConfigured } from './ai.js';
 
@@ -41,6 +43,13 @@ server.listen(PORT, '0.0.0.0', () => {
 // Push services want a contact for the sender: the site's address, or a mailto.
 const site = siteUrlFrom(getAllowedOrigins());
 const stopReminders = startReminderSchedule({ subject: site.startsWith('https://') ? site : 'mailto:reminders@studify.invalid' });
+// The weekly progress email (Sunday evening for each student). The unsubscribe link points at this server:
+// PUBLIC_API_URL, or the address Render gives the service.
+const stopDigests = startDigestSchedule({
+  mailer: createResendMailer(),
+  siteUrl: site,
+  apiUrl: (process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, ''),
+});
 
 // Render stops a service by sending SIGTERM before replacing it: finish open requests, then close the database.
 let stopping = false;
@@ -48,6 +57,7 @@ function shutdown(signal) {
   if (stopping) return;
   stopping = true;
   stopReminders();
+  stopDigests();
   console.log(`[Server] ${signal} received, shutting down.`);
   server.close(async () => {
     await db.close().catch(() => {});

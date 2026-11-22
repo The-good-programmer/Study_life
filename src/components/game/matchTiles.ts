@@ -1,4 +1,5 @@
 import type { StudySession } from '../../types';
+import { studyableCards } from '../../utils/cardProgress';
 import { maskCloze } from '../../utils/cloze';
 import { shuffle } from '../../utils/shuffle';
 import { getEffectiveCardType } from '../cockpit/retrievalLogic';
@@ -30,7 +31,7 @@ export function buildMatchTiles(session: StudySession, random: () => number = Ma
   const seenQuestions = new Set<string>();
   const seenAnswers = new Set<string>();
   const usable = shuffle(
-    session.concepts.flatMap(c => c.retrievalCards || []),
+    session.concepts.flatMap(c => studyableCards(c.retrievalCards)),
     random,
   ).filter(card => {
     if (getEffectiveCardType(card) === 'image-occlusion') return false;

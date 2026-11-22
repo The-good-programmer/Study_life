@@ -232,4 +232,45 @@ export const MIGRATIONS = [
       END $$;
     `,
   },
+  {
+    // Friends (each student's invite code, and friendships stored both ways) and the weekly progress email.
+    id: '007_friends_and_digest',
+    sql: `
+      CREATE TABLE friend_codes (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        code TEXT NOT NULL UNIQUE,
+        created_at TIMESTAMPTZ NOT NULL
+      );
+
+      CREATE TABLE friendships (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        friend_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (user_id, friend_id)
+      );
+      CREATE INDEX idx_friendships_friend ON friendships (friend_id);
+
+      CREATE TABLE digest_subscriptions (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        time_zone TEXT NOT NULL,
+        unsubscribe_token TEXT NOT NULL UNIQUE,
+        last_sent_week TEXT,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+
+      ALTER TABLE friend_codes ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE friendships ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE digest_subscriptions ENABLE ROW LEVEL SECURITY;
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+          REVOKE ALL ON friend_codes, friendships, digest_subscriptions FROM anon;
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          REVOKE ALL ON friend_codes, friendships, digest_subscriptions FROM authenticated;
+        END IF;
+      END $$;
+    `,
+  },
 ];

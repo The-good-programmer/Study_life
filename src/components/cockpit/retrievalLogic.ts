@@ -1,4 +1,5 @@
 import type { CardType, ConceptCheckpoint, RetrievalCard } from '../../types';
+import { studyableCards } from '../../utils/cardProgress';
 
 /** Pure study-loop rules for the Active Retrieval phase, kept out of the component so they can be tested. */
 
@@ -30,13 +31,13 @@ export const blendInterleavedCards = (
   conceptIndex: number | undefined,
   enabled: boolean,
 ): InterleavedDeck => {
-  const currentCards = concept.retrievalCards || [];
+  const currentCards = studyableCards(concept.retrievalCards);
   const none: InterleavedDeck = { cards: currentCards, interleaveMap: new Map() };
   if (!allConcepts || !enabled || conceptIndex === undefined || conceptIndex <= 0) return none;
 
   const candidates: { card: RetrievalCard; originTitle: string; originId: string; rank: number }[] = [];
   allConcepts.slice(0, conceptIndex).forEach(prior => {
-    (prior.retrievalCards || []).forEach(card => {
+    studyableCards(prior.retrievalCards).forEach(card => {
       candidates.push({
         card,
         originTitle: prior.title,

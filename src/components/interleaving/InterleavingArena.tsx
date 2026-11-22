@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { studyableCards } from '../../utils/cardProgress';
 import { ECONOMY_VISIBLE } from '../../services/features';
 import { Shuffle, X, Flame, Timer, Lightbulb, Eye, Check, ArrowRight, RotateCcw } from 'lucide-react';
 import type {
@@ -117,7 +118,7 @@ export const InterleavingArena: React.FC<InterleavingArenaProps> = ({ onBack, on
       if (!poolByDomain[domain]) poolByDomain[domain] = [];
 
       deck.concepts.forEach(concept => {
-        concept.retrievalCards.forEach(card => {
+        studyableCards(concept.retrievalCards).forEach(card => {
           poolByDomain[domain].push({
             ...card,
             deckId: deck.id,
