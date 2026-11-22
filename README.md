@@ -8,10 +8,10 @@ Open Studify, pick a starter deck or turn your own notes or a lecture PDF into f
 
 ## 🔁 The core study loop
 
-1. **Add material** — pick a ready-made starter deck (ranked for your level), paste notes, import Anki/Quizlet/CSV, or drop a PDF.
+1. **Add material** — pick a ready-made starter deck (ranked for your level), paste notes or take photos of them (the AI writes out the text for you to check), import Anki/Quizlet/CSV, or drop a PDF.
 2. **Review** — active recall flashcards, rated *Again / Hard / Good / Easy*.
-3. **Let the scheduler work** — reviews are spaced with the open-source FSRS algorithm (`ts-fsrs`), so cards come back just before you would forget them. **Start review** opens today's review across all decks: every card due now (most overdue first), then new cards up to a daily limit (10 by default, Settings → Study). Missed cards come back a few cards later, and the last rating can be undone (Z).
-4. **See progress** — the retention dashboard shows what's due, what's sticking, and which cards keep failing.
+3. **Let the scheduler work** — reviews are spaced with the open-source FSRS algorithm (`ts-fsrs`), so cards come back just before you would forget them. **Start review** opens today's review across all decks: every card due now (most overdue first), then new cards up to a daily limit (10 by default, Settings → Study). Missed cards come back a few cards later, and the last rating can be undone (Z). A wrong or unclear card can be fixed on the spot or hidden from reviews (E); the latest edit wins on every device.
+4. **See progress** — the retention dashboard shows what's due, what's sticking, and which cards keep failing. Friends (added by code or invite link) see each other's streak and whether they studied today, and an optional weekly email sums up the week.
 
 ## 🧠 What the techniques are (and the evidence behind them)
 
@@ -114,6 +114,10 @@ Both halves run on [Render](https://render.com), deployed from `fix/audit-harden
 - **Study reminders:** signed-in students get push notifications at their chosen time on days they haven't studied,
   even with Studify closed. The API sends them every few minutes (kept awake by the keep-alive workflow) and makes its own
   Web Push keys on first use (stored in `app_secrets`), so there is nothing to configure.
+- **Weekly progress email:** students who turn it on (Settings → Reminders) get a summary every Sunday from 17:00
+  in their time zone, sent through Resend (`RESEND_API_KEY`, `MAIL_FROM`). The unsubscribe link points at the API's own
+  address (`RENDER_EXTERNAL_URL`, or set `PUBLIC_API_URL`). Until a domain is verified in Resend and `MAIL_FROM` uses it,
+  Resend only delivers to the Resend account's own address.
 - **Keeping it awake:** `.github/workflows/keep-alive.yml` calls the API's `/api/health` every 14 minutes, so the
   free Render API is usually awake and the free Supabase database never pauses for inactivity. GitHub pauses scheduled
   workflows after 60 days without commits; if that happens, re-enable it under *Actions → Keep alive*. The site also
