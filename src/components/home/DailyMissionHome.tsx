@@ -471,7 +471,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
           {onOpenPlanner && <UpcomingPlanCard onStartSession={onStartSession} onOpenPlanner={onOpenPlanner} />}
 
           {/* Friends */}
-          <FriendsCard signedIn={!!currentUser} onOpenAuth={onOpenAuth} />
+          <FriendsCard user={currentUser ? { id: currentUser.id, name: currentUser.name } : null} onOpenAuth={onOpenAuth} />
 
           {/* Decks */}
           <section aria-labelledby="decks-title" className="space-y-3">

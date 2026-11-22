@@ -159,7 +159,8 @@ export class CloudSyncService {
   public static createSyncPayload(): CloudSyncPayload & { documents: Required<SyncDocuments> } {
     return {
       sessions: StorageService.getSessions().map(deck => StorageService.deckWithLatestProgress(deck)),
-      stats: StorageService.getStats(),
+      // This week's XP goes along so friends can see it on their leaderboard.
+      stats: { ...StorageService.getStats(), ...StorageService.getWeeklyXPForSync() },
       characterState: appearanceOf(characterService.getCharacter()),
       documents: localDocuments(),
     };

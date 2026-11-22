@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useState } from 'react';
-import { Check, Copy, Flame, Share2, UserMinus, UserPlus } from 'lucide-react';
-import { FriendsService, formatCode, friendStatus, sortFriends, type FriendsData } from '../../services/friendsService';
+import { Check, Copy, Flame, Share2, Swords, UserMinus, UserPlus } from 'lucide-react';
+import { FriendsService, formatCode, friendStatus, sortFriends, type Friend, type FriendsData } from '../../services/friendsService';
 import { Dialog, DialogHeader, DialogPanel } from '../common/Dialog';
 import { Button } from '../ui/primitives';
 import { FriendAvatar } from './FriendAvatar';
@@ -14,7 +14,9 @@ export const FriendsDialog: React.FC<{
   onClose: () => void;
   /** A code from an invite link, filled in ready to add. */
   initialCode?: string | null;
-}> = ({ isOpen, onClose, initialCode }) => {
+  /** Challenge a friend to a duel (the button shows when given). */
+  onChallenge?: (friend: Friend) => void;
+}> = ({ isOpen, onClose, initialCode, onChallenge }) => {
   const titleId = useId();
   const codeId = useId();
   const [data, setData] = useState<FriendsData | null>(null);
@@ -190,6 +192,17 @@ export const FriendsDialog: React.FC<{
                       {friend.streak}
                       <span className="sr-only">-day streak</span>
                     </span>
+                    {onChallenge && (
+                      <button
+                        type="button"
+                        onClick={() => onChallenge(friend)}
+                        aria-label={`Challenge ${friend.name} to a duel`}
+                        title={`Challenge ${friend.name} to a duel`}
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-subtle transition-colors hover:bg-surface-hover hover:text-brand-text cursor-pointer"
+                      >
+                        <Swords className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => void remove(friend.id, friend.name)}

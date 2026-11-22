@@ -442,7 +442,7 @@ describe('friends', () => {
     const { code } = (await api('/api/friends', { token: dee.token })).data;
     await api('/api/friends/add', { method: 'POST', token: eli.token, body: { code } });
     const [friend] = (await api('/api/friends', { token: eli.token })).data.friends;
-    expect(Object.keys(friend).sort()).toEqual(['avatar', 'friendsSince', 'id', 'lastStudiedAt', 'name', 'pictureUrl', 'streak', 'todayMinutes']);
+    expect(Object.keys(friend).sort()).toEqual(['avatar', 'friendsSince', 'id', 'lastStudiedAt', 'name', 'pictureUrl', 'streak', 'todayMinutes', 'weekXp']);
     expect(friend).toMatchObject({ streak: 6, todayMinutes: 25 });
 
     // A streak whose last study was days ago has ended, whatever is stored.
@@ -467,6 +467,68 @@ describe('friends', () => {
     const res = await api('/api/friends/add', { method: 'POST', token: popular.token, body: { code } });
     expect(res.status).toBe(400);
     expect(res.data.error).toMatch(/already have 50 friends/);
+  });
+});
+
+describe('duels between friends', () => {
+  const questions = Array.from({ length: 5 }, (_, i) => ({ question: `Q${i}?`, options: [`A${i}`, `B${i}`, `C${i}`, `D${i}`], answerIndex: i % 4 }));
+  const befriend = async (a, b) => {
+    const { code } = (await api('/api/friends', { token: b.token })).data;
+    await api('/api/friends/add', { method: 'POST', token: a.token, body: { code } });
+  };
+
+  it('grades both players on the same questions, and shows the answers only after playing', async () => {
+    const ivy = await register('duel-ivy@example.com');
+    const jo = await register('duel-jo@example.com');
+    const stranger = await register('duel-stranger@example.com');
+    await befriend(ivy, jo);
+
+    const body = { friendId: jo.user.id, deckTitle: 'Cells', questions, answers: [0, 1, 2, 0, null], ms: 31_000 };
+    expect((await api('/api/duels', { method: 'POST', token: ivy.token, body: { ...body, friendId: stranger.user.id } })).status).toBe(400);
+    expect((await api('/api/duels', { method: 'POST', token: ivy.token, body: { ...body, questions: questions.slice(0, 3), answers: [0, 1, 2] } })).status).toBe(400);
+    const sameChoices = questions.map((q) => ({ ...q, options: ['x', 'X', 'y', 'z'] }));
+    expect((await api('/api/duels', { method: 'POST', token: ivy.token, body: { ...body, questions: sameChoices } })).status).toBe(400);
+
+    const created = await api('/api/duels', { method: 'POST', token: ivy.token, body });
+    expect(created.status).toBe(201);
+    expect(created.data.duel).toMatchObject({ status: 'waiting', you: { score: 3 }, them: { score: null }, deckTitle: 'Cells' });
+
+    // Jo sees the questions without the right answers, and not Ivy's score.
+    const [incoming] = (await api('/api/duels', { token: jo.token })).data.duels;
+    expect(incoming).toMatchObject({ status: 'your-turn', them: { name: 'Test User', score: null } });
+    expect(incoming.questions[0]).toEqual({ question: 'Q0?', options: ['A0', 'B0', 'C0', 'D0'] });
+
+    expect((await api(`/api/duels/${incoming.id}/play`, { method: 'POST', token: stranger.token, body: { answers: [0, 1, 2, 3, 0] } })).status).toBe(404);
+    expect((await api(`/api/duels/${incoming.id}/play`, { method: 'POST', token: jo.token, body: { answers: [0, 1] } })).status).toBe(400);
+    const played = await api(`/api/duels/${incoming.id}/play`, { method: 'POST', token: jo.token, body: { answers: [0, 1, 2, 3, 0], ms: 25_000 } });
+    expect(played.status).toBe(200);
+    expect(played.data.duel).toMatchObject({ status: 'done', you: { score: 5 }, them: { score: 3 } });
+    expect(played.data.duel.questions[4]).toMatchObject({ answerIndex: 0, yourAnswer: 0, theirAnswer: null });
+
+    // Once only.
+    expect((await api(`/api/duels/${incoming.id}/play`, { method: 'POST', token: jo.token, body: { answers: [0, 0, 0, 0, 0] } })).status).toBe(409);
+    const [result] = (await api('/api/duels', { token: ivy.token })).data.duels;
+    expect(result).toMatchObject({ status: 'done', you: { score: 3 }, them: { score: 5 } });
+  });
+
+  it('expires a challenge after a week', async () => {
+    const kim = await register('duel-kim@example.com');
+    const lu = await register('duel-lu@example.com');
+    await befriend(kim, lu);
+    const created = await api('/api/duels', { method: 'POST', token: kim.token, body: { friendId: lu.user.id, deckTitle: 'Old', questions, answers: [0, 0, 0, 0, 0] } });
+    await db.run("UPDATE duels SET expires_at = '2020-01-01T00:00:00Z' WHERE id = $1", [created.data.duel.id]);
+    const [old] = (await api('/api/duels', { token: lu.token })).data.duels;
+    expect(old.status).toBe('expired');
+    expect((await api(`/api/duels/${old.id}/play`, { method: 'POST', token: lu.token, body: { answers: [0, 0, 0, 0, 0] } })).status).toBe(410);
+  });
+
+  it("shows a friend's XP for this week only", async () => {
+    const { friendView, weekStartOf } = await import('./routes/friendRoutes.js');
+    const now = new Date('2026-11-22T10:00:00Z'); // a Sunday: the week started Monday 16 November
+    expect(weekStartOf(now)).toBe('2026-11-16');
+    const row = (stats) => ({ id: 'x', name: 'X', stats_json: JSON.stringify(stats) });
+    expect(friendView(row({ weekXp: 240, weekXpWeek: '2026-11-16' }), now).weekXp).toBe(240);
+    expect(friendView(row({ weekXp: 240, weekXpWeek: '2026-11-09' }), now).weekXp).toBe(0);
   });
 });
 
@@ -634,7 +696,7 @@ describe('security headers', () => {
 describe('database', () => {
   it('applies its migrations once and reports healthy', async () => {
     const applied = await db.all('SELECT id FROM schema_migrations');
-    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds', '005_user_documents', '006_resets_and_reminders', '007_friends_and_digest']);
+    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds', '005_user_documents', '006_resets_and_reminders', '007_friends_and_digest', '008_duels']);
 
     const health = await api('/api/health');
     expect(health.status).toBe(200);

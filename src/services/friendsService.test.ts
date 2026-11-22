@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCode, friendStatus, inviteCodeFrom, sortFriends, studiedToday, type Friend } from './friendsService';
+import { formatCode, friendStatus, inviteCodeFrom, leaderboard, sortFriends, studiedToday, type Friend } from './friendsService';
 
 // Local times, so the tests mean the same in any time zone.
 const NOW = new Date(2026, 10, 22, 18, 0);
@@ -12,6 +12,7 @@ const friend = (name: string, extra: Partial<Friend> = {}): Friend => ({
   streak: 0,
   lastStudiedAt: null,
   todayMinutes: 0,
+  weekXp: 0,
   friendsSince: at(1, 9),
   ...extra,
 });
@@ -45,5 +46,10 @@ describe('friends', () => {
     expect(inviteCodeFrom('?friend=<script>')).toBeNull();
     expect(inviteCodeFrom('?view=focus')).toBeNull();
     expect(formatCode('K7M2QX9P')).toBe('K7M2-QX9P');
+  });
+
+  it('ranks you and your friends by XP this week', () => {
+    const rows = leaderboard([friend('Ana', { weekXp: 120 }), friend('Ben', { weekXp: 300, streak: 1 }), friend('Cy', { weekXp: 120, streak: 4 })], { id: 'me', name: 'You', weekXp: 150, streak: 2 });
+    expect(rows.map(r => [r.name, r.isYou])).toEqual([['Ben', false], ['You', true], ['Cy', false], ['Ana', false]]);
   });
 });

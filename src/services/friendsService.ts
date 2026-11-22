@@ -9,7 +9,19 @@ export interface Friend {
   streak: number;
   lastStudiedAt: string | null;
   todayMinutes: number;
+  /** XP earned this week (0 if none yet). */
+  weekXp: number;
   friendsSince: string;
+}
+
+/** One row of the weekly leaderboard: a friend, or you. */
+export interface LeaderboardRow {
+  id: string;
+  name: string;
+  weekXp: number;
+  streak: number;
+  isYou: boolean;
+  friend?: Friend;
 }
 
 export interface FriendsData {
@@ -51,6 +63,13 @@ export const sortFriends = (friends: readonly Friend[], now: Date = new Date()):
       b.streak - a.streak ||
       a.name.localeCompare(b.name),
   );
+
+/** You and your friends by this week's XP, then streak, then name. */
+export const leaderboard = (friends: readonly Friend[], you: { id: string; name: string; weekXp: number; streak: number }): LeaderboardRow[] =>
+  [
+    { id: you.id, name: you.name, weekXp: you.weekXp, streak: you.streak, isYou: true },
+    ...friends.map(friend => ({ id: friend.id, name: friend.name, weekXp: friend.weekXp ?? 0, streak: friend.streak, isYou: false, friend })),
+  ].sort((a, b) => b.weekXp - a.weekXp || b.streak - a.streak || a.name.localeCompare(b.name));
 
 /** A code shown in two halves, K7M2-QX9P, so it is easy to read out. */
 export const formatCode = (code: string): string => (code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code);
