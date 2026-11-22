@@ -386,6 +386,90 @@ describe('study reminders', () => {
   });
 });
 
+describe('friends', () => {
+  it('needs sign-in', async () => {
+    expect((await api('/api/friends')).status).toBe(401);
+    expect((await api('/api/friends/add', { method: 'POST', body: { code: 'ABCDEFGH' } })).status).toBe(401);
+  });
+
+  it('gives each student one code, and adding it makes friends both ways', async () => {
+    const ana = await register('friend-ana@example.com');
+    const ben = await register('friend-ben@example.com');
+    const first = await api('/api/friends', { token: ana.token });
+    expect(first.status).toBe(200);
+    expect(first.data.code).toMatch(/^[A-HJ-NP-Z2-9]{8}$/);
+    expect((await api('/api/friends', { token: ana.token })).data.code).toBe(first.data.code);
+
+    // Typed with a dash and in lower case.
+    const typed = `${first.data.code.slice(0, 4)}-${first.data.code.slice(4)}`.toLowerCase();
+    const added = await api('/api/friends/add', { method: 'POST', token: ben.token, body: { code: typed } });
+    expect(added.status).toBe(200);
+    expect(added.data).toMatchObject({ alreadyFriends: false, friend: { id: ana.user.id, name: 'Test User' } });
+
+    expect((await api('/api/friends', { token: ana.token })).data.friends.map((f) => f.id)).toEqual([ben.user.id]);
+    expect((await api('/api/friends', { token: ben.token })).data.friends.map((f) => f.id)).toEqual([ana.user.id]);
+
+    const again = await api('/api/friends/add', { method: 'POST', token: ben.token, body: { code: first.data.code } });
+    expect(again.data.alreadyFriends).toBe(true);
+
+    // Removing works both ways.
+    expect((await api('/api/friends/remove', { method: 'POST', token: ana.token, body: { friendId: ben.user.id } })).status).toBe(200);
+    expect((await api('/api/friends', { token: ana.token })).data.friends).toEqual([]);
+    expect((await api('/api/friends', { token: ben.token })).data.friends).toEqual([]);
+  });
+
+  it('refuses your own code, unknown codes and malformed ones', async () => {
+    const cy = await register('friend-cy@example.com');
+    const { code } = (await api('/api/friends', { token: cy.token })).data;
+    expect((await api('/api/friends/add', { method: 'POST', token: cy.token, body: { code } })).data.error).toMatch(/your own code/);
+    expect((await api('/api/friends/add', { method: 'POST', token: cy.token, body: { code: 'O0O0O0O0' } })).status).toBe(400);
+    const unknown = code === 'ZZZZZZZZ' ? 'YYYYYYYY' : 'ZZZZZZZZ';
+    expect((await api('/api/friends/add', { method: 'POST', token: cy.token, body: { code: unknown } })).status).toBe(404);
+  });
+
+  it('shows friends only a name, avatar, streak, last study and today\'s minutes', async () => {
+    const dee = await register('friend-dee@example.com');
+    const eli = await register('friend-eli@example.com');
+    const now = Date.now();
+    await api('/api/sync/push', {
+      method: 'POST',
+      token: dee.token,
+      body: {
+        stats: { currentStreak: 6, todayMinutes: 25, xp: 900, lastActiveDate: '2026-11-21', lastStudiedAt: new Date(now - 3_600_000).toISOString() },
+        sessions: [{ id: 'dee-deck', title: 'Secret deck', concepts: [] }],
+      },
+    });
+    const { code } = (await api('/api/friends', { token: dee.token })).data;
+    await api('/api/friends/add', { method: 'POST', token: eli.token, body: { code } });
+    const [friend] = (await api('/api/friends', { token: eli.token })).data.friends;
+    expect(Object.keys(friend).sort()).toEqual(['avatar', 'friendsSince', 'id', 'lastStudiedAt', 'name', 'pictureUrl', 'streak', 'todayMinutes']);
+    expect(friend).toMatchObject({ streak: 6, todayMinutes: 25 });
+
+    // A streak whose last study was days ago has ended, whatever is stored.
+    const { friendView } = await import('./routes/friendRoutes.js');
+    const stale = friendView({ id: 'x', name: 'X', stats_json: JSON.stringify({ currentStreak: 6, todayMinutes: 25, lastStudiedAt: '2026-11-18T10:00:00Z' }) }, new Date('2026-11-22T10:00:00Z'));
+    expect(stale).toMatchObject({ streak: 0, todayMinutes: 0, lastStudiedAt: '2026-11-18T10:00:00.000Z' });
+  });
+
+  it('stops at 50 friends', async () => {
+    const { MAX_FRIENDS } = await import('./routes/friendRoutes.js');
+    const popular = await register('friend-popular@example.com');
+    const now = new Date().toISOString();
+    for (let i = 0; i < MAX_FRIENDS; i++) {
+      await db.run(
+        `INSERT INTO users (id, name, email, provider, created_at, last_login_at) VALUES ($1, 'Fan', $2, 'password', $3, $3)`,
+        [`fan-${i}`, `fan-${i}@example.com`, now],
+      );
+      await db.run('INSERT INTO friendships (user_id, friend_id, created_at) VALUES ($1, $2, $3)', [popular.user.id, `fan-${i}`, now]);
+    }
+    const newcomer = await register('friend-newcomer@example.com');
+    const { code } = (await api('/api/friends', { token: newcomer.token })).data;
+    const res = await api('/api/friends/add', { method: 'POST', token: popular.token, body: { code } });
+    expect(res.status).toBe(400);
+    expect(res.data.error).toMatch(/already have 50 friends/);
+  });
+});
+
 describe('AI proxy', () => {
   it('requires sign-in', async () => {
     const res = await api('/api/ai/generate', { method: 'POST', body: { contents: 'hi' } });
@@ -457,7 +541,7 @@ describe('security headers', () => {
 describe('database', () => {
   it('applies its migrations once and reports healthy', async () => {
     const applied = await db.all('SELECT id FROM schema_migrations');
-    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds', '005_user_documents', '006_resets_and_reminders']);
+    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds', '005_user_documents', '006_resets_and_reminders', '007_friends_and_digest']);
 
     const health = await api('/api/health');
     expect(health.status).toBe(200);

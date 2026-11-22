@@ -15,6 +15,8 @@ import { CalendarFeedService } from './services/calendarFeedService';
 import { useFocusTimerAlerts } from './hooks/useFocusTimer';
 import { FocusToast } from './components/focus/FocusToast';
 import { InstallAppDialog } from './components/common/InstallAppDialog';
+import { FriendsDialog } from './components/friends/FriendsDialog';
+import { FriendsService, inviteCodeFrom } from './services/friendsService';
 import { ApiConfig } from './services/apiConfig';
 import { CloudSyncService } from './services/cloudSyncService';
 import { buildDailyReviewSession } from './services/dailyReview';
@@ -98,8 +100,22 @@ export function App() {
     }
     return token;
   });
-  const [isAuthOpen, setIsAuthOpen] = useState(() => Boolean(resetToken));
-  const [authInitialTab, setAuthInitialTab] = useState<'login' | 'register' | 'profile'>('login');
+  // A friend's invite link (/?friend=<code>) opens Friends with the code filled in. Signed out, sign-in
+  // comes first, and the code waits in this tab until then.
+  const [friendInvite, setFriendInvite] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const code = inviteCodeFrom(window.location.search);
+    if (code) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('friend');
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+      FriendsService.savePendingInvite(code);
+    }
+    return code ?? FriendsService.pendingInvite();
+  });
+  const invitedWhileSignedOut = Boolean(friendInvite) && !AuthService.getCurrentUser();
+  const [isAuthOpen, setIsAuthOpen] = useState(() => Boolean(resetToken) || invitedWhileSignedOut);
+  const [authInitialTab, setAuthInitialTab] = useState<'login' | 'register' | 'profile'>(() => (invitedWhileSignedOut && !resetToken ? 'register' : 'login'));
   const [stats, setStats] = useState<UserStats>(StorageService.getStats());
   // Notes from Focus to make a deck from, opened in the Library (with a key to open it afresh).
   const [libraryNotes, setLibraryNotes] = useState<{ text: string; key: number } | null>(null);
@@ -406,6 +422,7 @@ export function App() {
                 onOpenFolders={() => handleNavigate('folders')}
                 onOpenPlanner={() => handleNavigate('planner')}
                 onOpenLibrary={() => handleNavigate('studio')}
+                onOpenAuth={() => handleOpenAuth('login')}
               />
             )}
             {view === 'studio' && (
@@ -666,6 +683,17 @@ export function App() {
       {focusToast}
 
       <InstallAppDialog isOpen={isInstallHelpOpen} onClose={() => setIsInstallHelpOpen(false)} />
+
+      {currentUser && friendInvite && (
+        <FriendsDialog
+          isOpen
+          initialCode={friendInvite}
+          onClose={() => {
+            setFriendInvite(null);
+            FriendsService.savePendingInvite(null);
+          }}
+        />
+      )}
 
       {/* Global Study Wage Deposited Banner */}
       {ECONOMY_VISIBLE && <WagePayoutBanner />}

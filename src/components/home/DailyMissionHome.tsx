@@ -48,6 +48,7 @@ import { cn } from '../../utils/cn';
 import { deckCardIds } from '../../utils/cardProgress';
 import { ECONOMY_VISIBLE, WORLD_3D_ENABLED } from '../../services/features';
 import { UpcomingPlanCard } from '../planner/UpcomingPlanCard';
+import { FriendsCard } from '../friends/FriendsCard';
 
 // The customizer pulls in three.js; load it only when the user opens it, and only in builds with the 3D world.
 const CharacterCustomizerModal = WORLD_3D_ENABLED
@@ -76,6 +77,8 @@ interface DailyMissionHomeProps {
   onOpenFolders?: () => void;
   onOpenPlanner?: () => void;
   onOpenLibrary?: () => void;
+  /** Opens sign-in (for adding friends). */
+  onOpenAuth?: () => void;
 }
 
 const greetingFor = (date: Date): string => {
@@ -105,6 +108,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   onOpenFolders,
   onOpenPlanner,
   onOpenLibrary,
+  onOpenAuth,
 }) => {
   const [stats, setStats] = useState<UserStats>(() => StorageService.getStats());
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => AuthService.getCurrentUser());
@@ -465,6 +469,9 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
 
           {/* Exams and homework from the planner */}
           {onOpenPlanner && <UpcomingPlanCard onStartSession={onStartSession} onOpenPlanner={onOpenPlanner} />}
+
+          {/* Friends */}
+          <FriendsCard signedIn={!!currentUser} onOpenAuth={onOpenAuth} />
 
           {/* Decks */}
           <section aria-labelledby="decks-title" className="space-y-3">
