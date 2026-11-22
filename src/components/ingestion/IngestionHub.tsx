@@ -110,6 +110,8 @@ interface IngestionHubProps {
   onStartAudioBriefing?: (session: StudySession) => void;
   /** Opens the Subjects page, where subjects are renamed, recoloured and deleted. */
   onOpenFolders?: () => void;
+  /** A shared deck to open the report form for (from a public page's "Report this deck"). */
+  reportSlug?: string | null;
   onOpenSanctuary?: () => void;
   initialLibraryTab?: 'my-decks' | 'starred' | 'curated' | 'community';
   /** Opens on "make a deck from notes" with these notes filled in (from Focus). */
@@ -127,6 +129,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   onStartMatch,
   onStartAudioBriefing,
   onOpenFolders,
+  reportSlug,
   initialLibraryTab,
   initialNotes,
   onOpenAuth,
@@ -971,6 +974,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
             onAdded={() => setSavedSessions(StorageService.getSessions())}
             onStartSession={onStartSession}
             onOpenAuth={onOpenAuth}
+            reportSlug={reportSlug}
           />
         )}
 

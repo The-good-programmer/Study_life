@@ -39,7 +39,8 @@ function stampServiceWorker(): Plugin {
  * Writes the public pages (src/publicPages/buildPublicPages.ts) into the build: /decks/, a page per
  * starter deck, sitemap.xml and robots.txt. They are plain HTML that search engines can read. The
  * module is loaded through Vite so it can use the app's TypeScript and data as they are.
- * The site's address comes from SITE_URL, or else from og:url in index.html.
+ * The site's address comes from SITE_URL, or else from og:url in index.html. Shared decks come from the
+ * API at VITE_API_BASE_URL (none when it is unset or can't be reached).
  */
 function publicPages(): Plugin {
   let outDir = 'dist'
@@ -64,8 +65,12 @@ function publicPages(): Plugin {
         oxc: { jsx: { runtime: 'automatic' } },
       })
       try {
-        const { buildPublicPages } = await server.ssrLoadModule('/src/publicPages/buildPublicPages.ts')
-        for (const { file, content } of buildPublicPages(siteUrl) as { file: string; content: string }[]) {
+        const { buildPublicPages, loadCommunityDecks } = await server.ssrLoadModule('/src/publicPages/buildPublicPages.ts')
+        // Decks students shared get pages too, from the live API (VITE_API_BASE_URL, set on the static site).
+        const apiBase = process.env.VITE_API_BASE_URL || null
+        const community = await loadCommunityDecks(apiBase)
+        if (apiBase) console.log(`[public pages] ${community.length} shared ${community.length === 1 ? 'deck' : 'decks'} with pages`)
+        for (const { file, content } of buildPublicPages(siteUrl, undefined, community, apiBase) as { file: string; content: string }[]) {
           const target = join(outDir, file)
           mkdirSync(dirname(target), { recursive: true })
           writeFileSync(target, content)

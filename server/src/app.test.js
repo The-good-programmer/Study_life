@@ -698,6 +698,42 @@ describe('a guest\'s free AI deck', () => {
 });
 
 describe('community decks', () => {
+  it('gives a shared deck a public page only once it passed the check, is 3 days old and unreported', async () => {
+    const author = await register('pages@example.com');
+    const reader = await register('pages-reader@example.com');
+    const bigDeck = { concepts: [{ title: 'Atoms', retrievalCards: Array.from({ length: 12 }, (_, i) => ({ question: `Atom fact ${i}?`, answer: `Answer ${i}` })) }] };
+    const original = fakeAi.generateContent;
+    fakeAi.generateContent = async () => JSON.stringify({ verdict: 'ok' });
+    const share = (title, extra = {}) =>
+      api('/api/decks/share', { method: 'POST', token: author.token, body: { title, description: 'Twelve facts about atoms for the chemistry quiz.', session: bigDeck, rightsConfirmed: true, ...extra } });
+    let good, reported, fresh, small;
+    try {
+      good = (await share('Page deck')).data;
+      reported = (await share('Reported deck')).data;
+      fresh = (await share('Fresh deck')).data;
+      small = (await share('Small deck', { session: SHAREABLE_DECK })).data;
+    } finally {
+      fakeAi.generateContent = original;
+    }
+    const unchecked = (await share('Unchecked deck')).data; // the AI's answer wasn't a verdict
+    const old = new Date(Date.now() - 4 * 86_400_000).toISOString();
+    for (const deck of [good, reported, small, unchecked]) await db.run('UPDATE shared_decks SET created_at = $1 WHERE slug = $2', [old, deck.slug]);
+    await api(`/api/decks/${reported.slug}/report`, { method: 'POST', token: reader.token, body: { reason: 'Wrong answers' } });
+
+    const pages = (await api('/api/decks/public-pages')).data.decks;
+    const slugs = pages.map((deck) => deck.slug);
+    expect(slugs).toContain(good.slug);
+    for (const deck of [reported, fresh, small, unchecked]) expect(slugs).not.toContain(deck.slug);
+    const page = pages.find((deck) => deck.slug === good.slug);
+    expect(page.concepts[0].cards).toHaveLength(12);
+    expect(page.author).toBe('a Studify student');
+    expect(JSON.stringify(page)).not.toContain('reps');
+
+    expect((await api(`/api/decks/${good.slug}/visible`)).status).toBe(200);
+    await api(`/api/decks/${good.slug}`, { method: 'DELETE', token: author.token });
+    expect((await api(`/api/decks/${good.slug}/visible`)).status).toBe(404);
+  });
+
   it('shows the author by first name and initial, and nobody under 16 by name', async () => {
     const adult = await register('ada@example.com');
     await api('/api/auth/me', { method: 'PATCH', token: adult.token, body: { name: 'Ada Lovelace', age: 19 } });

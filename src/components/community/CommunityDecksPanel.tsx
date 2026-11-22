@@ -23,7 +23,9 @@ export const CommunityDecksPanel: React.FC<{
   onAdded: () => void;
   onStartSession: (session: StudySession) => void;
   onOpenAuth?: () => void;
-}> = ({ query, onAdded, onStartSession, onOpenAuth }) => {
+  /** Opens the report form for this deck at once (a public page's "Report this deck"). */
+  reportSlug?: string | null;
+}> = ({ query, onAdded, onStartSession, onOpenAuth, reportSlug }) => {
   const [signedIn] = useState(() => Boolean(AuthService.getCurrentUser()));
   const [decks, setDecks] = useState<PublicDeckSummary[] | null>(null);
   const [mine, setMine] = useState<MySharedDeck[]>([]);
@@ -31,8 +33,10 @@ export const CommunityDecksPanel: React.FC<{
   const [added, setAdded] = useState<Record<string, StudySession>>({});
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
-  const [reporting, setReporting] = useState<PublicDeckSummary | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [reporting, setReporting] = useState<PublicDeckSummary | null>(() =>
+    reportSlug && signedIn ? { slug: reportSlug, title: 'A shared deck', id: reportSlug, author_name: '', subject: '', description: '', card_count: 0, likes: 0, created_at: '' } : null,
+  );
+  const [notice, setNotice] = useState<string | null>(() => (reportSlug && !signedIn ? 'Sign in to report a deck, then find it here and choose Report.' : null));
 
   // Searches as the student types, a moment after they stop.
   useEffect(() => {
@@ -43,6 +47,8 @@ export const CommunityDecksPanel: React.FC<{
       if (result.success) {
         setDecks(result.decks);
         setError(null);
+        // Show the reported deck's real title once the list has it.
+        setReporting(current => (current ? result.decks.find(d => d.slug === current.slug) ?? current : current));
       } else {
         setDecks([]);
         setError(result.error);

@@ -34,6 +34,11 @@ const MAX_PUBLISHES_PER_DAY = 20;
 const MAX_REPORT_REASON = 500;
 /** Reports from this many different people hide a deck until someone reviews it. */
 export const REPORTS_TO_HIDE = 3;
+/** A shared deck gets a public page once it is this old, has this many cards and this much description. */
+const PAGE_AFTER_DAYS = 3;
+const PAGE_MIN_CARDS = 10;
+const PAGE_MIN_DESCRIPTION = 20;
+const PAGE_LIMIT = 2000;
 
 /** A visible deck by id or slug. Hidden (reported) decks are treated as missing. */
 const findVisibleDeck = (identifier) =>
@@ -43,6 +48,53 @@ const findVisibleDeck = (identifier) =>
 const shareUrlOf = (slug) => `/?shared=${encodeURIComponent(slug)}`;
 
 export async function handleDeckRoutes(req, res, pathname, body, searchParams, { ai } = {}) {
+  // 0a. DECKS FOR PUBLIC PAGES: what the website's build turns into search-engine pages. Only decks the
+  // AI check passed, with 10+ cards and a description, shared 3+ days ago and never reported, and only
+  // their text cards (src/publicPages/buildPublicPages.ts).
+  if (pathname === '/api/decks/public-pages' && req.method === 'GET') {
+    const since = new Date(Date.now() - PAGE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const rows = await db.all(
+      `SELECT d.slug, d.author_name, d.title, d.subject, d.description, d.likes, d.created_at, d.deck_json
+         FROM shared_decks d
+        WHERE d.hidden_at IS NULL AND d.content_check = 'passed' AND d.card_count >= $1
+          AND length(trim(coalesce(d.description, ''))) >= $2 AND d.created_at <= $3
+          AND NOT EXISTS (SELECT 1 FROM deck_reports r WHERE r.deck_id = d.id)
+        ORDER BY d.likes DESC, d.created_at DESC
+        LIMIT $4`,
+      [PAGE_MIN_CARDS, PAGE_MIN_DESCRIPTION, since, PAGE_LIMIT],
+    );
+    const decks = rows.flatMap((row) => {
+      let session = null;
+      try {
+        session = JSON.parse(row.deck_json);
+      } catch {
+        return [];
+      }
+      const concepts = (session?.concepts || [])
+        .map((concept) => ({
+          title: String(concept?.title || ''),
+          cards: (concept?.retrievalCards || [])
+            .filter((card) => card && card.cardType !== 'image-occlusion' && !card.hidden && typeof card.question === 'string' && typeof card.answer === 'string' && card.question.trim() && card.answer.trim())
+            .map((card) => ({ question: card.question, answer: card.answer })),
+        }))
+        .filter((concept) => concept.cards.length > 0);
+      if (concepts.length === 0) return [];
+      return [{ slug: row.slug, author: row.author_name, title: row.title, subject: row.subject, description: row.description, likes: row.likes, created_at: iso(row.created_at), concepts }];
+    });
+    res.setHeader('Cache-Control', 'public, max-age=600');
+    return send(res, 200, { success: true, decks });
+  }
+
+  // 0b. IS A SHARED DECK STILL UP? Public pages ask, so a deck that was hidden or unshared disappears from
+  // its page at once, without waiting for the next build.
+  const visibleMatch = /^\/api\/decks\/([^/]+)\/visible$/.exec(pathname);
+  if (visibleMatch && req.method === 'GET') {
+    const identifier = safeDecode(visibleMatch[1]);
+    const row = identifier ? await db.one('SELECT 1 AS ok FROM shared_decks WHERE slug = $1 AND hidden_at IS NULL', [identifier]) : null;
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    return send(res, row ? 200 : 404, { visible: Boolean(row) });
+  }
+
   // 0. YOUR SHARED DECKS (to see their links and unshare them)
   if (pathname === '/api/decks/mine' && req.method === 'GET') {
     const user = await getAuthUser(req);

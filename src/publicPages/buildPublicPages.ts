@@ -12,6 +12,18 @@ import type { RetrievalCard, StarterDeckMetadata } from '../types';
 import { CURATED_STARTER_DECKS } from '../data/curatedStarterCatalog';
 import { Mascot } from '../components/mascot/Mascot';
 
+/** A deck a student shared that qualifies for a page (server: GET /api/decks/public-pages). */
+export interface CommunityDeck {
+  slug: string;
+  author: string;
+  title: string;
+  subject: string;
+  description: string;
+  likes: number;
+  created_at: string;
+  concepts: { title: string; cards: { question: string; answer: string }[] }[];
+}
+
 export interface PublicPage {
   /** Path inside the build folder, e.g. "decks/index.html". */
   file: string;
@@ -76,7 +88,7 @@ footer{margin:56px 0 0;border-top:1px solid var(--line);padding:24px 0 40px;font
 
 const FONTS = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap" rel="stylesheet">`;
 
-const page = (o: { title: string; description: string; url: string; body: string; jsonLd: object[] }): string => `<!doctype html>
+const page = (o: { title: string; description: string; url: string; body: string; jsonLd: object[]; head?: string }): string => `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -96,6 +108,7 @@ const page = (o: { title: string; description: string; url: string; body: string
 ${FONTS}
 <style>${STYLE}</style>
 ${o.jsonLd.map(data => `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`).join('\n')}
+${o.head ?? ''}
 </head>
 <body>
 <header class="top"><div class="wrap">
@@ -169,7 +182,59 @@ const deckLink = (deck: StarterDeckMetadata): string =>
 
 const GENTLENESS: Record<StarterDeckMetadata['difficulty'], number> = { Foundational: 0, Intermediate: 1, 'High-Yield Board Review': 2 };
 
-export function hubPage(allDecks: StarterDeckMetadata[], siteUrl: string): string {
+/** Data for an inline script, safe inside <script>. */
+const scriptData = (value: unknown): string => JSON.stringify(value).replace(/</g, '\\u003c');
+
+const SLUG = /^[a-z0-9][a-z0-9-]{0,140}$/;
+export const communityPath = (deck: Pick<CommunityDeck, 'slug'>): string => `/decks/c/${deck.slug}/`;
+const sharedLink = (deck: Pick<CommunityDeck, 'slug'>): string => `/?shared=${encodeURIComponent(deck.slug)}`;
+const cardCountOf = (deck: CommunityDeck): number => deck.concepts.reduce((n, c) => n + c.cards.length, 0);
+
+const communityLink = (deck: CommunityDeck): string =>
+  `<li><a href="${communityPath(deck)}"><b>${esc(deck.title)}</b><span>${cardCountOf(deck)} cards · ${esc(deck.subject)} · by ${esc(deck.author)}</span></a></li>`;
+
+/**
+ * A page for a deck a student shared. It asks the server whether the deck is still up, and if it was
+ * unshared or hidden after reports, says so (and asks search engines to drop it) without a rebuild.
+ */
+export function communityPage(deck: CommunityDeck, siteUrl: string, apiBase: string | null, others: CommunityDeck[]): string {
+  const url = new URL(communityPath(deck), siteUrl).href;
+  const count = cardCountOf(deck);
+  const title = `${deck.title} flashcards (${count} cards) | Studify`;
+  const description = `${count} free flashcards: ${deck.description}`.slice(0, 300);
+  const related = others.filter(o => o.slug !== deck.slug && o.subject === deck.subject).slice(0, 6);
+  const body = `
+<p class="crumbs"><a href="/decks/">Flashcard decks</a> › Shared by students › ${esc(deck.subject)}</p>
+<h1>${esc(deck.title)}</h1>
+<p class="lead">${esc(deck.description)}</p>
+<ul class="meta"><li>${count} cards</li><li>${esc(deck.subject)}</li><li>Shared by ${esc(deck.author)}</li>${deck.likes > 0 ? `<li>${deck.likes} ${deck.likes === 1 ? 'like' : 'likes'}</li>` : ''}</ul>
+<div class="cta"><a class="btn" href="${sharedLink(deck)}">Study these cards free</a><small>No account needed. Each card comes back just before you would forget it.</small></div>
+${deck.concepts
+  .map(
+    concept => `<h2>${esc(concept.title || deck.title)}</h2>
+<ol class="cards">
+${concept.cards.map(card => `<li><p class="q">${esc(blanked(card.question))}</p><p class="a"><b>Answer</b>${esc(card.answer)}</p></li>`).join('\n')}
+</ol>`,
+  )
+  .join('\n')}
+<section class="panel"><div><b>Shared by a student</b><p>Studify checks shared decks, but not every card. If something is wrong, copied or inappropriate, please report it.</p></div><a class="btn ghost" href="/?report=${encodeURIComponent(deck.slug)}">Report this deck</a></section>
+${related.length ? `<h2>More ${esc(deck.subject)} decks</h2><ul class="decks">${related.map(communityLink).join('')}</ul>` : ''}`;
+  const quiz = {
+    '@context': 'https://schema.org',
+    '@type': 'Quiz',
+    name: deck.title,
+    about: { '@type': 'Thing', name: deck.subject },
+    hasPart: deck.concepts.flatMap(concept =>
+      concept.cards.map(card => ({ '@type': 'Question', eduQuestionType: 'Flashcard', text: blanked(card.question), acceptedAnswer: { '@type': 'Answer', text: card.answer } })),
+    ),
+  };
+  const head = apiBase
+    ? `<script>(function(){var api=${scriptData(apiBase)},slug=${scriptData(deck.slug)};fetch(api+'/decks/'+encodeURIComponent(slug)+'/visible').then(function(r){if(r.status!==404)return;var m=document.createElement('meta');m.name='robots';m.content='noindex';document.head.appendChild(m);document.title='Deck removed | Studify';var main=document.querySelector('main');if(main)main.innerHTML='<h1 style="margin-top:40px">This deck was removed</h1><p class="lead">Its author unshared it, or students reported it. <a href="/decks/">Browse other decks</a>.</p>';}).catch(function(){});})();</script>`
+    : '';
+  return page({ title, description, url, body, jsonLd: [quiz], head });
+}
+
+export function hubPage(allDecks: StarterDeckMetadata[], siteUrl: string, community: CommunityDeck[] = []): string {
   // Gentlest first, as in the app: a board-exam deck shouldn't be the first thing a school student sees.
   const decks = [...allDecks].sort((a, b) => GENTLENESS[a.difficulty] - GENTLENESS[b.difficulty]);
   const url = new URL('/decks/', siteUrl).href;
@@ -193,11 +258,15 @@ ${mascot}
 ${categories
   .map(category => `<h2>${esc(category)}</h2><ul class="decks">${decks.filter(d => d.category === category).map(deckLink).join('')}</ul>`)
   .join('\n')}
+${community.length ? `<h2>Shared by students</h2><ul class="decks">${community.slice(0, 24).map(communityLink).join('')}</ul>` : ''}
 <section class="panel"><div><b>Studying something else?</b><p>Type a topic or paste your notes, and Studify writes the cards for your level.</p></div><a class="btn" href="/">Make my own deck</a></section>`;
   const list = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
-    itemListElement: decks.map((deck, i) => ({ '@type': 'ListItem', position: i + 1, url: new URL(deckPath(deck), siteUrl).href, name: deck.title })),
+    itemListElement: [
+      ...decks.map(deck => ({ url: new URL(deckPath(deck), siteUrl).href, name: deck.title })),
+      ...community.slice(0, 24).map(deck => ({ url: new URL(communityPath(deck), siteUrl).href, name: deck.title })),
+    ].map((item, i) => ({ '@type': 'ListItem', position: i + 1, ...item })),
   };
   return page({
     title: 'Free flashcard decks with spaced repetition | Studify',
@@ -208,8 +277,8 @@ ${categories
   });
 }
 
-export function sitemap(siteUrl: string, decks: StarterDeckMetadata[]): string {
-  const urls = ['/', '/decks/', ...decks.map(deckPath)].map(path => new URL(path, siteUrl).href);
+export function sitemap(siteUrl: string, decks: StarterDeckMetadata[], community: CommunityDeck[] = []): string {
+  const urls = ['/', '/decks/', ...decks.map(deckPath), ...community.map(communityPath)].map(path => new URL(path, siteUrl).href);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map(loc => `  <url><loc>${esc(loc)}</loc></url>`).join('\n')}
@@ -221,12 +290,39 @@ export function robots(siteUrl: string): string {
   return `User-agent: *\nAllow: /\n\nSitemap: ${new URL('/sitemap.xml', siteUrl).href}\n`;
 }
 
+/**
+ * The shared decks that qualify for pages, from the API (whose free server may be asleep: the first
+ * request wakes it). An empty list when the API can't be reached, so a build never fails over it.
+ */
+export async function loadCommunityDecks(apiBase: string | null | undefined, timeoutMs = 90_000): Promise<CommunityDeck[]> {
+  if (!apiBase || !/^https?:\/\//.test(apiBase)) return [];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`${apiBase.replace(/\/+$/, '')}/decks/public-pages`, { signal: AbortSignal.timeout(timeoutMs) });
+      if (!res.ok) continue;
+      const body = (await res.json()) as { decks?: CommunityDeck[] };
+      return (body.decks ?? []).filter(deck => SLUG.test(deck.slug) && deck.concepts?.length);
+    } catch {
+      // Asleep or unreachable: try once more, then build without them.
+    }
+  }
+  console.warn('[public pages] Shared decks could not be loaded; building without their pages.');
+  return [];
+}
+
 /** Every public file, for the build to write. */
-export function buildPublicPages(siteUrl: string, decks: StarterDeckMetadata[] = CURATED_STARTER_DECKS): PublicPage[] {
+export function buildPublicPages(
+  siteUrl: string,
+  decks: StarterDeckMetadata[] = CURATED_STARTER_DECKS,
+  community: CommunityDeck[] = [],
+  apiBase: string | null = null,
+): PublicPage[] {
+  const shared = community.filter(deck => SLUG.test(deck.slug));
   return [
-    { file: 'decks/index.html', content: hubPage(decks, siteUrl) },
+    { file: 'decks/index.html', content: hubPage(decks, siteUrl, shared) },
     ...decks.map(deck => ({ file: `decks/${deck.id}/index.html`, content: deckPage(deck, siteUrl, decks) })),
-    { file: 'sitemap.xml', content: sitemap(siteUrl, decks) },
+    ...shared.map(deck => ({ file: `decks/c/${deck.slug}/index.html`, content: communityPage(deck, siteUrl, apiBase, shared) })),
+    { file: 'sitemap.xml', content: sitemap(siteUrl, decks, shared) },
     { file: 'robots.txt', content: robots(siteUrl) },
   ];
 }

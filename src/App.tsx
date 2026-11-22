@@ -82,9 +82,13 @@ export function App() {
   const [isStationOpen, setIsStationOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<StudySession | null>(null);
   // The Home Screen shortcut "Focus" opens /?view=focus.
-  const [view, setView] = useState<AppView>(() =>
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'focus' ? 'focus' : 'home',
-  );
+  const [view, setView] = useState<AppView>(() => {
+    if (typeof window === 'undefined') return 'home';
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'focus') return 'focus';
+    if (params.get('report')) return 'studio'; // a report link from a public deck page
+    return 'home';
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isDeckStudioOpen, setIsDeckStudioOpen] = useState(false);
@@ -118,6 +122,17 @@ export function App() {
     return code ?? FriendsService.pendingInvite();
   });
   const invitedWhileSignedOut = Boolean(friendInvite) && !AuthService.getCurrentUser();
+  // "Report this deck" on a shared deck's public page links to /?report=<slug>: the Library's
+  // Community tab opens with the report form for it.
+  const [reportFromLink] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const url = new URL(window.location.href);
+    const slug = url.searchParams.get('report');
+    if (!slug) return null;
+    url.searchParams.delete('report');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    return slug;
+  });
   // A classmate's share link (/?shared=<slug>) adds their deck and opens its cards.
   const [sharedFromLink] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -141,7 +156,7 @@ export function App() {
   // A first visit (no decks yet) starts with "What do you want to study?" instead of a tour. A topic typed
   // before signing up brings it back after signing in.
   const [quickStart, setQuickStart] = useState<{ topic: string | null } | null>(() =>
-    !resetToken && !friendInvite && !deckFromLink && !sharedFromLink && (shouldShowQuickStart() || (pendingQuickStartTopic() && AuthService.getCurrentUser()))
+    !resetToken && !friendInvite && !deckFromLink && !sharedFromLink && !reportFromLink && (shouldShowQuickStart() || (pendingQuickStartTopic() && AuthService.getCurrentUser()))
       ? { topic: pendingQuickStartTopic() }
       : null,
   );
@@ -521,6 +536,8 @@ export function App() {
                 onStartAudioBriefing={handleStartAudioBriefing}
                 onOpenDashboard={() => handleNavigate('dashboard')}
                 onOpenFolders={() => handleNavigate('folders')}
+                initialLibraryTab={reportFromLink ? 'community' : undefined}
+                reportSlug={reportFromLink}
                 onOpenSanctuary={openCampus}
               />
             )}

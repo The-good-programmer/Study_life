@@ -123,7 +123,12 @@ into its cards, with no account, and anyone can browse shared decks in Library â
   stored; profile edits are sent to the server (`PATCH /api/auth/me`) so it stays current.
 - **Checks:** the sharer confirms the cards are theirs to share; the AI checks each deck when it is shared and refuses
   unsafe ones (when the AI isn't available the deck is shared and marked unchecked); three reports hide a deck.
-- Shared decks don't have public (search-engine) pages yet.
+- **Public pages:** a shared deck gets a page at `/decks/c/<slug>/` (listed on `/decks/` and in the sitemap) once the
+  AI check passed, it has 10+ cards and a description, was shared 3+ days ago and was never reported. The build reads
+  them from the API (`GET /api/decks/public-pages`, using `VITE_API_BASE_URL`; none when it can't be reached). Each page
+  asks the API whether its deck is still up (`/api/decks/<slug>/visible`) and, if it was unshared or hidden, says
+  "This deck was removed" and asks search engines to drop it, without waiting for a rebuild. *Report this deck* opens
+  `/?report=<slug>`. A scheduled task rebuilds the site daily so new decks get pages.
 
 ### Deploying the website
 
