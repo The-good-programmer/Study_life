@@ -25,6 +25,8 @@ interface AuthModalProps {
   onClose: () => void;
   initialTab?: 'login' | 'register' | 'profile';
   onUserChanged?: (user: UserAccount | null) => void;
+  /** A new account was just made (not a sign-in to an existing one). */
+  onSignedUp?: (user: UserAccount) => void;
   /** From a password reset email: opens on "choose a new password". */
   resetToken?: string | null;
 }
@@ -41,6 +43,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   initialTab = 'login',
   onUserChanged,
+  onSignedUp,
   resetToken,
 }) => {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => AuthService.getCurrentUser());
@@ -281,7 +284,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               guest={guest}
               onGoogleClick={handleGoogleSignInClick}
               onGotoLogin={() => goTo('login')}
-              onSuccess={finish}
+              onSuccess={user => {
+                finish(user);
+                if (user) onSignedUp?.(user);
+              }}
             />
           )}
 
@@ -296,6 +302,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               onSuccess={user => {
                 setGoogleProfilePending(null);
                 finish(user);
+                if (user) onSignedUp?.(user);
               }}
             />
           )}

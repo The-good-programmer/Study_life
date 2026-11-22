@@ -15,6 +15,7 @@ import { CalendarFeedService } from './services/calendarFeedService';
 import { useFocusTimerAlerts } from './hooks/useFocusTimer';
 import { FocusToast } from './components/focus/FocusToast';
 import { markQuickStartSeen, pendingQuickStartTopic, shouldShowQuickStart } from './components/onboarding/quickStart';
+import { shouldOfferSetup } from './services/setupOffer';
 import { FriendsService, inviteCodeFrom } from './services/friendsService';
 import { ApiConfig } from './services/apiConfig';
 import { CloudSyncService } from './services/cloudSyncService';
@@ -43,6 +44,7 @@ const FocusPage = lazy(() => import('./components/focus/FocusPage').then(m => ({
 // Dialogs most visits never open, and the payout banner (only with the economy on), load when shown.
 const InstallAppDialog = lazy(() => import('./components/common/InstallAppDialog').then(m => ({ default: m.InstallAppDialog })));
 const QuickStartDialog = lazy(() => import('./components/onboarding/QuickStartDialog').then(m => ({ default: m.QuickStartDialog })));
+const SetupAssistant = lazy(() => import('./components/setup/SetupAssistant').then(m => ({ default: m.SetupAssistant })));
 const LessonLogDialog = lazy(() => import('./components/timetable/LessonLogDialog').then(m => ({ default: m.LessonLogDialog })));
 const FriendsDialog = lazy(() => import('./components/friends/FriendsDialog').then(m => ({ default: m.FriendsDialog })));
 const WagePayoutBanner = lazy(() => import('./components/lifesim/WagePayoutBanner').then(m => ({ default: m.WagePayoutBanner })));
@@ -174,6 +176,8 @@ export function App() {
       ? { topic: pendingQuickStartTopic() }
       : null,
   );
+  // The AI set-up assistant: opened after signing up, from the home card or from the Planner.
+  const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(() => Boolean(resetToken) || invitedWhileSignedOut);
   const [authInitialTab, setAuthInitialTab] = useState<'login' | 'register' | 'profile'>(() => (invitedWhileSignedOut && !resetToken ? 'register' : 'login'));
   const [stats, setStats] = useState<UserStats>(StorageService.getStats());
@@ -539,6 +543,7 @@ export function App() {
                 onOpenLibrary={() => handleNavigate('studio')}
                 onOpenAuth={() => handleOpenAuth('login')}
                 onOpenSignUp={() => handleOpenAuth('register')}
+                onOpenSetup={() => setIsSetupOpen(true)}
               />
             )}
             {view === 'studio' && (
@@ -611,7 +616,7 @@ export function App() {
                 }}
               />
             )}
-            {view === 'planner' && <PlannerPage onStartSession={handleStartSession} onOpenAuth={() => handleOpenAuth()} />}
+            {view === 'planner' && <PlannerPage onStartSession={handleStartSession} onOpenAuth={() => handleOpenAuth()} onOpenSetup={() => setIsSetupOpen(true)} />}
             {view === 'folders' && (
               <FoldersPage
                 onBack={() => handleNavigate('home')}
@@ -798,6 +803,10 @@ export function App() {
               setCurrentUser(user);
               setStats(StorageService.getStats());
             }}
+            onSignedUp={() => {
+              // A topic typed before signing up comes first; the set-up assistant is on the home page after.
+              if (!pendingQuickStartTopic() && shouldOfferSetup()) setIsSetupOpen(true);
+            }}
           />
         </Suspense>
       )}
@@ -832,6 +841,19 @@ export function App() {
             }}
             onOpenAuth={() => {
               setLogLink(null);
+              handleOpenAuth('register');
+            }}
+          />
+        </Suspense>
+      )}
+      {isSetupOpen && (
+        <Suspense fallback={null}>
+          <SetupAssistant
+            onClose={() => setIsSetupOpen(false)}
+            onOpenPlanner={() => handleNavigate('planner')}
+            onStartSession={handleStartSession}
+            onOpenAuth={() => {
+              setIsSetupOpen(false);
               handleOpenAuth('register');
             }}
           />

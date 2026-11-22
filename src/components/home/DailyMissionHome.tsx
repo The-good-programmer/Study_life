@@ -34,6 +34,7 @@ import { StorageService } from '../../services/storageService';
 import { PlannerService } from '../../services/plannerService';
 import { Mascot } from '../mascot/Mascot';
 import { AfterClassCard } from '../timetable/AfterClassCard';
+import { SetupOfferCard } from '../setup/SetupOfferCard';
 import { AuthService } from '../../services/authService';
 import { characterService } from '../../services/characterService';
 import { lifeSimService, ACADEMIC_ROLES } from '../../services/lifeSimService';
@@ -109,6 +110,8 @@ interface DailyMissionHomeProps {
   onOpenAuth?: () => void;
   /** Opens the sign-up form (for a guest keeping their decks). */
   onOpenSignUp?: () => void;
+  /** The AI set-up assistant (offered to a signed-in student with no timetable). */
+  onOpenSetup?: () => void;
 }
 
 const greetingFor = (date: Date): string => {
@@ -140,6 +143,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   onOpenLibrary,
   onOpenAuth,
   onOpenSignUp,
+  onOpenSetup,
 }) => {
   const [stats, setStats] = useState<UserStats>(() => StorageService.getStats());
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => AuthService.getCurrentUser());
@@ -355,6 +359,9 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
       <div className={cn('grid gap-6', ECONOMY_VISIBLE && 'xl:grid-cols-[minmax(0,1fr)_336px]')}>
         {/* Main column */}
         <div className="min-w-0 space-y-6">
+          {/* Set up the school year from a couple of photos */}
+          {currentUser && onOpenSetup && <SetupOfferCard userId={currentUser.id} onOpen={onOpenSetup} />}
+
           {/* Today's session */}
           <section
             aria-labelledby="today-session-title"
