@@ -117,9 +117,11 @@ export class FSRSService {
     const fsrsCard = this.toFSRSCard(card, now);
     const results = scheduler.repeat(fsrsCard, now);
 
+    // Floor at one minute (not 0.01 days, about 14 minutes): a new card's learning steps are
+    // minutes apart, and a higher floor made Again, Hard and Good all read the same.
     const getDays = (item: RecordLogItem): number => {
       const ms = item.card.due.getTime() - now.getTime();
-      return Math.max(0.01, ms / (1000 * 60 * 60 * 24));
+      return Math.max(1 / 1440, ms / (1000 * 60 * 60 * 24));
     };
 
     return {
@@ -164,7 +166,8 @@ export class FSRSService {
   }
 
   public static formatInterval(days: number): string {
-    if (days < 0.05) return '15m';
+    const minutes = Math.round(days * 1440);
+    if (minutes < 60) return `${Math.max(1, minutes)}m`;
     if (days < 1) return `${Math.max(1, Math.round(days * 24))}h`;
     if (days < 1.5) return '1d';
     if (days < 30) return `${Math.round(days)}d`;
