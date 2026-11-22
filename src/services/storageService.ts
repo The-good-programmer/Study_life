@@ -4,6 +4,7 @@ import { STARTING_COINS, guestEarningsAllowance, transferableGuestCoins } from '
 import { IndexedDbService } from './indexedDbService';
 import { uncoveredMs, type StudyInterval } from '../utils/studyIntervals';
 import { cleanDeletionLog, newerProgress, type DeletionKind, type DeletionLog } from './syncMerge';
+import { DEFAULT_NEW_CARDS_PER_DAY, buildDailyQueue, type DailyQueue } from './dailyReview';
 
 const STORAGE_KEYS = {
   SESSIONS: 'studify_sessions_v1',
@@ -28,6 +29,7 @@ const STORAGE_KEYS = {
   FOCUS_NOTES_SAVED: 'studify_focus_notes_saved_v1',
   DELETIONS: 'studify_deletions_v1',
   SYNC_STATE: 'studify_sync_state_v1',
+  NEW_CARDS_TODAY: 'studify_new_cards_v1',
 };
 
 /** The Monday a date's week starts on, as YYYY-MM-DD in UTC. */
@@ -77,6 +79,7 @@ const PROFILE_DATA_KEYS = [
   STORAGE_KEYS.FOCUS_NOTES_SAVED,
   STORAGE_KEYS.DELETIONS,
   STORAGE_KEYS.SYNC_STATE,
+  STORAGE_KEYS.NEW_CARDS_TODAY,
 ];
 
 const LEVEL_TITLES = [
@@ -569,6 +572,48 @@ export class StorageService {
     const history = this.getActivityHistory();
     history[today] = (history[today] || 0) + added;
     this.saveActivityHistory(history);
+  }
+
+  public static getNewCardsPerDay(): number {
+    return this.getStats().newCardsPerDay ?? DEFAULT_NEW_CARDS_PER_DAY;
+  }
+
+  public static setNewCardsPerDay(count: number) {
+    const stats = this.getStats();
+    stats.newCardsPerDay = Math.max(1, Math.min(100, Math.round(count)));
+    this.saveStats(stats);
+  }
+
+  private static localDay(date: Date): string {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  /** Ids of new cards first studied today (they count against today's new-card limit). */
+  public static getNewCardsStartedToday(now: Date = new Date()): string[] {
+    const raw = this.readRaw(this.getKey(STORAGE_KEYS.NEW_CARDS_TODAY));
+    try {
+      const log = raw ? JSON.parse(raw) : null;
+      return log?.day === this.localDay(now) && Array.isArray(log.ids) ? log.ids : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** Notes a new card studied for the first time today. */
+  public static recordNewCardStarted(cardId: string, now: Date = new Date()): void {
+    const ids = this.getNewCardsStartedToday(now);
+    if (ids.includes(cardId)) return;
+    this.safeSetItem(this.getKey(STORAGE_KEYS.NEW_CARDS_TODAY), JSON.stringify({ day: this.localDay(now), ids: [...ids, cardId] }));
+  }
+
+  /** Today's review across every deck: cards due now, then new cards up to the daily limit. */
+  public static getDailyQueue(now: Date = new Date()): DailyQueue {
+    const decks = this.getSessions().map(deck => this.deckWithLatestProgress(deck));
+    return buildDailyQueue(decks, this.savedCardsById(), {
+      now,
+      newPerDay: this.getNewCardsPerDay(),
+      newStartedToday: this.getNewCardsStartedToday(now).length,
+    });
   }
 
   public static setDailyGoal(minutes: number) {

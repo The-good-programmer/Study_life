@@ -10,7 +10,7 @@ Open Studify, pick a starter deck or turn your own notes or a lecture PDF into f
 
 1. **Add material** — pick a ready-made starter deck (ranked for your level), paste notes, import Anki/Quizlet/CSV, or drop a PDF.
 2. **Review** — active recall flashcards, rated *Again / Hard / Good / Easy*.
-3. **Let the scheduler work** — reviews are spaced with the open-source FSRS algorithm (`ts-fsrs`), so cards come back just before you would forget them.
+3. **Let the scheduler work** — reviews are spaced with the open-source FSRS algorithm (`ts-fsrs`), so cards come back just before you would forget them. **Start review** opens today's review across all decks: every card due now (most overdue first), then new cards up to a daily limit (10 by default, Settings → Study). Missed cards come back a few cards later, and the last rating can be undone (Z).
 4. **See progress** — the retention dashboard shows what's due, what's sticking, and which cards keep failing.
 
 ## 🧠 What the techniques are (and the evidence behind them)

@@ -123,3 +123,18 @@ export const evaluateBlurting = (
   const hit = (term: string) => lower.includes(term.toLowerCase());
   return { recalled: targets.filter(hit), missed: targets.filter(term => !hit(term)) };
 };
+
+/** How many cards come between a missed card and its second try in the same session. */
+export const MISSED_CARD_GAP = 3;
+
+/**
+ * A missed card ("Again") put back into the session a few cards later (at the end if fewer
+ * remain), so it is tried again while still fresh. Each card comes back once per session:
+ * `returned` holds the ids already put back.
+ */
+export function requeueMissed(queue: readonly RetrievalCard[], index: number, returned: ReadonlySet<string>): RetrievalCard[] {
+  const card = queue[index];
+  if (!card || returned.has(card.id)) return [...queue];
+  const at = Math.min(index + 1 + MISSED_CARD_GAP, queue.length);
+  return [...queue.slice(0, at), card, ...queue.slice(at)];
+}

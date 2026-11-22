@@ -115,6 +115,8 @@ interface IngestionHubProps {
   initialNotes?: string;
   /** Opens sign-in; AI decks need an account (or the student's own key). */
   onOpenAuth?: () => void;
+  /** Starts today's review across decks. */
+  onStartDailyReview?: () => void;
 }
 
 export const IngestionHub: React.FC<IngestionHubProps> = ({ 
@@ -128,6 +130,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   initialLibraryTab,
   initialNotes,
   onOpenAuth,
+  onStartDailyReview,
 }) => {
   const needsSignInForAi = useNeedsSignInForAi();
   // Ingestion studio mode: pdf | topic | notes | occlusion
@@ -209,7 +212,8 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   });
   const { isLoading, effectiveProfile, profileModal } = generation;
 
-  const dueCards = StorageService.getDueCards();
+  const todayCount = StorageService.getDailyQueue().cards.length;
+  const startReview = onStartDailyReview ?? onOpenDashboard;
   const allCards = StorageService.getAllCards();
   const starredCards = useMemo(() => allCards.filter(c => c.isStarred), [allCards]);
 
@@ -349,9 +353,9 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
           <h1 className="text-[26px] font-semibold tracking-tight text-ink sm:text-[30px]">Library</h1>
           <p className="mt-1 text-[15px] text-ink-muted">Turn any topic, notes or PDF into a deck, then study it your way.</p>
         </div>
-        {dueCards.length > 0 && (
-          <Button variant="secondary" size="sm" icon={Layers} onClick={onOpenDashboard}>
-            {dueCards.length} due for review
+        {todayCount > 0 && (
+          <Button variant="secondary" size="sm" icon={Layers} onClick={startReview}>
+            {todayCount} to review today
           </Button>
         )}
       </header>
@@ -672,10 +676,10 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StudyModeCard
             icon={Layers}
-            title="Review due cards"
-            description="Spaced repetition picks what you are about to forget."
-            meta={dueCards.length > 0 ? `${dueCards.length} due` : 'Nothing due'}
-            onClick={onOpenDashboard}
+            title="Today's review"
+            description="Spaced repetition picks what you are about to forget, from all your decks."
+            meta={todayCount > 0 ? `${todayCount} today` : 'All done for today'}
+            onClick={startReview}
           />
           <StudyModeCard
             icon={Zap}

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, Suspense, lazy } from 'react';
+import { buildDailyReviewSession } from '../../services/dailyReview';
 import {
   Play,
   Plus,
@@ -111,7 +112,8 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   const [hasFreeze, setHasFreeze] = useState(() => StorageService.hasSynapticFreeze());
   const [reviewedToday, setReviewedToday] = useState(() => StorageService.getReviewedTodayCount());
   const [savedSessions, setSavedSessions] = useState<StudySession[]>(() => StorageService.getSessions());
-  const [dueCards, setDueCards] = useState(() => StorageService.getDueCards());
+  // Today's review across every deck: cards due now, then new cards up to the daily limit.
+  const [queue, setQueue] = useState(() => StorageService.getDailyQueue());
   const [folders, setFolders] = useState<SubjectFolder[]>(() => StorageService.getFolders());
   const [ledger, setLedger] = useState<DailyLedger>(() => lifeSimService.getDailyLedger());
   const [wallet, setWallet] = useState(() => lifeSimService.getWalletBalance());
@@ -135,7 +137,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
     setReviewedToday(StorageService.getReviewedTodayCount());
     setHasFreeze(StorageService.hasSynapticFreeze());
     setSavedSessions(StorageService.getSessions());
-    setDueCards(StorageService.getDueCards());
+    setQueue(StorageService.getDailyQueue());
     setFolders(StorageService.getFolders());
     setEarnings(earningsForDay());
     setWeekly(StorageService.getWeeklyXP());
@@ -165,7 +167,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(now);
   const hasDecks = savedSessions.length > 0;
 
-  const dueIds = useMemo(() => new Set(dueCards.map(card => card.id)), [dueCards]);
+  const dueIds = useMemo(() => new Set(queue.cards.map(card => card.id)), [queue]);
   const dueInSession = useCallback(
     (session: StudySession) =>
       session.concepts.reduce((sum, concept) => sum + (concept.retrievalCards || []).filter(card => dueIds.has(card.id)).length, 0),
@@ -195,7 +197,9 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   }, [primarySession, savedSessions]);
 
   const primaryCards = primarySession ? cardCount(primarySession) : 0;
-  const estimatedMinutes = Math.max(1, Math.round((primaryCards * SECONDS_PER_CARD) / 60));
+  const queueSize = queue.cards.length;
+  const estimatedMinutes = Math.max(1, Math.round(((queueSize || primaryCards) * SECONDS_PER_CARD) / 60));
+  const queueDecks = useMemo(() => savedSessions.filter(s => dueInSession(s) > 0).length, [savedSessions, dueInSession]);
   const multiplier = lifeSimService.getActiveMultiplier();
   const estimatedTokens = primarySession
     ? Math.round(estimateReward({ kind: 'sprint', cardIds: deckCardIds(primarySession), minutes: estimatedMinutes }).tokens * multiplier)
@@ -224,13 +228,15 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   const role = ACADEMIC_ROLES[roleIndex];
   const nextRole = ACADEMIC_ROLES[roleIndex + 1];
 
+  /** Today's review across decks; with nothing left today, practise the main deck ahead. */
   const startQuickReview = () => {
     if (!primarySession) {
       onOpenStarterCatalog();
       return;
     }
     soundEngine.playCorrectChime();
-    onStartSession({ ...primarySession, currentPhase: 'retrieval', casualFlashcardMode: true });
+    if (queueSize > 0) onStartSession(buildDailyReviewSession(queue));
+    else onStartSession({ ...primarySession, currentPhase: 'retrieval', casualFlashcardMode: true });
   };
 
   const startGuidedSession = () => {
@@ -258,17 +264,24 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
     setIsFolderModalOpen(true);
   };
 
+  const cardsText = (n: number) => `${n} ${n === 1 ? 'card' : 'cards'}`;
   const sessionTitle = !hasDecks
     ? 'Build your first deck'
-    : dueCards.length > 0
-      ? `${dueCards.length} ${dueCards.length === 1 ? 'card is' : 'cards are'} due`
-      : "You're all caught up";
+    : queue.dueCount > 0 && queue.newCount > 0
+      ? `${queue.dueCount} to review, ${queue.newCount} new`
+      : queue.dueCount > 0
+        ? `${cardsText(queue.dueCount)} to review`
+        : queue.newCount > 0
+          ? `${cardsText(queue.newCount)} to learn`
+          : "You're all done for today";
 
   const sessionBody = !hasDecks
-    ? 'Pick a starter deck for your level, or turn your notes or a PDF into flashcards in about a minute. Every review you do pays.'
-    : dueCards.length > 0
-      ? `Review them now while they are on the edge of forgetting. That is when recall does the most for long-term memory.`
-      : 'Nothing is due right now. Practise ahead, try a mock exam, or come back when your next reviews are scheduled.';
+    ? 'Pick a starter deck for your level, or turn your notes or a PDF into flashcards in about a minute.'
+    : queue.dueCount > 0
+      ? 'Review them now, while they are on the edge of forgetting. That is when recall does the most for long-term memory.'
+      : queue.newCount > 0
+        ? `Today's new cards from your decks. New cards are spread out (${StorageService.getNewCardsPerDay()} a day) so reviews never pile up.`
+        : 'Nothing is due and today\'s new cards are done. Practise ahead, try a mock exam, or come back tomorrow.';
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 animate-fadeIn">
@@ -313,7 +326,9 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                     <div className="flex min-w-0 items-center gap-1.5">
                       <dt className="sr-only">Deck</dt>
                       <Layers className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden="true" />
-                      <dd className="max-w-[220px] truncate">{primarySession.title}</dd>
+                      <dd className="max-w-[220px] truncate">
+                        {queueSize > 0 && queueDecks > 1 ? `From ${queueDecks} decks` : primarySession.title}
+                      </dd>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <dt className="sr-only">Time</dt>
@@ -342,7 +357,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                   {hasDecks ? (
                     <>
                       <Button variant="primary" size="lg" icon={Play} onClick={startQuickReview} className="w-full sm:w-auto">
-                        {dueCards.length > 0 ? 'Start review' : 'Practise ahead'}
+                        {queueSize > 0 ? 'Start review' : 'Practise ahead'}
                       </Button>
                       <Button variant="secondary" size="lg" icon={Brain} onClick={startGuidedSession} className="w-full sm:w-auto">
                         Guided session
@@ -422,7 +437,14 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
               noteIcon={hasFreeze ? Snowflake : undefined}
               onClick={() => setIsStreakModalOpen(true)}
             />
-            <StatTile icon={Layers} label="Due now" value={dueCards.length} unit="cards" onClick={startQuickReview} />
+            <StatTile
+              icon={Layers}
+              label="Today"
+              value={queueSize}
+              unit={queueSize === 1 ? 'card' : 'cards'}
+              note={queue.newCount > 0 ? `${queue.newCount} new` : undefined}
+              onClick={startQuickReview}
+            />
             <StatTile
               icon={TrendingUp}
               label="This week"

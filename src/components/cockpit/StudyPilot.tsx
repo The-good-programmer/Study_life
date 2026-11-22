@@ -33,6 +33,11 @@ type AmbientTheme = 'obsidian' | 'library' | 'indigo-flow' | 'nordic-frost';
  */
 const toStored = (session: StudySession): StudySession => (session.currentPhase === 'summary' ? nextPass(session) : session);
 
+/** Saves the session as a deck, except one made for a single sitting (today's review across decks). */
+const persist = (session: StudySession) => {
+  if (!session.ephemeral) StorageService.saveSession(toStored(session));
+};
+
 /** When a pass finishes; it names the completion its summary pays for. */
 const timestamp = () => new Date().toISOString();
 
@@ -98,7 +103,17 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
     setSession(prev => {
       const updated = change(prev);
       sessionRef.current = updated;
-      StorageService.saveSession(toStored(updated));
+      persist(updated);
+      return updated;
+    });
+  };
+
+  /** Takes back a card's rating that was undone, so the summary doesn't pay for it. */
+  const unrecordRating = (cardId: string) => {
+    setSession(prev => {
+      if (!prev.passRatedCardIds?.includes(cardId)) return prev;
+      const updated = { ...prev, passRatedCardIds: prev.passRatedCardIds.filter(id => id !== cardId) };
+      sessionRef.current = updated;
       return updated;
     });
   };
@@ -116,7 +131,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
   // Live session timer: update in-memory elapsedSeconds every 1s, and persist every 30s + on unmount
   useEffect(() => {
     // No clock on the summary, but leaving it still saves the session as its next pass.
-    if (session.currentPhase === 'summary') return () => StorageService.saveSession(toStored(sessionRef.current));
+    if (session.currentPhase === 'summary') return () => persist(sessionRef.current);
     let tickCount = 0;
     const interval = setInterval(() => {
       // Time with the tab hidden isn't study time, so the clock stops.
@@ -127,7 +142,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
         const updated = { ...prev, elapsedSeconds: nextSeconds };
         sessionRef.current = updated;
         if (tickCount % 30 === 0) {
-          StorageService.saveSession(toStored(updated));
+          persist(updated);
         }
         return updated;
       });
@@ -135,7 +150,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
 
     return () => {
       clearInterval(interval);
-      StorageService.saveSession(toStored(sessionRef.current));
+      persist(sessionRef.current);
     };
   }, [session.currentPhase]);
 
@@ -253,6 +268,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
           allConcepts={session.concepts}
           conceptIndex={session.currentConceptIndex}
           onCardRated={recordRating}
+          onCardUnrated={unrecordRating}
           onComplete={() => {
             if (session.casualFlashcardMode) {
               handleNextConceptOrSummary();
@@ -316,7 +332,11 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs text-ink-subtle">
-              {session.title} · Concept {session.currentConceptIndex + 1} of {session.concepts.length}
+              {session.ephemeral
+                ? `${session.concepts[0]?.retrievalCards.length ?? 0} cards from your decks`
+                : session.concepts.length > 1
+                  ? `${session.title} · Concept ${session.currentConceptIndex + 1} of ${session.concepts.length}`
+                  : session.title}
             </p>
             <h1 className="truncate text-[15px] font-semibold leading-tight text-ink">{currentConcept.title}</h1>
           </div>

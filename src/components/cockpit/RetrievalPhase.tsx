@@ -12,8 +12,9 @@ import {
   Star,
   Keyboard,
   Lightbulb,
+  Undo2,
 } from 'lucide-react';
-import type { CardType, ConceptCheckpoint, FSRSRating, DiagnosticDistractor } from '../../types';
+import type { CardType, ConceptCheckpoint, FSRSRating, DiagnosticDistractor, RetrievalCard } from '../../types';
 import { FSRSService } from '../../services/fsrsService';
 import { StorageService } from '../../services/storageService';
 import { grantReward } from '../../services/economy/rewardService';
@@ -34,13 +35,25 @@ import {
   getBlurtingTargets,
   getEffectiveCardType,
   isOptionCorrect,
+  requeueMissed,
 } from './retrievalLogic';
+
+/** Remembers whether the student turned multiple choice on. */
+const MULTIPLE_CHOICE_KEY = 'studify_review_multiple_choice';
+
+/**
+ * A right answer picked from options is graded "Hard": it is remembered, but recognising an
+ * answer is easier than recalling it, so it is scheduled sooner than a card recalled unaided.
+ */
+const MULTIPLE_CHOICE_RIGHT: FSRSRating = 'hard';
 
 interface RetrievalPhaseProps {
   concept: ConceptCheckpoint;
   onComplete: () => void;
   /** Called with each card rated; the session pays for the cards rated in a pass. */
   onCardRated?: (cardId: string) => void;
+  /** Called when a rating is undone (and the card wasn't rated earlier in the pass). */
+  onCardUnrated?: (cardId: string) => void;
   onInspectSource?: (pageNumber?: number, snippet?: string) => void;
   allConcepts?: ConceptCheckpoint[];
   conceptIndex?: number;
@@ -50,6 +63,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
   concept, 
   onComplete,
   onCardRated,
+  onCardUnrated,
   onInspectSource,
   allConcepts,
   conceptIndex,
@@ -113,7 +127,21 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
   const [isBlurtingRunning, setIsBlurtingRunning] = useState(false);
   const [blurtingResult, setBlurtingResult] = useState<{ recalled: string[]; missed: string[] } | null>(null);
 
-  const currentCard = cards[currentIndex];
+  // The cards in order, with missed cards put back a few cards later (each once).
+  const [queue, setQueue] = useState<RetrievalCard[]>(cards);
+  const [returned, setReturned] = useState<Set<string>>(() => new Set());
+  // The last rating, so it can be undone: the card as saved before, and where the session was.
+  const [undo, setUndo] = useState<{ previous: RetrievalCard; index: number; queue: RetrievalCard[]; returned: Set<string> } | null>(null);
+  // A new concept (or mixing earlier topics on or off) starts its cards afresh.
+  const [prevCards, setPrevCards] = useState(cards);
+  if (cards !== prevCards) {
+    setPrevCards(cards);
+    setQueue(cards);
+    setReturned(new Set());
+    setUndo(null);
+    setCurrentIndex(0);
+  }
+  const currentCard = queue[currentIndex];
   const [misconception, setMisconception] = useState<DiagnosticDistractor | null>(null);
   const [hintLevel, setHintLevel] = useState<number>(0);
 
@@ -122,7 +150,23 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     return AIService.getSocraticHintLadder(currentCard, concept);
   }, [currentCard, concept]);
 
-  const [interactiveMode, setInteractiveMode] = useState<boolean>(true);
+  // Multiple choice is off unless the student turns it on (remembered): recalling an answer
+  // yourself does more for memory than recognising it among options.
+  const [interactiveMode, setInteractiveModeState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(MULTIPLE_CHOICE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const setInteractiveMode = (on: boolean) => {
+    setInteractiveModeState(on);
+    try {
+      localStorage.setItem(MULTIPLE_CHOICE_KEY, String(on));
+    } catch {
+      // Not remembered; the choice still applies now.
+    }
+  };
 
   const effectiveType: CardType = getEffectiveCardType(currentCard);
 
@@ -152,9 +196,19 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     if (!currentCard) return;
 
     // Schedule from the saved progress: this copy is older if the card was already reviewed this session.
-    const { updatedCard } = FSRSService.schedule(StorageService.withLatestProgress(currentCard), rating);
+    const previous = StorageService.withLatestProgress(currentCard);
+    const { updatedCard } = FSRSService.schedule(previous, rating, StorageService.getTargetRetention());
     StorageService.saveCard(updatedCard);
+    if (!previous.reps) StorageService.recordNewCardStarted(currentCard.id);
     onCardRated?.(currentCard.id);
+    setUndo({ previous, index: currentIndex, queue, returned });
+
+    // A missed card comes back a few cards later, once.
+    const nextQueue = rating === 'again' ? requeueMissed(queue, currentIndex, returned) : queue;
+    if (nextQueue.length > queue.length) {
+      setQueue(nextQueue);
+      setReturned(new Set([...returned, currentCard.id]));
+    }
 
     // Reward XP
     grantReward({ kind: 'review', rating }, { weekly: true, label: 'Flashcard review' });
@@ -183,7 +237,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
       });
     }
 
-    if (currentIndex + 1 < cards.length) {
+    if (currentIndex + 1 < nextQueue.length) {
       setCurrentIndex(prev => prev + 1);
       setIsAnswerRevealed(false);
       setHintLevel(0);
@@ -191,11 +245,47 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
       setIsCorrect(null);
       setMisconception(null);
     } else {
+      setUndo(null);
       soundEngine.playCompletionChime();
       StorageService.recordMasteredConcept();
       onComplete();
     }
-  }, [currentCard, currentIndex, cards.length, onComplete, onCardRated]);
+  }, [currentCard, currentIndex, queue, returned, onComplete, onCardRated]);
+
+  /**
+   * Undoes the last rating: the card's schedule as it was, and back to that card. XP already
+   * given for it stays (it is the same for every rating and capped each day).
+   */
+  const handleUndo = useCallback(() => {
+    if (!undo) return;
+    StorageService.saveCard(undo.previous);
+    const ratedEarlierInPass = undo.queue.slice(0, undo.index).some(card => card.id === undo.previous.id);
+    if (!ratedEarlierInPass) onCardUnrated?.(undo.previous.id);
+    setQueue(undo.queue);
+    setReturned(undo.returned);
+    setCurrentIndex(undo.index);
+    setIsAnswerRevealed(false);
+    setHintLevel(0);
+    setSelectedOption(null);
+    setIsCorrect(null);
+    setMisconception(null);
+    setUndo(null);
+  }, [undo, onCardUnrated]);
+
+  // Z undoes the last rating.
+  useEffect(() => {
+    if (!undo || activeTab !== 'cards') return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      if ((e.key === 'z' || e.key === 'Z') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, activeTab, handleUndo]);
 
   const handleSelectOption = useCallback((option: string) => {
     if (selectedOption !== null || !currentCard) return;
@@ -242,7 +332,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
       // If bottom feedback banner is showing, Enter advances to next card immediately
       if (e.key === 'Enter' && isAnswerRevealed && selectedOption !== null) {
         e.preventDefault();
-        handleRate(isCorrect ? 'good' : 'again');
+        handleRate(isCorrect ? MULTIPLE_CHOICE_RIGHT : 'again');
         return;
       }
 
@@ -532,7 +622,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     );
   }
 
-  const intervals = currentCard ? FSRSService.previewIntervals(currentCard) : null;
+  const intervals = currentCard ? FSRSService.previewIntervals(StorageService.withLatestProgress(currentCard), StorageService.getTargetRetention()) : null;
 
   // Real-time recognition in Blurting
   const liveRecognizedTerms = blurtingTargets.filter(term =>
@@ -612,7 +702,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
         <div className="space-y-4">
           <StudyHUD
             currentIndex={currentIndex}
-            totalCards={cards.length}
+            totalCards={queue.length}
             lastRating={lastRating}
             combo={combo}
             isAnswerRevealed={isAnswerRevealed}
@@ -621,6 +711,14 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
             gamepadName={gamepadName}
             onOpenShortcuts={() => setShowErgonomicsHelp(true)}
           />
+
+          {undo && (
+            <div className="flex justify-end">
+              <Button size="sm" variant="ghost" icon={Undo2} onClick={handleUndo} title="Undo last rating (Z)">
+                Undo last rating
+              </Button>
+            </div>
+          )}
 
           {(interleaveMap.has(currentCard.id) || lastGamepadAction || touchFeedback) && (
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1181,6 +1279,11 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                 <p className="text-[17px] font-semibold text-ink">
                   {isCorrect ? (combo >= 3 ? `Correct, ${combo} in a row` : 'Correct') : 'Not quite'}
                 </p>
+                {isCorrect && (
+                  <p className="text-[13px] text-ink-subtle">
+                    Picked from the options, so it comes back a little sooner than a card you recall yourself.
+                  </p>
+                )}
                 {!isCorrect && (
                   <p className="text-[14px] text-ink-muted">
                     The answer is <strong className="font-semibold text-ink">{currentCard.answer}</strong>
@@ -1197,7 +1300,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
             <Button
               variant={isCorrect ? 'primary' : 'secondary'}
               size="lg"
-              onClick={() => handleRate(isCorrect ? 'good' : 'again')}
+              onClick={() => handleRate(isCorrect ? MULTIPLE_CHOICE_RIGHT : 'again')}
               className="w-full shrink-0 sm:w-auto"
             >
               Continue
