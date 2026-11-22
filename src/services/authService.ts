@@ -495,6 +495,11 @@ export class AuthService {
 
     if (this.getCurrentUser()?.id === userId) {
       this.notifySubscribers(updated);
+      // Keep the server's copy current too (it names the author of decks this student shares).
+      if (ApiConfig.getToken()) {
+        const { name, age, country, grade, institution, avatar } = updated;
+        void ApiConfig.request('/auth/me', { method: 'PATCH', body: JSON.stringify({ name, age, country, grade, institution: institution ?? '', avatar }) });
+      }
     }
 
     return updated;

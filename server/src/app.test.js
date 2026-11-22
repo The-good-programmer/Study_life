@@ -69,6 +69,9 @@ async function register(email) {
   return res.data;
 }
 
+/** The smallest deck the server will share. */
+const SHAREABLE_DECK = { concepts: [{ title: 'Cells', retrievalCards: [{ question: 'What makes ATP?', answer: 'Mitochondria' }] }] };
+
 const fakeAi = {
   isAiConfigured: () => true,
   checkRateLimit: () => true,
@@ -695,6 +698,49 @@ describe('a guest\'s free AI deck', () => {
 });
 
 describe('community decks', () => {
+  it('shows the author by first name and initial, and nobody under 16 by name', async () => {
+    const adult = await register('ada@example.com');
+    await api('/api/auth/me', { method: 'PATCH', token: adult.token, body: { name: 'Ada Lovelace', age: 19 } });
+    const teen = await register('teen@example.com'); // ages default to 15
+    const share = (user, title) => api('/api/decks/share', { method: 'POST', token: user.token, body: { title, session: SHAREABLE_DECK, rightsConfirmed: true } });
+
+    const byAdult = await share(adult, 'Named deck');
+    expect(byAdult.status).toBe(201);
+    expect(byAdult.data.shareUrl).toBe(`/?shared=${byAdult.data.slug}`);
+    expect((await share(teen, 'Unnamed deck')).status).toBe(201);
+
+    const list = (await api('/api/decks/public?q=deck')).data.decks;
+    const authorOf = (title) => list.find((deck) => deck.title === title)?.author_name;
+    expect(authorOf('Named deck')).toBe('Ada L.');
+    expect(authorOf('Unnamed deck')).toBe('a Studify student');
+    expect(JSON.stringify(list)).not.toContain('Lovelace');
+  });
+
+  it('needs the rights confirmed and real cards, and lists your shared decks', async () => {
+    const user = await register('sharer@example.com');
+    const share = (body) => api('/api/decks/share', { method: 'POST', token: user.token, body: { title: 'Mine', session: SHAREABLE_DECK, ...body } });
+    expect((await share({ rightsConfirmed: false })).status).toBe(400);
+    expect((await share({ rightsConfirmed: true, session: { concepts: [] } })).status).toBe(400);
+    const ok = await share({ rightsConfirmed: true });
+    expect(ok.status).toBe(201);
+    const mine = await api('/api/decks/mine', { token: user.token });
+    expect(mine.data.decks.map((deck) => deck.slug)).toEqual([ok.data.slug]);
+    expect((await api('/api/decks/mine')).status).toBe(401);
+  });
+
+  it('refuses a deck the content check finds unsafe', async () => {
+    const user = await register('unsafe@example.com');
+    const original = fakeAi.generateContent;
+    fakeAi.generateContent = async () => JSON.stringify({ verdict: 'unsafe', reason: 'It lists a classmate\'s phone number.' });
+    try {
+      const res = await api('/api/decks/share', { method: 'POST', token: user.token, body: { title: 'Bad', session: SHAREABLE_DECK, rightsConfirmed: true } });
+      expect(res.status).toBe(422);
+      expect(res.data.error).toContain("classmate's phone number");
+    } finally {
+      fakeAi.generateContent = original;
+    }
+  });
+
   it('requires sign-in to publish, and counts one like per user', async () => {
     const anon = await api('/api/decks/share', { method: 'POST', body: { title: 'T', session: {} } });
     expect(anon.status).toBe(401);
@@ -704,7 +750,7 @@ describe('community decks', () => {
     const shared = await api('/api/decks/share', {
       method: 'POST',
       token: author.token,
-      body: { title: 'Cell Biology', session: { concepts: [] } },
+      body: { title: 'Cell Biology', session: SHAREABLE_DECK, rightsConfirmed: true },
     });
     expect(shared.status).toBe(201);
 
@@ -800,7 +846,7 @@ describe('security headers', () => {
 describe('database', () => {
   it('applies its migrations once and reports healthy', async () => {
     const applied = await db.all('SELECT id FROM schema_migrations');
-    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds', '005_user_documents', '006_resets_and_reminders', '007_friends_and_digest', '008_duels']);
+    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds', '005_user_documents', '006_resets_and_reminders', '007_friends_and_digest', '008_duels', '009_deck_sharing_privacy']);
 
     const health = await api('/api/health');
     expect(health.status).toBe(200);
@@ -926,7 +972,7 @@ describe('deleting an account', () => {
   it('removes the account and its synced data, and keeps shared decks without the name', async () => {
     const user = await register('gone@example.com');
     await api('/api/sync/push', { method: 'POST', token: user.token, body: { sessions: [{ id: 'sess_gone', title: 'Mine' }], stats: { xp: 5 } } });
-    const shared = await api('/api/decks/share', { method: 'POST', token: user.token, body: { title: 'Orphan Deck', session: { concepts: [] } } });
+    const shared = await api('/api/decks/share', { method: 'POST', token: user.token, body: { title: 'Orphan Deck', session: SHAREABLE_DECK, rightsConfirmed: true } });
 
     const del = await api('/api/auth/me', { method: 'DELETE', token: user.token, body: { confirm: 'DELETE', password: 'correct-horse' } });
     expect(del.status).toBe(200);
@@ -983,8 +1029,8 @@ describe('daily AI quota', () => {
 describe('community deck search', () => {
   it('treats % and _ as plain characters, and refuses a malformed address', async () => {
     const author = await register('search@example.com');
-    await api('/api/decks/share', { method: 'POST', token: author.token, body: { title: '100% Chemistry', session: { concepts: [] } } });
-    await api('/api/decks/share', { method: 'POST', token: author.token, body: { title: 'Plain Physics', session: { concepts: [] } } });
+    await api('/api/decks/share', { method: 'POST', token: author.token, body: { title: '100% Chemistry', session: SHAREABLE_DECK, rightsConfirmed: true } });
+    await api('/api/decks/share', { method: 'POST', token: author.token, body: { title: 'Plain Physics', session: SHAREABLE_DECK, rightsConfirmed: true } });
 
     const percent = await api('/api/decks/public?q=%25');
     expect(percent.data.decks.map((deck) => deck.title)).toEqual(['100% Chemistry']);
@@ -1126,7 +1172,7 @@ describe('cloud sync limits', () => {
 
 describe('community deck moderation', () => {
   const publish = (user, title = 'A deck') =>
-    api('/api/decks/share', { method: 'POST', token: user.token, body: { title, session: { concepts: [] } } });
+    api('/api/decks/share', { method: 'POST', token: user.token, body: { title, session: SHAREABLE_DECK, rightsConfirmed: true } });
 
   it('hides a deck once three different people report it', async () => {
     const author = await register('mod-author@example.com');
@@ -1167,7 +1213,7 @@ describe('community deck moderation', () => {
     const big = await api('/api/decks/share', {
       method: 'POST',
       token: author.token,
-      body: { title: 'Huge', session: { notes: 'x'.repeat(2 * 1024 * 1024) } },
+      body: { title: 'Huge', session: { ...SHAREABLE_DECK, notes: 'x'.repeat(2 * 1024 * 1024) }, rightsConfirmed: true },
     });
     expect(big.status).toBe(413);
 

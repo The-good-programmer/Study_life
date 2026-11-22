@@ -147,3 +147,44 @@ test('a public deck page shows its cards and opens them in the app with one tap'
   expect(new URL(page.url()).search).toBe('');
   expectNoErrors(errors);
 });
+
+test('a student shares a deck, and a classmate opens the link straight into its cards', async ({ browser, request }) => {
+  const ana = await newAccount(request, 'Sharer');
+  const anaContext = await browser.newContext();
+  const anaPage = await anaContext.newPage();
+  const anaErrors = watchErrors(anaPage);
+  await seedDeck(anaPage, { due: 3, userId: ana.id });
+  await anaPage.goto('/');
+  await signIn(anaPage, ana.email);
+
+  await anaPage.getByRole('button', { name: 'Details', exact: true }).first().click();
+  await anaPage.getByRole('button', { name: 'Share deck' }).first().click();
+  const share = anaPage.getByRole('dialog', { name: 'Share this deck' });
+  await expect(share.getByText('a Studify student')).toBeVisible(); // ages default to 15: never named
+  await share.getByLabel('What is it for?').fill('Cell biology facts for the unit test on Friday.');
+  await share.getByRole('checkbox').check();
+  await share.getByRole('button', { name: 'Share deck' }).click();
+  const link = anaPage.getByLabel('Share link');
+  await expect(link).toHaveValue(/\?shared=cells-/);
+  const shareUrl = new URL(await link.inputValue());
+
+  // A classmate without an account opens the link: the deck is added and its cards open.
+  const benContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const benPage = await benContext.newPage();
+  const benErrors = watchErrors(benPage);
+  await benPage.goto(shareUrl.pathname + shareUrl.search);
+  await expect(benPage.getByRole('button', { name: /Show answer/ })).toBeVisible();
+  await expect(shownQuestion(benPage)).toHaveText(/What is fact \d\?/);
+  // Ana's review history stayed with her: every card is new to Ben.
+  const benReps = await benPage.evaluate(() =>
+    (JSON.parse(localStorage.getItem('studify_sessions_v1') || '[]') as { concepts: { retrievalCards: { reps: number }[] }[] }[])
+      .flatMap(deck => deck.concepts.flatMap(c => c.retrievalCards.map(card => card.reps))),
+  );
+  expect(benReps.length).toBeGreaterThan(0);
+  expect(benReps.every(reps => reps === 0)).toBe(true);
+
+  expectNoErrors(anaErrors);
+  expectNoErrors(benErrors);
+  await anaContext.close();
+  await benContext.close();
+});

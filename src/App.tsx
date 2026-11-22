@@ -118,6 +118,16 @@ export function App() {
     return code ?? FriendsService.pendingInvite();
   });
   const invitedWhileSignedOut = Boolean(friendInvite) && !AuthService.getCurrentUser();
+  // A classmate's share link (/?shared=<slug>) adds their deck and opens its cards.
+  const [sharedFromLink] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const url = new URL(window.location.href);
+    const slug = url.searchParams.get('shared');
+    if (!slug) return null;
+    url.searchParams.delete('shared');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    return slug;
+  });
   // A deck's public page (/decks/<id>/) links to /?deck=<id>, which opens that starter deck's cards.
   const [deckFromLink] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -131,7 +141,7 @@ export function App() {
   // A first visit (no decks yet) starts with "What do you want to study?" instead of a tour. A topic typed
   // before signing up brings it back after signing in.
   const [quickStart, setQuickStart] = useState<{ topic: string | null } | null>(() =>
-    !resetToken && !friendInvite && !deckFromLink && (shouldShowQuickStart() || (pendingQuickStartTopic() && AuthService.getCurrentUser()))
+    !resetToken && !friendInvite && !deckFromLink && !sharedFromLink && (shouldShowQuickStart() || (pendingQuickStartTopic() && AuthService.getCurrentUser()))
       ? { topic: pendingQuickStartTopic() }
       : null,
   );
@@ -180,6 +190,26 @@ export function App() {
 
   // Keep a subscribed calendar up to date with the planner.
   useEffect(() => CalendarFeedService.startAutoPublish(), []);
+
+  // Adds and opens the deck a share link pointed at. If it's gone (unshared, or hidden after reports),
+  // a first visit gets the quick start instead.
+  useEffect(() => {
+    if (!sharedFromLink) return;
+    let cancelled = false;
+    void import('./services/communityService').then(async ({ CommunityService }) => {
+      const result = await CommunityService.addToLibrary(sharedFromLink);
+      if (cancelled) return;
+      if (!result.success) {
+        if (shouldShowQuickStart()) setQuickStart({ topic: null });
+        return;
+      }
+      markQuickStartSeen();
+      setActiveSession({ ...result.session, currentPhase: 'retrieval', casualFlashcardMode: true });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sharedFromLink]);
 
   // Opens the deck a public page linked to. The catalog loads only for this, so it stays out of the
   // first download. An unknown id falls back to the first-visit quick start.
@@ -588,6 +618,11 @@ export function App() {
             key={stationSession?.id || 'none'}
             isOpen={isStationOpen}
             session={stationSession}
+            onOpenSignUp={() => {
+              setIsStationOpen(false);
+              setStationSession(null);
+              handleOpenAuth('register');
+            }}
             onClose={() => {
               setIsStationOpen(false);
               setStationSession(null);

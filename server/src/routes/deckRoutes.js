@@ -5,6 +5,7 @@
 import crypto from 'node:crypto';
 import { db } from '../db.js';
 import { getAuthUser } from '../auth.js';
+import { authorDisplay, cardsOf, checkDeckContent } from '../deckSharing.js';
 
 function send(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -38,7 +39,24 @@ export const REPORTS_TO_HIDE = 3;
 const findVisibleDeck = (identifier) =>
   db.one('SELECT * FROM shared_decks WHERE (id = $1 OR slug = $1) AND hidden_at IS NULL', [identifier]);
 
-export async function handleDeckRoutes(req, res, pathname, body, searchParams) {
+/** The app's link to a shared deck: it opens the deck in the app (App.tsx reads ?shared=). */
+const shareUrlOf = (slug) => `/?shared=${encodeURIComponent(slug)}`;
+
+export async function handleDeckRoutes(req, res, pathname, body, searchParams, { ai } = {}) {
+  // 0. YOUR SHARED DECKS (to see their links and unshare them)
+  if (pathname === '/api/decks/mine' && req.method === 'GET') {
+    const user = await getAuthUser(req);
+    if (!user) return send(res, 401, { error: 'Sign in to see the decks you shared.' });
+    const rows = await db.all(
+      'SELECT id, slug, title, subject, card_count, likes, created_at, hidden_at FROM shared_decks WHERE author_id = $1 ORDER BY created_at DESC',
+      [user.id],
+    );
+    return send(res, 200, {
+      success: true,
+      decks: rows.map((row) => ({ ...row, created_at: iso(row.created_at), hidden: Boolean(row.hidden_at), hidden_at: undefined, shareUrl: shareUrlOf(row.slug) })),
+    });
+  }
+
   // 1. LIST PUBLIC COMMUNITY DECKS
   if (pathname === '/api/decks/public' && req.method === 'GET') {
     const query = (searchParams.get('q') || '').trim();
@@ -73,10 +91,13 @@ export async function handleDeckRoutes(req, res, pathname, body, searchParams) {
     if (!user) {
       return send(res, 401, { error: 'Sign in to publish decks to the community.' });
     }
-    const { title, subject, description, session, cards } = body || {};
+    const { title, subject, description, session, rightsConfirmed } = body || {};
 
     if (typeof title !== 'string' || !title.trim() || !session || typeof session !== 'object') {
       return send(res, 400, { error: 'Deck title and study session payload are required.' });
+    }
+    if (rightsConfirmed !== true) {
+      return send(res, 400, { error: 'Confirm that you made these cards or have the right to share them.' });
     }
     if (title.trim().length > MAX_TITLE || String(subject || '').trim().length > MAX_SUBJECT || String(description || '').trim().length > MAX_DESCRIPTION) {
       return send(res, 400, { error: `Keep the title under ${MAX_TITLE} characters, the subject under ${MAX_SUBJECT} and the description under ${MAX_DESCRIPTION}.` });
@@ -85,33 +106,42 @@ export async function handleDeckRoutes(req, res, pathname, body, searchParams) {
     if (Buffer.byteLength(deckJson) > MAX_DECK_BYTES) {
       return send(res, 413, { error: 'This deck is too large to publish (2 MB at most).' });
     }
+    const deckCards = cardsOf(session);
+    if (!deckCards) {
+      return send(res, 400, { error: 'This deck has no cards to share, or is not a Studify deck.' });
+    }
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const recent = await db.one('SELECT COUNT(*)::int AS n FROM shared_decks WHERE author_id = $1 AND created_at > $2', [user.id, since]);
     if (recent.n >= MAX_PUBLISHES_PER_DAY) {
       return send(res, 429, { error: `You can publish up to ${MAX_PUBLISHES_PER_DAY} decks a day. Try again tomorrow.` });
     }
 
-    const cardCount = Array.isArray(cards)
-      ? cards.length
-      : (session.concepts?.flatMap((c) => c.retrievalCards || []) || []).length;
+    const cleanTitle = title.trim();
+    const cleanDescription = String(description || '').trim();
+    const check = await checkDeckContent(ai, { title: cleanTitle, description: cleanDescription, cards: deckCards });
+    if (check.result === 'unsafe') {
+      return send(res, 422, { error: `This deck can't be shared: ${check.reason || 'some of it is not suitable for other students.'} Edit it and try again.` });
+    }
 
     const slug = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${crypto.randomBytes(3).toString('hex')}`;
     const deckId = `deck_pub_${crypto.randomUUID()}`;
 
     await db.run(
-      `INSERT INTO shared_decks (id, slug, author_id, author_name, title, subject, description, card_count, likes, deck_json, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10)`,
+      `INSERT INTO shared_decks (id, slug, author_id, author_name, title, subject, description, card_count, likes, deck_json, created_at, rights_confirmed, content_check)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, TRUE, $11)`,
       [
         deckId,
         slug,
         user.id,
-        user.name,
-        title.trim(),
+        // Only what is shown is stored: first name and initial, or nobody under 16 by name.
+        authorDisplay(user),
+        cleanTitle,
         String(subject || 'General').trim(),
-        String(description || '').trim(),
-        cardCount,
+        cleanDescription,
+        deckCards.length,
         deckJson,
         new Date().toISOString(),
+        check.result,
       ],
     );
 
@@ -119,8 +149,9 @@ export async function handleDeckRoutes(req, res, pathname, body, searchParams) {
       success: true,
       deckId,
       slug,
-      shareUrl: `/d/${slug}`,
-      message: 'Deck successfully published to community marketplace!',
+      authorName: authorDisplay(user),
+      shareUrl: shareUrlOf(slug),
+      message: 'Your deck is shared.',
     });
   }
 

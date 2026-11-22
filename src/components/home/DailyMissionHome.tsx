@@ -188,7 +188,11 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
     const unsubStorage = StorageService.addMutationListener(refreshStudy);
     const unsubLife = lifeSimService.subscribe(refreshLife);
     const unsubCharacter = characterService.subscribe(setCharacter);
-    const unsubAuth = AuthService.subscribe(setCurrentUser);
+    // Signing in or out switches to that account's decks and stats.
+    const unsubAuth = AuthService.subscribe(user => {
+      setCurrentUser(user);
+      refreshStudy();
+    });
     return () => {
       unsubStorage();
       unsubLife();

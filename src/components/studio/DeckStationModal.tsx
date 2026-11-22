@@ -16,6 +16,7 @@ import {
   Printer,
   Search,
   Share2,
+  Download,
   Star,
   X,
   Zap,
@@ -35,6 +36,7 @@ import { Dialog, DialogPanel } from '../common/Dialog';
 import { ActionMenu } from '../ui/ActionMenu';
 import { Badge, Button, IconButton, Tokens } from '../ui/primitives';
 import { MoveToFolderModal } from './MoveToFolderModal';
+import { ShareDeckDialog } from '../community/ShareDeckDialog';
 import { SubjectFolderModal } from './SubjectFolderModal';
 import { FOLDER_COLORS } from './folderOptions';
 
@@ -47,6 +49,8 @@ interface DeckStationModalProps {
   onStartFlashcardsOnly: (session: StudySession) => void;
   onStartAudioBriefing: (session: StudySession) => void;
   onEditInStudio: (session: StudySession) => void;
+  /** Opens sign-up (sharing a deck needs an account). */
+  onOpenSignUp?: () => void;
 }
 
 const STATUS_STYLES: Record<CardStatus, { label: string; dot: string }> = {
@@ -105,7 +109,9 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
   onStartFlashcardsOnly,
   onStartAudioBriefing,
   onEditInStudio,
+  onOpenSignUp,
 }) => {
+  const [isShareOpen, setIsShareOpen] = useState(false);
   // App remounts this modal per deck (key = deck id), so state is initialised from `session` once.
   const [activeTab, setActiveTab] = useState<'study' | 'cards'>('study');
   const [cardSearch, setCardSearch] = useState('');
@@ -220,6 +226,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
               )}
             </div>
             <div className="-mr-2 -mt-1.5 flex shrink-0 items-center">
+              <IconButton icon={Share2} label="Share deck" onClick={() => setIsShareOpen(true)} />
               <ActionMenu
                 label="More actions for this deck"
                 items={[
@@ -227,7 +234,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                   { label: 'Move to subject', icon: FolderInput, onSelect: () => setIsMoveModalOpen(true) },
                   { label: 'Print study sheet', icon: Printer, onSelect: () => ExportService.printStudySheet(session) },
                   { label: 'Export as Markdown', icon: FileText, onSelect: () => ExportService.downloadMarkdown(session) },
-                  { label: 'Export for Anki', icon: Share2, onSelect: () => ExportService.downloadAnkiTSV(session) },
+                  { label: 'Export for Anki', icon: Download, onSelect: () => ExportService.downloadAnkiTSV(session) },
                   { label: 'Export as JSON', icon: FileJson, onSelect: () => ExportService.downloadJSON(session) },
                 ]}
               />
@@ -469,6 +476,7 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
         )}
       </DialogPanel>
 
+      {isShareOpen && <ShareDeckDialog session={session} onClose={() => setIsShareOpen(false)} onOpenSignUp={onOpenSignUp} />}
       {isMoveModalOpen && (
         <MoveToFolderModal
           isOpen={isMoveModalOpen}

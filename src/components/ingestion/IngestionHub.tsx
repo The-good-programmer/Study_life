@@ -3,6 +3,7 @@ import { useNeedsSignInForAi } from '../../hooks/useAiAccess';
 import { AiUnavailableNotice } from '../common/AiUnavailableNotice';
 import { GuestDeck } from '../../services/guestDeck';
 import { Mascot } from '../mascot/Mascot';
+import { CommunityDecksPanel } from '../community/CommunityDecksPanel';
 import { 
   X,
   Sparkles, 
@@ -110,7 +111,7 @@ interface IngestionHubProps {
   /** Opens the Subjects page, where subjects are renamed, recoloured and deleted. */
   onOpenFolders?: () => void;
   onOpenSanctuary?: () => void;
-  initialLibraryTab?: 'my-decks' | 'starred' | 'curated';
+  initialLibraryTab?: 'my-decks' | 'starred' | 'curated' | 'community';
   /** Opens on "make a deck from notes" with these notes filled in (from Focus). */
   initialNotes?: string;
   /** Opens sign-in; AI decks need an account (or the student's own key). */
@@ -173,7 +174,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
 
   // Library & Decks state
   const [savedSessions, setSavedSessions] = useState<StudySession[]>(() => StorageService.getSessions());
-  const [selectedLibraryTab, setSelectedLibraryTab] = useState<'my-decks' | 'starred' | 'curated' | null>(null);
+  const [selectedLibraryTab, setSelectedLibraryTab] = useState<'my-decks' | 'starred' | 'curated' | 'community' | null>(null);
   const [prevInitialTab, setPrevInitialTab] = useState(initialLibraryTab);
 
   if (initialLibraryTab !== prevInitialTab) {
@@ -182,7 +183,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   }
 
   const activeLibraryTab = selectedLibraryTab ?? initialLibraryTab ?? 'my-decks';
-  const setActiveLibraryTab = (tab: 'my-decks' | 'starred' | 'curated') => setSelectedLibraryTab(tab);
+  const setActiveLibraryTab = (tab: 'my-decks' | 'starred' | 'curated' | 'community') => setSelectedLibraryTab(tab);
   const [deckSearch, setDeckSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [isDeckStudioOpen, setIsDeckStudioOpen] = useState(false);
@@ -688,6 +689,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
               { tab: 'my-decks', label: 'My decks', count: savedSessions.length },
               { tab: 'starred', label: 'Starred', count: starredCards.length },
               { tab: 'curated', label: 'Starter decks', count: CURATED_STARTER_DECKS.length },
+              { tab: 'community', label: 'Community', count: null },
             ] as const).map(({ tab, label, count }) => (
               <button
                 key={tab}
@@ -700,7 +702,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 }`}
               >
                 {label}
-                <span className="tabular-nums text-ink-subtle">{count}</span>
+                {count !== null && <span className="tabular-nums text-ink-subtle">{count}</span>}
               </button>
             ))}
           </div>
@@ -723,7 +725,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
           </div>
         </div>
 
-        {activeLibraryTab !== 'starred' && (
+        {activeLibraryTab !== 'starred' && activeLibraryTab !== 'community' && (
           <div className="space-y-2.5">
             {activeLibraryTab === 'my-decks' && (
               <div className="no-scrollbar -mx-1 flex items-center gap-1.5 overflow-x-auto px-1 py-0.5">
@@ -963,6 +965,15 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
         )}
 
         {/* Starter decks */}
+        {activeLibraryTab === 'community' && (
+          <CommunityDecksPanel
+            query={deckSearch}
+            onAdded={() => setSavedSessions(StorageService.getSessions())}
+            onStartSession={onStartSession}
+            onOpenAuth={onOpenAuth}
+          />
+        )}
+
         {activeLibraryTab === 'curated' && (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {filteredCuratedDecks.map(deck => {

@@ -110,7 +110,20 @@ The build also writes plain-HTML pages that search engines and link previews can
 - `sitemap.xml` and `robots.txt` (with the sitemap's address).
 
 Addresses use `SITE_URL` (set it on the static site when it moves to its own domain), or else `og:url` in
-`index.html`. Decks students share (community decks) don't have public pages yet.
+`index.html`.
+
+### Sharing decks
+
+Signed-in students share a deck from its details (**Share**); classmates open the link (`/?shared=<slug>`) straight
+into its cards, with no account, and anyone can browse shared decks in Library → Community.
+
+- **What is shared:** the cards and their explanations only (`src/services/deckSharing.ts`): never review history,
+  hidden cards, sketches, notes, PDFs or the education profile. A copy someone adds gets new ids and starts fresh.
+- **Who is named:** first name and initial ("Ada L."), and students under 16 never ("a Studify student"). Only that is
+  stored; profile edits are sent to the server (`PATCH /api/auth/me`) so it stays current.
+- **Checks:** the sharer confirms the cards are theirs to share; the AI checks each deck when it is shared and refuses
+  unsafe ones (when the AI isn't available the deck is shared and marked unchecked); three reports hide a deck.
+- Shared decks don't have public (search-engine) pages yet.
 
 ### Deploying the website
 

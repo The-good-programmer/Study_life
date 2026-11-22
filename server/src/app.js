@@ -292,7 +292,7 @@ export function createApp({ ai = defaultAi, mailer = createResendMailer() } = {}
       }
 
       // 5. COMMUNITY DECK ROUTES
-      if (await handleDeckRoutes(req, res, pathname, body, searchParams)) {
+      if (await handleDeckRoutes(req, res, pathname, body, searchParams, { ai })) {
         return;
       }
 

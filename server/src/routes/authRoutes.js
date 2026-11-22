@@ -3,6 +3,7 @@
  */
 
 import crypto from 'node:crypto';
+import { authorDisplay } from '../deckSharing.js';
 import { db, isUniqueViolation } from '../db.js';
 import { generateSalt, hashPassword, verifyPassword, createToken, getAuthUser, verifyGoogleIdToken, verifyGoogleAccessToken } from '../auth.js';
 import { clientIp, limiters } from '../rateLimit.js';
@@ -301,6 +302,31 @@ export async function handleAuthRoutes(req, res, pathname, body, ctx = {}) {
       return send(res, 401, { error: 'Unauthorized. Invalid or missing authentication token.' });
     }
     return send(res, 200, { user: publicUser(user) });
+  }
+
+  // 4b. UPDATE MY PROFILE: what the app's profile editor changes, so the server's copy (and the author
+  // name on decks this student shared) stays current.
+  if (pathname === '/api/auth/me' && req.method === 'PATCH') {
+    const user = await getAuthUser(req);
+    if (!user) {
+      return send(res, 401, { error: 'Unauthorized. Invalid or missing authentication token.' });
+    }
+    const { name, age, country, grade, institution, avatar } = body || {};
+    const text = (value, max) => (typeof value === 'string' && value.trim().length <= max ? value.trim() : undefined);
+    const next = {
+      name: text(name, 80) || user.name,
+      age: Number.isInteger(age) && age >= 5 && age <= 100 ? age : user.age,
+      country: text(country, 60) ?? user.country,
+      grade: text(grade, 40) ?? user.grade,
+      institution: institution === undefined ? user.institution : text(institution, 120) || null,
+      avatar: text(avatar, 16) || user.avatar,
+    };
+    await db.run(
+      'UPDATE users SET name = $1, age = $2, country = $3, grade = $4, institution = $5, avatar = $6 WHERE id = $7',
+      [next.name, next.age, next.country, next.grade, next.institution, next.avatar, user.id],
+    );
+    await db.run('UPDATE shared_decks SET author_name = $1 WHERE author_id = $2', [authorDisplay({ ...user, ...next }), user.id]);
+    return send(res, 200, { user: publicUser({ ...user, ...next }) });
   }
 
   // 5. DELETE MY ACCOUNT: removes the account and everything synced to it. Decks shared with the
