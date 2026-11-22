@@ -9,6 +9,8 @@ interface MobileTabBarProps {
   activeView: View;
   onNavigate: (view: View) => void;
   dueCardsCount: number;
+  /** False until the student has studied something. */
+  showExam?: boolean;
 }
 
 const TABS: { view: View; label: string; icon: LucideIcon }[] = [
@@ -20,13 +22,16 @@ const TABS: { view: View; label: string; icon: LucideIcon }[] = [
 ];
 
 /** Bottom tab bar for phones; the sidebar takes over from the md breakpoint. Mix decks, Campus and the rest live in the menu. */
-export const MobileTabBar: React.FC<MobileTabBarProps> = ({ activeView, onNavigate, dueCardsCount }) => (
+export const MobileTabBar: React.FC<MobileTabBarProps> = ({ activeView, onNavigate, dueCardsCount, showExam = true }) => {
+  // Mock exams need cards that have been studied; until then the tab would open an empty page.
+  const tabs = showExam ? TABS : TABS.filter(tab => tab.view !== 'exam');
+  return (
   <nav
     aria-label="Primary"
     className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas-raised/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
   >
-    <div className="mx-auto grid max-w-md grid-cols-5">
-      {TABS.map(({ view, label, icon: Icon }) => {
+    <div className={cn('mx-auto grid max-w-md', tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4')}>
+      {tabs.map(({ view, label, icon: Icon }) => {
         const active = activeView === view || (view === 'studio' && activeView === 'folders');
         return (
           <button
@@ -53,4 +58,5 @@ export const MobileTabBar: React.FC<MobileTabBarProps> = ({ activeView, onNaviga
       })}
     </div>
   </nav>
-);
+  );
+};

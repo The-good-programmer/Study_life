@@ -136,7 +136,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
 }) => {
   const needsSignInForAi = useNeedsSignInForAi();
   // Ingestion studio mode: pdf | topic | notes | occlusion
-  const [ingestMode, setIngestMode] = useState<'pdf' | 'topic' | 'notes' | 'occlusion'>(initialNotes ? 'notes' : 'topic');
+  const [ingestMode, setIngestMode] = useState<'pdf' | 'topic' | 'notes' | 'occlusion'>(initialNotes !== undefined ? 'notes' : 'topic');
   const [topicInput, setTopicInput] = useState('');
   const [notesInput, setNotesInput] = useState(initialNotes ?? '');
   // Photos, a lecture or a video being written out into the notes box.
