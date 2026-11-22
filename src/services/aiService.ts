@@ -129,6 +129,8 @@ export class AIService {
     for (const model of this.MODEL_CANDIDATES) {
       const buildConfig = (includeThinking: boolean) => {
         const config: Record<string, unknown> = {};
+        // A video is read at low resolution: plenty for notes, and about a third of the tokens.
+        if (Array.isArray(contents) && JSON.stringify(contents).includes('"fileData"')) config.mediaResolution = 'MEDIA_RESOLUTION_LOW';
         if (responseSchema) {
           config.responseSchema = responseSchema;
           config.responseMimeType = 'application/json';

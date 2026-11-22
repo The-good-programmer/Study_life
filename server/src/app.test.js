@@ -874,6 +874,25 @@ describe('AI proxy request checks', () => {
     expect((await call({ contents: [{ role: 'user', parts: [{ text: 'Grade this' }, { inlineData: { mimeType: 'image/png', data: 'iVBORw0KGgo=' } }] }] })).status).toBe(200);
   });
 
+  it('takes short WAV clips and one public YouTube link, and nothing else of the kind', async () => {
+    const { checkAiRequest } = await import('./aiGuard.js');
+    const { hasVideo } = await import('./ai.js');
+    const parts = (...p) => ({ contents: [{ role: 'user', parts: [{ text: 'Write out the lecture' }, ...p] }] });
+    const video = { fileData: { fileUri: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' }, videoMetadata: { endOffset: '3600s' } };
+
+    expect(checkAiRequest(parts({ inlineData: { mimeType: 'audio/wav', data: 'UklGRg==' } })).request).toBeDefined();
+    expect(checkAiRequest(parts(video)).request).toBeDefined();
+    expect(hasVideo(parts(video).contents)).toBe(true);
+    expect(hasVideo(parts({ text: 'x' }).contents)).toBe(false);
+
+    expect(checkAiRequest(parts({ inlineData: { mimeType: 'audio/webm', data: 'AAAA' } })).error).toBeDefined();
+    expect(checkAiRequest(parts({ inlineData: { mimeType: 'audio/wav', data: 'A'.repeat(6_000_000) } })).error).toMatch(/under 4 MB/);
+    expect(checkAiRequest(parts({ fileData: { fileUri: 'https://evil.example/watch?v=dQw4w9WgXcQ' } })).error).toBeDefined();
+    expect(checkAiRequest(parts({ fileData: { fileUri: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', mimeType: 'video/mp4' } })).error).toBeDefined();
+    expect(checkAiRequest(parts({ ...video, videoMetadata: { fps: 30 } })).error).toBeDefined();
+    expect(checkAiRequest(parts(video, video)).error).toMatch(/One video/);
+  });
+
   it('takes no response schema on the stream', async () => {
     const { FEYNMAN_EVALUATION_SCHEMA } = await import('./aiSchemas.js');
     const user = await register('stream-guard@example.com');

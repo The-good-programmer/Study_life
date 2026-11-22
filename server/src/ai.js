@@ -31,6 +31,12 @@ const MODEL_CANDIDATES = (process.env.GEMINI_MODELS || '')
   .filter(Boolean);
 if (MODEL_CANDIDATES.length === 0) MODEL_CANDIDATES.push(...DEFAULT_MODELS);
 
+/** Whether a request carries a video (a YouTube link). */
+export function hasVideo(contents) {
+  if (!Array.isArray(contents)) return false;
+  return contents.some((item) => (item?.parts ?? [item]).some((part) => part && typeof part === 'object' && part.fileData));
+}
+
 function supportsThinking(model) {
   return model.includes('2.5') || model.includes('3.');
 }
@@ -119,6 +125,8 @@ export async function generateContent({ contents, responseMimeType, enableThinki
   for (const model of MODEL_CANDIDATES) {
     const buildConfig = (includeThinking) => {
       const config = { systemInstruction: STUDY_ONLY_INSTRUCTION };
+      // A video is read at low resolution: plenty for notes, and about a third of the tokens.
+      if (hasVideo(contents)) config.mediaResolution = 'MEDIA_RESOLUTION_LOW';
       if (responseSchema) {
         config.responseSchema = responseSchema;
         config.responseMimeType = 'application/json';
@@ -179,6 +187,8 @@ export async function* generateContentStream({ contents, responseMimeType, enabl
   for (const model of MODEL_CANDIDATES) {
     const buildConfig = (includeThinking) => {
       const config = { systemInstruction: STUDY_ONLY_INSTRUCTION };
+      // A video is read at low resolution: plenty for notes, and about a third of the tokens.
+      if (hasVideo(contents)) config.mediaResolution = 'MEDIA_RESOLUTION_LOW';
       if (responseMimeType) {
         config.responseMimeType = responseMimeType;
       }
