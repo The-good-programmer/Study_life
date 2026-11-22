@@ -33,7 +33,12 @@ export const QuickStartDialog: React.FC<{
   const generation = useDeckGeneration({ onSessionReady: onStartSession });
   const { isLoading, error, effectiveProfile, profileModal } = generation;
   const needsSignIn = AIService.needsSignIn();
-  const readyMade = useMemo(() => rankStarterDecksForGrade(CURATED_STARTER_DECKS, AuthService.getCurrentUser()?.grade).slice(0, READY_MADE), []);
+  // Ranked for the student's level, the gentlest first: a first deck should feel doable.
+  const readyMade = useMemo(() => {
+    const ranked = rankStarterDecksForGrade(CURATED_STARTER_DECKS, AuthService.getCurrentUser()?.grade);
+    const gentle = (difficulty: string) => (difficulty === 'Foundational' ? 0 : difficulty === 'Intermediate' ? 1 : 2);
+    return [...ranked].sort((a, b) => gentle(a.difficulty) - gentle(b.difficulty)).slice(0, READY_MADE);
+  }, []);
 
   const make = (e?: React.FormEvent) => {
     e?.preventDefault();

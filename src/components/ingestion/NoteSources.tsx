@@ -47,19 +47,19 @@ export const NoteSources: React.FC<{
   const partQueue = useRef<Promise<void>>(Promise.resolve());
   const counts = useRef({ parts: 0, pending: 0, failed: 0 });
 
-  const setBusy = (next: Busy | null | ((prev: Busy | null) => Busy | null)) => {
-    setBusyState(prev => {
-      const value = typeof next === 'function' ? next(prev) : next;
-      if (!!value !== !!prev) onBusyChange(!!value);
-      return value;
-    });
-  };
+  const setBusy = setBusyState;
 
-  // Leaving the tab or page stops the microphone, and the notes box isn't held as busy.
+  // The notes box can't make a deck while something is being written out into it.
   const onBusyChangeRef = useRef(onBusyChange);
   useEffect(() => {
     onBusyChangeRef.current = onBusyChange;
   }, [onBusyChange]);
+  const isBusy = busy !== null;
+  useEffect(() => {
+    onBusyChangeRef.current(isBusy);
+  }, [isBusy]);
+
+  // Leaving the tab or page stops the microphone, and the notes box isn't held as busy.
   useEffect(
     () => () => {
       recorder.current?.stop();

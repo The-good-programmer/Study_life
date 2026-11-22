@@ -125,8 +125,8 @@ export const FriendsCard: React.FC<{ user: { id: string; name: string } | null; 
             const rank = ranking.indexOf(row) + 1;
             return (
               <li key={row.id} className={cn('flex min-w-0 items-center gap-3 rounded-xl px-3 py-2', row.isYou ? 'bg-brand-soft/60' : 'bg-canvas')}>
-                <span className={cn('w-5 shrink-0 text-center text-[13px] font-semibold tabular-nums', rank === 1 ? 'text-gold' : 'text-ink-subtle')}>
-                  {rank === 1 ? <Trophy className="mx-auto h-4 w-4" aria-label="First" /> : rank}
+                <span className={cn('w-5 shrink-0 text-center text-[13px] font-semibold tabular-nums', rank === 1 && row.weekXp > 0 ? 'text-gold' : 'text-ink-subtle')}>
+                  {rank === 1 && row.weekXp > 0 ? <Trophy className="mx-auto h-4 w-4" aria-label="First" /> : rank}
                 </span>
                 {row.friend ? (
                   <FriendAvatar friend={row.friend} className="h-8 w-8 text-base" />
