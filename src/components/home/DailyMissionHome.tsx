@@ -32,6 +32,7 @@ import type { StudySession, UserStats, SubjectFolder, UserAccount } from '../../
 import type { DailyLedger } from '../../types/lifeSim';
 import { StorageService } from '../../services/storageService';
 import { PlannerService } from '../../services/plannerService';
+import { Mascot } from '../mascot/Mascot';
 import { AuthService } from '../../services/authService';
 import { characterService } from '../../services/characterService';
 import { lifeSimService, ACADEMIC_ROLES } from '../../services/lifeSimService';
@@ -46,7 +47,7 @@ import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
 import { StreakGuardianModal } from '../mascot/StreakGuardianModal';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
 import { SubjectFolderModal } from '../studio/SubjectFolderModal';
-import { FOLDER_COLORS } from '../studio/folderOptions';
+import { FOLDER_COLORS, deckColor } from '../studio/folderOptions';
 import { MoveToFolderModal } from '../studio/MoveToFolderModal';
 import { Badge, Button, Card, CoinIcon, IconButton, ProgressBar, ProgressRing, SectionHeader, Tokens } from '../ui/primitives';
 import { cn } from '../../utils/cn';
@@ -447,6 +448,10 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                 )}
               </div>
 
+              {!hasDecks && (
+                <Mascot mood="wave" className="hidden h-36 w-40 shrink-0 self-start text-ink lg:block" />
+              )}
+
               {hasDecks && (
                 <div className="space-y-1.5 sm:hidden">
                   <div className="flex items-center justify-between text-[13px]">
@@ -663,7 +668,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
               <ul className="space-y-2">
                 {displayedSessions.slice(0, DECKS_ON_HOME).map(session => {
                   const folder = folders.find(f => f.id === session.folderId);
-                  const color = folder ? FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0] : null;
+                  const color = deckColor(session, folder);
                   const due = dueInSession(session);
                   return (
                     <li
@@ -674,7 +679,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                         <div
                           className={cn(
                             'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold',
-                            color ? `${color.bg} ${color.text}` : 'bg-brand-soft text-brand-text',
+                            `${color.bg} ${color.text}`,
                           )}
                           aria-hidden="true"
                         >

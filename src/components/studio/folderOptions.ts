@@ -10,6 +10,19 @@ export const FOLDER_COLORS: { id: string; name: string; bg: string; border: stri
   { id: 'blue', name: 'Blue', bg: 'bg-blue-500/15', border: 'border-blue-500/40', text: 'text-blue-300', dot: 'bg-blue-500', glow: 'shadow-blue-500/20' },
 ];
 
+type DeckColor = (typeof FOLDER_COLORS)[number];
+
+/**
+ * A deck's colour: its subject's, or one picked from the deck's id when it has no subject, so the
+ * same deck always looks the same and a list of decks isn't a wall of one colour.
+ */
+export function deckColor(deck: { id: string }, folder?: { color?: string } | null): DeckColor {
+  if (folder) return FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0];
+  let hash = 0;
+  for (const char of deck.id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return FOLDER_COLORS[hash % FOLDER_COLORS.length];
+}
+
 export const FOLDER_ICONS = [
   '📚', '🧠', '🧬', '⚛️', '🧪', '📐', '💻', '🩺', '🎨', '⚖️', '🏛️', '🌍', '📈', '🚀', '📝', '⚡'
 ];

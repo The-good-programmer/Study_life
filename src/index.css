@@ -56,6 +56,13 @@
   --animate-fadeIn: fadeIn 0.24s ease-out;
   --animate-shake: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
   --animate-rise: rise 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  /* Review cards: each one is dealt in from the stack, turns when its answer shows, and the answer
+     folds open. "backwards" fill only, for the same reason as fadeIn below. */
+  --animate-card-deal: card-deal 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  --animate-card-turn: card-turn 0.42s cubic-bezier(0.3, 0.7, 0.3, 1);
+  --animate-mascot-bob: mascot-bob 3.2s ease-in-out infinite;
+  --animate-mascot-wave: mascot-wave 1.4s ease-in-out infinite;
+  --animate-answer-unfold: answer-unfold 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 
   @keyframes fadeIn {
     from { opacity: 0; }
@@ -64,6 +71,32 @@
 
   @keyframes rise {
     from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  @keyframes mascot-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  @keyframes mascot-wave {
+    0%, 100% { transform: rotate(0); }
+    50% { transform: rotate(-18deg); }
+  }
+
+  @keyframes card-deal {
+    from { opacity: 0; transform: translateY(14px) rotate(1deg) scale(0.97); } /* no sideways shift: a phone would scroll */
+    to { opacity: 1; transform: none; }
+  }
+
+  @keyframes card-turn {
+    0% { transform: perspective(1200px) rotateY(0); }
+    45% { transform: perspective(1200px) rotateY(-7deg) scale(1.01); }
+    100% { transform: perspective(1200px) rotateY(0); }
+  }
+
+  @keyframes answer-unfold {
+    from { opacity: 0; transform: perspective(900px) rotateX(-14deg) translateY(-6px); transform-origin: top; }
     to { opacity: 1; transform: none; }
   }
 
@@ -476,6 +509,15 @@
 [data-theme="paper"] .text-slate-300 {
   color: #353844 !important;
 }
+
+/* Subject and deck colours (folderOptions.ts): their pale dark-theme text reads too faint on white. */
+[data-theme="paper"] .text-indigo-300 { color: oklch(0.48 0.185 276) !important; }
+[data-theme="paper"] .text-purple-300 { color: oklch(0.49 0.17 300) !important; }
+[data-theme="paper"] .text-emerald-300 { color: oklch(0.508 0.118 165.6) !important; }
+[data-theme="paper"] .text-amber-300 { color: oklch(0.555 0.163 49) !important; }
+[data-theme="paper"] .text-rose-300 { color: oklch(0.514 0.222 16.9) !important; }
+[data-theme="paper"] .text-cyan-300 { color: oklch(0.52 0.105 223.1) !important; }
+[data-theme="paper"] .text-blue-300 { color: oklch(0.488 0.243 264.4) !important; }
 
 [data-theme="paper"] .text-slate-400 {
   color: #4a4d59 !important;
