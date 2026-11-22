@@ -99,6 +99,19 @@ npm run build
 npm run check:build   # service worker stamped, avatar manifest points at real files
 ```
 
+### Public pages (found on Google)
+
+The build also writes plain-HTML pages that search engines and link previews can read
+(`src/publicPages/buildPublicPages.ts`, run by the `publicPages` plugin in `vite.config.ts`):
+
+- `/decks/`: what Studify is, how it works, and every starter deck by subject.
+- `/decks/<deck id>/`: one deck with all its text cards (cloze gaps blanked), flashcard markup for Google
+  (`Quiz` / `Question`), and *Study these cards free*, which opens `/?deck=<id>` straight into its flashcards.
+- `sitemap.xml` and `robots.txt` (with the sitemap's address).
+
+Addresses use `SITE_URL` (set it on the static site when it moves to its own domain), or else `og:url` in
+`index.html`. Decks students share (community decks) don't have public pages yet.
+
 ### Deploying the website
 
 Both halves run on [Render](https://render.com), deployed from `fix/audit-hardening`:

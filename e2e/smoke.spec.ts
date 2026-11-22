@@ -129,3 +129,21 @@ test('friends: an invite link makes two students friends, and a duel is played b
   await anaContext.close();
   await benContext.close();
 });
+
+test('a public deck page shows its cards and opens them in the app with one tap', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/decks/');
+  await expect(page.getByRole('heading', { name: 'Learn anything in 3 minutes a day' })).toBeVisible();
+  await page.getByRole('link', { name: /How Memory Works/ }).first().click();
+  await expect(page).toHaveURL(/\/decks\/demo-memory-neuroscience\/$/);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('How Memory Works');
+  expect(await page.locator('ol.cards li').count()).toBeGreaterThan(10);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+  await page.getByRole('link', { name: 'Study these cards free' }).click();
+  // Straight into the deck's flashcards: no first-visit dialog, and the link's ?deck= is gone.
+  await expect(page.getByRole('button', { name: /Show answer/ })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'What do you want to study?' })).toHaveCount(0);
+  expect(new URL(page.url()).search).toBe('');
+  expectNoErrors(errors);
+});

@@ -118,10 +118,20 @@ export function App() {
     return code ?? FriendsService.pendingInvite();
   });
   const invitedWhileSignedOut = Boolean(friendInvite) && !AuthService.getCurrentUser();
+  // A deck's public page (/decks/<id>/) links to /?deck=<id>, which opens that starter deck's cards.
+  const [deckFromLink] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const url = new URL(window.location.href);
+    const id = url.searchParams.get('deck');
+    if (!id) return null;
+    url.searchParams.delete('deck');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    return id;
+  });
   // A first visit (no decks yet) starts with "What do you want to study?" instead of a tour. A topic typed
   // before signing up brings it back after signing in.
   const [quickStart, setQuickStart] = useState<{ topic: string | null } | null>(() =>
-    !resetToken && !friendInvite && (shouldShowQuickStart() || (pendingQuickStartTopic() && AuthService.getCurrentUser()))
+    !resetToken && !friendInvite && !deckFromLink && (shouldShowQuickStart() || (pendingQuickStartTopic() && AuthService.getCurrentUser()))
       ? { topic: pendingQuickStartTopic() }
       : null,
   );
@@ -170,6 +180,26 @@ export function App() {
 
   // Keep a subscribed calendar up to date with the planner.
   useEffect(() => CalendarFeedService.startAutoPublish(), []);
+
+  // Opens the deck a public page linked to. The catalog loads only for this, so it stays out of the
+  // first download. An unknown id falls back to the first-visit quick start.
+  useEffect(() => {
+    if (!deckFromLink) return;
+    let cancelled = false;
+    void import('./components/onboarding/readyMadeDecks').then(({ starterDeckById, readyMadeSession }) => {
+      if (cancelled) return;
+      const deck = starterDeckById(deckFromLink);
+      if (!deck) {
+        if (shouldShowQuickStart()) setQuickStart({ topic: null });
+        return;
+      }
+      markQuickStartSeen();
+      setActiveSession(readyMadeSession(deck));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [deckFromLink]);
 
   // Keep user and stats synchronized with AuthService
   useEffect(() => {
