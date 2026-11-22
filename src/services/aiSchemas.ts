@@ -3,7 +3,18 @@
  * Enforces grammar-level decoding constraints so Gemini produces 100% valid JSON.
  */
 
-import { Type } from '@google/genai';
+/**
+ * Gemini's schema type names (the same strings as the Type enum in @google/genai), written out so the
+ * schemas don't pull Google's library into the first download.
+ */
+const Type = {
+  STRING: 'STRING',
+  NUMBER: 'NUMBER',
+  INTEGER: 'INTEGER',
+  BOOLEAN: 'BOOLEAN',
+  ARRAY: 'ARRAY',
+  OBJECT: 'OBJECT',
+} as const;
 
 export const FEYNMAN_EVALUATION_SCHEMA = {
   type: Type.OBJECT,

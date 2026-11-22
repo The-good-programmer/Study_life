@@ -677,6 +677,39 @@ describe('CORS', () => {
   });
 });
 
+describe('compression', () => {
+  const rawGet = (path, headers) =>
+    new Promise((resolve, reject) => {
+      http.get(`${baseUrl}${path}`, { headers }, (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => resolve({ headers: res.headers, body: Buffer.concat(chunks) }));
+      }).on('error', reject);
+    });
+
+  it('gzips large JSON answers when the browser accepts it, and only then', async () => {
+    const zlib = await import('node:zlib');
+    const me = await register('gzip-me@example.com');
+    const deck = { id: 'gzip-deck', title: 'Big', concepts: [{ retrievalCards: Array.from({ length: 200 }, (_, i) => ({ id: `g${i}`, question: `Question ${i}?`, answer: `Answer ${i}` })) }] };
+    await api('/api/sync/push', { method: 'POST', token: me.token, body: { sessions: [deck] } });
+
+    const zipped = await rawGet('/api/sync/pull', { Authorization: `Bearer ${me.token}`, 'Accept-Encoding': 'gzip' });
+    expect(zipped.headers['content-encoding']).toBe('gzip');
+    expect(zipped.headers.vary).toMatch(/Accept-Encoding/);
+    const pulled = JSON.parse(zlib.gunzipSync(zipped.body).toString());
+    expect(pulled.sessions[0].concepts[0].retrievalCards).toHaveLength(200);
+
+    const plain = await rawGet('/api/sync/pull', { Authorization: `Bearer ${me.token}` });
+    expect(plain.headers['content-encoding']).toBeUndefined();
+    expect(JSON.parse(plain.body.toString()).sessions).toHaveLength(1);
+    expect(plain.body.length).toBeGreaterThan(zipped.body.length * 3);
+
+    // Small answers aren't worth it.
+    const health = await rawGet('/api/health', { 'Accept-Encoding': 'gzip' });
+    expect(health.headers['content-encoding']).toBeUndefined();
+  });
+});
+
 describe('security headers', () => {
   it('are on every response, including errors and preflights', async () => {
     for (const res of [

@@ -20,6 +20,7 @@ import { createResendMailer } from './mailer.js';
 import * as defaultAi from './ai.js';
 import { checkAiRequest } from './aiGuard.js';
 import { clientIp } from './rateLimit.js';
+import { enableCompression } from './compression.js';
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5MB
 
@@ -111,6 +112,7 @@ export function createApp({ ai = defaultAi, mailer = createResendMailer() } = {}
     const startTime = Date.now();
     setSecurityHeaders(res);
     setCorsHeaders(req, res, allowedOrigins);
+    enableCompression(req, res);
 
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {

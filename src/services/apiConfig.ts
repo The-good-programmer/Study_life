@@ -6,9 +6,39 @@
 
 const AUTH_TOKEN_KEY = 'studify_auth_token_v1';
 
+/** A request still waiting after this long most likely means the free server is starting up. */
+export const WAKING_AFTER_MS = 4000;
+
 export class ApiConfig {
   private static cachedIsReachable: boolean | null = null;
   private static lastCheckTime: number = 0;
+  private static wakingListeners = new Set<(waking: boolean) => void>();
+  private static slowRequests = 0;
+
+  /** Called with true while a request to the server is unusually slow (it's waking up), then false. */
+  public static onWaking(listener: (waking: boolean) => void): () => void {
+    this.wakingListeners.add(listener);
+    return () => this.wakingListeners.delete(listener);
+  }
+
+  /**
+   * Runs a request, telling the listeners when it is slow. AI requests are slow by nature (writing a
+   * deck takes a while), so they don't count.
+   */
+  private static async watchSlow<T>(endpoint: string, run: () => Promise<T>): Promise<T> {
+    if (endpoint.includes('/ai/')) return run();
+    let slow = false;
+    const timer = setTimeout(() => {
+      slow = true;
+      if (this.slowRequests++ === 0) this.wakingListeners.forEach(listener => listener(true));
+    }, WAKING_AFTER_MS);
+    try {
+      return await run();
+    } finally {
+      clearTimeout(timer);
+      if (slow && --this.slowRequests === 0) this.wakingListeners.forEach(listener => listener(false));
+    }
+  }
 
   /**
    * Resolves the API base URL. Defaults to relative '/api' which works
@@ -85,7 +115,7 @@ export class ApiConfig {
    */
   public static warmUp(): void {
     if (typeof fetch === 'undefined') return;
-    fetch(`${this.getBaseUrl()}/health`, { method: 'GET', headers: { Accept: 'application/json' } })
+    this.watchSlow('/health', () => fetch(`${this.getBaseUrl()}/health`, { method: 'GET', headers: { Accept: 'application/json' } }))
       .then(res => {
         if (res.ok) {
           this.cachedIsReachable = true;
@@ -141,10 +171,7 @@ export class ApiConfig {
     }
 
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      });
+      const response = await this.watchSlow(endpoint, () => fetch(url, { ...options, headers }));
 
       const contentType = response.headers.get('content-type') || '';
       let data: any = null;

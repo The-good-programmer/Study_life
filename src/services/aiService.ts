@@ -1,4 +1,5 @@
-import { GoogleGenAI } from '@google/genai';
+// Google's AI library is only needed with a student's own key, so it is loaded then, not with the page.
+import type { GoogleGenAI } from '@google/genai';
 import type { 
   ConceptCheckpoint, 
   FeynmanEvaluation, 
@@ -48,11 +49,18 @@ export class AIService {
     return !StorageService.getApiKey() && !ApiConfig.getToken();
   }
 
-  private static getClient(customKey?: string): GoogleGenAI | null {
+  /** Whether the student added their own Gemini key (in Settings → AI). */
+  private static hasOwnKey(): boolean {
+    return Boolean(StorageService.getApiKey());
+  }
+
+  /** A Gemini client with the student's own key (loading Google's library the first time), or null. */
+  private static async getClient(customKey?: string): Promise<GoogleGenAI | null> {
     // Strictly rely on user-configured key in browser storage, never bake keys into client bundle
     const key = customKey || StorageService.getApiKey();
     if (!key) return null;
     try {
+      const { GoogleGenAI } = await import('@google/genai');
       return new GoogleGenAI({ apiKey: key });
     } catch (err) {
       console.error('Failed to initialize GoogleGenAI client:', err);
@@ -91,7 +99,7 @@ export class AIService {
     }
 
     // 2. Try client-side API key with candidate models
-    const client = this.getClient();
+    const client = await this.getClient();
     if (client) {
       const response = await this.generateContentWithFallback(client, contents, responseMimeType, enableThinking, responseSchema);
       return response.text || '';
@@ -237,7 +245,7 @@ export class AIService {
       };
     }
 
-    if (this.isAvailable() || this.getClient()) {
+    if (this.isAvailable() || this.hasOwnKey()) {
       try {
         const memoryProfile = StorageService.getCognitiveMemoryProfile();
         const profileContext = memoryProfile.totalCards > 0
@@ -347,7 +355,7 @@ Before assigning the final score, you MUST articulate your step-by-step cognitiv
     const cleanQ = studentQuestion.trim();
     if (!cleanQ) return 'Please ask a specific clarifying question regarding this concept.';
 
-    if (this.isAvailable() || this.getClient()) {
+    if (this.isAvailable() || this.hasOwnKey()) {
       try {
         const prompt = `
 You are a warm, concise Socratic science tutor helping a student deeply understand "${concept.title}".
@@ -392,7 +400,7 @@ Answer the student in 2 to 3 concise, illuminating sentences. Use an intuitive a
       ? KnowledgeGraphService.findCrossDeckBridges(concept, currentSessionId, 2)
       : [];
 
-    if (this.isAvailable() || this.getClient()) {
+    if (this.isAvailable() || this.hasOwnKey()) {
       try {
         const isFinalRound = targetRound >= 3;
         const memoryProfile = StorageService.getCognitiveMemoryProfile();
@@ -605,7 +613,7 @@ Formulate your verbal Socratic response (2-3 concise sentences) directly address
     }
 
     // 2. Try client-side direct streaming if client API key is configured
-    const client = this.getClient();
+    const client = await this.getClient();
     if (client) {
       for (const model of this.MODEL_CANDIDATES) {
         try {
@@ -781,7 +789,7 @@ Formulate your verbal Socratic response (2-3 concise sentences) directly address
     card: RetrievalCard,
     concept?: ConceptCheckpoint
   ): Promise<LeechAnalysis> {
-    if (this.isAvailable() || this.getClient()) {
+    if (this.isAvailable() || this.hasOwnKey()) {
       try {
         const prompt = `
 You are a cognitive psychologist and expert mnemonist specializing in fixing memory bottlenecks in medical and board exam flashcards.
@@ -952,7 +960,7 @@ Return ONLY valid JSON matching this schema:
     const effectiveTier: DepthTier = depthTier || depthEstimate.tier;
     const effectiveGradeLevel: AcademicGradeLevel = gradeLevel || depthEstimate.gradeLevel;
 
-    if (this.isAvailable() || this.getClient()) {
+    if (this.isAvailable() || this.hasOwnKey()) {
       try {
         const checkpointCountInstruction = isRawNotes
           ? '3 to 5 sequential bite-sized concept checkpoints'
