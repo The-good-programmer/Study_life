@@ -81,7 +81,7 @@ export async function countDueCards(userId, now) {
     }
     for (const concept of deck?.concepts ?? []) {
       for (const card of concept?.retrievalCards ?? []) {
-        if (card?.reps > 0 && card.nextReviewDate && new Date(card.nextReviewDate) <= now) due.add(card.id);
+        if (!card?.hidden && card?.reps > 0 && card.nextReviewDate && new Date(card.nextReviewDate) <= now) due.add(card.id);
       }
     }
   }

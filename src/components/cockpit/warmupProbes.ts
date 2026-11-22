@@ -1,4 +1,5 @@
 import type { DiagnosticProbe, StudySession } from '../../types';
+import { studyableCards } from '../../utils/cardProgress';
 import { maskCloze } from '../../utils/cloze';
 import { buildQuizOptions, orderOptionsForCard } from '../../utils/quizOptions';
 import { shuffle } from '../../utils/shuffle';
@@ -21,12 +22,12 @@ export function buildWarmupProbes(
   random: () => number = Math.random,
   maxProbes = MAX_WARMUP_PROBES,
 ): DiagnosticProbe[] {
-  const deckCards = session.concepts.flatMap(c => c.retrievalCards || []);
+  const deckCards = session.concepts.flatMap(c => studyableCards(c.retrievalCards));
   const probes: DiagnosticProbe[] = [];
 
   for (const concept of session.concepts) {
     if (probes.length >= maxProbes) break;
-    const cards = (concept.retrievalCards || []).filter(card => getEffectiveCardType(card) !== 'image-occlusion');
+    const cards = studyableCards(concept.retrievalCards).filter(card => getEffectiveCardType(card) !== 'image-occlusion');
     const base = { conceptId: concept.id, conceptTitle: concept.title };
 
     const choiceCard = cards.find(card => card.options && card.options.length >= 2);

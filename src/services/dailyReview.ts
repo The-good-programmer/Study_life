@@ -57,6 +57,7 @@ export function buildDailyQueue(
         if (!raw || seen.has(raw.id)) continue;
         seen.add(raw.id);
         const card = withSavedProgress(raw, savedCards.get(raw.id));
+        if (card.hidden) continue;
         if (isCardDue(card, now)) due.push(card);
         else if (!card.reps) fresh.push(card);
       }

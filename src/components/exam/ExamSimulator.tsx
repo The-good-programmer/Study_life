@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { studyableCards } from '../../utils/cardProgress';
 import { ECONOMY_VISIBLE } from '../../services/features';
 import {
   Clock,
@@ -116,7 +117,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
     targetDecks.forEach(deck => {
       deck.concepts.forEach(concept => {
-        concept.retrievalCards.forEach(card => {
+        studyableCards(concept.retrievalCards).forEach(card => {
           pool.push({
             card,
             conceptTitle: concept.title,

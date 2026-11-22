@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { ChevronDown, EyeOff, FileUp, Image as ImageIcon, Layers, PenLine, Plus, Trash2, Upload, X } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, FileUp, Image as ImageIcon, Layers, PenLine, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { ConceptCheckpoint, RetrievalCard, StudySession, SubjectFolder } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
@@ -221,6 +221,7 @@ const WriteCards: React.FC<{
   };
 
   const cardCount = concepts.reduce((sum, concept) => sum + concept.retrievalCards.filter(card => !isUntouched(card)).length, 0);
+  const hiddenCount = concepts.reduce((sum, concept) => sum + concept.retrievalCards.filter(card => card.hidden).length, 0);
 
   return (
     <>
@@ -315,7 +316,7 @@ const WriteCards: React.FC<{
         <p className={cn('min-w-0 truncate text-[13px]', saveMessage && (issues.size > 0 || titleMissing) ? 'text-danger' : 'text-ink-subtle')} role="status">
           {saveMessage && (issues.size > 0 || titleMissing || cardCount === 0)
             ? saveMessage
-            : `${concepts.length} ${concepts.length === 1 ? 'concept' : 'concepts'} · ${cardCount} ${cardCount === 1 ? 'card' : 'cards'}`}
+            : `${concepts.length} ${concepts.length === 1 ? 'concept' : 'concepts'} · ${cardCount} ${cardCount === 1 ? 'card' : 'cards'}${hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ''}`}
         </p>
         <div className="flex shrink-0 items-center gap-2">
           <Button onClick={onCancel}>Cancel</Button>
@@ -511,8 +512,22 @@ const CardEditor: React.FC<{
             </div>
           )}
         </div>
-        <IconButton icon={Trash2} label={`Delete card ${number}`} onClick={onRemove} className="hover:text-danger" />
+        <div className="flex shrink-0 items-center gap-1">
+          {card.hidden && (
+            <>
+              <Badge>
+                <EyeOff className="h-3 w-3" aria-hidden="true" />
+                Hidden
+              </Badge>
+              <Button size="sm" variant="ghost" icon={Eye} onClick={() => onChange(c => ({ ...c, hidden: undefined }))}>
+                Show again
+              </Button>
+            </>
+          )}
+          <IconButton icon={Trash2} label={`Delete card ${number}`} onClick={onRemove} className="hover:text-danger" />
+        </div>
       </div>
+      {card.hidden && <p className="mt-2 text-xs text-ink-subtle">Hidden from reviews. Click Show again, then Save, to study it again.</p>}
 
       {type === 'image-occlusion' && (
         <p className="mt-3 text-[13px] text-ink-muted">

@@ -57,6 +57,10 @@ export interface RetrievalCard {
   diagramDataUrl?: string; // Optional student dual-coding sketch
   sourceAnchor?: SourceAnchor;
   isStarred?: boolean; // Star/Bookmark for high-priority drilling
+  /** Hidden by the student: kept in the deck, but never shown in a review. */
+  hidden?: boolean;
+  /** When the card's content (or hidden) was last changed, so the latest edit wins across copies and devices. */
+  updatedAt?: string;
   retrievability?: number; // Current calculated probability of recall (0 - 100%)
 }
 

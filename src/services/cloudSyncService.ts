@@ -92,7 +92,11 @@ const deckTime = (deck: StudySession): number => {
   };
   consider(deck.createdAt);
   consider(deck.completedAt);
-  for (const card of cardsOf(deck)) consider(card.lastReviewDate);
+  for (const card of cardsOf(deck)) {
+    consider(card.lastReviewDate);
+    // A card edited (or hidden) counts as a change to its deck.
+    consider(card.updatedAt);
+  }
   return latest;
 };
 

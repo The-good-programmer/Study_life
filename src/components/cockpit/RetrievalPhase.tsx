@@ -13,6 +13,7 @@ import {
   Keyboard,
   Lightbulb,
   Undo2,
+  PenLine,
 } from 'lucide-react';
 import type { CardType, ConceptCheckpoint, FSRSRating, DiagnosticDistractor, RetrievalCard } from '../../types';
 import { FSRSService } from '../../services/fsrsService';
@@ -24,6 +25,8 @@ import { MathRenderer } from '../common/MathRenderer';
 import { gamepadService, type GamepadAction } from '../../services/gamepadService';
 import confetti from 'canvas-confetti';
 import { StudyHUD } from './StudyHUD';
+import { CardEditDialog } from './CardEditDialog';
+import type { CardContentPatch } from '../../utils/cardProgress';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
 import { haptics } from '../../services/hapticsService';
 import { buildQuizOptions, orderOptionsForCard } from '../../utils/quizOptions';
@@ -58,6 +61,10 @@ interface RetrievalPhaseProps {
   allConcepts?: ConceptCheckpoint[];
   conceptIndex?: number;
 }
+
+/** The cards with their latest saved text, without any hidden since this list was made. */
+const withLatestContent = (cards: RetrievalCard[]): RetrievalCard[] =>
+  cards.map(card => StorageService.withLatestProgress(card)).filter(card => !card.hidden);
 
 export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({ 
   concept, 
@@ -127,16 +134,19 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
   const [isBlurtingRunning, setIsBlurtingRunning] = useState(false);
   const [blurtingResult, setBlurtingResult] = useState<{ recalled: string[]; missed: string[] } | null>(null);
 
-  // The cards in order, with missed cards put back a few cards later (each once).
-  const [queue, setQueue] = useState<RetrievalCard[]>(cards);
+  // The cards in order, with missed cards put back a few cards later (each once). Each card has its
+  // latest saved text, so a card fixed earlier in this session shows the fix.
+  const [queue, setQueue] = useState<RetrievalCard[]>(() => withLatestContent(cards));
   const [returned, setReturned] = useState<Set<string>>(() => new Set());
-  // The last rating, so it can be undone: the card as saved before, and where the session was.
-  const [undo, setUndo] = useState<{ previous: RetrievalCard; index: number; queue: RetrievalCard[]; returned: Set<string> } | null>(null);
+  // The last rating (or hidden card), so it can be undone: the card as saved before, and where the session was.
+  const [undo, setUndo] = useState<{ kind: 'rate' | 'hide'; previous: RetrievalCard; index: number; queue: RetrievalCard[]; returned: Set<string> } | null>(null);
+  // The card being edited.
+  const [editing, setEditing] = useState(false);
   // A new concept (or mixing earlier topics on or off) starts its cards afresh.
   const [prevCards, setPrevCards] = useState(cards);
   if (cards !== prevCards) {
     setPrevCards(cards);
-    setQueue(cards);
+    setQueue(withLatestContent(cards));
     setReturned(new Set());
     setUndo(null);
     setCurrentIndex(0);
@@ -201,7 +211,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     StorageService.saveCard(updatedCard);
     if (!previous.reps) StorageService.recordNewCardStarted(currentCard.id);
     onCardRated?.(currentCard.id);
-    setUndo({ previous, index: currentIndex, queue, returned });
+    setUndo({ kind: 'rate', previous, index: currentIndex, queue, returned });
 
     // A missed card comes back a few cards later, once.
     const nextQueue = rating === 'again' ? requeueMissed(queue, currentIndex, returned) : queue;
@@ -258,9 +268,13 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
    */
   const handleUndo = useCallback(() => {
     if (!undo) return;
-    StorageService.saveCard(undo.previous);
-    const ratedEarlierInPass = undo.queue.slice(0, undo.index).some(card => card.id === undo.previous.id);
-    if (!ratedEarlierInPass) onCardUnrated?.(undo.previous.id);
+    if (undo.kind === 'hide') {
+      StorageService.setCardHidden(undo.previous.id, false);
+    } else {
+      StorageService.saveCard(undo.previous);
+      const ratedEarlierInPass = undo.queue.slice(0, undo.index).some(card => card.id === undo.previous.id);
+      if (!ratedEarlierInPass) onCardUnrated?.(undo.previous.id);
+    }
     setQueue(undo.queue);
     setReturned(undo.returned);
     setCurrentIndex(undo.index);
@@ -272,9 +286,56 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     setUndo(null);
   }, [undo, onCardUnrated]);
 
-  // Z undoes the last rating.
+  /** Hides the card from every review (it stays in the deck) and moves on. Undo brings it back. */
+  const handleHide = useCallback(() => {
+    if (!currentCard) return;
+    StorageService.setCardHidden(currentCard.id, true);
+    setEditing(false);
+    const nextQueue = [...queue.slice(0, currentIndex), ...queue.slice(currentIndex).filter(card => card.id !== currentCard.id)];
+    setQueue(nextQueue);
+    setIsAnswerRevealed(false);
+    setHintLevel(0);
+    setSelectedOption(null);
+    setIsCorrect(null);
+    setMisconception(null);
+    if (currentIndex < nextQueue.length) {
+      setUndo({ kind: 'hide', previous: currentCard, index: currentIndex, queue, returned });
+    } else {
+      setUndo(null);
+      soundEngine.playCompletionChime();
+      onComplete();
+    }
+  }, [currentCard, currentIndex, queue, returned, onComplete]);
+
+  /** Saves a fixed card and shows the fix at once, here and in the undo slot. */
+  const handleSaveEdit = useCallback((patch: CardContentPatch) => {
+    if (!currentCard) return;
+    const saved = StorageService.updateCardContent(currentCard.id, patch);
+    const apply = (card: RetrievalCard): RetrievalCard =>
+      card.id === currentCard.id ? { ...card, ...patch, updatedAt: saved?.updatedAt ?? card.updatedAt } : card;
+    setQueue(prev => prev.map(apply));
+    setUndo(prev => prev && { ...prev, previous: apply(prev.previous), queue: prev.queue.map(apply) });
+    setEditing(false);
+    soundEngine.playSuccess();
+  }, [currentCard]);
+
+  // Z undoes the last rating; E edits the card.
   useEffect(() => {
-    if (!undo || activeTab !== 'cards') return;
+    if (activeTab !== 'cards' || editing) return;
+    const onEdit = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      if ((e.key === 'e' || e.key === 'E') && !e.metaKey && !e.ctrlKey && !e.altKey && currentCard && getEffectiveCardType(currentCard) !== 'image-occlusion') {
+        e.preventDefault();
+        setEditing(true);
+      }
+    };
+    window.addEventListener('keydown', onEdit);
+    return () => window.removeEventListener('keydown', onEdit);
+  }, [activeTab, editing, currentCard]);
+
+  useEffect(() => {
+    if (!undo || activeTab !== 'cards' || editing) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
@@ -285,7 +346,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, activeTab, handleUndo]);
+  }, [undo, activeTab, editing, handleUndo]);
 
   const handleSelectOption = useCallback((option: string) => {
     if (selectedOption !== null || !currentCard) return;
@@ -325,7 +386,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      if (editing || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
         return;
       }
 
@@ -389,7 +450,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, isAnswerRevealed, handleRate, effectiveType, currentCard, handleSelectOption, handleToggleReveal, hasInteractiveOptions, isCorrect, selectedOption, activeOptions]);
+  }, [activeTab, editing, isAnswerRevealed, handleRate, effectiveType, currentCard, handleSelectOption, handleToggleReveal, hasInteractiveOptions, isCorrect, selectedOption, activeOptions]);
 
   // Web Gamepad Controller Integration (8BitDo, Joy-Cons, Xbox, PlayStation)
   useEffect(() => {
@@ -713,9 +774,10 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
           />
 
           {undo && (
-            <div className="flex justify-end">
-              <Button size="sm" variant="ghost" icon={Undo2} onClick={handleUndo} title="Undo last rating (Z)">
-                Undo last rating
+            <div className="flex items-center justify-end gap-2">
+              {undo.kind === 'hide' && <span className="text-xs text-ink-subtle" role="status">Card hidden from reviews.</span>}
+              <Button size="sm" variant="ghost" icon={Undo2} onClick={handleUndo} title={undo.kind === 'hide' ? 'Show the card again (Z)' : 'Undo last rating (Z)'}>
+                {undo.kind === 'hide' ? 'Undo' : 'Undo last rating'}
               </Button>
             </div>
           )}
@@ -785,6 +847,20 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                     >
                       <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                       Page {cardSource.pageNumber}
+                    </button>
+                  )}
+                  {effectiveType !== 'image-occlusion' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditing(true);
+                      }}
+                      aria-label="Edit or hide this card (E)"
+                      title="Edit or hide this card (E)"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-ink-subtle transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer"
+                    >
+                      <PenLine className="h-4 w-4" aria-hidden="true" />
                     </button>
                   )}
                   <button
@@ -1230,6 +1306,8 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                 ['A – D', 'Pick a choice'],
                 ['H', 'Hint'],
                 ['S', 'Star card'],
+                ['E', 'Edit or hide card'],
+                ['Z', 'Undo last rating'],
                 ['Enter', 'Continue'],
               ]}
             />
@@ -1311,6 +1389,9 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
       )}
 
       <ScienceExplainerModal isOpen={showScienceModal} onClose={() => setShowScienceModal(false)} initialTopic="retrieval" />
+      {editing && currentCard && (
+        <CardEditDialog key={currentCard.id} card={currentCard} onClose={() => setEditing(false)} onSave={handleSaveEdit} onHide={handleHide} />
+      )}
     </div>
   );
 };

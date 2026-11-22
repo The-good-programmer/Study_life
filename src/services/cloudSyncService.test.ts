@@ -243,6 +243,29 @@ describe('account sync', () => {
     void phone;
   });
 
+  it('brings a card fixed or hidden on one device to the other', async () => {
+    let laptop = newDevice();
+    let phone = newDevice();
+    laptop = await onDevice(laptop, async () => {
+      StorageService.saveSession(deck('bio', [card('c1'), card('c2')]));
+      await CloudSyncService.syncNow();
+    });
+    phone = await onDevice(phone, () => CloudSyncService.syncNow().then(() => {}));
+
+    laptop = await onDevice(laptop, async () => {
+      StorageService.updateCardContent('c1', { question: 'Fixed question' });
+      StorageService.setCardHidden('c2', true);
+      await CloudSyncService.syncNow();
+    });
+    await onDevice(phone, async () => {
+      await CloudSyncService.syncNow();
+      const cards = StorageService.getSessions()[0].concepts[0].retrievalCards;
+      expect(cards.map(c => [c.question, !!c.hidden])).toEqual([['Fixed question', false], ['Q c2', true]]);
+      expect(StorageService.getAllCards().find(c => c.id === 'c1')!.question).toBe('Fixed question');
+    });
+    void laptop;
+  });
+
   it("doesn't send what hasn't changed", async () => {
     newDevice();
     StorageService.saveSession(deck('bio'));

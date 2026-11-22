@@ -1,5 +1,5 @@
 import type { EarningEntry, ExamReport, FocusLogEntry, FocusTask, InterleavingSessionReport, PlannerItem, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
-import { deckWithSavedProgress, withSavedProgress } from '../utils/cardProgress';
+import { deckWithSavedProgress, withNewerContent, withSavedProgress, type CardContentPatch } from '../utils/cardProgress';
 import { STARTING_COINS, guestEarningsAllowance, transferableGuestCoins } from './economy/wallet';
 import { IndexedDbService } from './indexedDbService';
 import { uncoveredMs, type StudyInterval } from '../utils/studyIntervals';
@@ -744,6 +744,24 @@ export class StorageService {
   }
 
   /**
+   * Changes a card's text (or hides it) in the saved cards and in every deck that holds it, marked
+   * with the time, so the edit wins over older copies here and on the student's other devices.
+   * Returns the card as saved, or null if there is no such card.
+   */
+  public static updateCardContent(cardId: string, patch: CardContentPatch, now: Date = new Date()): RetrievalCard | null {
+    const saved = this.getAllCards().find(c => c.id === cardId);
+    if (!saved) return null;
+    const updated: RetrievalCard = { ...saved, ...patch, updatedAt: now.toISOString() };
+    this.saveCards([updated]);
+    return updated;
+  }
+
+  /** Hides a card from every review, or shows it again. */
+  public static setCardHidden(cardId: string, hidden: boolean, now: Date = new Date()): RetrievalCard | null {
+    return this.updateCardContent(cardId, { hidden: hidden || undefined }, now);
+  }
+
+  /**
    * Permanently deletes a card from both the global card queue and any parent sessions
    */
   /**
@@ -925,6 +943,7 @@ export class StorageService {
     const all = this.getAllCards();
     const now = new Date();
     return all.filter(c => {
+      if (c.hidden) return false;
       if (!c.nextReviewDate) return true;
       return new Date(c.nextReviewDate) <= now;
     });
@@ -961,9 +980,13 @@ export class StorageService {
         const nextReviewDate = existing.nextReviewDate || sc.nextReviewDate;
         const isStarred = existing.isStarred !== undefined ? existing.isStarred : sc.isStarred;
 
-        cardMap.set(sc.id, {
+        // A card edited during a review keeps that edit over an older copy in the deck being saved.
+        cardMap.set(sc.id, withNewerContent({
           ...sc,
           ...existing,
+          hidden: sc.hidden,
+          updatedAt: sc.updatedAt,
+          clozeTemplate: sc.clozeTemplate ?? existing.clozeTemplate,
           question: sc.question,
           answer: sc.answer,
           hint: sc.hint || existing.hint,
@@ -977,7 +1000,7 @@ export class StorageService {
           lastReviewDate,
           nextReviewDate,
           isStarred,
-        });
+        }, existing));
       } else {
         cardMap.set(sc.id, sc);
       }
