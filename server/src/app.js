@@ -19,7 +19,7 @@ import { handleDigestRoutes } from './routes/digestRoutes.js';
 import { createResendMailer } from './mailer.js';
 import * as defaultAi from './ai.js';
 import { checkAiRequest } from './aiGuard.js';
-import { clientIp } from './rateLimit.js';
+import { clientIp, limiters } from './rateLimit.js';
 import { enableCompression } from './compression.js';
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5MB
@@ -104,6 +104,23 @@ export function siteUrlFrom(origins) {
   return list.find((o) => !/localhost|127\.0\.0\.1/.test(o)) || list[0] || '';
 }
 
+const oneLine = (text, max) => String(text).replace(/\s*\n\s*/g, ' | ').slice(0, max);
+
+/** An error report from the app, checked and flattened to one log line, or null. */
+export function readClientError(body) {
+  if (!body || typeof body !== 'object') return null;
+  const { kind, message, stack, path, build } = body;
+  if (!['error', 'rejection', 'boundary'].includes(kind) || typeof message !== 'string' || !message.trim()) return null;
+  if (message.length > 500 || (stack !== undefined && (typeof stack !== 'string' || stack.length > 2000))) return null;
+  return {
+    kind,
+    message: oneLine(message, 500),
+    stack: stack ? oneLine(stack, 2000) : '',
+    path: typeof path === 'string' ? oneLine(path, 200) : '?',
+    build: typeof build === 'string' && /^[\w-]{1,40}$/.test(build) ? build : '?',
+  };
+}
+
 export function createApp({ ai = defaultAi, mailer = createResendMailer() } = {}) {
   const allowedOrigins = getAllowedOrigins();
   const siteUrl = siteUrlFrom(allowedOrigins);
@@ -174,6 +191,16 @@ export function createApp({ ai = defaultAi, mailer = createResendMailer() } = {}
           db: dbOk ? 'connected' : 'unreachable',
           aiProxyAvailable: ai.isAiConfigured(),
         });
+      }
+
+      // ERROR REPORTS FROM THE APP: written to the log, where they can be read after each release.
+      if (pathname === '/api/client-errors' && req.method === 'POST') {
+        if (!limiters.clientErrors.take(clientIp(req))) return sendJson(res, 429, { error: 'Too many reports.' });
+        const report = readClientError(body);
+        if (!report) return sendJson(res, 400, { error: 'Not an error report.' });
+        console.warn(`[ClientError] ${report.kind} build=${report.build} path=${report.path} ${report.message}${report.stack ? ` | ${report.stack}` : ''}`);
+        res.writeHead(204);
+        return res.end();
       }
 
       // 2. AI PROXY GATEWAYS (REST & SSE STREAMING) — signed-in users only

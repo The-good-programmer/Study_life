@@ -4,6 +4,10 @@ import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { StorageService } from './services/storageService'
+import { startErrorReporting } from './services/errorReporter'
+
+// Errors students run into reach the server's log.
+startErrorReporting()
 
 // Study data that overflowed localStorage lives in IndexedDB; load it before the first read.
 await StorageService.hydrateOverflow().catch(() => {})

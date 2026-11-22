@@ -677,6 +677,23 @@ describe('CORS', () => {
   });
 });
 
+describe('error reports from the app', () => {
+  it('writes a checked report to the log as one line, and refuses anything else', async () => {
+    const lines = [];
+    const warn = console.warn;
+    console.warn = (...args) => lines.push(args.join(' '));
+    try {
+      const report = { kind: 'error', message: 'TypeError: x is undefined', stack: 'TypeError: x is undefined\n    at render (index-abc.js:1:2)', path: '/', build: 'abc123' };
+      expect((await api('/api/client-errors', { method: 'POST', body: report })).status).toBe(204);
+      expect(lines.at(-1)).toBe('[ClientError] error build=abc123 path=/ TypeError: x is undefined | TypeError: x is undefined | at render (index-abc.js:1:2)');
+      expect((await api('/api/client-errors', { method: 'POST', body: { ...report, kind: 'other' } })).status).toBe(400);
+      expect((await api('/api/client-errors', { method: 'POST', body: { ...report, message: 'x'.repeat(600) } })).status).toBe(400);
+    } finally {
+      console.warn = warn;
+    }
+  });
+});
+
 describe('compression', () => {
   const rawGet = (path, headers) =>
     new Promise((resolve, reject) => {

@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, RotateCcw, Home } from 'lucide-react';
 import { Button } from '../ui/primitives';
+import { reportError } from '../../services/errorReporter';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -29,6 +30,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   public override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('[Studify ErrorBoundary] Uncaught runtime exception caught:', error, errorInfo);
+    reportError(error, 'boundary');
     this.setState({ errorInfo });
   }
 

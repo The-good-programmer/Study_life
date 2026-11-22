@@ -55,6 +55,7 @@ const DEFAULTS = {
   reminders: { max: 30, windowMs: 10 * MINUTE }, // per IP
   friends: { max: 20, windowMs: 10 * MINUTE }, // per IP: adding by code, so codes can't be guessed
   digest: { max: 30, windowMs: 10 * MINUTE }, // per IP
+  clientErrors: { max: 20, windowMs: 10 * MINUTE }, // per IP: error reports from the app
 };
 
 export const limiters = {};
