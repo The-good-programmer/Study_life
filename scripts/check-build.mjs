@@ -11,6 +11,10 @@ const dist = 'dist';
 const problems = [];
 const sw = readFileSync(join(dist, 'sw.js'), 'utf8');
 if (sw.includes('__BUILD_ID__') || !/const BUILD_ID = '[0-9a-f]{12}'/.test(sw)) problems.push('dist/sw.js has no build id');
+// The public pages (src/publicPages) that search engines read.
+for (const f of ['decks/index.html', 'sitemap.xml', 'robots.txt']) {
+  if (!existsSync(join(dist, f))) problems.push(`dist/${f} is missing (public pages)`);
+}
 for (const f of ['sw-routes.js', 'register-sw.js', 'index.html']) {
   if (!existsSync(join(dist, f))) problems.push(`dist/${f} is missing`);
 }

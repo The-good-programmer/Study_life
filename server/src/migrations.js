@@ -308,4 +308,18 @@ export const MIGRATIONS = [
       END $$;
     `,
   },
+  {
+    // Sharing decks: a privacy-safe author name (first name and initial; never named under 16), the
+    // sharer's confirmation that they may share the cards, and the AI content check's result.
+    id: '009_deck_sharing_privacy',
+    sql: `
+      ALTER TABLE shared_decks ADD COLUMN rights_confirmed BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE shared_decks ADD COLUMN content_check TEXT NOT NULL DEFAULT 'unchecked';
+      UPDATE shared_decks d SET author_name = 'a Studify student'
+        FROM users u WHERE d.author_id = u.id AND (u.age IS NULL OR u.age < 16);
+      UPDATE shared_decks SET author_name = split_part(author_name, ' ', 1) ||
+        CASE WHEN strpos(trim(author_name), ' ') > 0 THEN ' ' || upper(left(split_part(trim(author_name), ' ', 2), 1)) || '.' ELSE '' END
+        WHERE author_name <> 'a Studify student';
+    `,
+  },
 ];

@@ -1,9 +1,10 @@
 import React from 'react';
+import type { AppView } from './views';
 import { Home, Layers, Award, LineChart, Timer } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
-type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus';
+type View = AppView;
 
 interface MobileTabBarProps {
   activeView: View;

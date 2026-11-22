@@ -17,6 +17,7 @@ import {
   Search,
   Settings,
   Shuffle,
+  Dumbbell,
   Sparkles,
   Target,
   Upload,
@@ -53,6 +54,7 @@ interface CommandPaletteProps {
   onOpenSubjects?: () => void;
   onOpenPlanner?: () => void;
   onOpenFocus?: () => void;
+  onOpenPractice?: () => void;
 }
 
 type Group = 'Go to' | 'Your decks' | 'Starter decks' | 'Study a deck' | 'Focus sound';
@@ -101,6 +103,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onOpenSubjects,
   onOpenPlanner,
   onOpenFocus,
+  onOpenPractice,
 }) => {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -118,6 +121,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     const goTo: PaletteItem[] = [
       { id: 'go-today', title: 'Today', subtitle: 'Your session and due cards', keywords: 'home', icon: Home, group: 'Go to', run: run(onOpenToday) },
       { id: 'go-library', title: 'Library', subtitle: 'All your decks', keywords: 'decks', icon: BookMarked, group: 'Go to', run: run(onOpenLibrary) },
+      ...(onOpenPractice ? [{ id: 'go-practice', title: 'Practice', subtitle: 'Every way to study: review, mock exam, speed match, mixing decks', keywords: 'modes exam match interleaving', icon: Dumbbell, group: 'Go to' as const, run: run(onOpenPractice) }] : []),
       { id: 'go-focus', title: 'Focus', subtitle: 'Pomodoro timer, tasks and notes', keywords: 'pomodoro timer workspace tasks notes concentrate', icon: Timer, group: 'Go to', run: run(onOpenFocus) },
       { id: 'go-planner', title: 'Planner', subtitle: 'Exams, homework and a plan for each day', keywords: 'calendar schedule syllabus deadlines homework exams', icon: CalendarDays, group: 'Go to', run: run(onOpenPlanner) },
       { id: 'go-subjects', title: 'Subjects', subtitle: 'Decks grouped by class or exam', keywords: 'folders', icon: Layers, group: 'Go to', run: run(onOpenSubjects) },
@@ -184,6 +188,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     onOpenSubjects,
     onOpenPlanner,
     onOpenFocus,
+    onOpenPractice,
   ]);
 
   const q = query.trim().toLowerCase();

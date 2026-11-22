@@ -1,4 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
+import type { AppView } from './components/layout/views';
 import { Loader2, WifiOff } from 'lucide-react';
 import type { StudySession, UserStats, UserAccount } from './types';
 import { StorageService } from './services/storageService';
@@ -37,6 +38,7 @@ const AuthModal = lazy(() => import('./components/auth/AuthModal').then(m => ({ 
 const StudyEstateCampus = WORLD_3D_ENABLED ? lazy(() => import('./components/mascot/AxolotlStudyHabitat').then(m => ({ default: m.StudyEstateCampus }))) : null;
 const DailyMissionHome = lazy(() => import('./components/home/DailyMissionHome').then(m => ({ default: m.DailyMissionHome })));
 const PlannerPage = lazy(() => import('./components/planner/PlannerPage').then(m => ({ default: m.PlannerPage })));
+const PracticePage = lazy(() => import('./components/practice/PracticePage').then(m => ({ default: m.PracticePage })));
 const FocusPage = lazy(() => import('./components/focus/FocusPage').then(m => ({ default: m.FocusPage })));
 // Dialogs most visits never open, and the payout banner (only with the economy on), load when shown.
 const InstallAppDialog = lazy(() => import('./components/common/InstallAppDialog').then(m => ({ default: m.InstallAppDialog })));
@@ -80,16 +82,19 @@ export function App() {
   const [isStationOpen, setIsStationOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<StudySession | null>(null);
   // The Home Screen shortcut "Focus" opens /?view=focus.
-  const [view, setView] = useState<'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus'>(() =>
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'focus' ? 'focus' : 'home',
-  );
+  const [view, setView] = useState<AppView>(() => {
+    if (typeof window === 'undefined') return 'home';
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'focus') return 'focus';
+    if (params.get('report')) return 'studio'; // a report link from a public deck page
+    return 'home';
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isDeckStudioOpen, setIsDeckStudioOpen] = useState(false);
   const [isStarterCatalogOpen, setIsStarterCatalogOpen] = useState(false);
   const [isCharacterCustomizerOpen, setIsCharacterCustomizerOpen] = useState(false);
   const [deckStudioTab, setDeckStudioTab] = useState<'create' | 'import' | 'occlusion'>('create');
-  const [libraryTab, setLibraryTab] = useState<'my-decks' | 'starred' | 'curated'>('my-decks');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => AuthService.getCurrentUser());
   // A password reset link (/?reset=<token>) opens sign-in on "choose a new password".
@@ -117,10 +122,41 @@ export function App() {
     return code ?? FriendsService.pendingInvite();
   });
   const invitedWhileSignedOut = Boolean(friendInvite) && !AuthService.getCurrentUser();
+  // "Report this deck" on a shared deck's public page links to /?report=<slug>: the Library's
+  // Community tab opens with the report form for it.
+  const [reportFromLink] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const url = new URL(window.location.href);
+    const slug = url.searchParams.get('report');
+    if (!slug) return null;
+    url.searchParams.delete('report');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    return slug;
+  });
+  // A classmate's share link (/?shared=<slug>) adds their deck and opens its cards.
+  const [sharedFromLink] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const url = new URL(window.location.href);
+    const slug = url.searchParams.get('shared');
+    if (!slug) return null;
+    url.searchParams.delete('shared');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    return slug;
+  });
+  // A deck's public page (/decks/<id>/) links to /?deck=<id>, which opens that starter deck's cards.
+  const [deckFromLink] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const url = new URL(window.location.href);
+    const id = url.searchParams.get('deck');
+    if (!id) return null;
+    url.searchParams.delete('deck');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    return id;
+  });
   // A first visit (no decks yet) starts with "What do you want to study?" instead of a tour. A topic typed
   // before signing up brings it back after signing in.
   const [quickStart, setQuickStart] = useState<{ topic: string | null } | null>(() =>
-    !resetToken && !friendInvite && (shouldShowQuickStart() || (pendingQuickStartTopic() && AuthService.getCurrentUser()))
+    !resetToken && !friendInvite && !deckFromLink && !sharedFromLink && !reportFromLink && (shouldShowQuickStart() || (pendingQuickStartTopic() && AuthService.getCurrentUser()))
       ? { topic: pendingQuickStartTopic() }
       : null,
   );
@@ -169,6 +205,46 @@ export function App() {
 
   // Keep a subscribed calendar up to date with the planner.
   useEffect(() => CalendarFeedService.startAutoPublish(), []);
+
+  // Adds and opens the deck a share link pointed at. If it's gone (unshared, or hidden after reports),
+  // a first visit gets the quick start instead.
+  useEffect(() => {
+    if (!sharedFromLink) return;
+    let cancelled = false;
+    void import('./services/communityService').then(async ({ CommunityService }) => {
+      const result = await CommunityService.addToLibrary(sharedFromLink);
+      if (cancelled) return;
+      if (!result.success) {
+        if (shouldShowQuickStart()) setQuickStart({ topic: null });
+        return;
+      }
+      markQuickStartSeen();
+      setActiveSession({ ...result.session, currentPhase: 'retrieval', casualFlashcardMode: true });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sharedFromLink]);
+
+  // Opens the deck a public page linked to. The catalog loads only for this, so it stays out of the
+  // first download. An unknown id falls back to the first-visit quick start.
+  useEffect(() => {
+    if (!deckFromLink) return;
+    let cancelled = false;
+    void import('./components/onboarding/readyMadeDecks').then(({ starterDeckById, readyMadeSession }) => {
+      if (cancelled) return;
+      const deck = starterDeckById(deckFromLink);
+      if (!deck) {
+        if (shouldShowQuickStart()) setQuickStart({ topic: null });
+        return;
+      }
+      markQuickStartSeen();
+      setActiveSession(readyMadeSession(deck));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [deckFromLink]);
 
   // Keep user and stats synchronized with AuthService
   useEffect(() => {
@@ -255,7 +331,7 @@ export function App() {
     setStats(StorageService.getStats());
   };
 
-  const handleNavigate = (targetView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus') => {
+  const handleNavigate = (targetView: AppView) => {
     setLibraryNotes(null);
     setView(targetView);
     setStats(StorageService.getStats());
@@ -329,10 +405,8 @@ export function App() {
   const savedSessions = StorageService.getSessions();
   // Today's review across decks: what "Start review" studies and the count shown beside it.
   const dailyQueue = StorageService.getDailyQueue();
-  // Mock exams and mixing decks show once something has been studied (before, they would open empty).
-  const allCards = StorageService.getAllCards();
-  const hasStudied = allCards.some(card => card.reps > 0);
-  const starredCardsCount = allCards.filter(c => c.isStarred).length;
+  // Practice (mock exams, mixing decks) shows once something has been studied (before, it would open empty).
+  const hasStudied = StorageService.getAllCards().some(card => card.reps > 0);
 
   const handleQuickStudy = () => {
     if (dailyQueue.cards.length > 0) {
@@ -372,15 +446,9 @@ export function App() {
           setDeckStudioTab('create');
           setIsDeckStudioOpen(true);
         }}
-        onOpenStarterCatalog={() => setIsStarterCatalogOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onQuickStudy={handleQuickStudy}
-        onOpenLibraryTab={(tab) => {
-          setView('home');
-          setLibraryTab(tab);
-        }}
         savedDecksCount={savedSessions.length}
-        starredCardsCount={starredCardsCount}
         dueCardsCount={dailyQueue.cards.length}
         isOnline={isOnline}
         isOpenMobile={isMobileSidebarOpen}
@@ -459,7 +527,6 @@ export function App() {
             {view === 'studio' && (
               <IngestionHub
                 key={`${currentUser?.id || 'guest'}-${libraryNotes?.key ?? 0}`}
-                initialLibraryTab={libraryTab}
                 initialNotes={libraryNotes?.text}
                 onOpenAuth={() => handleOpenAuth()}
                 onStartDailyReview={handleQuickStudy}
@@ -468,9 +535,20 @@ export function App() {
                 onStartMatch={handleStartMatch}
                 onStartAudioBriefing={handleStartAudioBriefing}
                 onOpenDashboard={() => handleNavigate('dashboard')}
+                onOpenFolders={() => handleNavigate('folders')}
+                initialLibraryTab={reportFromLink ? 'community' : undefined}
+                reportSlug={reportFromLink}
+                onOpenSanctuary={openCampus}
+              />
+            )}
+            {view === 'practice' && (
+              <PracticePage
+                onStartDailyReview={handleQuickStudy}
+                onStartSession={handleStartSession}
+                onStartMatch={handleStartMatch}
                 onOpenExam={() => handleNavigate('exam')}
                 onOpenInterleaving={() => handleNavigate('interleave')}
-                onOpenSanctuary={openCampus}
+                onOpenStarterCatalog={() => setIsStarterCatalogOpen(true)}
               />
             )}
             {view === 'dashboard' && (
@@ -486,7 +564,7 @@ export function App() {
             )}
             {view === 'exam' && (
               <ExamSimulator
-                onBack={() => setView('home')}
+                onBack={() => setView(hasStudied ? 'practice' : 'home')}
                 onStartRemediationSession={(session) => {
                   handleStartSession(session);
                 }}
@@ -494,7 +572,7 @@ export function App() {
             )}
             {view === 'interleave' && (
               <InterleavingArena
-                onBack={() => setView('home')}
+                onBack={() => setView(hasStudied ? 'practice' : 'home')}
                 onSessionComplete={() => {
                   setStats(StorageService.getStats());
                 }}
@@ -557,6 +635,11 @@ export function App() {
             key={stationSession?.id || 'none'}
             isOpen={isStationOpen}
             session={stationSession}
+            onOpenSignUp={() => {
+              setIsStationOpen(false);
+              setStationSession(null);
+              handleOpenAuth('register');
+            }}
             onClose={() => {
               setIsStationOpen(false);
               setStationSession(null);
@@ -622,6 +705,7 @@ export function App() {
             }}
             onOpenExam={() => handleNavigate('exam')}
             onOpenInterleaving={() => handleNavigate('interleave')}
+            onOpenPractice={hasStudied ? () => handleNavigate('practice') : undefined}
             onOpenSanctuary={openCampus}
             onOpenToday={() => handleNavigate('home')}
             onOpenLibrary={() => handleNavigate('studio')}

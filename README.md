@@ -99,6 +99,37 @@ npm run build
 npm run check:build   # service worker stamped, avatar manifest points at real files
 ```
 
+### Public pages (found on Google)
+
+The build also writes plain-HTML pages that search engines and link previews can read
+(`src/publicPages/buildPublicPages.ts`, run by the `publicPages` plugin in `vite.config.ts`):
+
+- `/decks/`: what Studify is, how it works, and every starter deck by subject.
+- `/decks/<deck id>/`: one deck with all its text cards (cloze gaps blanked), flashcard markup for Google
+  (`Quiz` / `Question`), and *Study these cards free*, which opens `/?deck=<id>` straight into its flashcards.
+- `sitemap.xml` and `robots.txt` (with the sitemap's address).
+
+Addresses use `SITE_URL` (set it on the static site when it moves to its own domain), or else `og:url` in
+`index.html`.
+
+### Sharing decks
+
+Signed-in students share a deck from its details (**Share**); classmates open the link (`/?shared=<slug>`) straight
+into its cards, with no account, and anyone can browse shared decks in Library → Community.
+
+- **What is shared:** the cards and their explanations only (`src/services/deckSharing.ts`): never review history,
+  hidden cards, sketches, notes, PDFs or the education profile. A copy someone adds gets new ids and starts fresh.
+- **Who is named:** first name and initial ("Ada L."), and students under 16 never ("a Studify student"). Only that is
+  stored; profile edits are sent to the server (`PATCH /api/auth/me`) so it stays current.
+- **Checks:** the sharer confirms the cards are theirs to share; the AI checks each deck when it is shared and refuses
+  unsafe ones (when the AI isn't available the deck is shared and marked unchecked); three reports hide a deck.
+- **Public pages:** a shared deck gets a page at `/decks/c/<slug>/` (listed on `/decks/` and in the sitemap) once the
+  AI check passed, it has 10+ cards and a description, was shared 3+ days ago and was never reported. The build reads
+  them from the API (`GET /api/decks/public-pages`, using `VITE_API_BASE_URL`; none when it can't be reached). Each page
+  asks the API whether its deck is still up (`/api/decks/<slug>/visible`) and, if it was unshared or hidden, says
+  "This deck was removed" and asks search engines to drop it, without waiting for a rebuild. *Report this deck* opens
+  `/?report=<slug>`. A scheduled task rebuilds the site daily so new decks get pages.
+
 ### Deploying the website
 
 Both halves run on [Render](https://render.com), deployed from `fix/audit-hardening`:
