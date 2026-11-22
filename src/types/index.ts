@@ -127,6 +127,42 @@ export interface DiagnosticReport {
 
 export type PlannerItemKind = 'exam' | 'homework' | 'other';
 
+/** A lesson in the student's weekly timetable (school or university). */
+export interface TimetableLesson {
+  id: string;
+  /** The subject's name as shown, e.g. "Biology". */
+  subject: string;
+  /** The Studify subject (folder) it belongs to, when there is one. */
+  folderId?: string;
+  /** Day of the week, ISO: 1 = Monday … 7 = Sunday. */
+  weekday: number;
+  /** Local times of day, HH:MM. */
+  start: string;
+  end: string;
+  room?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What the student noted right after a lesson: the topic, any homework, and the cards made from it. */
+export interface LessonLog {
+  id: string;
+  lessonId: string;
+  /** The lesson's day, YYYY-MM-DD. */
+  date: string;
+  subject: string;
+  folderId?: string;
+  topic: string;
+  notes?: string;
+  /** The planner item made for the homework. */
+  homeworkItemId?: string;
+  /** The subject's class-notes deck the cards went into, and how many. */
+  deckId?: string;
+  cardCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** A dated item in the planner: an exam to prepare for, homework to hand in, or anything else. */
 export interface PlannerItem {
   id: string;

@@ -273,19 +273,6 @@ export function App() {
     [],
   );
 
-  // Google One Tap automatic prompt / auto-login on startup
-  useEffect(() => {
-    if (!currentUser && GoogleAuthService.isGoogleConfigured()) {
-      GoogleAuthService.initOneTapAutoLogin(async (payload) => {
-        const res = await AuthService.signInWithGoogle(payload);
-        if (res.success && res.user) {
-          GoogleAuthService.cancelOneTap();
-          setCurrentUser(res.user);
-        }
-      });
-    }
-  }, [currentUser]);
-
   // Global keyboard shortcut for Command Palette (⌘K / Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -358,6 +345,24 @@ export function App() {
   );
   const openCharacterCustomizer = WORLD_3D_ENABLED ? () => setIsCharacterCustomizerOpen(true) : undefined;
 
+  // Practice (mock exams, mixing decks) shows once something has been studied (before, it would open empty).
+  const hasStudied = StorageService.getAllCards().some(card => card.reps > 0);
+
+  // Google's "Sign in with Google" prompt, only for someone who has studied here before (it brings back
+  // their account in one tap), and never over the first-visit dialog or a review. Shown to everyone on
+  // arrival, it covered a new student's first screen; after their first session it offers to save it.
+  const quietScreen = !quickStart && !activeSession && !matchSession;
+  useEffect(() => {
+    if (currentUser || !hasStudied || !quietScreen || !GoogleAuthService.isGoogleConfigured()) return;
+    GoogleAuthService.initOneTapAutoLogin(async (payload) => {
+      const res = await AuthService.signInWithGoogle(payload);
+      if (res.success && res.user) {
+        GoogleAuthService.cancelOneTap();
+        setCurrentUser(res.user);
+      }
+    });
+  }, [currentUser, hasStudied, quietScreen]);
+
   // If in an active match game arena, display full-screen Quizlet-style Match Arena
   if (matchSession) {
     return (
@@ -405,8 +410,6 @@ export function App() {
   const savedSessions = StorageService.getSessions();
   // Today's review across decks: what "Start review" studies and the count shown beside it.
   const dailyQueue = StorageService.getDailyQueue();
-  // Practice (mock exams, mixing decks) shows once something has been studied (before, it would open empty).
-  const hasStudied = StorageService.getAllCards().some(card => card.reps > 0);
 
   const handleQuickStudy = () => {
     if (dailyQueue.cards.length > 0) {

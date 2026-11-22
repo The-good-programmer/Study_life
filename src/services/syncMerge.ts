@@ -11,7 +11,7 @@ import type { RetrievalCard } from '../types';
 /** When each item was deleted (ISO time), by id. */
 export type Deletions = Record<string, string>;
 
-export const DELETION_KINDS = ['decks', 'folders', 'planner', 'focus_tasks'] as const;
+export const DELETION_KINDS = ['decks', 'folders', 'planner', 'focus_tasks', 'timetable', 'lesson_logs'] as const;
 export type DeletionKind = (typeof DELETION_KINDS)[number];
 export type DeletionLog = Record<DeletionKind, Deletions>;
 
@@ -20,7 +20,7 @@ export const DELETION_RETENTION_DAYS = 90;
 
 const DAY_MS = 86_400_000;
 
-export const emptyDeletionLog = (): DeletionLog => ({ decks: {}, folders: {}, planner: {}, focus_tasks: {} });
+export const emptyDeletionLog = (): DeletionLog => ({ decks: {}, folders: {}, planner: {}, focus_tasks: {}, timetable: {}, lesson_logs: {} });
 
 const timeOf = (iso: string | undefined): number => {
   const t = Date.parse(iso ?? '');

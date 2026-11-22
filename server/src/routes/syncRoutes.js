@@ -20,7 +20,7 @@ const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
 const MAX_DELETED_SESSIONS = 2000;
 
 /** The kinds of synced document an account can hold (see migration 005). */
-export const DOCUMENT_KINDS = ['folders', 'planner', 'focus_tasks', 'focus_log', 'focus_notes', 'deletions'];
+export const DOCUMENT_KINDS = ['folders', 'planner', 'timetable', 'lesson_logs', 'focus_tasks', 'focus_log', 'focus_notes', 'deletions'];
 
 class BadRequest extends Error {}
 

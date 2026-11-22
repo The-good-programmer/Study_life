@@ -11,7 +11,7 @@
  * Guests don't sync.
  */
 
-import type { FocusLogEntry, FocusTask, PlannerItem, RetrievalCard, StudySession, SubjectFolder, UserStats } from '../types';
+import type { FocusLogEntry, FocusTask, LessonLog, PlannerItem, RetrievalCard, StudySession, SubjectFolder, TimetableLesson, UserStats } from '../types';
 import { StorageService } from './storageService';
 import { appearanceOf, characterService } from './characterService';
 import { ApiConfig } from './apiConfig';
@@ -30,6 +30,8 @@ export interface CloudSyncConfig {
 export interface SyncDocuments {
   folders?: { items: SubjectFolder[] };
   planner?: { items: PlannerItem[] };
+  timetable?: { items: TimetableLesson[] };
+  lesson_logs?: { items: LessonLog[] };
   focus_tasks?: { items: FocusTask[] };
   focus_log?: { items: FocusLogEntry[] };
   focus_notes?: SyncedText;
@@ -64,7 +66,7 @@ const VISIBLE_SYNC_GAP_MS = 60_000;
 /** Pushes are split to stay under the server's 5 MB request limit. */
 const MAX_PUSH_BYTES = 3.5 * 1024 * 1024;
 
-const DOCUMENT_KINDS = ['folders', 'planner', 'focus_tasks', 'focus_log', 'focus_notes', 'deletions'] as const;
+const DOCUMENT_KINDS = ['folders', 'planner', 'timetable', 'lesson_logs', 'focus_tasks', 'focus_log', 'focus_notes', 'deletions'] as const;
 
 const DEFAULT_CONFIG: CloudSyncConfig = { enabled: true, lastSyncAt: null, status: 'idle' };
 
@@ -107,6 +109,8 @@ function localDocuments(): Required<SyncDocuments> {
   return {
     folders: { items: StorageService.getFolders() },
     planner: { items: StorageService.getPlannerItems() },
+    timetable: { items: StorageService.getTimetable() },
+    lesson_logs: { items: StorageService.getLessonLogs() },
     focus_tasks: { items: StorageService.getFocusTasks() },
     focus_log: { items: StorageService.getFocusLog() },
     focus_notes: { text: StorageService.getFocusNotes(), updatedAt: StorageService.getFocusNotesUpdatedAt() },
@@ -332,6 +336,10 @@ export class CloudSyncService {
       replaceIfChanged(folders, mergeById(folders, itemsOf<SubjectFolder>(docs.folders), deletions.folders), v => StorageService.saveFolders(v));
       const planner = StorageService.getPlannerItems();
       replaceIfChanged(planner, mergeById(planner, itemsOf<PlannerItem>(docs.planner), deletions.planner), v => StorageService.savePlannerItems(v));
+      const timetable = StorageService.getTimetable();
+      replaceIfChanged(timetable, mergeById(timetable, itemsOf<TimetableLesson>(docs.timetable), deletions.timetable), v => StorageService.saveTimetable(v));
+      const lessonLogs = StorageService.getLessonLogs();
+      replaceIfChanged(lessonLogs, mergeById(lessonLogs, itemsOf<LessonLog>(docs.lesson_logs), deletions.lesson_logs), v => StorageService.saveLessonLogs(v));
 
       let focusChanged = false;
       const tasks = StorageService.getFocusTasks();

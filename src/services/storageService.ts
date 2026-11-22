@@ -1,4 +1,4 @@
-import type { EarningEntry, ExamReport, FocusLogEntry, FocusTask, InterleavingSessionReport, PlannerItem, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile } from '../types';
+import type { EarningEntry, ExamReport, FocusLogEntry, FocusTask, InterleavingSessionReport, PlannerItem, RetrievalCard, StudySession, UserStats, StudentEducationProfile, SubjectFolder, CognitiveMemoryProfile, TimetableLesson, LessonLog } from '../types';
 import { deckWithSavedProgress, withNewerContent, withSavedProgress, type CardContentPatch } from '../utils/cardProgress';
 import { STARTING_COINS, guestEarningsAllowance, transferableGuestCoins } from './economy/wallet';
 import { IndexedDbService } from './indexedDbService';
@@ -22,6 +22,8 @@ const STORAGE_KEYS = {
   COMPLETIONS: 'studify_paid_completions_v1',
   WEEKLY_XP: 'studify_weekly_xp_v1',
   PLANNER: 'studify_planner_v1',
+  TIMETABLE: 'studify_timetable_v1',
+  LESSON_LOGS: 'studify_lesson_logs_v1',
   FOCUS_TASKS: 'studify_focus_tasks_v1',
   FOCUS_LOG: 'studify_focus_log_v1',
   FOCUS_NOTES: 'studify_focus_notes_v1',
@@ -72,6 +74,8 @@ const PROFILE_DATA_KEYS = [
   STORAGE_KEYS.COMPLETIONS,
   STORAGE_KEYS.WEEKLY_XP,
   STORAGE_KEYS.PLANNER,
+  STORAGE_KEYS.TIMETABLE,
+  STORAGE_KEYS.LESSON_LOGS,
   STORAGE_KEYS.FOCUS_TASKS,
   STORAGE_KEYS.FOCUS_LOG,
   STORAGE_KEYS.FOCUS_NOTES,
@@ -1164,6 +1168,26 @@ export class StorageService {
 
   public static savePlannerItems(items: PlannerItem[]): void {
     this.safeSetItem(this.getKey(STORAGE_KEYS.PLANNER), JSON.stringify(items));
+    this.notifyMutation();
+  }
+
+  /** The weekly timetable's lessons (synced, like the planner). */
+  public static getTimetable(): TimetableLesson[] {
+    return this.readArray<TimetableLesson>(STORAGE_KEYS.TIMETABLE);
+  }
+
+  public static saveTimetable(lessons: TimetableLesson[]): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.TIMETABLE), JSON.stringify(lessons));
+    this.notifyMutation();
+  }
+
+  /** What was logged after each lesson (synced). */
+  public static getLessonLogs(): LessonLog[] {
+    return this.readArray<LessonLog>(STORAGE_KEYS.LESSON_LOGS);
+  }
+
+  public static saveLessonLogs(logs: LessonLog[]): void {
+    this.safeSetItem(this.getKey(STORAGE_KEYS.LESSON_LOGS), JSON.stringify(logs));
     this.notifyMutation();
   }
 

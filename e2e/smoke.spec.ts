@@ -188,3 +188,62 @@ test('a student shares a deck, and a classmate opens the link straight into its 
   await anaContext.close();
   await benContext.close();
 });
+
+test('a lesson in the timetable is logged after class: homework goes in the planner, the topic becomes cards', async ({ page, request }) => {
+  const errors = watchErrors(page);
+  const me = await newAccount(request, 'Pupil');
+  await page.addInitScript(() => localStorage.setItem('axon_tour_seen', 'true'));
+  const deckJson = JSON.stringify({
+    title: 'Calvin cycle',
+    category: 'Biology',
+    description: 'Lesson cards',
+    concepts: [
+      {
+        title: 'Calvin cycle',
+        mentalModel: 'A sugar factory.',
+        coreTakeaways: ['It runs in the stroma'],
+        keyTerms: [],
+        feynmanPrompt: 'Explain it.',
+        sampleMasteryExplanation: '',
+        retrievalCards: [
+          { question: 'Where does the Calvin cycle run?', answer: 'In the stroma', cardType: 'standard' },
+          { question: 'Which enzyme fixes CO2?', answer: 'RuBisCO', cardType: 'standard' },
+        ],
+      },
+    ],
+  });
+  await standInForAi(page, body => (JSON.stringify(body).includes('verdict') ? JSON.stringify({ cards: [] }) : deckJson));
+  await page.goto('/');
+  await signIn(page, me.email);
+
+  // A Biology lesson today that has already started.
+  const today = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][(new Date().getDay() + 6) % 7];
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Planner' }).click();
+  await page.getByRole('button', { name: 'Add lesson' }).first().click();
+  const add = page.getByRole('dialog', { name: 'Add a lesson' });
+  await add.getByLabel('Subject').fill('Biology');
+  await add.getByRole('radio', { name: today }).click();
+  await add.getByLabel('Starts').fill('00:00');
+  await add.getByLabel('Ends').fill('00:01');
+  await add.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^Edit Biology/ }).first()).toBeVisible();
+
+  // Today: log it.
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /Today/ }).click();
+  const afterClass = page.getByRole('region', { name: 'After class' });
+  await afterClass.getByRole('button', { name: 'Log it' }).click();
+  const log = page.getByRole('dialog', { name: 'What did you cover?' });
+  await log.getByLabel('Topic').fill('The Calvin cycle');
+  await log.getByLabel(/Homework/).fill('Worksheet 4');
+  await log.getByRole('button', { name: 'Save and make cards' }).click();
+  await expect(page.getByText(/2 cards added to Biology: class notes/)).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Done' }).click();
+  await expect(afterClass.getByText(/The Calvin cycle · 2 cards/)).toBeVisible();
+
+  // The homework is in the planner, and the cards are in the subject's class notes.
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Planner' }).click();
+  await expect(page.getByText('Biology: Worksheet 4').first()).toBeVisible();
+  const deck = await page.evaluate(id => (JSON.parse(localStorage.getItem(`studify_sessions_v1_${id}`) || '[]') as { title: string; concepts: { retrievalCards: unknown[] }[] }[]).find(d => d.title === 'Biology: class notes'), me.id);
+  expect(deck?.concepts[0].retrievalCards).toHaveLength(2);
+  expectNoErrors(errors);
+});

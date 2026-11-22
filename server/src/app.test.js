@@ -230,6 +230,14 @@ describe('cloud sync', () => {
     expect((await api('/api/sync/pull', { token: a.token })).data.documents.planner).toEqual({ items: [] });
   });
 
+  it('syncs the timetable and lesson logs like the planner', async () => {
+    const user = await register('timetable@example.com');
+    const timetable = { items: [{ id: 'lesson-1', subject: 'Biology', weekday: 1, start: '09:00', end: '09:45', updatedAt: '2026-11-23T08:00:00Z' }] };
+    const lesson_logs = { items: [{ id: 'log-1', lessonId: 'lesson-1', date: '2026-11-23', subject: 'Biology', topic: 'Calvin cycle', updatedAt: '2026-11-23T10:00:00Z' }] };
+    expect((await api('/api/sync/push', { method: 'POST', token: user.token, body: { documents: { timetable, lesson_logs } } })).status).toBe(200);
+    expect((await api('/api/sync/pull', { token: user.token })).data.documents).toEqual({ timetable, lesson_logs });
+  });
+
   it('refuses unknown document kinds and oversized documents', async () => {
     const a = await register('docs-bad@example.com');
     const unknown = await api('/api/sync/push', { method: 'POST', token: a.token, body: { documents: { wallet: { coins: 1e9 } } } });
