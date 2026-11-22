@@ -26,6 +26,7 @@ import { gamepadService, type GamepadAction } from '../../services/gamepadServic
 import confetti from 'canvas-confetti';
 import { StudyHUD } from './StudyHUD';
 import { CardEditDialog } from './CardEditDialog';
+import { CardTutor } from './CardTutor';
 import type { CardContentPatch } from '../../utils/cardProgress';
 import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
 import { haptics } from '../../services/hapticsService';
@@ -1123,6 +1124,13 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                   <span className="text-xs text-ink-subtle">Or tap the card. On a phone, swipe it.</span>
                 </div>
               ) : null}
+
+              {/* Ask the AI about the card */}
+              {isAnswerRevealed && (
+                <div onClick={(e) => e.stopPropagation()} className="mt-5">
+                  <CardTutor key={currentCard.id} card={currentCard} wrongPick={selectedOption !== null && isCorrect === false ? selectedOption : null} />
+                </div>
+              )}
 
               {/* Rating */}
               {isAnswerRevealed && selectedOption === null && (
