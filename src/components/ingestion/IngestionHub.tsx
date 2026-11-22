@@ -3,6 +3,7 @@ import { ECONOMY_VISIBLE } from '../../services/features';
 import { useNeedsSignInForAi } from '../../hooks/useAiAccess';
 import { AiUnavailableNotice } from '../common/AiUnavailableNotice';
 import { GuestDeck } from '../../services/guestDeck';
+import { Mascot } from '../mascot/Mascot';
 import { 
   X,
   Sparkles, 
@@ -56,7 +57,7 @@ import { Badge, Button, IconButton, ProgressBar } from '../ui/primitives';
 import { ActionMenu } from '../ui/ActionMenu';
 import { EducationCatalog } from '../../services/educationCatalog';
 import { SubjectFolderModal } from '../studio/SubjectFolderModal';
-import { FOLDER_COLORS } from '../studio/folderOptions';
+import { FOLDER_COLORS, deckColor } from '../studio/folderOptions';
 import { MoveToFolderModal } from '../studio/MoveToFolderModal';
 import { fillCloze } from '../../utils/cloze';
 import { appendNotes } from '../../services/photoNotes';
@@ -854,7 +855,11 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
         {activeLibraryTab === 'my-decks' && (
           filteredMyDecks.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-line-strong px-6 py-12 text-center">
-              <BookMarked className="mx-auto h-8 w-8 text-ink-subtle" aria-hidden="true" />
+              {deckSearch || selectedFolderId !== 'all' ? (
+                <BookMarked className="mx-auto h-8 w-8 text-ink-subtle" aria-hidden="true" />
+              ) : (
+                <Mascot mood="sleepy" className="mx-auto h-20 w-24 text-ink" />
+              )}
               <p className="mt-3 text-[15px] font-medium text-ink">
                 {deckSearch
                   ? 'No decks match your filter'
@@ -875,6 +880,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                 const totalMins = deck.concepts.reduce((acc, c) => acc + (c.estimatedMinutes || 5), 0);
                 const folder = folders.find(f => f.id === deck.folderId);
                 const color = folder ? FOLDER_COLORS.find(c => c.id === folder.color) || FOLDER_COLORS[0] : null;
+                const tile = deckColor(deck, folder);
                 return (
                   <article
                     key={deck.id}
@@ -917,10 +923,18 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                     <button
                       type="button"
                       onClick={() => (onOpenDeckStation ? onOpenDeckStation(deck) : onStartSession(deck))}
-                      className="mt-3 text-left cursor-pointer"
+                      className="mt-3 flex items-start gap-3 text-left cursor-pointer"
                     >
-                      <h3 className="line-clamp-2 text-[15px] font-medium leading-snug text-ink group-hover:text-brand-text">{deck.title}</h3>
-                      {deck.description && <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-ink-subtle">{deck.description}</p>}
+                      <span
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold ${tile.bg} ${tile.text}`}
+                        aria-hidden="true"
+                      >
+                        {folder?.icon || deck.title.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="min-w-0">
+                        <h3 className="line-clamp-2 text-[15px] font-medium leading-snug text-ink group-hover:text-brand-text">{deck.title}</h3>
+                        {deck.description && <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-ink-subtle">{deck.description}</p>}
+                      </span>
                     </button>
 
                     <div className="mt-auto flex items-center justify-between pt-4 text-[13px] text-ink-subtle">

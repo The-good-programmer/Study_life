@@ -820,8 +820,8 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
             </div>
           )}
 
-          {/* Card */}
-          <div className="relative">
+          {/* Card (keyed, so each new card is dealt in) */}
+          <div key={currentCard.id} className="relative animate-card-deal">
             <div className="pointer-events-none absolute inset-x-4 -bottom-2 h-full rounded-3xl border border-line bg-surface" aria-hidden="true" />
             <div
               onClick={() => {
@@ -844,7 +844,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                 transition: touchOffset ? 'none' : 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.2s ease',
               }}
               className={`relative flex min-h-[360px] select-none flex-col rounded-3xl border bg-surface-solid p-6 shadow-[0_1px_0_rgb(255_255_255/0.04)_inset,0_24px_48px_-28px_rgb(0_0_0/0.6)] sm:p-8 ${
-                isAnswerRevealed ? 'border-line-strong' : 'border-line'
+                isAnswerRevealed ? 'border-line-strong animate-card-turn' : 'border-line'
               } ${effectiveType !== 'multiple-choice' && !isAnswerRevealed ? 'cursor-grab hover:border-line-strong active:cursor-grabbing' : ''}`}
             >
               {swipeStamp && (
@@ -1101,7 +1101,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
               {/* Answer */}
               {isAnswerRevealed ? (
                 (!isChoiceCard || currentCard.explanation || currentCard.diagramDataUrl || StorageService.getConceptDiagram(currentCard.conceptId)) && (
-                  <div className="mt-6 space-y-4 border-t border-line pt-6 animate-fadeIn">
+                  <div className="mt-6 space-y-4 border-t border-line pt-6 animate-answer-unfold">
                     {!isChoiceCard && (
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wide text-success">Answer</p>

@@ -11,12 +11,14 @@ import {
   Zap,
   Check,
   Share2,
+  Flame,
+  CalendarClock,
 } from 'lucide-react';
 import type { StudySession, ConceptCheckpoint } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
 import { ExportService } from '../../services/exportService';
-import { UserAvatarBadge } from '../character/UserAvatarBadge';
+import { Mascot } from '../mascot/Mascot';
 import { SynapticFlexModal } from '../mascot/SynapticFlexModal';
 import { lifeSimService } from '../../services/lifeSimService';
 import { grantReward } from '../../services/economy/rewardService';
@@ -212,17 +214,55 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
   };
 
   const isReview = Boolean(session.casualFlashcardMode);
+  const rated = ratedCardIds.length;
+  const headline = streak >= 2 ? `${streak} days in a row!` : isReview ? 'Review complete' : 'Session complete';
+  const nextUp = nextReviews[0];
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-5 py-6 animate-fadeIn">
-      <header className="text-center">
-        <div className="mx-auto w-fit animate-rise">
-          <UserAvatarBadge size="lg" />
+      {/* The moment worth a screenshot: what was done, the streak, and when the cards come back. */}
+      <header className="relative overflow-hidden rounded-3xl border border-brand/25 bg-gradient-to-b from-brand-soft to-surface-solid px-5 pb-6 pt-7 text-center sm:px-8 animate-rise">
+        <div className="pointer-events-none absolute -top-24 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-brand/25 blur-3xl" aria-hidden="true" />
+        <Mascot mood="cheer" className="relative mx-auto h-28 w-32 text-ink" />
+        <h1 className="relative mt-3 text-[28px] font-semibold tracking-tight text-ink sm:text-[32px]">{headline}</h1>
+        <p className="relative mx-auto mt-1 max-w-md text-[15px] text-ink-muted">
+          {rated > 0 ? `${rated} ${rated === 1 ? 'card' : 'cards'} in ${minutes} min · ` : ''}
+          {session.title}
+        </p>
+
+        <dl className="relative mx-auto mt-5 grid max-w-md grid-cols-3 divide-x divide-line rounded-2xl border border-line bg-surface-solid/70 py-3">
+          <div>
+            <dt className="text-xs text-ink-subtle">Cards</dt>
+            <dd className="mt-0.5 text-[22px] font-semibold tabular-nums text-ink">{rated.toLocaleString()}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-ink-subtle">Minutes</dt>
+            <dd className="mt-0.5 text-[22px] font-semibold tabular-nums text-ink">{minutes}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-ink-subtle">Streak</dt>
+            <dd className="mt-0.5 flex items-center justify-center gap-1 text-[22px] font-semibold tabular-nums text-ink">
+              <Flame className="h-5 w-5 text-gold" aria-hidden="true" />
+              {streak}
+            </dd>
+          </div>
+        </dl>
+
+        {nextUp && (
+          <p className="relative mt-3 inline-flex items-center gap-1.5 text-[13px] text-ink-muted">
+            <CalendarClock className="h-4 w-4 text-brand-text" aria-hidden="true" />
+            Next up: {nextUp.count} {nextUp.count === 1 ? 'card' : 'cards'} {nextUp.label.charAt(0).toLowerCase() + nextUp.label.slice(1)}
+          </p>
+        )}
+
+        <div className="relative mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+          <Button variant="primary" size="lg" trailingIcon={ArrowRight} onClick={onHome}>
+            Done
+          </Button>
+          <Button variant="secondary" size="lg" icon={Share2} onClick={() => setIsFlexModalOpen(true)}>
+            Share
+          </Button>
         </div>
-        <h1 className="mt-5 text-[28px] font-semibold tracking-tight text-ink sm:text-[32px]">
-          {isReview ? 'Review complete' : 'Session complete'}
-        </h1>
-        <p className="mx-auto mt-1.5 max-w-md text-[15px] text-ink-muted">{session.title}</p>
       </header>
 
       {!ECONOMY_VISIBLE ? null : wageEarned ? (
@@ -266,12 +306,6 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
         </Card>
       ) : null}
 
-      <div className="grid grid-cols-3 gap-3">
-        <SummaryStat label="Time" value={`${minutes} min`} />
-        <SummaryStat label="Cards rated" value={ratedCardIds.length.toLocaleString()} />
-        <SummaryStat label="Streak" value={`${streak} ${streak === 1 ? 'day' : 'days'}`} />
-      </div>
-
       {nextReviews.length > 0 && (
         <Card className="space-y-3">
           <div>
@@ -314,7 +348,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
 
       <Card className="space-y-3">
         <h2 className="text-[15px] font-semibold text-ink">Take it with you</h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <Button variant="secondary" size="sm" icon={Printer} onClick={handlePrint}>
             Study sheet
           </Button>
@@ -323,9 +357,6 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
           </Button>
           <Button variant="secondary" size="sm" icon={Download} onClick={handleDownloadAnki}>
             Anki / Quizlet
-          </Button>
-          <Button variant="secondary" size="sm" icon={Share2} onClick={() => setIsFlexModalOpen(true)}>
-            Share card
           </Button>
         </div>
         {downloadNotice && (
@@ -342,7 +373,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
         <Button variant="secondary" icon={Layers} onClick={onOpenDashboard}>
           See what is due
         </Button>
-        <Button variant="primary" trailingIcon={ArrowRight} onClick={onHome}>
+        <Button variant="secondary" trailingIcon={ArrowRight} onClick={onHome}>
           Done
         </Button>
       </div>
@@ -356,10 +387,3 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
     </div>
   );
 };
-
-const SummaryStat: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="rounded-2xl border border-line bg-surface p-4">
-    <p className="text-[13px] text-ink-subtle">{label}</p>
-    <p className="mt-1 text-[20px] font-semibold tabular-nums text-ink">{value}</p>
-  </div>
-);

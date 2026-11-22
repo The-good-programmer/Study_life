@@ -25,6 +25,31 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400..700&display=swap" rel="stylesheet" />
     <title>Studify — Learn Anything in 3 Minutes a Day</title>
+    <script>
+      // The theme, set before the first paint so the page doesn't flash dark. New visitors get the
+      // light "paper" theme; anyone who already used Studify (and so has its data here) keeps dark
+      // unless they switch. The choice is kept under the key the theme button uses (Navbar.tsx).
+      (function () {
+        try {
+          var key = 'axon_theme';
+          var theme = localStorage.getItem(key);
+          if (!theme) {
+            var returning = false;
+            for (var i = 0; i < localStorage.length; i++) {
+              if (/^(studify|axon)_/.test(localStorage.key(i) || '')) { returning = true; break; }
+            }
+            theme = returning ? 'dark' : 'paper';
+            localStorage.setItem(key, theme);
+          }
+          if (theme === 'paper') {
+            document.documentElement.setAttribute('data-theme', 'paper');
+            document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f6f6f3');
+          }
+        } catch (e) {
+          // Storage blocked: the dark theme, as before.
+        }
+      })();
+    </script>
   </head>
   <body class="bg-canvas text-ink antialiased min-h-screen font-sans">
     <div id="root"></div>
