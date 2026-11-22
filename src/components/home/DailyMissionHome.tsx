@@ -33,6 +33,7 @@ import type { DailyLedger } from '../../types/lifeSim';
 import { StorageService } from '../../services/storageService';
 import { PlannerService } from '../../services/plannerService';
 import { Mascot } from '../mascot/Mascot';
+import { AfterClassCard } from '../timetable/AfterClassCard';
 import { AuthService } from '../../services/authService';
 import { characterService } from '../../services/characterService';
 import { lifeSimService, ACADEMIC_ROLES } from '../../services/lifeSimService';
@@ -488,6 +489,9 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
               )}
             </div>
           </section>
+
+          {/* Today's lessons: note what was covered after each one */}
+          <AfterClassCard onStartSession={onStartSession} onOpenAuth={onOpenAuth} />
 
           {/* Keep your decks (guests) */}
           {showKeepPrompt && (

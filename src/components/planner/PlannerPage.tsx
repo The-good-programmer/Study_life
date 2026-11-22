@@ -10,6 +10,7 @@ import { ExamPlanRow } from './ExamPlanRow';
 import { PlannerItemDialog } from './PlannerItemDialog';
 import { SyllabusImportDialog } from './SyllabusImportDialog';
 import { KIND_STYLES, formatDay, formatWhen } from './plannerUi';
+import { WeeklyTimetable } from '../timetable/WeeklyTimetable';
 
 export interface PlannerPageProps {
   onStartSession: (session: StudySession) => void;
@@ -110,7 +111,7 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ onStartSession, onOpen
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-[26px] font-semibold tracking-tight text-ink sm:text-[30px]">Planner</h1>
-          <p className="mt-1 text-[15px] text-ink-muted">Your exams and deadlines, and what to study for them each day.</p>
+          <p className="mt-1 text-[15px] text-ink-muted">Your timetable, exams and deadlines, and what to study for them each day.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button icon={ScanText} onClick={() => setIsSyllabusOpen(true)}>
@@ -139,6 +140,8 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ onStartSession, onOpen
           </Button>
         </Card>
       )}
+
+      <WeeklyTimetable onStartSession={onStartSession} onOpenAuth={onOpenAuth} />
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* Month */}

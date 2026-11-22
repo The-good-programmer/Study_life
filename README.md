@@ -32,6 +32,14 @@ Open Studify, pick a starter deck or turn your own notes or a lecture PDF into f
 - **Leech Hunter** — finds cards you keep failing and helps split them into simpler ones.
 - **Gamepad review** — flip and grade cards with a Bluetooth controller (HTML5 Gamepad API).
 
+### Timetable and after-class notes
+
+Add your weekly lessons in the Planner (school or university: any day, any times, a room if you like; *Save and add
+another* fills a day quickly). On days with lessons, **After class** on Today lists them: when one ends, *Log it* asks
+what you covered (a few seconds). Homework goes into the planner, due at that subject's next lesson by default, and the
+topic (with any notes) can become flashcards, checked like any AI deck, added as one topic to that subject's
+**class notes** deck, so they come up in tonight's review. The timetable and logs sync with your account.
+
 ### Focus workspace
 
 A Pomodoro timer (25-minute focus sessions, short breaks, a long break after every fourth; one-tap 25/5, 50/10 and 90/20 presets, or your own lengths) with the session's tasks, a notes pad, background sound and today's focus time. Tap a task to work on it, drag to reorder, and press F for a full-screen timer. Homework due soon in the Planner is offered as a task, and ticking it off marks it done in the Planner too. The timer keeps running on other pages (the time left shows in the top bar and the tab title), chimes when a phase ends and can send a notification. Finished focus sessions (or ones finished early with "Finish now") count toward the daily goal and streak; time spent reviewing cards during a session is counted once, not twice. Alerts ring on time in background tabs, and the screen stays on while the timer runs (where the browser supports it).
