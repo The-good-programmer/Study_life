@@ -20,6 +20,7 @@ import { StorageService } from '../../services/storageService';
 import { ExportService } from '../../services/exportService';
 import { CloudSyncService, type CloudSyncConfig } from '../../services/cloudSyncService';
 import { AuthService } from '../../services/authService';
+import { NEW_CARDS_PER_DAY_OPTIONS } from '../../services/dailyReview';
 import { NotificationService, type NotificationSettings } from '../../services/notificationService';
 import { soundEngine } from '../../services/soundEngine';
 import { haptics } from '../../services/hapticsService';
@@ -258,6 +259,7 @@ const NoticeLine: React.FC<{ notice: Notice | null }> = ({ notice }) => (
 const StudySection: React.FC<{ onStatsReset: () => void }> = ({ onStatsReset }) => {
   const [dailyGoal, setDailyGoal] = useState(() => StorageService.getStats().dailyGoalMinutes || 25);
   const [targetRetention, setTargetRetention] = useState(() => StorageService.getTargetRetention());
+  const [newPerDay, setNewPerDay] = useState(() => StorageService.getNewCardsPerDay());
   const memoryTarget = MEMORY_TARGETS.reduce((best, option) =>
     Math.abs(option.value - targetRetention) < Math.abs(best.value - targetRetention) ? option : best,
   ).value;
@@ -272,6 +274,23 @@ const StudySection: React.FC<{ onStatsReset: () => void }> = ({ onStatsReset }) 
           onChange={(minutes) => {
             setDailyGoal(minutes);
             StorageService.setDailyGoal(minutes);
+            onStatsReset();
+          }}
+          className="grid-cols-2 sm:grid-cols-4"
+        />
+      </SettingGroup>
+
+      <SettingGroup
+        title="New cards per day"
+        description="How many new cards today's review brings in. Every new card comes back for reviews later, so a steady number keeps those from piling up."
+      >
+        <OptionGrid
+          label="New cards per day"
+          options={NEW_CARDS_PER_DAY_OPTIONS.map(n => ({ value: n, label: `${n} a day` }))}
+          value={newPerDay}
+          onChange={(count) => {
+            setNewPerDay(count);
+            StorageService.setNewCardsPerDay(count);
             onStatsReset();
           }}
           className="grid-cols-2 sm:grid-cols-4"

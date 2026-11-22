@@ -204,6 +204,8 @@ export interface StudySession {
   passRatedCardIds?: string[];
   sourceDocument?: SourceDocument;
   casualFlashcardMode?: boolean;
+  /** Made for one sitting (today's review across decks): never saved as a deck. */
+  ephemeral?: boolean;
   diagnosticReport?: DiagnosticReport;
   depthTier?: DepthTier;
   gradeLevel?: AcademicGradeLevel;
@@ -252,6 +254,8 @@ export interface UserStats {
   level: number;
   levelTitle: string;
   dailyGoalMinutes: number;
+  /** New cards today's review introduces each day. */
+  newCardsPerDay?: number;
   todayMinutes: number;
   targetRetention?: number; // Desired target retention rate (0.75 - 0.97, default 0.90)
 }

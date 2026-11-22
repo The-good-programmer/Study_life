@@ -17,6 +17,7 @@ import { FocusToast } from './components/focus/FocusToast';
 import { InstallAppDialog } from './components/common/InstallAppDialog';
 import { ApiConfig } from './services/apiConfig';
 import { CloudSyncService } from './services/cloudSyncService';
+import { buildDailyReviewSession } from './services/dailyReview';
 
 // Lazy-loaded heavy modules and modals for optimal initial bundle performance
 const IngestionHub = lazy(() => import('./components/ingestion/IngestionHub').then(m => ({ default: m.IngestionHub })));
@@ -52,6 +53,9 @@ export function App() {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('launch') === 'quick_sprint') {
+        // Today's review across decks; with nothing left today, the first deck to practise ahead.
+        const queue = StorageService.getDailyQueue();
+        if (queue.cards.length > 0) return buildDailyReviewSession(queue);
         // Without a saved deck, fall through to the home screen's first-deck empty state.
         const primary = StorageService.getSessions()[0];
         if (primary) {
@@ -280,15 +284,19 @@ export function App() {
   }
 
   const savedSessions = StorageService.getSessions();
-  const dueCards = StorageService.getDueCards();
+  // Today's review across decks: what "Start review" studies and the count shown beside it.
+  const dailyQueue = StorageService.getDailyQueue();
   const allCards = StorageService.getAllCards();
   const starredCardsCount = allCards.filter(c => c.isStarred).length;
 
   const handleQuickStudy = () => {
-    // New users pick a deck themselves rather than being dropped into a demo deck.
-    if (savedSessions[0]) {
-      handleStartSession(savedSessions[0]);
+    if (dailyQueue.cards.length > 0) {
+      handleStartSession(buildDailyReviewSession(dailyQueue));
+    } else if (savedSessions[0]) {
+      // Nothing left today: practise the first deck ahead.
+      handleStartSession({ ...savedSessions[0], currentPhase: 'retrieval', casualFlashcardMode: true });
     } else {
+      // New users pick a deck themselves rather than being dropped into a demo deck.
       setIsStarterCatalogOpen(true);
     }
   };
@@ -327,7 +335,7 @@ export function App() {
         }}
         savedDecksCount={savedSessions.length}
         starredCardsCount={starredCardsCount}
-        dueCardsCount={dueCards.length}
+        dueCardsCount={dailyQueue.cards.length}
         isOnline={isOnline}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
@@ -406,6 +414,7 @@ export function App() {
                 initialLibraryTab={libraryTab}
                 initialNotes={libraryNotes?.text}
                 onOpenAuth={() => handleOpenAuth()}
+                onStartDailyReview={handleQuickStudy}
                 onStartSession={handleStartSession}
                 onOpenDeckStation={handleOpenDeckStation}
                 onStartMatch={handleStartMatch}
@@ -421,6 +430,7 @@ export function App() {
                 stats={stats}
                 onBack={() => setView('home')}
                 onStartSession={handleStartSession}
+                onStartDailyReview={handleQuickStudy}
                 onOpenDeckStation={handleOpenDeckStation}
                 onOpenExam={() => setView('exam')}
                 onOpenInterleaving={() => handleNavigate('interleave')}
@@ -479,7 +489,7 @@ export function App() {
       </div>
 
       {view !== 'sanctuary' && (
-        <MobileTabBar activeView={view} onNavigate={handleNavigate} dueCardsCount={dueCards.length} />
+        <MobileTabBar activeView={view} onNavigate={handleNavigate} dueCardsCount={dailyQueue.cards.length} />
       )}
 
       {/* Floating NotebookLM-style Audio Briefing Bar */}

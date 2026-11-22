@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ConceptCheckpoint, RetrievalCard } from '../../types';
 import {
   blendInterleavedCards,
+  requeueMissed,
   evaluateBlurting,
   getBlurtingTargets,
   getEffectiveCardType,
@@ -144,5 +145,23 @@ describe('blurting', () => {
 
   it('marks everything missed for empty text', () => {
     expect(evaluateBlurting('', ['a', 'b'])).toEqual({ recalled: [], missed: ['a', 'b'] });
+  });
+});
+
+describe('requeueMissed', () => {
+  const c = (id: string) => ({ id }) as RetrievalCard;
+  const ids = (cards: RetrievalCard[]) => cards.map(card => card.id);
+  const queue = ['a', 'b', 'c', 'd', 'e', 'f'].map(c);
+
+  it('puts a missed card back three cards later', () => {
+    expect(ids(requeueMissed(queue, 0, new Set()))).toEqual(['a', 'b', 'c', 'd', 'a', 'e', 'f']);
+  });
+
+  it('puts it at the end when fewer cards remain', () => {
+    expect(ids(requeueMissed(queue, 4, new Set()))).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'e']);
+  });
+
+  it('brings a card back only once', () => {
+    expect(ids(requeueMissed(queue, 1, new Set(['b'])))).toEqual(ids(queue));
   });
 });

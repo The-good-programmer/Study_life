@@ -252,8 +252,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={go(onQuickStudy)}
-            aria-label={dueCardsCount > 0 ? `Start review, ${dueCardsCount} due` : 'Start review'}
-            title={collapsed ? (dueCardsCount > 0 ? `Start review (${dueCardsCount} due)` : 'Start review') : undefined}
+            aria-label={dueCardsCount > 0 ? `Start review, ${dueCardsCount} cards today` : 'Start review'}
+            title={collapsed ? (dueCardsCount > 0 ? `Start review (${dueCardsCount} today)` : 'Start review') : undefined}
             className={cn(
               'group relative flex h-9 items-center rounded-lg bg-brand text-[13px] font-medium text-brand-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.2),0_8px_20px_-12px_var(--brand)] transition-colors hover:bg-brand-hover cursor-pointer',
               collapsed ? 'w-9 justify-center' : 'w-full justify-between px-3',

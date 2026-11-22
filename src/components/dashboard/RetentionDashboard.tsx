@@ -1,10 +1,8 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  ArrowLeft,
   Flame,
   Award,
   Play,
-  Eye,
   Bug,
   Shuffle,
   BrainCircuit,
@@ -14,15 +12,9 @@ import type { LucideIcon } from 'lucide-react';
 import type { RetrievalCard, StudySession, UserStats } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { FSRSService } from '../../services/fsrsService';
-import { soundEngine } from '../../services/soundEngine';
-import { MathRenderer } from '../common/MathRenderer';
 import { LeechHunterLab } from './LeechHunterLab';
 import { CurriculumKnowledgeMap } from './CurriculumKnowledgeMap';
-import { grantReward } from '../../services/economy/rewardService';
-import { Badge, Button, Card, Kbd, ProgressBar } from '../ui/primitives';
-
-import { gamepadService, type GamepadAction } from '../../services/gamepadService';
-import { fillCloze, maskCloze } from '../../utils/cloze';
+import { Badge, Button, Card } from '../ui/primitives';
 
 interface RetentionDashboardProps {
   stats: UserStats;
@@ -31,6 +23,8 @@ interface RetentionDashboardProps {
   onOpenDeckStation?: (session: StudySession) => void;
   onOpenExam?: () => void;
   onOpenInterleaving?: () => void;
+  /** Starts today's review across decks (the same as Start review elsewhere). */
+  onStartDailyReview?: () => void;
 }
 
 export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({ 
@@ -38,13 +32,12 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
   onStartSession, 
   onOpenDeckStation,
   onOpenExam,
-  onOpenInterleaving 
+  onOpenInterleaving,
+  onStartDailyReview,
 }) => {
   const [activeView, setActiveView] = useState<'overview' | 'curriculum' | 'leeches'>('overview');
-  const [dueCards, setDueCards] = useState<RetrievalCard[]>(() => StorageService.getDueCards());
+  const [queue, setQueue] = useState(() => StorageService.getDailyQueue());
   const [allCards, setAllCards] = useState<RetrievalCard[]>(() => StorageService.getAllCards());
-  const [activeReviewCardIndex, setActiveReviewCardIndex] = useState<number | null>(null);
-  const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [targetRetention, setTargetRetention] = useState(() => StorageService.getTargetRetention());
   const [examReports] = useState(StorageService.getExamReports());
   const [interleavingReports] = useState(StorageService.getInterleavingReports());
@@ -75,100 +68,11 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
   const matureCards = allCards.filter(c => (c.stability || 0) >= 7 && (c.stability || 0) < 30).length;
   const masteredCards = allCards.filter(c => (c.stability || 0) >= 30).length;
 
-  const handleStartDueReview = () => {
-    if (dueCards.length === 0) return;
-    setActiveReviewCardIndex(0);
-    setIsAnswerRevealed(false);
-  };
 
   const activityHistory = useMemo(() => StorageService.getActivityHistory(), []);
 
-  const handleRateReviewCard = useCallback((rating: 'again' | 'hard' | 'good' | 'easy') => {
-    if (activeReviewCardIndex === null) return;
-    const currentCard = dueCards[activeReviewCardIndex];
-    const { updatedCard } = FSRSService.schedule(currentCard, rating, targetRetention);
-    StorageService.saveCard(updatedCard);
-    grantReward({ kind: 'review', rating }, { weekly: true, label: 'Flashcard review' });
 
-    if (activeReviewCardIndex + 1 < dueCards.length) {
-      setActiveReviewCardIndex(activeReviewCardIndex + 1);
-      setIsAnswerRevealed(false);
-    } else {
-      soundEngine.playCompletionChime();
-      setActiveReviewCardIndex(null);
-      setDueCards(StorageService.getDueCards());
-    }
-  }, [activeReviewCardIndex, dueCards, targetRetention]);
 
-  // Keyboard navigation for due card reviews
-  useEffect(() => {
-    if (activeReviewCardIndex === null) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setActiveReviewCardIndex(null);
-      } else if (e.code === 'Space') {
-        e.preventDefault();
-        setIsAnswerRevealed(prev => !prev);
-      } else if (isAnswerRevealed) {
-        if (e.key === '1') {
-          e.preventDefault();
-          handleRateReviewCard('again');
-        } else if (e.key === '2') {
-          e.preventDefault();
-          handleRateReviewCard('hard');
-        } else if (e.key === '3') {
-          e.preventDefault();
-          handleRateReviewCard('good');
-        } else if (e.key === '4') {
-          e.preventDefault();
-          handleRateReviewCard('easy');
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeReviewCardIndex, isAnswerRevealed, handleRateReviewCard]);
-
-  // Gamepad action controller support for due card reviews
-  useEffect(() => {
-    if (activeReviewCardIndex === null) return;
-
-    const unsubAction = gamepadService.subscribeAction((action: GamepadAction) => {
-      switch (action) {
-        case 'flip':
-          setIsAnswerRevealed(prev => !prev);
-          break;
-        case 'again':
-          if (isAnswerRevealed) handleRateReviewCard('again');
-          else setIsAnswerRevealed(true);
-          break;
-        case 'hard':
-          if (isAnswerRevealed) handleRateReviewCard('hard');
-          else setIsAnswerRevealed(true);
-          break;
-        case 'good':
-          if (isAnswerRevealed) handleRateReviewCard('good');
-          else setIsAnswerRevealed(true);
-          break;
-        case 'easy':
-          if (isAnswerRevealed) handleRateReviewCard('easy');
-          else setIsAnswerRevealed(true);
-          break;
-        default:
-          break;
-      }
-    });
-
-    return () => unsubAction();
-  }, [activeReviewCardIndex, isAnswerRevealed, handleRateReviewCard]);
 
   const [todayTimestamp] = useState(() => Date.now());
 
@@ -193,76 +97,6 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
     });
   }, [stats.todayMinutes, todayTimestamp, activityHistory]);
 
-  // Reviewing due cards
-  if (activeReviewCardIndex !== null && dueCards[activeReviewCardIndex]) {
-    const card = dueCards[activeReviewCardIndex];
-    const intervals = FSRSService.previewIntervals(card, targetRetention);
-    const cardRetrievability = FSRSService.calculateRetrievability(card);
-
-    return (
-      <div className="mx-auto w-full max-w-2xl space-y-4 animate-fadeIn">
-        <div className="flex items-center justify-between gap-3">
-          <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={() => setActiveReviewCardIndex(null)} className="-ml-2">
-            Stop reviewing
-          </Button>
-          <span className="text-[13px] tabular-nums text-ink-subtle">
-            <span className="font-medium text-ink">{activeReviewCardIndex + 1}</span> / {dueCards.length}
-          </span>
-        </div>
-        <ProgressBar value={(activeReviewCardIndex / dueCards.length) * 100} label="Review progress" />
-
-        <div className="flex min-h-[340px] flex-col rounded-3xl border border-line bg-surface-solid p-6 sm:p-8">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-subtle">
-            <span>Recall chance now <span className="font-medium tabular-nums text-ink">{cardRetrievability}%</span></span>
-            <span>Stable for about <span className="font-medium tabular-nums text-ink">{(card.stability || 1).toFixed(1)} days</span></span>
-          </div>
-          <h3 className="mt-4 text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
-            <MathRenderer text={isAnswerRevealed ? fillCloze(card.question) : maskCloze(card.question)} />
-          </h3>
-          {card.hint && !isAnswerRevealed && (
-            <p className="mt-4 rounded-2xl border border-gold/25 bg-gold-soft p-3.5 text-[14px] text-ink">
-              <span className="mr-1.5 text-xs font-semibold uppercase tracking-wide text-gold">Hint</span>
-              <MathRenderer text={card.hint} />
-            </p>
-          )}
-
-          {isAnswerRevealed ? (
-            <div className="mt-6 space-y-5 border-t border-line pt-6 animate-fadeIn">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-success">Answer</p>
-                <div className="mt-1.5 text-[17px] leading-relaxed text-ink">
-                  <MathRenderer text={card.answer} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {REVIEW_RATINGS.map(({ rating, label, key, className, labelClassName }) => (
-                  <button
-                    key={rating}
-                    type="button"
-                    onClick={() => handleRateReviewCard(rating)}
-                    className={`flex flex-col items-start gap-1 rounded-xl border border-line bg-surface p-3 text-left transition-colors cursor-pointer ${className}`}
-                  >
-                    <span className="flex w-full items-center justify-between">
-                      <span className={`text-[14px] font-semibold ${labelClassName}`}>{label}</span>
-                      <Kbd>{key}</Kbd>
-                    </span>
-                    <span className="text-[13px] tabular-nums text-ink-muted">Back in {intervals[rating]}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="mt-auto flex justify-center pt-8">
-              <Button variant="primary" size="lg" icon={Eye} onClick={() => setIsAnswerRevealed(true)} className="w-full sm:w-auto sm:px-8">
-                Show answer
-              </Button>
-            </div>
-          )}
-        </div>
-        <p className="text-center text-xs text-ink-subtle">Space shows the answer, 1 to 4 rates it, Esc stops.</p>
-      </div>
-    );
-  }
 
   if (activeView === 'curriculum') {
     return (
@@ -270,7 +104,7 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
         onBack={() => {
           setActiveView('overview');
           setAllCards(StorageService.getAllCards());
-          setDueCards(StorageService.getDueCards());
+          setQueue(StorageService.getDailyQueue());
         }}
         onStartSession={onStartSession}
         onOpenDeckStation={onOpenDeckStation}
@@ -285,11 +119,11 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
         onBack={() => {
           setActiveView('overview');
           setAllCards(StorageService.getAllCards());
-          setDueCards(StorageService.getDueCards());
+          setQueue(StorageService.getDailyQueue());
         }}
         onCardCured={() => {
           setAllCards(StorageService.getAllCards());
-          setDueCards(StorageService.getDueCards());
+          setQueue(StorageService.getDailyQueue());
         }}
       />
     );
@@ -341,19 +175,21 @@ export const RetentionDashboard: React.FC<RetentionDashboardProps> = ({
         <div className="relative min-w-0">
           <p className="text-[13px] font-medium text-brand-text">Review queue</p>
           <h2 className="mt-1.5 text-[24px] font-semibold tracking-tight text-ink">
-            {dueCards.length > 0 ? `${dueCards.length} ${dueCards.length === 1 ? 'card is' : 'cards are'} due` : 'Nothing is due'}
+            {queue.cards.length > 0
+              ? `${queue.dueCount} to review${queue.newCount > 0 ? `, ${queue.newCount} new` : ''}`
+              : 'All done for today'}
           </h2>
           <p className="mt-1.5 max-w-lg text-[14px] leading-relaxed text-ink-muted">
-            {dueCards.length > 0
-              ? 'Reviewing cards when they come due is what keeps them in long-term memory. Every review earns the same XP.'
+            {queue.cards.length > 0
+              ? 'Reviewing cards when they come due is what keeps them in long-term memory. New cards are spread out so reviews never pile up.'
               : hasCards
                 ? 'You are up to date. Cards come back here as they near the point of being forgotten.'
                 : 'Add a deck and start reviewing, and your schedule will build up here.'}
           </p>
         </div>
-        {dueCards.length > 0 && (
-          <Button variant="primary" size="lg" icon={Play} onClick={handleStartDueReview} className="relative w-full shrink-0 sm:w-auto">
-            Review {dueCards.length} {dueCards.length === 1 ? 'card' : 'cards'}
+        {queue.cards.length > 0 && onStartDailyReview && (
+          <Button variant="primary" size="lg" icon={Play} onClick={onStartDailyReview} className="relative w-full shrink-0 sm:w-auto">
+            Start review
           </Button>
         )}
       </section>
@@ -565,13 +401,6 @@ const HEAT_CELLS = [
   'bg-brand/25 text-ink-muted',
   'bg-brand/55 text-ink',
   'bg-brand text-brand-ink',
-];
-
-const REVIEW_RATINGS: { rating: 'again' | 'hard' | 'good' | 'easy'; label: string; key: string; className: string; labelClassName: string }[] = [
-  { rating: 'again', label: 'Again', key: '1', className: 'hover:border-danger/50 hover:bg-danger-soft', labelClassName: 'text-danger' },
-  { rating: 'hard', label: 'Hard', key: '2', className: 'hover:border-gold/50 hover:bg-gold-soft', labelClassName: 'text-gold' },
-  { rating: 'good', label: 'Good', key: '3', className: 'hover:border-brand/50 hover:bg-brand-soft', labelClassName: 'text-brand-text' },
-  { rating: 'easy', label: 'Easy', key: '4', className: 'hover:border-success/50 hover:bg-success-soft', labelClassName: 'text-success' },
 ];
 
 const formatMinutes = (minutes: number): string => {
