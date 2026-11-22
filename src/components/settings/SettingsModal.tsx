@@ -22,6 +22,7 @@ import { CloudSyncService, type CloudSyncConfig } from '../../services/cloudSync
 import { AuthService } from '../../services/authService';
 import { NEW_CARDS_PER_DAY_OPTIONS } from '../../services/dailyReview';
 import { NotificationService, type NotificationSettings } from '../../services/notificationService';
+import { DigestService, type DigestStatus } from '../../services/digestService';
 import { soundEngine } from '../../services/soundEngine';
 import { haptics } from '../../services/hapticsService';
 import { cn } from '../../utils/cn';
@@ -499,6 +500,8 @@ const RemindersSection: React.FC<{ onShowInstallHelp?: () => void }> = ({ onShow
         )}
       </SettingGroup>
 
+      <WeeklyEmailGroup />
+
       {isSupported && (
         <SettingGroup title="Reminder time" description="If you haven't studied by this time, you get a reminder.">
           <OptionGrid
@@ -516,6 +519,66 @@ const RemindersSection: React.FC<{ onShowInstallHelp?: () => void }> = ({ onShow
         </SettingGroup>
       )}
     </div>
+  );
+};
+
+/** The weekly progress email, for signed-in students. */
+const WeeklyEmailGroup: React.FC = () => {
+  const signedIn = Boolean(AuthService.getCurrentUser());
+  const [status, setStatus] = useState<DigestStatus | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [notice, showNotice] = useNotice();
+
+  useEffect(() => {
+    if (!signedIn) return;
+    let alive = true;
+    void DigestService.status().then(result => {
+      if (!alive) return;
+      if (result) setStatus(result);
+      else setFailed(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [signedIn]);
+
+  const change = async (enabled: boolean) => {
+    if (!status) return;
+    setSaving(true);
+    const error = await DigestService.setEnabled(enabled);
+    setSaving(false);
+    if (error) {
+      showNotice({ tone: 'error', text: error });
+      return;
+    }
+    setStatus({ ...status, enabled });
+    if (enabled) soundEngine.playSuccess();
+    showNotice(enabled ? { tone: 'success', text: `On. The first one arrives on Sunday evening at ${status.email}.` } : { tone: 'info', text: 'Weekly email is off.' });
+  };
+
+  return (
+    <SettingGroup
+      title="Weekly progress email"
+      description={
+        signedIn
+          ? 'Every Sunday evening: cards reviewed, focus time, your streak and exams coming up.'
+          : 'Sign in to get a summary of your week by email every Sunday.'
+      }
+      aside={
+        signedIn && status ? (
+          <Switch label="Weekly progress email" checked={status.enabled} onChange={next => void change(next)} disabled={saving || !status.available} />
+        ) : undefined
+      }
+    >
+      {signedIn && status && (
+        <p className="text-[13px] text-ink-muted">
+          {status.available ? `Sent to ${status.email}.` : "Email isn't set up on this Studify server yet, so the weekly email can't be sent."}
+        </p>
+      )}
+      {signedIn && failed && <p className="text-[13px] text-ink-muted">Couldn't check the weekly email. Check your connection and open Settings again.</p>}
+      <NoticeLine notice={notice} />
+    </SettingGroup>
   );
 };
 

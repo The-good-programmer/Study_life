@@ -470,6 +470,99 @@ describe('friends', () => {
   });
 });
 
+describe('weekly progress email', () => {
+  it('turns on and off for a signed-in student, with a checked time zone', async () => {
+    expect((await api('/api/digest')).status).toBe(401);
+    const me = await register('digest-me@example.com');
+    expect((await api('/api/digest', { token: me.token })).data).toMatchObject({ enabled: false, email: 'digest-me@example.com', available: true });
+    expect((await api('/api/digest', { method: 'POST', token: me.token, body: { enabled: true, timeZone: 'Mars/Base' } })).status).toBe(400);
+    expect((await api('/api/digest', { method: 'POST', token: me.token, body: { enabled: true, timeZone: 'Europe/Sofia' } })).status).toBe(200);
+    expect((await api('/api/digest', { token: me.token })).data).toMatchObject({ enabled: true, timeZone: 'Europe/Sofia' });
+    expect((await api('/api/digest', { method: 'POST', token: me.token, body: { enabled: false } })).status).toBe(200);
+    expect((await api('/api/digest', { token: me.token })).data.enabled).toBe(false);
+  });
+
+  it('sends on Sunday evening where the student is, once a week, with their week in it', async () => {
+    const { runDigests } = await import('./digest.js');
+    await db.run('DELETE FROM digest_subscriptions');
+    const me = await register('digest-week@example.com');
+    await api('/api/digest', { method: 'POST', token: me.token, body: { enabled: true, timeZone: 'Asia/Tokyo' } });
+    await api('/api/sync/push', {
+      method: 'POST',
+      token: me.token,
+      body: {
+        stats: { currentStreak: 4, lastStudiedAt: '2026-11-22T01:00:00.000Z' },
+        sessions: [{
+          id: 'digest-deck',
+          title: 'Bio',
+          concepts: [{ retrievalCards: [
+            { id: 'd1', reps: 2, lastReviewDate: '2026-11-20T10:00:00.000Z', nextReviewDate: '2026-11-21T10:00:00.000Z' },
+            { id: 'd2', reps: 1, lastReviewDate: '2026-11-21T10:00:00.000Z', nextReviewDate: '2026-12-01T10:00:00.000Z' },
+            { id: 'd3', reps: 1, lastReviewDate: '2026-11-01T10:00:00.000Z', nextReviewDate: '2026-11-03T10:00:00.000Z', hidden: true },
+          ] }],
+        }],
+        documents: {
+          focus_log: { items: [{ id: 'f1', day: '2026-11-21', endedAt: '2026-11-21T09:00:00.000Z', minutes: 50 }, { id: 'f0', day: '2026-11-01', endedAt: '2026-11-01T09:00:00.000Z', minutes: 90 }] },
+          planner: { items: [{ id: 'p1', kind: 'exam', title: 'Biology <final>', date: '2026-11-26' }, { id: 'p2', kind: 'homework', title: 'Done already', date: '2026-11-24', done: true }] },
+        },
+      },
+    });
+
+    const mailbox = [];
+    const mailer = { send: async (mail) => void mailbox.push(mail) };
+    // Saturday 20:00 in Tokyo, then Sunday 16:30: not yet.
+    await runDigests({ now: new Date('2026-11-21T11:00:00Z'), mailer, siteUrl: 'https://app.example', apiUrl: 'https://api.example' });
+    await runDigests({ now: new Date('2026-11-22T07:30:00Z'), mailer, siteUrl: 'https://app.example', apiUrl: 'https://api.example' });
+    expect(mailbox).toHaveLength(0);
+    // Sunday 17:05 in Tokyo.
+    await runDigests({ now: new Date('2026-11-22T08:05:00Z'), mailer, siteUrl: 'https://app.example', apiUrl: 'https://api.example' });
+    expect(mailbox).toHaveLength(1);
+    const [mail] = mailbox;
+    expect(mail.to).toBe('digest-week@example.com');
+    expect(mail.subject).toBe('Your week: 2 cards reviewed, 50 min focused');
+    expect(mail.text).toContain('Cards reviewed: 2');
+    expect(mail.text).toContain('Focus time: 50 min');
+    expect(mail.text).toContain('Streak: 4 days');
+    expect(mail.text).toContain('Exam: Biology <final>, Thu 26 Nov (in 4 days)');
+    expect(mail.text).not.toContain('Done already');
+    expect(mail.text).toContain('1 card is due now.');
+    expect(mail.text).toContain('https://app.example/?launch=quick_sprint');
+    expect(mail.html).toContain('Biology &lt;final&gt;');
+    expect(mail.headers['List-Unsubscribe']).toMatch(/^<https:\/\/api\.example\/api\/digest\/unsubscribe\?t=[\w-]+>$/);
+
+    // Not twice in one week.
+    await runDigests({ now: new Date('2026-11-22T12:00:00Z'), mailer, siteUrl: 'https://app.example', apiUrl: 'https://api.example' });
+    expect(mailbox).toHaveLength(1);
+
+    // The email's link turns it off without signing in.
+    const link = mail.text.match(/https:\/\/api\.example(\/api\/digest\/unsubscribe\?t=[\w-]+)/)[1];
+    const res = await fetch(`${baseUrl}${link}`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("You won't get weekly emails any more");
+    expect((await api('/api/digest', { token: me.token })).data.enabled).toBe(false);
+  });
+
+  it('writes a gentle email for a week without study, and leaves hidden cards out of reminders', async () => {
+    const { digestEmail, weekSummary, isoWeekOf } = await import('./digest.js');
+    const summary = weekSummary({ now: new Date('2026-11-22T10:00:00Z'), today: '2026-11-22' });
+    const mail = digestEmail({ name: 'Sam Lee', summary, reviewUrl: 'https://app.example/?launch=quick_sprint', unsubscribeUrl: '', settingsUrl: 'https://app.example' });
+    expect(mail.subject).toBe('Your Studify week');
+    expect(mail.text).toMatch(/^Hi Sam,/);
+    expect(mail.text).toContain('Turn these emails off in Settings');
+    expect(isoWeekOf('2026-11-22')).toBe('2026-W47');
+    expect(isoWeekOf('2027-01-01')).toBe('2026-W53');
+
+    const { countDueCards } = await import('./reminders.js');
+    const hider = await register('digest-hider@example.com');
+    await api('/api/sync/push', {
+      method: 'POST',
+      token: hider.token,
+      body: { sessions: [{ id: 'hider-deck', title: 'Bio', concepts: [{ retrievalCards: [{ id: 'h1', reps: 2, nextReviewDate: '2026-11-01T00:00:00Z', hidden: true }, { id: 'h2', reps: 2, nextReviewDate: '2026-11-01T00:00:00Z' }] }] }] },
+    });
+    expect(await countDueCards(hider.user.id, new Date('2026-11-22T00:00:00Z'))).toBe(1);
+  });
+});
+
 describe('AI proxy', () => {
   it('requires sign-in', async () => {
     const res = await api('/api/ai/generate', { method: 'POST', body: { contents: 'hi' } });

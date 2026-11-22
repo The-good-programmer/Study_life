@@ -14,6 +14,7 @@ import { handleDeckRoutes } from './routes/deckRoutes.js';
 import { handleCalendarRoutes } from './routes/calendarRoutes.js';
 import { handleReminderRoutes } from './routes/reminderRoutes.js';
 import { handleFriendRoutes } from './routes/friendRoutes.js';
+import { handleDigestRoutes } from './routes/digestRoutes.js';
 import { createResendMailer } from './mailer.js';
 import * as defaultAi from './ai.js';
 import { checkAiRequest } from './aiGuard.js';
@@ -236,7 +237,12 @@ export function createApp({ ai = defaultAi, mailer = createResendMailer() } = {}
         return;
       }
 
-      // 8. CALENDAR FEED ROUTES
+      // 8. WEEKLY EMAIL
+      if (await handleDigestRoutes(req, res, pathname, body, searchParams, { mailer })) {
+        return;
+      }
+
+      // 9. CALENDAR FEED ROUTES
       if (await handleCalendarRoutes(req, res, pathname, body, searchParams)) {
         return;
       }
