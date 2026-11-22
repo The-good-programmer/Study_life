@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import type { AppView } from './views';
 import {
   Home,
-  Star,
   Layers,
-  Award,
-  Shuffle,
+  Dumbbell,
   Plus,
   Play,
   Settings,
@@ -15,8 +14,6 @@ import {
   LineChart,
   PanelLeftClose,
   PanelLeftOpen,
-  Compass,
-  Folder,
   Building2,
   ChevronRight,
   CalendarDays,
@@ -26,30 +23,26 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import type { UserStats, UserAccount } from '../../types';
 import { soundEngine } from '../../services/soundEngine';
-import { StorageService } from '../../services/storageService';
 import { lifeSimService } from '../../services/lifeSimService';
 import { UserAvatarBadge } from '../character/UserAvatarBadge';
 import { WORLD_3D_ENABLED } from '../../services/features';
 import { BrandMark, CoinIcon } from '../ui/primitives';
 import { cn } from '../../utils/cn';
 
-type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus';
+type View = AppView;
 
 interface SidebarProps {
   activeView: View;
-  /** Mock exams and mixing decks need studied cards; they show once there are some. */
+  /** Practice (mock exams, mixing decks, speed match) needs studied cards; it shows once there are some. */
   showPractice?: boolean;
   onNavigate: (view: View) => void;
   stats: UserStats;
   currentUser?: UserAccount | null;
   onOpenAuth?: (tab?: 'login' | 'register' | 'profile') => void;
   onOpenDeckStudio: () => void;
-  onOpenStarterCatalog: () => void;
   onOpenSettings: () => void;
   onQuickStudy?: () => void;
-  onOpenLibraryTab?: (tab: 'my-decks' | 'starred' | 'curated') => void;
   savedDecksCount: number;
-  starredCardsCount: number;
   dueCardsCount: number;
   /** @deprecated No longer shown. */
   curatedCount?: number;
@@ -125,12 +118,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentUser,
   onOpenAuth,
   onOpenDeckStudio,
-  onOpenStarterCatalog,
   onOpenSettings,
   onQuickStudy,
-  onOpenLibraryTab,
   savedDecksCount,
-  starredCardsCount,
   dueCardsCount,
   isOnline = true,
   isOpenMobile = false,
@@ -190,16 +180,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [isOpenMobile, onCloseMobile]);
 
-  const [foldersCount, setFoldersCount] = useState<number>(() => StorageService.getFolders().length);
   const [walletCoins, setWalletCoins] = useState<number>(() => lifeSimService.getWalletBalance());
   const [isSoundOn, setIsSoundOn] = useState(() => soundEngine.getCurrentSound() !== 'off');
 
   useEffect(() => {
-    const unsubStorage = StorageService.addMutationListener(() => setFoldersCount(StorageService.getFolders().length));
     const unsubLife = lifeSimService.subscribe(() => setWalletCoins(lifeSimService.getWalletBalance()));
     const unsubSound = soundEngine.subscribe(sound => setIsSoundOn(sound !== 'off'));
     return () => {
-      unsubStorage();
       unsubLife();
       unsubSound();
     };
@@ -289,8 +276,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation */}
       <nav className="no-scrollbar mt-2 flex-1 overflow-y-auto overflow-x-hidden" aria-label="Main">
-        <GroupLabel collapsed={collapsed}>Study</GroupLabel>
-        <div className="space-y-0.5">
+        {/* One short list. Subjects and starred cards live in the Library; the ways to study (mock
+            exam, mixing decks, speed match) on Practice. */}
+        <div className="space-y-0.5 pt-2">
           <NavItem
             icon={Home}
             label="Today"
@@ -305,18 +293,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon={Layers}
             label="Library"
             collapsed={collapsed}
-            active={activeView === 'studio'}
+            active={activeView === 'studio' || activeView === 'folders'}
             onClick={go(() => onNavigate('studio'))}
             trailing={<CountText value={savedDecksCount} />}
           />
-          <NavItem
-            icon={Folder}
-            label="Subjects"
-            collapsed={collapsed}
-            active={activeView === 'folders'}
-            onClick={go(() => onNavigate('folders'))}
-            trailing={<CountText value={foldersCount} />}
-          />
+          {showPractice && (
+            <NavItem
+              icon={Dumbbell}
+              label="Practice"
+              collapsed={collapsed}
+              active={activeView === 'practice' || activeView === 'exam' || activeView === 'interleave'}
+              onClick={go(() => onNavigate('practice'))}
+            />
+          )}
           <NavItem
             icon={Timer}
             label="Focus"
@@ -331,15 +320,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             active={activeView === 'planner'}
             onClick={go(() => onNavigate('planner'))}
           />
-          {starredCardsCount > 0 && (
-            <NavItem
-              icon={Star}
-              label="Starred"
-              collapsed={collapsed}
-              onClick={go(() => (onOpenLibraryTab ? onOpenLibraryTab('starred') : onNavigate('studio')))}
-              trailing={<CountText value={starredCardsCount} />}
-            />
-          )}
           <NavItem
             icon={LineChart}
             label="Insights"
@@ -347,17 +327,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             active={activeView === 'dashboard'}
             onClick={go(() => onNavigate('dashboard'))}
           />
-        </div>
-
-        <GroupLabel collapsed={collapsed}>Practice</GroupLabel>
-        <div className="space-y-0.5">
-          {showPractice && (
-            <>
-              <NavItem icon={Award} label="Mock exam" collapsed={collapsed} active={activeView === 'exam'} onClick={go(() => onNavigate('exam'))} />
-              <NavItem icon={Shuffle} label="Mix decks" collapsed={collapsed} active={activeView === 'interleave'} onClick={go(() => onNavigate('interleave'))} />
-            </>
-          )}
-          <NavItem icon={Compass} label="Explore decks" collapsed={collapsed} onClick={go(onOpenStarterCatalog)} />
         </div>
 
         {WORLD_3D_ENABLED && (

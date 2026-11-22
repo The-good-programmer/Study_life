@@ -1,4 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
+import type { AppView } from './components/layout/views';
 import { Loader2, WifiOff } from 'lucide-react';
 import type { StudySession, UserStats, UserAccount } from './types';
 import { StorageService } from './services/storageService';
@@ -37,6 +38,7 @@ const AuthModal = lazy(() => import('./components/auth/AuthModal').then(m => ({ 
 const StudyEstateCampus = WORLD_3D_ENABLED ? lazy(() => import('./components/mascot/AxolotlStudyHabitat').then(m => ({ default: m.StudyEstateCampus }))) : null;
 const DailyMissionHome = lazy(() => import('./components/home/DailyMissionHome').then(m => ({ default: m.DailyMissionHome })));
 const PlannerPage = lazy(() => import('./components/planner/PlannerPage').then(m => ({ default: m.PlannerPage })));
+const PracticePage = lazy(() => import('./components/practice/PracticePage').then(m => ({ default: m.PracticePage })));
 const FocusPage = lazy(() => import('./components/focus/FocusPage').then(m => ({ default: m.FocusPage })));
 // Dialogs most visits never open, and the payout banner (only with the economy on), load when shown.
 const InstallAppDialog = lazy(() => import('./components/common/InstallAppDialog').then(m => ({ default: m.InstallAppDialog })));
@@ -80,7 +82,7 @@ export function App() {
   const [isStationOpen, setIsStationOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<StudySession | null>(null);
   // The Home Screen shortcut "Focus" opens /?view=focus.
-  const [view, setView] = useState<'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus'>(() =>
+  const [view, setView] = useState<AppView>(() =>
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'focus' ? 'focus' : 'home',
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -89,7 +91,6 @@ export function App() {
   const [isStarterCatalogOpen, setIsStarterCatalogOpen] = useState(false);
   const [isCharacterCustomizerOpen, setIsCharacterCustomizerOpen] = useState(false);
   const [deckStudioTab, setDeckStudioTab] = useState<'create' | 'import' | 'occlusion'>('create');
-  const [libraryTab, setLibraryTab] = useState<'my-decks' | 'starred' | 'curated'>('my-decks');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => AuthService.getCurrentUser());
   // A password reset link (/?reset=<token>) opens sign-in on "choose a new password".
@@ -255,7 +256,7 @@ export function App() {
     setStats(StorageService.getStats());
   };
 
-  const handleNavigate = (targetView: 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus') => {
+  const handleNavigate = (targetView: AppView) => {
     setLibraryNotes(null);
     setView(targetView);
     setStats(StorageService.getStats());
@@ -329,10 +330,8 @@ export function App() {
   const savedSessions = StorageService.getSessions();
   // Today's review across decks: what "Start review" studies and the count shown beside it.
   const dailyQueue = StorageService.getDailyQueue();
-  // Mock exams and mixing decks show once something has been studied (before, they would open empty).
-  const allCards = StorageService.getAllCards();
-  const hasStudied = allCards.some(card => card.reps > 0);
-  const starredCardsCount = allCards.filter(c => c.isStarred).length;
+  // Practice (mock exams, mixing decks) shows once something has been studied (before, it would open empty).
+  const hasStudied = StorageService.getAllCards().some(card => card.reps > 0);
 
   const handleQuickStudy = () => {
     if (dailyQueue.cards.length > 0) {
@@ -372,15 +371,9 @@ export function App() {
           setDeckStudioTab('create');
           setIsDeckStudioOpen(true);
         }}
-        onOpenStarterCatalog={() => setIsStarterCatalogOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onQuickStudy={handleQuickStudy}
-        onOpenLibraryTab={(tab) => {
-          setView('home');
-          setLibraryTab(tab);
-        }}
         savedDecksCount={savedSessions.length}
-        starredCardsCount={starredCardsCount}
         dueCardsCount={dailyQueue.cards.length}
         isOnline={isOnline}
         isOpenMobile={isMobileSidebarOpen}
@@ -459,7 +452,6 @@ export function App() {
             {view === 'studio' && (
               <IngestionHub
                 key={`${currentUser?.id || 'guest'}-${libraryNotes?.key ?? 0}`}
-                initialLibraryTab={libraryTab}
                 initialNotes={libraryNotes?.text}
                 onOpenAuth={() => handleOpenAuth()}
                 onStartDailyReview={handleQuickStudy}
@@ -468,9 +460,18 @@ export function App() {
                 onStartMatch={handleStartMatch}
                 onStartAudioBriefing={handleStartAudioBriefing}
                 onOpenDashboard={() => handleNavigate('dashboard')}
+                onOpenFolders={() => handleNavigate('folders')}
+                onOpenSanctuary={openCampus}
+              />
+            )}
+            {view === 'practice' && (
+              <PracticePage
+                onStartDailyReview={handleQuickStudy}
+                onStartSession={handleStartSession}
+                onStartMatch={handleStartMatch}
                 onOpenExam={() => handleNavigate('exam')}
                 onOpenInterleaving={() => handleNavigate('interleave')}
-                onOpenSanctuary={openCampus}
+                onOpenStarterCatalog={() => setIsStarterCatalogOpen(true)}
               />
             )}
             {view === 'dashboard' && (
@@ -486,7 +487,7 @@ export function App() {
             )}
             {view === 'exam' && (
               <ExamSimulator
-                onBack={() => setView('home')}
+                onBack={() => setView(hasStudied ? 'practice' : 'home')}
                 onStartRemediationSession={(session) => {
                   handleStartSession(session);
                 }}
@@ -494,7 +495,7 @@ export function App() {
             )}
             {view === 'interleave' && (
               <InterleavingArena
-                onBack={() => setView('home')}
+                onBack={() => setView(hasStudied ? 'practice' : 'home')}
                 onSessionComplete={() => {
                   setStats(StorageService.getStats());
                 }}
@@ -622,6 +623,7 @@ export function App() {
             }}
             onOpenExam={() => handleNavigate('exam')}
             onOpenInterleaving={() => handleNavigate('interleave')}
+            onOpenPractice={hasStudied ? () => handleNavigate('practice') : undefined}
             onOpenSanctuary={openCampus}
             onOpenToday={() => handleNavigate('home')}
             onOpenLibrary={() => handleNavigate('studio')}

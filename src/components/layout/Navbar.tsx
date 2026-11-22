@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import type { AppView } from './views';
 import {
   Flame,
   Volume2,
@@ -24,7 +25,7 @@ import { BrandMark, CoinIcon, IconButton, Kbd } from '../ui/primitives';
 import { cn } from '../../utils/cn';
 import { FocusTimerPill } from '../focus/FocusTimerPill';
 
-type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio' | 'folders' | 'planner' | 'focus';
+type View = AppView;
 
 interface NavbarProps {
   stats: UserStats;
@@ -59,6 +60,7 @@ const VIEW_TITLES: Record<View, string> = {
   exam: 'Mock exam',
   interleave: 'Mix decks',
   sanctuary: 'Campus',
+  practice: 'Practice',
 };
 
 const SOUND_PRESETS = FOCUS_SOUNDS;

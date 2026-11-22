@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ECONOMY_VISIBLE } from '../../services/features';
 import { useNeedsSignInForAi } from '../../hooks/useAiAccess';
 import { AiUnavailableNotice } from '../common/AiUnavailableNotice';
 import { GuestDeck } from '../../services/guestDeck';
@@ -27,14 +26,11 @@ import {
   Check, 
   Maximize2,
   Headphones,
-  Award,
-  Shuffle,
   Plus,
   Printer,
   Edit3,
   Eye,
   Star,
-  ChevronRight,
   Globe,
   GraduationCap,
   ChevronDown,
@@ -111,8 +107,8 @@ interface IngestionHubProps {
   onOpenDeckStation?: (session: StudySession) => void;
   onStartMatch?: (session: StudySession) => void;
   onStartAudioBriefing?: (session: StudySession) => void;
-  onOpenExam?: () => void;
-  onOpenInterleaving?: () => void;
+  /** Opens the Subjects page, where subjects are renamed, recoloured and deleted. */
+  onOpenFolders?: () => void;
   onOpenSanctuary?: () => void;
   initialLibraryTab?: 'my-decks' | 'starred' | 'curated';
   /** Opens on "make a deck from notes" with these notes filled in (from Focus). */
@@ -129,8 +125,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   onOpenDeckStation,
   onStartMatch,
   onStartAudioBriefing,
-  onOpenExam,
-  onOpenInterleaving,
+  onOpenFolders,
   initialLibraryTab,
   initialNotes,
   onOpenAuth,
@@ -347,7 +342,6 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   });
 
   // First available session for quick launch widgets
-  const defaultQuickSession = savedSessions[0] || CURATED_STARTER_DECKS[0]?.session;
 
   const handleLaunchAllStarred = () => {
     if (starredCards.length === 0) return;
@@ -686,41 +680,6 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
         </div>
       </section>
 
-      {/* Ways to study */}
-      <section aria-labelledby="study-modes-title" className="space-y-3">
-        <h2 id="study-modes-title" className="text-[15px] font-semibold text-ink">Ways to study</h2>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StudyModeCard
-            icon={Layers}
-            title="Today's review"
-            description="Spaced repetition picks what you are about to forget, from all your decks."
-            meta={todayCount > 0 ? `${todayCount} today` : 'All done for today'}
-            onClick={startReview}
-          />
-          <StudyModeCard
-            icon={Zap}
-            title="Speed match"
-            description="Pair terms with definitions against the clock."
-            meta="60 seconds"
-            onClick={defaultQuickSession && onStartMatch ? () => onStartMatch(defaultQuickSession) : undefined}
-          />
-          <StudyModeCard
-            icon={Award}
-            title="Mock exam"
-            description="Timed questions scored on accuracy and confidence."
-            meta={ECONOMY_VISIBLE ? 'Pays for correct answers' : 'Timed, like the real thing'}
-            onClick={onOpenExam}
-          />
-          <StudyModeCard
-            icon={Shuffle}
-            title="Mix decks"
-            description="Shuffle subjects together to learn to tell them apart."
-            meta="Interleaving"
-            onClick={onOpenInterleaving}
-          />
-        </div>
-      </section>
-
       {/* Decks workspace */}
       <section aria-label="Your decks" className="space-y-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -837,6 +796,11 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                   <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
                   New subject
                 </button>
+                {onOpenFolders && folders.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={onOpenFolders} className="shrink-0">
+                    Manage subjects
+                  </Button>
+                )}
               </div>
             )}
 
@@ -1177,35 +1141,6 @@ const SOURCE_TABS: { mode: 'topic' | 'notes' | 'pdf'; label: string; icon: Lucid
   { mode: 'notes', label: 'Notes', icon: FileText },
   { mode: 'pdf', label: 'PDF', icon: FileUp },
 ];
-
-interface StudyModeCardProps {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-  meta: string;
-  onClick?: () => void;
-}
-
-const StudyModeCard: React.FC<StudyModeCardProps> = ({ icon: Icon, title, description, meta, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={!onClick}
-    className="group flex flex-col items-start gap-3 rounded-2xl border border-line bg-surface p-4 text-left transition-colors hover:border-line-strong hover:bg-surface-hover disabled:opacity-50 disabled:hover:bg-surface cursor-pointer"
-  >
-    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-soft text-brand-text">
-      <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
-    </span>
-    <span>
-      <span className="block text-[15px] font-medium text-ink">{title}</span>
-      <span className="mt-1 block text-[13px] leading-relaxed text-ink-subtle">{description}</span>
-    </span>
-    <span className="mt-auto flex w-full items-center justify-between text-[13px] font-medium text-ink-muted group-hover:text-ink">
-      {meta}
-      <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-    </span>
-  </button>
-);
 
 const LibraryChip: React.FC<{
   active: boolean;
