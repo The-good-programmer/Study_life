@@ -44,16 +44,18 @@ export async function handleReminderRoutes(req, res, pathname, body) {
     const now = new Date().toISOString();
     // A browser belongs to whoever signed in last; switching accounts moves its reminders over.
     await db.run(
-      `INSERT INTO push_subscriptions (endpoint, user_id, keys_json, time_zone, remind_at, last_sent_day, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NULL, $6, $6)
+      `INSERT INTO push_subscriptions (endpoint, user_id, keys_json, time_zone, remind_at, last_sent_day, created_at, updated_at, after_class)
+       VALUES ($1, $2, $3, $4, $5, NULL, $6, $6, $7)
        ON CONFLICT (endpoint) DO UPDATE SET
          user_id = excluded.user_id,
          keys_json = excluded.keys_json,
          time_zone = excluded.time_zone,
          remind_at = excluded.remind_at,
+         after_class = excluded.after_class,
          last_sent_day = CASE WHEN push_subscriptions.user_id = excluded.user_id THEN push_subscriptions.last_sent_day ELSE NULL END,
          updated_at = excluded.updated_at`,
-      [subscription.endpoint, user.id, JSON.stringify(subscription.keys), body.timeZone, body.remindAt, now],
+      // After-class notifications stay on unless the app says otherwise (older apps don't send it).
+      [subscription.endpoint, user.id, JSON.stringify(subscription.keys), body.timeZone, body.remindAt, now, body?.afterClass !== false],
     );
     return send(res, 200, { success: true });
   }

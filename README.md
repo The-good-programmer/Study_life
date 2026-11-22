@@ -40,6 +40,13 @@ what you covered (a few seconds). Homework goes into the planner, due at that su
 topic (with any notes) can become flashcards, checked like any AI deck, added as one topic to that subject's
 **class notes** deck, so they come up in tonight's review. The timetable and logs sync with your account.
 
+- **From a photo:** *From a photo* reads a picture (or pasted text) of the timetable with the AI; you tick the lessons to
+  add, and ones already there are left out.
+- **After-class notifications:** with reminders on (Settings → Reminders), the server sends a notification when each
+  lesson ends ("Biology just finished"), from the synced timetable in your time zone: once per lesson, within 20
+  minutes of its end, and never for a lesson you've already noted. Tapping it opens the note (`/?log=<lessonId>`). It can
+  be turned off under *After each lesson*.
+
 ### Focus workspace
 
 A Pomodoro timer (25-minute focus sessions, short breaks, a long break after every fourth; one-tap 25/5, 50/10 and 90/20 presets, or your own lengths) with the session's tasks, a notes pad, background sound and today's focus time. Tap a task to work on it, drag to reorder, and press F for a full-screen timer. Homework due soon in the Planner is offered as a task, and ticking it off marks it done in the Planner too. The timer keeps running on other pages (the time left shows in the top bar and the tab title), chimes when a phase ends and can send a notification. Finished focus sessions (or ones finished early with "Finish now") count toward the daily goal and streak; time spent reviewing cards during a session is counted once, not twice. Alerts ring on time in background tabs, and the screen stays on while the timer runs (where the browser supports it).

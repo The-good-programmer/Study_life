@@ -389,6 +389,33 @@ describe('study reminders', () => {
     expect(sent).toHaveLength(1);
   });
 
+  it('notifies once when a lesson ends, never for a logged or stale one, and not when turned off', async () => {
+    const { runAfterClass } = await import('./reminders.js');
+    const pupil = await register('after-class@example.com');
+    const quiet = await register('after-class-off@example.com');
+    await db.run('DELETE FROM push_subscriptions');
+    await api('/api/reminders/subscribe', { method: 'POST', token: pupil.token, body: { subscription: subscription(30), timeZone: 'Asia/Tokyo', remindAt: '19:00' } });
+    await api('/api/reminders/subscribe', { method: 'POST', token: quiet.token, body: { subscription: subscription(31), timeZone: 'Asia/Tokyo', remindAt: '19:00', afterClass: false } });
+    // Monday 2026-11-23 in Tokyo: Biology ends 10:45, Maths 11:45 (logged), Art 12:45.
+    const lesson = (id, subject, start, end) => ({ id, subject, weekday: 1, start, end, updatedAt: '2026-11-22T00:00:00Z' });
+    const timetable = { items: [lesson('bio', 'Biology', '10:00', '10:45'), lesson('maths', 'Maths', '11:00', '11:45'), lesson('art', 'Art', '12:00', '12:45')] };
+    const lesson_logs = { items: [{ id: 'log', lessonId: 'maths', date: '2026-11-23', subject: 'Maths', topic: 'Vectors', updatedAt: '2026-11-23T02:40:00Z' }] };
+    for (const account of [pupil, quiet]) await api('/api/sync/push', { method: 'POST', token: account.token, body: { documents: { timetable, lesson_logs } } });
+
+    const sent = [];
+    const send = async (sub, message) => void sent.push({ endpoint: sub.endpoint, message });
+    const tokyo = (time) => new Date(`2026-11-23T${time}:00+09:00`);
+    await runAfterClass({ now: tokyo('10:40'), send });
+    expect(sent).toHaveLength(0);
+    await runAfterClass({ now: tokyo('10:50'), send });
+    expect(sent.map((s) => s.endpoint)).toEqual([subscription(30).endpoint]);
+    expect(sent[0].message).toMatchObject({ title: 'Biology just finished', url: '/?log=bio', tag: 'studify-lesson-bio' });
+    await runAfterClass({ now: tokyo('10:55'), send }); // not twice
+    await runAfterClass({ now: tokyo('11:50'), send }); // Maths is already logged
+    await runAfterClass({ now: tokyo('13:30'), send }); // Art ended 45 minutes ago: too late to be useful
+    expect(sent).toHaveLength(1);
+  });
+
   it('drops a subscription the browser has given up', async () => {
     const { runReminders } = await import('./reminders.js');
     const gone = await register('push-gone@example.com');
@@ -890,7 +917,7 @@ describe('security headers', () => {
 describe('database', () => {
   it('applies its migrations once and reports healthy', async () => {
     const applied = await db.all('SELECT id FROM schema_migrations');
-    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds', '005_user_documents', '006_resets_and_reminders', '007_friends_and_digest', '008_duels', '009_deck_sharing_privacy']);
+    expect(applied.map((row) => row.id)).toEqual(['001_initial', '002_lock_down_tables', '003_ai_pools_and_deck_reports', '004_calendar_feeds', '005_user_documents', '006_resets_and_reminders', '007_friends_and_digest', '008_duels', '009_deck_sharing_privacy', '010_after_class_notifications']);
 
     const health = await api('/api/health');
     expect(health.status).toBe(200);

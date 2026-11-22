@@ -43,6 +43,7 @@ const FocusPage = lazy(() => import('./components/focus/FocusPage').then(m => ({
 // Dialogs most visits never open, and the payout banner (only with the economy on), load when shown.
 const InstallAppDialog = lazy(() => import('./components/common/InstallAppDialog').then(m => ({ default: m.InstallAppDialog })));
 const QuickStartDialog = lazy(() => import('./components/onboarding/QuickStartDialog').then(m => ({ default: m.QuickStartDialog })));
+const LessonLogDialog = lazy(() => import('./components/timetable/LessonLogDialog').then(m => ({ default: m.LessonLogDialog })));
 const FriendsDialog = lazy(() => import('./components/friends/FriendsDialog').then(m => ({ default: m.FriendsDialog })));
 const WagePayoutBanner = lazy(() => import('./components/lifesim/WagePayoutBanner').then(m => ({ default: m.WagePayoutBanner })));
 const FoldersPage = lazy(() => import('./components/folders/FoldersPage').then(m => ({ default: m.FoldersPage })));
@@ -122,6 +123,19 @@ export function App() {
     return code ?? FriendsService.pendingInvite();
   });
   const invitedWhileSignedOut = Boolean(friendInvite) && !AuthService.getCurrentUser();
+  // An after-class notification opens /?log=<lessonId>: the note for that lesson, today.
+  const [logLink, setLogLink] = useState<{ id: string; day: string } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const url = new URL(window.location.href);
+    const id = url.searchParams.get('log');
+    if (!id) return null;
+    url.searchParams.delete('log');
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+    const now = new Date();
+    return { id, day: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` };
+  });
+  const logLessonId = logLink?.id ?? null;
+  const logLesson = logLink ? StorageService.getTimetable().find(lesson => lesson.id === logLink.id) ?? null : null;
   // "Report this deck" on a shared deck's public page links to /?report=<slug>: the Library's
   // Community tab opens with the report form for it.
   const [reportFromLink] = useState<string | null>(() => {
@@ -156,7 +170,7 @@ export function App() {
   // A first visit (no decks yet) starts with "What do you want to study?" instead of a tour. A topic typed
   // before signing up brings it back after signing in.
   const [quickStart, setQuickStart] = useState<{ topic: string | null } | null>(() =>
-    !resetToken && !friendInvite && !deckFromLink && !sharedFromLink && !reportFromLink && (shouldShowQuickStart() || (pendingQuickStartTopic() && AuthService.getCurrentUser()))
+    !resetToken && !friendInvite && !deckFromLink && !sharedFromLink && !reportFromLink && !logLessonId && (shouldShowQuickStart() || (pendingQuickStartTopic() && AuthService.getCurrentUser()))
       ? { topic: pendingQuickStartTopic() }
       : null,
   );
@@ -806,6 +820,23 @@ export function App() {
         </Suspense>
       )}
 
+      {logLesson && (
+        <Suspense fallback={null}>
+          <LessonLogDialog
+            lesson={logLesson}
+            day={logLink?.day ?? ''}
+            onClose={() => setLogLink(null)}
+            onStudy={session => {
+              setLogLink(null);
+              handleStartSession(session);
+            }}
+            onOpenAuth={() => {
+              setLogLink(null);
+              handleOpenAuth('register');
+            }}
+          />
+        </Suspense>
+      )}
       {quickStart && (
         <Suspense fallback={null}>
           <QuickStartDialog

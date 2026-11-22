@@ -1,14 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { Check, NotebookPen, Plus } from 'lucide-react';
+import { Camera, Check, NotebookPen, Plus } from 'lucide-react';
 import type { StudySession, TimetableLesson } from '../../types';
 import { dayKey } from '../../services/plannerService';
 import { StorageService } from '../../services/storageService';
+import { NotificationService } from '../../services/notificationService';
 import { WEEKDAY_NAMES, WEEKDAY_SHORT, isoWeekday } from '../../services/timetableService';
 import { cn } from '../../utils/cn';
 import { FOLDER_COLORS } from '../studio/folderOptions';
 import { Button, Card } from '../ui/primitives';
 import { LessonDialog } from './LessonDialog';
 import { LessonLogDialog } from './LessonLogDialog';
+import { TimetableImportDialog } from './TimetableImportDialog';
 import { useMinuteClock, useTimetable } from './useTimetable';
 
 const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
@@ -26,6 +28,11 @@ export const WeeklyTimetable: React.FC<{
   const [editing, setEditing] = useState<TimetableLesson | null>(null);
   const [adding, setAdding] = useState<number | null>(null);
   const [logging, setLogging] = useState<TimetableLesson | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [notified] = useState(() => {
+    const settings = NotificationService.getSettings();
+    return Boolean(settings.push && settings.afterClass !== false);
+  });
   const now = useMinuteClock();
   const today = dayKey(now);
   const todayWeekday = isoWeekday(now);
@@ -87,10 +94,20 @@ export const WeeklyTimetable: React.FC<{
               ? 'Add your lessons. After each one, note what you covered and Studify turns it into flashcards for tonight.'
               : 'After each lesson, note what you covered: homework goes in the planner, and the topic becomes flashcards.'}
           </p>
+          {lessons.length > 0 && !notified && (
+            <p className="mt-1 text-[13px] text-ink-subtle">
+              Tip: turn on reminders in Settings → Reminders to get a nudge when each lesson ends.
+            </p>
+          )}
         </div>
-        <Button variant={lessons.length === 0 ? 'primary' : 'secondary'} size="sm" icon={Plus} onClick={() => setAdding(todayWeekday <= 5 ? todayWeekday : 1)}>
-          Add lesson
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant={lessons.length === 0 ? 'primary' : 'secondary'} size="sm" icon={Camera} onClick={() => setImporting(true)}>
+            From a photo
+          </Button>
+          <Button variant="secondary" size="sm" icon={Plus} onClick={() => setAdding(todayWeekday <= 5 ? todayWeekday : 1)}>
+            Add lesson
+          </Button>
+        </div>
       </div>
 
       {lessons.length > 0 && (
@@ -144,6 +161,7 @@ export const WeeklyTimetable: React.FC<{
           }}
         />
       )}
+      {importing && <TimetableImportDialog onClose={() => setImporting(false)} onOpenAuth={onOpenAuth} />}
       {logging && (
         <LessonLogDialog
           lesson={logging}

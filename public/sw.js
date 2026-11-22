@@ -129,10 +129,11 @@ self.addEventListener('push', (event) => {
     body: data.body,
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    tag: 'studify-push-streak',
+    // A push can bring its own tag (one notification per lesson, say) and button label.
+    tag: data.tag || 'studify-push-streak',
     data: { url: data.url || '/' },
     actions: [
-      { action: 'study', title: 'Start Practice ⚡' },
+      { action: 'study', title: data.action || 'Start Practice ⚡' },
       { action: 'dismiss', title: 'Later' }
     ]
   };

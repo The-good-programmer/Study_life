@@ -247,3 +247,35 @@ test('a lesson in the timetable is logged after class: homework goes in the plan
   expect(deck?.concepts[0].retrievalCards).toHaveLength(2);
   expectNoErrors(errors);
 });
+
+test('a pasted timetable is read into lessons, and an after-class notification opens that lesson', async ({ page, request }) => {
+  const errors = watchErrors(page);
+  const me = await newAccount(request, 'Reader');
+  await page.addInitScript(() => localStorage.setItem('axon_tour_seen', 'true'));
+  await standInForAi(page, () =>
+    JSON.stringify({
+      lessons: [
+        { subject: 'Biology', weekday: 1, start: '08:30', end: '09:15', room: 'Lab 2' },
+        { subject: 'Maths', weekday: 2, start: '09:20', end: '10:05' },
+      ],
+    }),
+  );
+  await page.goto('/');
+  await signIn(page, me.email);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Planner' }).click();
+  await page.getByRole('button', { name: 'From a photo' }).click();
+  const read = page.getByRole('dialog', { name: 'Add your timetable from a photo' });
+  await read.getByLabel('Or paste it').fill('Monday 08:30-09:15 Biology (Lab 2); Tuesday 09:20-10:05 Maths');
+  await read.getByRole('button', { name: 'Read it' }).click();
+  const check = page.getByRole('dialog', { name: 'Check your lessons' });
+  await expect(check.getByText('Biology')).toBeVisible();
+  await check.getByRole('button', { name: 'Add 2 lessons' }).click();
+  await expect(page.getByRole('button', { name: /^Edit Biology, Monday 08:30/ })).toBeVisible();
+
+  // The notification's link: /?log=<lessonId> opens the note for that lesson.
+  const lessonId = await page.evaluate(id => (JSON.parse(localStorage.getItem(`studify_timetable_v1_${id}`) || '[]') as { id: string; subject: string }[]).find(l => l.subject === 'Maths')!.id, me.id);
+  await page.goto(`/?log=${lessonId}`);
+  await expect(page.getByRole('dialog', { name: 'What did you cover?' })).toContainText('Maths');
+  expect(new URL(page.url()).search).toBe('');
+  expectNoErrors(errors);
+});
