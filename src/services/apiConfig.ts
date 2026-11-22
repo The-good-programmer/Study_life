@@ -14,6 +14,16 @@ export class ApiConfig {
   private static lastCheckTime: number = 0;
   private static wakingListeners = new Set<(waking: boolean) => void>();
   private static slowRequests = 0;
+  /** A guest's pass for their one free AI deck, held only while that deck is being made. */
+  private static guestPass: string | null = null;
+
+  public static setGuestPass(pass: string | null): void {
+    this.guestPass = pass;
+  }
+
+  public static hasGuestPass(): boolean {
+    return this.guestPass !== null;
+  }
 
   /** Called with true while a request to the server is unusually slow (it's waking up), then false. */
   public static onWaking(listener: (waking: boolean) => void): () => void {
@@ -142,10 +152,12 @@ export class ApiConfig {
    * when the server is reachable and we hold a login token.
    */
   public static async canUseServerAi(): Promise<boolean> {
-    return Boolean(this.getToken()) && (await this.isServerReachable());
+    return Boolean(this.getToken() || this.guestPass) && (await this.isServerReachable());
   }
 
   public static canUseServerAiSync(): boolean {
+    // A guest pass was just handed out by the server, so it is reachable.
+    if (!this.getToken() && this.guestPass) return true;
     return Boolean(this.getToken()) && this.isServerReachableSync();
   }
 
@@ -168,6 +180,8 @@ export class ApiConfig {
     const token = this.getToken();
     if (token && !headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${token}`);
+    } else if (!token && this.guestPass && endpoint.includes('/ai/')) {
+      headers.set('X-Guest-Pass', this.guestPass);
     }
 
     try {

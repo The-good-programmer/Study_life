@@ -22,11 +22,16 @@ import {
   Snowflake,
   Check,
   Sparkles,
+  Eye,
+  Repeat,
+  CloudUpload,
+  X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { StudySession, UserStats, SubjectFolder, UserAccount } from '../../types';
 import type { DailyLedger } from '../../types/lifeSim';
 import { StorageService } from '../../services/storageService';
+import { PlannerService } from '../../services/plannerService';
 import { AuthService } from '../../services/authService';
 import { characterService } from '../../services/characterService';
 import { lifeSimService, ACADEMIC_ROLES } from '../../services/lifeSimService';
@@ -57,6 +62,27 @@ const CharacterCustomizerModal = WORLD_3D_ENABLED
 
 /** Reviews per day that count as hitting the daily goal. */
 /** Rough time per flashcard, for session length estimates. */
+// Only a student with no decks sees it, and it brings the starter catalog's data with it.
+const FirstDeckStarter = lazy(() => import('./FirstDeckStarter').then(m => ({ default: m.FirstDeckStarter })));
+
+/** What a new student needs to know before their first review, in place of stats that are all zero. */
+const HOW_IT_WORKS: { icon: LucideIcon; title: string; body: string }[] = [
+  { icon: Layers, title: 'Pick or make a deck', body: 'A starter deck, your notes, a PDF, a photo or a lecture.' },
+  { icon: Eye, title: 'Recall, then reveal', body: 'Answer in your head first. Then rate how well you knew it.' },
+  { icon: Repeat, title: 'A few minutes a day', body: 'Each card comes back just before you would forget it.' },
+];
+
+/** When a guest last closed the "keep your decks" prompt; it comes back after a few days. */
+const KEEP_PROMPT_KEY = 'studify_keep_decks_prompt_closed';
+const KEEP_PROMPT_PAUSE_MS = 3 * 24 * 60 * 60 * 1000;
+const keepPromptPaused = (): boolean => {
+  try {
+    return Date.now() - Number(localStorage.getItem(KEEP_PROMPT_KEY) || 0) < KEEP_PROMPT_PAUSE_MS;
+  } catch {
+    return false;
+  }
+};
+
 const SECONDS_PER_CARD = 20;
 /** Decks shown on Today before linking to the full library. */
 const DECKS_ON_HOME = 5;
@@ -79,6 +105,8 @@ interface DailyMissionHomeProps {
   onOpenLibrary?: () => void;
   /** Opens sign-in (for adding friends). */
   onOpenAuth?: () => void;
+  /** Opens the sign-up form (for a guest keeping their decks). */
+  onOpenSignUp?: () => void;
 }
 
 const greetingFor = (date: Date): string => {
@@ -109,6 +137,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   onOpenPlanner,
   onOpenLibrary,
   onOpenAuth,
+  onOpenSignUp,
 }) => {
   const [stats, setStats] = useState<UserStats>(() => StorageService.getStats());
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => AuthService.getCurrentUser());
@@ -170,6 +199,20 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   const firstName = currentUser?.name.split(' ')[0];
   const dateLabel = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(now);
   const hasDecks = savedSessions.length > 0;
+  // Streak, XP and level tiles wait for the first review: four zeros tell a new student nothing.
+  const [hasPlannerItems] = useState(() => PlannerService.getItems().length > 0);
+  const [keepPromptClosed, setKeepPromptClosed] = useState(keepPromptPaused);
+  // A guest's decks live only in this browser: offer an account to keep them (and make more with AI).
+  const showKeepPrompt = !currentUser && hasDecks && !keepPromptClosed && Boolean(onOpenSignUp);
+  const closeKeepPrompt = () => {
+    setKeepPromptClosed(true);
+    try {
+      localStorage.setItem(KEEP_PROMPT_KEY, String(Date.now()));
+    } catch {
+      // Private mode: it shows again next visit.
+    }
+  };
+  const hasStudied = totalReviews > 0 || stats.currentStreak > 0 || weekly.current > 0 || stats.xp > 0;
 
   const dueIds = useMemo(() => new Set(queue.cards.map(card => card.id)), [queue]);
   const dueInSession = useCallback(
@@ -280,7 +323,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
           : "You're all done for today";
 
   const sessionBody = !hasDecks
-    ? 'Pick a starter deck for your level, or turn your notes or a PDF into flashcards in about a minute.'
+    ? 'Open a ready-made deck and you are studying in seconds, or turn your own notes into flashcards in about a minute.'
     : queue.dueCount > 0
       ? 'Review them now, while they are on the edge of forgetting. That is when recall does the most for long-term memory.'
       : queue.newCount > 0
@@ -357,27 +400,35 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                   </dl>
                 )}
 
-                <div className="flex flex-wrap items-center gap-2.5">
-                  {hasDecks ? (
-                    <>
-                      <Button variant="primary" size="lg" icon={Play} onClick={startQuickReview} className="w-full sm:w-auto">
-                        {queueSize > 0 ? 'Start review' : 'Practise ahead'}
-                      </Button>
-                      <Button variant="secondary" size="lg" icon={Brain} onClick={startGuidedSession} className="w-full sm:w-auto">
-                        Guided session
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button variant="primary" size="lg" icon={Compass} onClick={onOpenStarterCatalog} className="w-full sm:w-auto">
-                        Pick a starter deck
-                      </Button>
-                      <Button variant="secondary" size="lg" icon={Upload} onClick={onOpenDeckStudio} className="w-full sm:w-auto">
-                        Import notes or PDF
-                      </Button>
-                    </>
-                  )}
-                </div>
+                {hasDecks ? (
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <Button variant="primary" size="lg" icon={Play} onClick={startQuickReview} className="w-full sm:w-auto">
+                      {queueSize > 0 ? 'Start review' : 'Practise ahead'}
+                    </Button>
+                    <Button variant="secondary" size="lg" icon={Brain} onClick={startGuidedSession} className="w-full sm:w-auto">
+                      Guided session
+                    </Button>
+                  </div>
+                ) : (
+                  <Suspense
+                    fallback={
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <Button variant="primary" size="lg" icon={Compass} onClick={onOpenStarterCatalog} className="w-full sm:w-auto">
+                          Pick a starter deck
+                        </Button>
+                        <Button variant="secondary" size="lg" icon={Upload} onClick={onOpenDeckStudio} className="w-full sm:w-auto">
+                          Import notes or PDF
+                        </Button>
+                      </div>
+                    }
+                  >
+                    <FirstDeckStarter
+                      onStartSession={onStartSession}
+                      onOpenStarterCatalog={onOpenStarterCatalog}
+                      onOpenDeckStudio={onOpenDeckStudio}
+                    />
+                  </Suspense>
+                )}
 
                 {primarySession && (
                   <div className="flex flex-wrap items-center gap-1 text-[13px]">
@@ -429,7 +480,70 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
             </div>
           </section>
 
+          {/* Keep your decks (guests) */}
+          {showKeepPrompt && (
+            <section
+              aria-labelledby="keep-decks-title"
+              className="flex flex-col gap-4 rounded-2xl border border-brand/30 bg-brand-soft/60 p-4 sm:flex-row sm:items-center sm:p-5 animate-rise"
+            >
+              <div className="flex min-w-0 flex-1 items-start gap-3.5">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-ink" aria-hidden="true">
+                  <CloudUpload className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <h2 id="keep-decks-title" className="text-[15px] font-semibold text-ink">
+                    {savedSessions.length === 1 ? 'Keep your deck' : 'Keep your decks'}
+                  </h2>
+                  <p className="mt-0.5 text-[13px] leading-relaxed text-ink-muted">
+                    Right now {savedSessions.length === 1 ? 'it is' : 'they are'} saved in this browser only. Sign up free to keep your
+                    progress on every device and make more decks with AI.
+                  </p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button variant="primary" onClick={onOpenSignUp} className="flex-1 sm:flex-none">
+                  Sign up free
+                </Button>
+                <IconButton icon={X} label="Not now" onClick={closeKeepPrompt} />
+              </div>
+            </section>
+          )}
+
+          {/* How it works, until the first deck */}
+          {!hasDecks && (
+            <section aria-labelledby="how-it-works-title" className="space-y-3">
+              <h2 id="how-it-works-title" className="text-[15px] font-semibold text-ink">
+                How Studify works
+              </h2>
+              <ol className="grid gap-3 sm:grid-cols-3">
+                {HOW_IT_WORKS.map(({ icon: Icon, title, body }, i) => (
+                  <li key={title} className="flex gap-3.5 rounded-2xl border border-line bg-surface p-4">
+                    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand-text" aria-hidden="true">
+                      <Icon className="h-[18px] w-[18px]" />
+                      <span className="absolute -right-1.5 -top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full border border-line bg-surface-solid text-[10.5px] font-semibold tabular-nums text-ink-muted">
+                        {i + 1}
+                      </span>
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[14px] font-medium text-ink">{title}</span>
+                      <span className="mt-0.5 block text-[13px] leading-relaxed text-ink-muted">{body}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <button
+                type="button"
+                onClick={() => setShowScienceModal(true)}
+                className="inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-text hover:underline cursor-pointer"
+              >
+                The research behind it
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </section>
+          )}
+
           {/* At a glance */}
+          {hasStudied && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatTile
               icon={Flame}
@@ -466,14 +580,19 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
               onClick={onOpenDashboard}
             />
           </div>
+          )}
 
           {/* Exams and homework from the planner */}
-          {onOpenPlanner && <UpcomingPlanCard onStartSession={onStartSession} onOpenPlanner={onOpenPlanner} />}
+          {/* For a guest with nothing yet, the planner and friends prompts would only say "not yet". A
+              signed-in student sees friends at once (an invite or a duel can come before any deck),
+              and exams already in the planner always show. */}
+          {(hasDecks || hasPlannerItems) && onOpenPlanner && <UpcomingPlanCard onStartSession={onStartSession} onOpenPlanner={onOpenPlanner} />}
 
           {/* Friends */}
-          <FriendsCard user={currentUser ? { id: currentUser.id, name: currentUser.name } : null} onOpenAuth={onOpenAuth} />
+          {(currentUser || (hasDecks && !showKeepPrompt)) && <FriendsCard user={currentUser ? { id: currentUser.id, name: currentUser.name } : null} onOpenAuth={onOpenAuth} />}
 
           {/* Decks */}
+          {hasDecks && (
           <section aria-labelledby="decks-title" className="space-y-3">
             <SectionHeader
               title="Your decks"
@@ -538,25 +657,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
               </div>
             )}
 
-            {!hasDecks ? (
-              <Card className="flex flex-col items-center px-6 py-10 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand-text">
-                  <Layers className="h-6 w-6" aria-hidden="true" />
-                </div>
-                <h3 className="mt-4 text-[15px] font-semibold text-ink">No decks yet</h3>
-                <p className="mt-1 max-w-sm text-[13px] leading-relaxed text-ink-muted">
-                  Start from a starter deck, or let the AI turn your lecture notes or a PDF into a deck.
-                </p>
-                <div className="mt-5 flex flex-wrap justify-center gap-2">
-                  <Button variant="primary" icon={Compass} onClick={onOpenStarterCatalog}>
-                    Explore starter decks
-                  </Button>
-                  <Button variant="secondary" icon={Upload} onClick={onOpenDeckStudio}>
-                    Import notes or PDF
-                  </Button>
-                </div>
-              </Card>
-            ) : displayedSessions.length === 0 ? (
+            {displayedSessions.length === 0 ? (
               <Card className="py-8 text-center text-[13px] text-ink-muted">No decks in this subject yet.</Card>
             ) : (
               <ul className="space-y-2">
@@ -626,6 +727,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
               </button>
             )}
           </section>
+          )}
         </div>
 
         {/* Side column: life and money (only while tokens are shown) */}

@@ -73,6 +73,7 @@ const fakeAi = {
   isAiConfigured: () => true,
   checkRateLimit: () => true,
   consumeDailyQuota: undefined, // filled in beforeAll with the real DB-backed quota
+  consumeGuestQuota: undefined, // likewise
   generateContent: async () => 'generated',
   generateContentStream: async function* () { yield 'chunk'; },
 };
@@ -94,6 +95,7 @@ beforeAll(async () => {
     userInfo: async () => ({ name: 'Carol' }),
   });
   fakeAi.consumeDailyQuota = ai.consumeDailyQuota;
+  fakeAi.consumeGuestQuota = ai.consumeGuestQuota;
 
   server = http.createServer(createApp({ ai: fakeAi, mailer: fakeMailer }));
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -637,6 +639,58 @@ describe('AI proxy', () => {
     expect((await call()).status).toBe(200);
     expect((await call()).status).toBe(200);
     expect((await call()).status).toBe(429);
+  });
+});
+
+describe('a guest\'s free AI deck', () => {
+  let schemas;
+  beforeAll(async () => { schemas = await import('./aiSchemas.js'); });
+
+  const getPass = async () => {
+    const res = await api('/api/ai/guest-pass', { method: 'POST' });
+    expect(res.status).toBe(200);
+    return res.data.pass;
+  };
+  const deckRequest = (pass, schema = schemas.STUDY_SESSION_GENERATION_SCHEMA) =>
+    api('/api/ai/generate', {
+      method: 'POST',
+      headers: { 'X-Guest-Pass': pass },
+      body: { contents: 'Photosynthesis', responseMimeType: 'application/json', responseSchema: schema },
+    });
+
+  it('writes and checks one deck without an account', async () => {
+    const pass = await getPass();
+    expect((await deckRequest(pass)).status).toBe(200);
+    expect((await deckRequest(pass, schemas.DECK_REVIEW_SCHEMA)).status).toBe(200);
+  });
+
+  it('serves only deck requests, and only a few of them', async () => {
+    const pass = await getPass();
+    const chat = await api('/api/ai/generate', { method: 'POST', headers: { 'X-Guest-Pass': pass }, body: { contents: 'hi' } });
+    expect(chat.status).toBe(403);
+    const stream = await api('/api/ai/stream', { method: 'POST', headers: { 'X-Guest-Pass': pass }, body: { contents: 'hi' } });
+    expect(stream.status).toBe(403);
+    for (let i = 0; i < 4; i++) expect((await deckRequest(pass)).status).toBe(200);
+    expect((await deckRequest(pass)).status).toBe(429);
+  });
+
+  it('is not a login, and a login is not a pass', async () => {
+    const pass = await getPass();
+    expect((await api('/api/sync/pull', { token: pass })).status).toBe(401);
+    expect((await api('/api/ai/generate', { method: 'POST', token: pass, body: { contents: 'hi' } })).status).toBe(401);
+    const user = await register('not-a-pass@example.com');
+    expect((await deckRequest(user.token)).status).toBe(401);
+    expect((await deckRequest('forged.pass.value')).status).toBe(401);
+  });
+
+  it('gives a network only a few passes a day', async () => {
+    rateLimit.configureLimits({ guestPass: { max: 1, windowMs: 60_000 } });
+    try {
+      expect((await api('/api/ai/guest-pass', { method: 'POST' })).status).toBe(200);
+      expect((await api('/api/ai/guest-pass', { method: 'POST' })).status).toBe(429);
+    } finally {
+      rateLimit.configureLimits();
+    }
   });
 });
 

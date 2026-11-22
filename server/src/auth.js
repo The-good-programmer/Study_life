@@ -85,20 +85,37 @@ function signHs256(data) {
   return base64UrlEncode(crypto.createHmac('sha256', JWT_SECRET).update(data).digest());
 }
 
+function signPayload(payload) {
+  const encHeader = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const encPayload = base64UrlEncode(JSON.stringify(payload));
+  return `${encHeader}.${encPayload}.${signHs256(`${encHeader}.${encPayload}`)}`;
+}
+
 export function createToken(user, expiresInSec = TOKEN_TTL_SEC) {
-  const header = { alg: 'HS256', typ: 'JWT' };
   const now = Math.floor(Date.now() / 1000);
-  const payload = {
+  return signPayload({
     sub: user.id,
     email: user.email,
     name: user.name,
     iat: now,
     exp: now + expiresInSec,
-  };
+  });
+}
 
-  const encHeader = base64UrlEncode(JSON.stringify(header));
-  const encPayload = base64UrlEncode(JSON.stringify(payload));
-  return `${encHeader}.${encPayload}.${signHs256(`${encHeader}.${encPayload}`)}`;
+/**
+ * A guest's pass to the shared AI for one deck. It carries no `sub`, so it can never stand in for a login
+ * (getAuthUser needs one), and a login token can't stand in for it (no `purpose`).
+ */
+export function createGuestAiPass(passId, expiresInSec) {
+  const now = Math.floor(Date.now() / 1000);
+  return signPayload({ purpose: 'guest-ai', pid: passId, iat: now, exp: now + expiresInSec });
+}
+
+/** The pass's payload ({ pid, exp }) if it is a valid, unexpired guest pass; otherwise null. */
+export function verifyGuestAiPass(token) {
+  const payload = verifyToken(token);
+  if (!payload || payload.purpose !== 'guest-ai' || payload.sub !== undefined || typeof payload.pid !== 'string') return null;
+  return payload;
 }
 
 export function verifyToken(token) {

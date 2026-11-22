@@ -14,6 +14,7 @@ import {
   Lightbulb,
   Undo2,
   PenLine,
+  ListChecks,
 } from 'lucide-react';
 import type { CardType, ConceptCheckpoint, FSRSRating, DiagnosticDistractor, RetrievalCard } from '../../types';
 import { FSRSService } from '../../services/fsrsService';
@@ -32,6 +33,7 @@ import { ScienceExplainerModal } from '../common/ScienceExplainerModal';
 import { haptics } from '../../services/hapticsService';
 import { buildQuizOptions, orderOptionsForCard } from '../../utils/quizOptions';
 import { Badge, Button, IconButton, Kbd, Toggle } from '../ui/primitives';
+import { ActionMenu, type ActionMenuItem } from '../ui/ActionMenu';
 import {
   CARD_TYPE_LABELS,
   blendInterleavedCards,
@@ -723,10 +725,31 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     return null;
   })();
 
+  // The rating bar and the multiple-choice result are pinned to the bottom of the screen, so the
+  // page leaves room under the card for them.
+  const showRatingBar = activeTab === 'cards' && !!currentCard && !!intervals && isAnswerRevealed && selectedOption === null;
+  const showChoiceResult = isAnswerRevealed && selectedOption !== null && !!currentCard;
+
+  // On a phone the session settings sit in one menu, so the card is the first thing on screen.
+  const settingsMenuItems: ActionMenuItem[] = [
+    ...(activeTab === 'cards'
+      ? [{ label: 'Multiple choice', icon: ListChecks, checked: interactiveMode, onSelect: () => setInteractiveMode(!interactiveMode) }]
+      : []),
+    ...(canMixEarlierTopics
+      ? [{ label: 'Mix earlier topics', icon: Brain, checked: interleaveEnabled, onSelect: () => setInterleaveEnabled(!interleaveEnabled) }]
+      : []),
+    { label: 'Shortcuts and controller', icon: Keyboard, onSelect: () => setShowErgonomicsHelp(true) },
+    { label: 'Why recall works', icon: HelpCircle, onSelect: () => setShowScienceModal(true) },
+  ];
+
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4 py-2 animate-fadeIn">
+    <div
+      className={`mx-auto w-full max-w-2xl space-y-4 py-2 animate-fadeIn ${
+        showRatingBar ? 'pb-36 sm:pb-40' : showChoiceResult ? 'pb-56 sm:pb-40' : ''
+      }`}
+    >
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <div role="tablist" aria-label="Practice mode" className="inline-flex rounded-xl border border-line bg-canvas p-1">
           {([
             { tab: 'cards', label: 'Cards' },
@@ -747,7 +770,8 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-0.5">
+        <ActionMenu label="Session settings" items={settingsMenuItems} className="sm:hidden" />
+        <div className="hidden flex-wrap items-center gap-0.5 sm:flex">
           {activeTab === 'cards' && (
             <Toggle checked={interactiveMode} onChange={setInteractiveMode} label="Multiple choice" />
           )}
@@ -1131,35 +1155,6 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                   <CardTutor key={currentCard.id} card={currentCard} wrongPick={selectedOption !== null && isCorrect === false ? selectedOption : null} />
                 </div>
               )}
-
-              {/* Rating */}
-              {isAnswerRevealed && selectedOption === null && (
-                <div onClick={(e) => e.stopPropagation()} className="mt-8 space-y-3 border-t border-line pt-6 animate-fadeIn">
-                  <div className="flex items-center justify-between gap-2 text-[13px]">
-                    <span className="font-medium text-ink">How well did you remember it?</span>
-                    <span className="hidden text-ink-subtle sm:inline">Keys 1 to 4</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {RATING_BUTTONS.map(({ rating, label, key, className, labelClassName }) => (
-                      <button
-                        key={rating}
-                        type="button"
-                        onClick={() => handleRate(rating)}
-                        className={`group flex flex-col items-start gap-1 rounded-xl border border-line bg-surface p-3 text-left transition-colors cursor-pointer ${className}`}
-                      >
-                        <span className="flex w-full items-center justify-between">
-                          <span className={`text-[14px] font-semibold ${labelClassName}`}>{label}</span>
-                          <Kbd>{key}</Kbd>
-                        </span>
-                        <span className="text-[13px] tabular-nums text-ink-muted">Back in {intervals[rating]}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs leading-relaxed text-ink-subtle">
-                    Every rating earns the same XP, so there is no reason to round up. Your rating only decides when the card comes back.
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -1345,8 +1340,45 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
         </div>
       )}
 
+      {/* Rating, pinned to the bottom of the screen so it is in reach without scrolling */}
+      {showRatingBar && intervals && (
+        <div
+          role="group"
+          aria-label="How well did you remember it?"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas-raised/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_32px_-16px_rgb(0_0_0/0.5)] backdrop-blur-xl animate-slideUp"
+        >
+          <div className="mx-auto max-w-2xl space-y-2.5 px-3 py-3 sm:px-4 sm:py-4">
+            <div className="flex items-center justify-between gap-2 text-[13px]">
+              <span className="font-medium text-ink">How well did you remember it?</span>
+              <span className="hidden text-ink-subtle sm:inline">Keys 1 to 4</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {RATING_BUTTONS.map(({ rating, label, key, className, labelClassName }) => (
+                <button
+                  key={rating}
+                  type="button"
+                  onClick={() => handleRate(rating)}
+                  className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl border px-1.5 py-2 transition-colors cursor-pointer active:translate-y-px sm:items-start sm:gap-1 sm:px-3 sm:py-2.5 ${className}`}
+                >
+                  <span className="flex w-full items-center justify-center sm:justify-between">
+                    <span className={`text-[15px] font-semibold sm:text-[14px] ${labelClassName}`}>{label}</span>
+                    <span className="hidden sm:inline-flex"><Kbd>{key}</Kbd></span>
+                  </span>
+                  <span className="text-[12px] tabular-nums text-ink-muted sm:text-[13px]">
+                    <span className="hidden sm:inline">Back in </span>{intervals[rating]}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="hidden text-xs leading-relaxed text-ink-subtle sm:block">
+              Every rating earns the same XP, so there is no reason to round up. Your rating only decides when the card comes back.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Multiple-choice feedback */}
-      {isAnswerRevealed && selectedOption !== null && currentCard && (
+      {showChoiceResult && currentCard && (
         <div
           role="status"
           className={`fixed inset-x-0 bottom-0 z-50 border-t-2 bg-canvas-raised/95 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur-xl animate-slideUp ${
@@ -1405,10 +1437,11 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 };
 
 const RATING_BUTTONS: { rating: FSRSRating; label: string; key: string; className: string; labelClassName: string }[] = [
-  { rating: 'again', label: 'Again', key: '1', className: 'hover:border-danger/50 hover:bg-danger-soft', labelClassName: 'text-danger' },
-  { rating: 'hard', label: 'Hard', key: '2', className: 'hover:border-gold/50 hover:bg-gold-soft', labelClassName: 'text-gold' },
-  { rating: 'good', label: 'Good', key: '3', className: 'hover:border-brand/50 hover:bg-brand-soft', labelClassName: 'text-brand-text' },
-  { rating: 'easy', label: 'Easy', key: '4', className: 'hover:border-success/50 hover:bg-success-soft', labelClassName: 'text-success' },
+  // Tinted by default (not only on hover), so on a touch screen the four are told apart at a glance.
+  { rating: 'again', label: 'Again', key: '1', className: 'border-danger/25 bg-danger-soft hover:border-danger/60', labelClassName: 'text-danger' },
+  { rating: 'hard', label: 'Hard', key: '2', className: 'border-gold/25 bg-gold-soft hover:border-gold/60', labelClassName: 'text-gold' },
+  { rating: 'good', label: 'Good', key: '3', className: 'border-brand/25 bg-brand-soft hover:border-brand/60', labelClassName: 'text-brand-text' },
+  { rating: 'easy', label: 'Easy', key: '4', className: 'border-success/25 bg-success-soft hover:border-success/60', labelClassName: 'text-success' },
 ];
 
 const ShortcutGroup: React.FC<{ title: string; items: [string, string][] }> = ({ title, items }) => (

@@ -64,8 +64,17 @@ describe('FSRSService', () => {
     expect(typeof previews.good).toBe('string');
   });
 
+  it('shows a new card\'s learning steps as different times, not the same label', () => {
+    const previews = FSRSService.previewIntervals(createMockCard({ reps: 0, lastReviewDate: undefined }));
+    expect(new Set([previews.again, previews.hard, previews.good]).size).toBe(3);
+    expect(previews.again).toMatch(/^\d+m$/);
+  });
+
   it('formats intervals accurately for human display', () => {
-    expect(FSRSService.formatInterval(0.01)).toBe('15m');
+    expect(FSRSService.formatInterval(1 / 1440)).toBe('1m');
+    expect(FSRSService.formatInterval(10 / 1440)).toBe('10m');
+    expect(FSRSService.formatInterval(0.01)).toBe('14m');
+    expect(FSRSService.formatInterval(59.7 / 1440)).toBe('1h');
     expect(FSRSService.formatInterval(0.5)).toBe('12h');
     expect(FSRSService.formatInterval(1.2)).toBe('1d');
     expect(FSRSService.formatInterval(7)).toBe('7d');

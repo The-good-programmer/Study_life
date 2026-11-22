@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ECONOMY_VISIBLE } from '../../services/features';
 import { useNeedsSignInForAi } from '../../hooks/useAiAccess';
 import { AiUnavailableNotice } from '../common/AiUnavailableNotice';
+import { GuestDeck } from '../../services/guestDeck';
 import { 
   X,
   Sparkles, 
@@ -280,9 +281,12 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
     }
   };
 
-  /** Making a deck needs AI: a guest without a key is asked to sign in instead of seeing it fail. */
+  /**
+   * Making a deck needs AI: a guest without a key is asked to sign in instead of seeing it fail, once
+   * their one free deck is made.
+   */
   const generate: typeof generation.generate = request => {
-    if (needsSignInForAi) {
+    if (needsSignInForAi && !GuestDeck.isAvailable()) {
       onOpenAuth?.();
       return;
     }
@@ -405,7 +409,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
           </div>
         </div>
 
-        {needsSignInForAi && ingestMode !== 'occlusion' && <AiUnavailableNotice action="make decks" onSignIn={onOpenAuth} />}
+        {needsSignInForAi && ingestMode !== 'occlusion' && <AiUnavailableNotice action="make decks" onSignIn={onOpenAuth} freeDeck={GuestDeck.isAvailable()} />}
 
         {/* Topic */}
         {ingestMode === 'topic' && (

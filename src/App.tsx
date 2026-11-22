@@ -453,6 +453,7 @@ export function App() {
                 onOpenPlanner={() => handleNavigate('planner')}
                 onOpenLibrary={() => handleNavigate('studio')}
                 onOpenAuth={() => handleOpenAuth('login')}
+                onOpenSignUp={() => handleOpenAuth('register')}
               />
             )}
             {view === 'studio' && (

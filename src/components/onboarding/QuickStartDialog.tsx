@@ -1,11 +1,11 @@
 import React, { useId, useMemo, useState } from 'react';
 import { ArrowRight, Camera, FileText, RefreshCw, Sparkles } from 'lucide-react';
 import type { StudySession } from '../../types';
-import { CURATED_STARTER_DECKS, rankStarterDecksForGrade } from '../../data/curatedStarterCatalog';
 import { AuthService } from '../../services/authService';
 import { AIService } from '../../services/aiService';
+import { GuestDeck } from '../../services/guestDeck';
 import { soundEngine } from '../../services/soundEngine';
-import { addStarterDeck } from '../catalog/starterDeckCopy';
+import { gentleStarterDecks, readyMadeSession } from './readyMadeDecks';
 import { useDeckGeneration } from '../ingestion/useDeckGeneration';
 import { EducationProfileModal } from '../ingestion/EducationProfileModal';
 import { Dialog, DialogFooter, DialogHeader, DialogPanel } from '../common/Dialog';
@@ -32,13 +32,11 @@ export const QuickStartDialog: React.FC<{
   const [topic, setTopic] = useState(initialTopic ?? '');
   const generation = useDeckGeneration({ onSessionReady: onStartSession });
   const { isLoading, stage, error, effectiveProfile, profileModal } = generation;
-  const needsSignIn = AIService.needsSignIn();
+  // A guest's first deck is free (no account); after that, making one with AI needs an account.
+  const freeDeck = GuestDeck.isAvailable();
+  const needsSignIn = AIService.needsSignIn() && !freeDeck;
   // Ranked for the student's level, the gentlest first: a first deck should feel doable.
-  const readyMade = useMemo(() => {
-    const ranked = rankStarterDecksForGrade(CURATED_STARTER_DECKS, AuthService.getCurrentUser()?.grade);
-    const gentle = (difficulty: string) => (difficulty === 'Foundational' ? 0 : difficulty === 'Intermediate' ? 1 : 2);
-    return [...ranked].sort((a, b) => gentle(a.difficulty) - gentle(b.difficulty)).slice(0, READY_MADE);
-  }, []);
+  const readyMade = useMemo(() => gentleStarterDecks(READY_MADE, AuthService.getCurrentUser()?.grade), []);
 
   const make = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -59,10 +57,10 @@ export const QuickStartDialog: React.FC<{
   };
 
   const startReadyMade = (index: number) => {
-    const deck = addStarterDeck(readyMade[index]);
+    const session = readyMadeSession(readyMade[index]);
     soundEngine.playStart();
     // Straight into the flashcards: studying in seconds.
-    onStartSession({ ...deck, casualFlashcardMode: true, currentPhase: 'retrieval', currentConceptIndex: 0 });
+    onStartSession(session);
   };
 
   return (
@@ -77,8 +75,9 @@ export const QuickStartDialog: React.FC<{
           />
           <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
             <form onSubmit={make} className="space-y-2.5">
-              <label htmlFor={inputId} className="text-[13px] font-medium text-ink">
+              <label htmlFor={inputId} className="block text-[13px] font-medium text-ink">
                 Type a topic
+                {freeDeck && <span className="font-normal text-ink-subtle"> (your first deck is free, no account needed)</span>}
               </label>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
@@ -115,9 +114,14 @@ export const QuickStartDialog: React.FC<{
                 </div>
               )}
               {error && (
-                <p role="alert" className="text-[13px] text-danger">
-                  {error}
-                </p>
+                <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-danger">
+                  <span>{error}</span>
+                  {AIService.needsSignIn() && /sign up/i.test(error) && (
+                    <Button type="button" variant="secondary" size="sm" onClick={onOpenAuth}>
+                      Sign up free
+                    </Button>
+                  )}
+                </div>
               )}
             </form>
 

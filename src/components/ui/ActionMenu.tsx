@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MoreHorizontal } from 'lucide-react';
+import { Check, MoreHorizontal } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
@@ -8,6 +8,8 @@ export interface ActionMenuItem {
   icon?: LucideIcon;
   onSelect: (event: React.MouseEvent) => void;
   tone?: 'default' | 'danger';
+  /** Set for an on/off setting: the item becomes a checkbox item and shows a tick when on. */
+  checked?: boolean;
 }
 
 interface ActionMenuProps {
@@ -66,11 +68,12 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ label, items, className 
           role="menu"
           className="absolute right-0 top-9 z-40 min-w-48 rounded-xl border border-line-strong bg-surface-solid p-1 shadow-2xl animate-fadeIn"
         >
-          {items.map(({ label: itemLabel, icon: Icon, onSelect, tone }) => (
+          {items.map(({ label: itemLabel, icon: Icon, onSelect, tone, checked }) => (
             <button
               key={itemLabel}
               type="button"
-              role="menuitem"
+              role={checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+              aria-checked={checked}
               onClick={(e) => {
                 e.stopPropagation();
                 setIsOpen(false);
@@ -82,7 +85,8 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ label, items, className 
               )}
             >
               {Icon && <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}
-              {itemLabel}
+              <span className="flex-1">{itemLabel}</span>
+              {checked && <Check className="h-4 w-4 shrink-0 text-brand-text" aria-hidden="true" />}
             </button>
           ))}
         </div>

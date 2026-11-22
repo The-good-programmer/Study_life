@@ -56,6 +56,7 @@ const DEFAULTS = {
   friends: { max: 20, windowMs: 10 * MINUTE }, // per IP: adding by code, so codes can't be guessed
   digest: { max: 30, windowMs: 10 * MINUTE }, // per IP
   clientErrors: { max: 20, windowMs: 10 * MINUTE }, // per IP: error reports from the app
+  guestPass: { max: 3, windowMs: 24 * 60 * MINUTE }, // per IP: free AI decks for guests (a school shares one)
 };
 
 export const limiters = {};

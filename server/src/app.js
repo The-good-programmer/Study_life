@@ -7,7 +7,8 @@
 
 import { URL } from 'node:url';
 import { db } from './db.js'; // Importing it connects and migrates the database first
-import { getAuthUser } from './auth.js';
+import { createGuestAiPass, getAuthUser, verifyGuestAiPass } from './auth.js';
+import { GUEST_PASS_REQUESTS, GUEST_PASS_TTL_SEC, isGuestDeckRequest, newPassId, takeGuestRequest } from './guestAi.js';
 import { handleAuthRoutes } from './routes/authRoutes.js';
 import { handleSyncRoutes } from './routes/syncRoutes.js';
 import { handleDeckRoutes } from './routes/deckRoutes.js';
@@ -45,7 +46,7 @@ function setCorsHeaders(req, res, allowedOrigins) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Guest-Pass');
   }
 }
 
@@ -70,9 +71,11 @@ function sendJson(res, status, payload) {
  * Guards the shared Gemini proxy: signed-in users only, burst rate limit,
  * and a persistent daily quota. Returns the user, or null after responding.
  */
-async function authorizeAiRequest(req, res, ai) {
+async function authorizeAiRequest(req, res, ai, request, { stream = false } = {}) {
   const user = await getAuthUser(req);
   if (!user) {
+    const pass = verifyGuestAiPass(String(req.headers['x-guest-pass'] || ''));
+    if (pass) return authorizeGuestRequest(req, res, ai, pass, request, stream);
     sendJson(res, 401, { error: 'Sign in to use the shared AI service, or add your own Gemini API key in Settings.' });
     return null;
   }
@@ -90,6 +93,29 @@ async function authorizeAiRequest(req, res, ai) {
     return null;
   }
   return user;
+}
+
+/** A guest's request on their free-deck pass: only a new deck and its check, within the pass's budget. */
+async function authorizeGuestRequest(req, res, ai, pass, request, stream) {
+  const signUp = 'Sign up free to make more decks with AI.';
+  if (!isGuestDeckRequest(request, { stream })) {
+    sendJson(res, 403, { error: `Your free deck covers making one deck. ${signUp}` });
+    return null;
+  }
+  if (!ai.isAiConfigured()) {
+    sendJson(res, 503, { error: 'Server AI Gateway is not configured with GEMINI_API_KEY.' });
+    return null;
+  }
+  if (!ai.checkRateLimit(`guest:${pass.pid}`) || !takeGuestRequest(pass.pid, pass.exp)) {
+    sendJson(res, 429, { error: `Your free deck is used up. ${signUp}` });
+    return null;
+  }
+  const spent = await ai.consumeGuestQuota(clientIp(req));
+  if (spent) {
+    sendJson(res, 429, { error: `Free decks are busy today. ${signUp}` });
+    return null;
+  }
+  return { guest: pass.pid };
 }
 
 const QUOTA_MESSAGES = {
@@ -203,12 +229,25 @@ export function createApp({ ai = defaultAi, mailer = createResendMailer() } = {}
         return res.end();
       }
 
-      // 2. AI PROXY GATEWAYS (REST & SSE STREAMING) — signed-in users only
+      // A GUEST'S FREE DECK: a short pass for the requests one deck takes (see guestAi.js).
+      if (pathname === '/api/ai/guest-pass' && req.method === 'POST') {
+        if (!ai.isAiConfigured()) return sendJson(res, 503, { error: 'The free AI is not available right now.' });
+        if (!limiters.guestPass.take(clientIp(req))) {
+          return sendJson(res, 429, { error: 'Free decks from this network are used up for today. Sign up free to make more.' });
+        }
+        return sendJson(res, 200, {
+          pass: createGuestAiPass(newPassId(), GUEST_PASS_TTL_SEC),
+          expiresIn: GUEST_PASS_TTL_SEC,
+          requests: GUEST_PASS_REQUESTS,
+        });
+      }
+
+      // 2. AI PROXY GATEWAYS (REST & SSE STREAMING) — signed-in users, or a guest's free-deck pass
       if (pathname === '/api/ai/generate' && req.method === 'POST') {
         // Checked before the quota, so a malformed request doesn't use one up.
         const { request, error } = checkAiRequest(body);
         if (error) return sendJson(res, 400, { error });
-        if (!(await authorizeAiRequest(req, res, ai))) return;
+        if (!(await authorizeAiRequest(req, res, ai, request))) return;
 
         try {
           const text = await ai.generateContent(request);
@@ -222,7 +261,7 @@ export function createApp({ ai = defaultAi, mailer = createResendMailer() } = {}
       if (pathname === '/api/ai/stream' && req.method === 'POST') {
         const { request, error } = checkAiRequest(body, { stream: true });
         if (error) return sendJson(res, 400, { error });
-        if (!(await authorizeAiRequest(req, res, ai))) return;
+        if (!(await authorizeAiRequest(req, res, ai, request, { stream: true }))) return;
 
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',

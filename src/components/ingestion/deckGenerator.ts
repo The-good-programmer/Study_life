@@ -1,5 +1,6 @@
 import type { DepthTier, StudentEducationProfile, StudySession } from '../../types';
 import { AIService } from '../../services/aiService';
+import { ApiConfig } from '../../services/apiConfig';
 import type { ExtractedPDF } from '../../services/pdfService';
 import { groundSessionInPdf } from './pdfGrounding';
 import { reviewGeneratedDeck } from '../../services/deckReview';
@@ -42,8 +43,8 @@ export const buildSession = async (
       session = groundSessionInPdf(await AIService.generateStudySession(request.pdf.text, true, undefined, undefined, undefined, profile), request.pdf);
       break;
   }
-  // Without AI (a template deck) there is nothing to check with.
-  if (AIService.needsSignIn()) return session;
+  // Without AI (a template deck) there is nothing to check with. A guest's free deck is checked too.
+  if (AIService.needsSignIn() && !ApiConfig.hasGuestPass()) return session;
   onStage?.('checking');
   return reviewGeneratedDeck(session, sourceOf(request));
 };
@@ -52,6 +53,8 @@ export const buildSession = async (
 export const describeGenerationError = (err: unknown): string => {
   const reason = err instanceof Error ? err.message : '';
   // A daily limit is worth saying as it is; other reasons are technical and stay in the console.
+  // The free deck's limits say what to do next (sign up), so they are shown as they are.
+  if (/sign up/i.test(reason)) return reason;
   if (/limit/i.test(reason)) return `We couldn't build your deck: ${reason.replace(/\.$/, '')}. Try again tomorrow, or add your own Gemini key in Settings → AI.`;
   if (reason) console.warn('[Deck generation]', reason);
   return "We couldn't build your deck just now. Check your connection and try again in a moment.";
