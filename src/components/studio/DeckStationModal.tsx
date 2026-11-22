@@ -3,6 +3,7 @@ import { ECONOMY_VISIBLE } from '../../services/features';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowRight,
+  ShieldCheck,
   ChevronDown,
   Clock,
   Edit3,
@@ -195,6 +196,20 @@ export const DeckStationModal: React.FC<DeckStationModalProps> = ({
                     <FileText className="h-3 w-3" aria-hidden="true" />
                     Source
                   </Badge>
+                )}
+                {session.quality && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-success"
+                    title={`A second AI check looked at ${session.quality.checked} cards before you studied them.`}
+                  >
+                    <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                    Checked by AI
+                    {session.quality.fixed + session.quality.removed > 0 &&
+                      `: ${[
+                        session.quality.fixed ? `${session.quality.fixed} fixed` : '',
+                        session.quality.removed ? `${session.quality.removed} removed` : '',
+                      ].filter(Boolean).join(', ')}`}
+                  </span>
                 )}
               </div>
               <h2 id="deck-details-title" className="mt-2 text-xl font-semibold leading-snug text-ink">

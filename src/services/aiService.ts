@@ -1,4 +1,5 @@
-import { GoogleGenAI } from '@google/genai';
+// Google's AI library is only needed with a student's own key, so it is loaded then, not with the page.
+import type { GoogleGenAI } from '@google/genai';
 import type { 
   ConceptCheckpoint, 
   FeynmanEvaluation, 
@@ -20,6 +21,7 @@ import { FSRSService } from './fsrsService';
 import { KnowledgeGraphService } from './knowledgeGraphService';
 import { DepthEstimationService, SUPPORTED_LANGUAGES } from './depthEstimationService';
 import { ApiConfig } from './apiConfig';
+import { cleanGeneratedDeck } from './deckQuality';
 import { FEYNMAN_EVALUATION_SCHEMA, VIVA_VOCE_TURN_SCHEMA, LEECH_ANALYSIS_SCHEMA, STUDY_SESSION_GENERATION_SCHEMA } from './aiSchemas';
 
 /** Source text sent for deck generation; the shared AI service refuses prompts over 200,000 characters. */
@@ -47,11 +49,18 @@ export class AIService {
     return !StorageService.getApiKey() && !ApiConfig.getToken();
   }
 
-  private static getClient(customKey?: string): GoogleGenAI | null {
+  /** Whether the student added their own Gemini key (in Settings → AI). */
+  private static hasOwnKey(): boolean {
+    return Boolean(StorageService.getApiKey());
+  }
+
+  /** A Gemini client with the student's own key (loading Google's library the first time), or null. */
+  private static async getClient(customKey?: string): Promise<GoogleGenAI | null> {
     // Strictly rely on user-configured key in browser storage, never bake keys into client bundle
     const key = customKey || StorageService.getApiKey();
     if (!key) return null;
     try {
+      const { GoogleGenAI } = await import('@google/genai');
       return new GoogleGenAI({ apiKey: key });
     } catch (err) {
       console.error('Failed to initialize GoogleGenAI client:', err);
@@ -90,7 +99,7 @@ export class AIService {
     }
 
     // 2. Try client-side API key with candidate models
-    const client = this.getClient();
+    const client = await this.getClient();
     if (client) {
       const response = await this.generateContentWithFallback(client, contents, responseMimeType, enableThinking, responseSchema);
       return response.text || '';
@@ -236,7 +245,7 @@ export class AIService {
       };
     }
 
-    if (this.isAvailable() || this.getClient()) {
+    if (this.isAvailable() || this.hasOwnKey()) {
       try {
         const memoryProfile = StorageService.getCognitiveMemoryProfile();
         const profileContext = memoryProfile.totalCards > 0
@@ -346,7 +355,7 @@ Before assigning the final score, you MUST articulate your step-by-step cognitiv
     const cleanQ = studentQuestion.trim();
     if (!cleanQ) return 'Please ask a specific clarifying question regarding this concept.';
 
-    if (this.isAvailable() || this.getClient()) {
+    if (this.isAvailable() || this.hasOwnKey()) {
       try {
         const prompt = `
 You are a warm, concise Socratic science tutor helping a student deeply understand "${concept.title}".
@@ -391,7 +400,7 @@ Answer the student in 2 to 3 concise, illuminating sentences. Use an intuitive a
       ? KnowledgeGraphService.findCrossDeckBridges(concept, currentSessionId, 2)
       : [];
 
-    if (this.isAvailable() || this.getClient()) {
+    if (this.isAvailable() || this.hasOwnKey()) {
       try {
         const isFinalRound = targetRound >= 3;
         const memoryProfile = StorageService.getCognitiveMemoryProfile();
@@ -604,7 +613,7 @@ Formulate your verbal Socratic response (2-3 concise sentences) directly address
     }
 
     // 2. Try client-side direct streaming if client API key is configured
-    const client = this.getClient();
+    const client = await this.getClient();
     if (client) {
       for (const model of this.MODEL_CANDIDATES) {
         try {
@@ -780,7 +789,7 @@ Formulate your verbal Socratic response (2-3 concise sentences) directly address
     card: RetrievalCard,
     concept?: ConceptCheckpoint
   ): Promise<LeechAnalysis> {
-    if (this.isAvailable() || this.getClient()) {
+    if (this.isAvailable() || this.hasOwnKey()) {
       try {
         const prompt = `
 You are a cognitive psychologist and expert mnemonist specializing in fixing memory bottlenecks in medical and board exam flashcards.
@@ -951,7 +960,7 @@ Return ONLY valid JSON matching this schema:
     const effectiveTier: DepthTier = depthTier || depthEstimate.tier;
     const effectiveGradeLevel: AcademicGradeLevel = gradeLevel || depthEstimate.gradeLevel;
 
-    if (this.isAvailable() || this.getClient()) {
+    if (this.isAvailable() || this.hasOwnKey()) {
       try {
         const checkpointCountInstruction = isRawNotes
           ? '3 to 5 sequential bite-sized concept checkpoints'
@@ -1089,13 +1098,13 @@ Return ONLY a valid JSON object with this exact structure:
         const concepts: ConceptCheckpoint[] = (parsed.concepts || []).map((c: Partial<ConceptCheckpoint>, idx: number) => {
           const conceptId = `c-${sessionId}-${idx + 1}`;
           const cards: RetrievalCard[] = ((c.retrievalCards as unknown as Partial<RetrievalCard>[]) || []).map((rc, cIdx) => {
-            let question = rc.question || 'What is the key takeaway?';
-            let answer = rc.answer || 'Core concept answer';
+            // Missing text stays missing: cleanGeneratedDeck drops such a card instead of inventing one.
+            let question = rc.question || '';
+            const answer = rc.answer || '';
             let clozeTemplate = rc.clozeTemplate;
 
-            // Auto-mask cloze if missing {{}} and answer is inside question
-            const isCloze = rc.cardType === 'cloze' || (cIdx === 1 && !rc.options?.length);
-            if (isCloze && !question.includes('{{') && answer.trim().length > 2) {
+            // A fill-in-the-blank card the AI wrote without braces: hide the answer where the sentence has it.
+            if (rc.cardType === 'cloze' && !question.includes('{{') && answer.trim().length > 2) {
               const escapedAnswer = answer.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
               const regex = new RegExp(`\\b${escapedAnswer}\\b`, 'i');
               if (regex.test(question)) {
@@ -1114,7 +1123,8 @@ Return ONLY a valid JSON object with this exact structure:
             return {
               id: `rc-${conceptId}-${cIdx + 1}`,
               conceptId: conceptId,
-              cardType: rc.cardType || (clozeTemplate || (question && question.includes('{{')) ? 'cloze' : (rc.options && rc.options.length > 0 ? 'multiple-choice' : (cIdx === 1 ? 'cloze' : (cIdx === 2 ? 'multiple-choice' : 'standard')))),
+              // Set from the card's content by cleanGeneratedDeck.
+              cardType: rc.cardType,
               question,
               answer,
               hint: rc.hint || '',
@@ -1143,8 +1153,8 @@ Return ONLY a valid JSON object with this exact structure:
             order: idx + 1,
             title: c.title || `Concept ${idx + 1}`,
             estimatedMinutes: c.estimatedMinutes || 12,
-            mentalModel: c.mentalModel || `An interconnected mental framework of ${c.title || input}.`,
-            coreTakeaways: c.coreTakeaways || ['Essential rule 1', 'Essential rule 2'],
+            mentalModel: c.mentalModel || '',
+            coreTakeaways: (c.coreTakeaways || []).filter(Boolean),
             keyTerms: c.keyTerms || [],
             feynmanPrompt: c.feynmanPrompt || 'Explain this concept simply without reading notes.',
             sampleMasteryExplanation: c.sampleMasteryExplanation || '',
@@ -1153,7 +1163,7 @@ Return ONLY a valid JSON object with this exact structure:
           };
         });
 
-        return {
+        return cleanGeneratedDeck({
           id: sessionId,
           title: parsed.title || input.slice(0, 50),
           category: parsed.category || 'General Studies',
@@ -1167,7 +1177,7 @@ Return ONLY a valid JSON object with this exact structure:
           gradeLevel: effectiveGradeLevel,
           studentProfile,
           languageCode: targetLang.code,
-        };
+        });
       } catch (err) {
         // With AI set up, a failure is reported so the student can retry; a template deck passed off as the
         // AI's work would be worse than no deck.

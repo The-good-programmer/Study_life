@@ -677,6 +677,56 @@ describe('CORS', () => {
   });
 });
 
+describe('error reports from the app', () => {
+  it('writes a checked report to the log as one line, and refuses anything else', async () => {
+    const lines = [];
+    const warn = console.warn;
+    console.warn = (...args) => lines.push(args.join(' '));
+    try {
+      const report = { kind: 'error', message: 'TypeError: x is undefined', stack: 'TypeError: x is undefined\n    at render (index-abc.js:1:2)', path: '/', build: 'abc123' };
+      expect((await api('/api/client-errors', { method: 'POST', body: report })).status).toBe(204);
+      expect(lines.at(-1)).toBe('[ClientError] error build=abc123 path=/ TypeError: x is undefined | TypeError: x is undefined | at render (index-abc.js:1:2)');
+      expect((await api('/api/client-errors', { method: 'POST', body: { ...report, kind: 'other' } })).status).toBe(400);
+      expect((await api('/api/client-errors', { method: 'POST', body: { ...report, message: 'x'.repeat(600) } })).status).toBe(400);
+    } finally {
+      console.warn = warn;
+    }
+  });
+});
+
+describe('compression', () => {
+  const rawGet = (path, headers) =>
+    new Promise((resolve, reject) => {
+      http.get(`${baseUrl}${path}`, { headers }, (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => resolve({ headers: res.headers, body: Buffer.concat(chunks) }));
+      }).on('error', reject);
+    });
+
+  it('gzips large JSON answers when the browser accepts it, and only then', async () => {
+    const zlib = await import('node:zlib');
+    const me = await register('gzip-me@example.com');
+    const deck = { id: 'gzip-deck', title: 'Big', concepts: [{ retrievalCards: Array.from({ length: 200 }, (_, i) => ({ id: `g${i}`, question: `Question ${i}?`, answer: `Answer ${i}` })) }] };
+    await api('/api/sync/push', { method: 'POST', token: me.token, body: { sessions: [deck] } });
+
+    const zipped = await rawGet('/api/sync/pull', { Authorization: `Bearer ${me.token}`, 'Accept-Encoding': 'gzip' });
+    expect(zipped.headers['content-encoding']).toBe('gzip');
+    expect(zipped.headers.vary).toMatch(/Accept-Encoding/);
+    const pulled = JSON.parse(zlib.gunzipSync(zipped.body).toString());
+    expect(pulled.sessions[0].concepts[0].retrievalCards).toHaveLength(200);
+
+    const plain = await rawGet('/api/sync/pull', { Authorization: `Bearer ${me.token}` });
+    expect(plain.headers['content-encoding']).toBeUndefined();
+    expect(JSON.parse(plain.body.toString()).sessions).toHaveLength(1);
+    expect(plain.body.length).toBeGreaterThan(zipped.body.length * 3);
+
+    // Small answers aren't worth it.
+    const health = await rawGet('/api/health', { 'Accept-Encoding': 'gzip' });
+    expect(health.headers['content-encoding']).toBeUndefined();
+  });
+});
+
 describe('security headers', () => {
   it('are on every response, including errors and preflights', async () => {
     for (const res of [

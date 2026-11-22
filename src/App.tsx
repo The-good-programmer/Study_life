@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
-import { WifiOff } from 'lucide-react';
+import { Loader2, WifiOff } from 'lucide-react';
 import type { StudySession, UserStats, UserAccount } from './types';
 import { StorageService } from './services/storageService';
 import { AuthService } from './services/authService';
@@ -9,15 +9,11 @@ import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileTabBar } from './components/layout/MobileTabBar';
 import { NotificationService } from './services/notificationService';
-import { WagePayoutBanner } from './components/lifesim/WagePayoutBanner';
 import { ECONOMY_VISIBLE, WORLD_3D_ENABLED } from './services/features';
 import { CalendarFeedService } from './services/calendarFeedService';
 import { useFocusTimerAlerts } from './hooks/useFocusTimer';
 import { FocusToast } from './components/focus/FocusToast';
-import { InstallAppDialog } from './components/common/InstallAppDialog';
-import { QuickStartDialog } from './components/onboarding/QuickStartDialog';
 import { markQuickStartSeen, pendingQuickStartTopic, shouldShowQuickStart } from './components/onboarding/quickStart';
-import { FriendsDialog } from './components/friends/FriendsDialog';
 import { FriendsService, inviteCodeFrom } from './services/friendsService';
 import { ApiConfig } from './services/apiConfig';
 import { CloudSyncService } from './services/cloudSyncService';
@@ -42,6 +38,11 @@ const StudyEstateCampus = WORLD_3D_ENABLED ? lazy(() => import('./components/mas
 const DailyMissionHome = lazy(() => import('./components/home/DailyMissionHome').then(m => ({ default: m.DailyMissionHome })));
 const PlannerPage = lazy(() => import('./components/planner/PlannerPage').then(m => ({ default: m.PlannerPage })));
 const FocusPage = lazy(() => import('./components/focus/FocusPage').then(m => ({ default: m.FocusPage })));
+// Dialogs most visits never open, and the payout banner (only with the economy on), load when shown.
+const InstallAppDialog = lazy(() => import('./components/common/InstallAppDialog').then(m => ({ default: m.InstallAppDialog })));
+const QuickStartDialog = lazy(() => import('./components/onboarding/QuickStartDialog').then(m => ({ default: m.QuickStartDialog })));
+const FriendsDialog = lazy(() => import('./components/friends/FriendsDialog').then(m => ({ default: m.FriendsDialog })));
+const WagePayoutBanner = lazy(() => import('./components/lifesim/WagePayoutBanner').then(m => ({ default: m.WagePayoutBanner })));
 const FoldersPage = lazy(() => import('./components/folders/FoldersPage').then(m => ({ default: m.FoldersPage })));
 const CharacterCustomizerModal = WORLD_3D_ENABLED ? lazy(() => import('./components/character/CharacterCustomizerModal').then(m => ({ default: m.CharacterCustomizerModal }))) : null;
 
@@ -129,6 +130,9 @@ export function App() {
   // Notes from Focus to make a deck from, opened in the Library (with a key to open it afresh).
   const [libraryNotes, setLibraryNotes] = useState<{ text: string; key: number } | null>(null);
   const { isOnline, isInstallable, isIos, promptInstall } = usePwaInstall();
+  // The free server sleeps when nobody uses it; its first answer after that is slow.
+  const [serverWaking, setServerWaking] = useState(false);
+  useEffect(() => ApiConfig.onWaking(setServerWaking), []);
   const [isInstallHelpOpen, setIsInstallHelpOpen] = useState(false);
   // Install: the browser's own prompt where there is one (Android, desktop); on iPhone and iPad, the steps.
   const installApp = isInstallable ? () => void promptInstall() : isIos ? () => setIsInstallHelpOpen(true) : undefined;
@@ -257,12 +261,24 @@ export function App() {
     setStats(StorageService.getStats());
   };
   const openCampus = WORLD_3D_ENABLED ? () => handleNavigate('sanctuary') : undefined;
+  // Notices shown over every screen: Focus alerts, and the server starting up.
   const focusToast = (
-    <FocusToast
-      message={focusAlerts.message}
-      onDismiss={focusAlerts.dismiss}
-      onOpen={!matchSession && !activeSession && view !== 'focus' ? () => handleNavigate('focus') : undefined}
-    />
+    <>
+      <FocusToast
+        message={focusAlerts.message}
+        onDismiss={focusAlerts.dismiss}
+        onOpen={!matchSession && !activeSession && view !== 'focus' ? () => handleNavigate('focus') : undefined}
+      />
+      {serverWaking && (
+        <div
+          role="status"
+          className="fixed bottom-20 left-1/2 z-50 flex w-[calc(100%-32px)] max-w-sm -translate-x-1/2 items-center gap-2.5 rounded-xl border border-line bg-canvas-raised px-3.5 py-2.5 text-[13px] text-ink-muted shadow-lg md:bottom-5"
+        >
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-text" aria-hidden="true" />
+          Starting the server. This takes up to a minute the first time.
+        </div>
+      )}
+    </>
   );
   const openCharacterCustomizer = WORLD_3D_ENABLED ? () => setIsCharacterCustomizerOpen(true) : undefined;
 
@@ -696,46 +712,58 @@ export function App() {
 
       {focusToast}
 
-      <InstallAppDialog isOpen={isInstallHelpOpen} onClose={() => setIsInstallHelpOpen(false)} />
+      {isInstallHelpOpen && (
+        <Suspense fallback={null}>
+          <InstallAppDialog isOpen onClose={() => setIsInstallHelpOpen(false)} />
+        </Suspense>
+      )}
 
       {quickStart && (
-        <QuickStartDialog
-          initialTopic={quickStart.topic}
-          onClose={() => {
-            markQuickStartSeen();
-            setQuickStart(null);
-          }}
-          onStartSession={session => {
-            markQuickStartSeen();
-            setQuickStart(null);
-            handleStartSession(session);
-          }}
-          onOpenNotes={() => {
-            markQuickStartSeen();
-            setQuickStart(null);
-            setLibraryNotes({ text: '', key: Date.now() });
-            handleNavigate('studio');
-          }}
-          onOpenAuth={() => {
-            setQuickStart(null);
-            handleOpenAuth('register');
-          }}
-        />
+        <Suspense fallback={null}>
+          <QuickStartDialog
+            initialTopic={quickStart.topic}
+            onClose={() => {
+              markQuickStartSeen();
+              setQuickStart(null);
+            }}
+            onStartSession={session => {
+              markQuickStartSeen();
+              setQuickStart(null);
+              handleStartSession(session);
+            }}
+            onOpenNotes={() => {
+              markQuickStartSeen();
+              setQuickStart(null);
+              setLibraryNotes({ text: '', key: Date.now() });
+              handleNavigate('studio');
+            }}
+            onOpenAuth={() => {
+              setQuickStart(null);
+              handleOpenAuth('register');
+            }}
+          />
+        </Suspense>
       )}
 
       {currentUser && friendInvite && (
-        <FriendsDialog
-          isOpen
-          initialCode={friendInvite}
-          onClose={() => {
-            setFriendInvite(null);
-            FriendsService.savePendingInvite(null);
-          }}
-        />
+        <Suspense fallback={null}>
+          <FriendsDialog
+            isOpen
+            initialCode={friendInvite}
+            onClose={() => {
+              setFriendInvite(null);
+              FriendsService.savePendingInvite(null);
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Global Study Wage Deposited Banner */}
-      {ECONOMY_VISIBLE && <WagePayoutBanner />}
+      {ECONOMY_VISIBLE && (
+        <Suspense fallback={null}>
+          <WagePayoutBanner />
+        </Suspense>
+      )}
     </div>
   );
 }
