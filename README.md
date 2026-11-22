@@ -8,10 +8,10 @@ Open Studify, pick a starter deck or turn your own notes or a lecture PDF into f
 
 ## 🔁 The core study loop
 
-1. **Add material** — pick a ready-made starter deck (ranked for your level), paste notes or take photos of them (the AI writes out the text for you to check), import Anki/Quizlet/CSV, or drop a PDF.
+1. **Add material** — pick a ready-made starter deck (ranked for your level), paste notes, take photos of them, record a lecture or upload its audio (written out in 3-minute parts, up to two hours), paste a YouTube link (notes from the video's first hour), import Anki/Quizlet/CSV, or drop a PDF. The AI's text lands in the notes box for you to check first. A first visit opens *What do you want to study?* instead of a tour.
 2. **Review** — active recall flashcards, rated *Again / Hard / Good / Easy*.
-3. **Let the scheduler work** — reviews are spaced with the open-source FSRS algorithm (`ts-fsrs`), so cards come back just before you would forget them. **Start review** opens today's review across all decks: every card due now (most overdue first), then new cards up to a daily limit (10 by default, Settings → Study). Missed cards come back a few cards later, and the last rating can be undone (Z). A wrong or unclear card can be fixed on the spot or hidden from reviews (E); the latest edit wins on every device.
-4. **See progress** — the retention dashboard shows what's due, what's sticking, and which cards keep failing. Friends (added by code or invite link) see each other's streak and whether they studied today, and an optional weekly email sums up the week.
+3. **Let the scheduler work** — reviews are spaced with the open-source FSRS algorithm (`ts-fsrs`), so cards come back just before you would forget them. **Start review** opens today's review across all decks: every card due now (most overdue first), then new cards up to a daily limit (10 by default, Settings → Study). Missed cards come back a few cards later, and the last rating can be undone (Z). A wrong or unclear card can be fixed on the spot or hidden from reviews (E); the latest edit wins on every device. **Ask about this card** opens a short chat with the AI about the card on screen.
+4. **See progress** — the retention dashboard shows what's due, what's sticking, and which cards keep failing. Friends (added by code or invite link) see each other's streak and whether they studied today, rank by this week's XP, and challenge each other to duels: the same multiple-choice questions from a deck, graded on the server. An optional weekly email sums up the week.
 
 ## 🧠 What the techniques are (and the evidence behind them)
 

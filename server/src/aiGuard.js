@@ -1,7 +1,7 @@
 /**
  * Checks what a client may send to the shared Gemini proxy, so it serves Studify's own requests and cannot be
- * used as a free general-purpose Gemini endpoint: text and images only, a size cap, and only the response
- * schemas the app itself uses.
+ * used as a free general-purpose Gemini endpoint: text, images, short lecture-audio clips and a YouTube link,
+ * a size cap, and only the response schemas the app itself uses.
  */
 
 import * as schemas from './aiSchemas.js';
@@ -11,6 +11,11 @@ export const MAX_PROMPT_CHARS = 200_000;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_PARTS = 16;
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+/** Lecture audio arrives as short WAV clips the app cuts from a recording (see lectureAudio.ts). */
+const AUDIO_TYPES = new Set(['audio/wav']);
+/** A public YouTube video, as the app writes its address. */
+const YOUTUBE_URI = /^https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}$/;
+const OFFSET = /^\d{1,5}s$/;
 const RESPONSE_TYPES = new Set(['application/json', 'text/plain']);
 
 const KNOWN_SCHEMAS = new Set(Object.values(schemas).map((schema) => JSON.stringify(schema)));
@@ -28,7 +33,7 @@ function checkPart(part, budget) {
     budget.chars += part.length;
     return;
   }
-  if (!part || typeof part !== 'object') throw new Rejected('Each part must be text or an image.');
+  if (!part || typeof part !== 'object') throw new Rejected('Each part must be text, an image, audio or a YouTube link.');
   const keys = Object.keys(part);
   if (keys.length === 1 && typeof part.text === 'string') {
     budget.chars += part.text.length;
@@ -36,15 +41,31 @@ function checkPart(part, budget) {
   }
   if (keys.length === 1 && part.inlineData && typeof part.inlineData === 'object') {
     const { mimeType, data } = part.inlineData;
-    if (!IMAGE_TYPES.has(mimeType) || typeof data !== 'string') throw new Rejected('Only PNG, JPEG or WebP images can be attached.');
-    if (data.length * 0.75 > MAX_IMAGE_BYTES) throw new Rejected('Images must be under 4 MB.');
+    if ((!IMAGE_TYPES.has(mimeType) && !AUDIO_TYPES.has(mimeType)) || typeof data !== 'string') {
+      throw new Rejected('Only PNG, JPEG or WebP images, or WAV audio, can be attached.');
+    }
+    if (data.length * 0.75 > MAX_IMAGE_BYTES) throw new Rejected('Attachments must be under 4 MB.');
     return;
   }
-  throw new Rejected('Each part must be text or an image.');
+  if (part.fileData && typeof part.fileData === 'object' && keys.every((key) => key === 'fileData' || key === 'videoMetadata')) {
+    const { fileUri, ...fileRest } = part.fileData;
+    if (typeof fileUri !== 'string' || !YOUTUBE_URI.test(fileUri) || Object.keys(fileRest).length > 0) {
+      throw new Rejected('Only a public YouTube video link can be attached.');
+    }
+    if (part.videoMetadata !== undefined) {
+      const meta = part.videoMetadata;
+      const allowed = meta && typeof meta === 'object' && Object.entries(meta).every(([key, value]) => (key === 'startOffset' || key === 'endOffset') && OFFSET.test(value));
+      if (!allowed) throw new Rejected('Unsupported video settings.');
+    }
+    budget.videos += 1;
+    if (budget.videos > 1) throw new Rejected('One video per request.');
+    return;
+  }
+  throw new Rejected('Each part must be text, an image, audio or a YouTube link.');
 }
 
 function checkContents(contents) {
-  const budget = { chars: 0 };
+  const budget = { chars: 0, videos: 0 };
   let parts = 0;
   const visit = (part) => {
     parts += 1;

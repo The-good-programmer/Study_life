@@ -273,4 +273,39 @@ export const MIGRATIONS = [
       END $$;
     `,
   },
+  {
+    // Duels between friends: the same multiple-choice questions for both, each answered once, graded here.
+    id: '008_duels',
+    sql: `
+      CREATE TABLE duels (
+        id TEXT PRIMARY KEY,
+        challenger_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        opponent_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        deck_title TEXT NOT NULL,
+        questions_json TEXT NOT NULL,
+        challenger_answers_json TEXT NOT NULL,
+        challenger_score INTEGER NOT NULL,
+        challenger_ms INTEGER NOT NULL,
+        opponent_answers_json TEXT,
+        opponent_score INTEGER,
+        opponent_ms INTEGER,
+        created_at TIMESTAMPTZ NOT NULL,
+        completed_at TIMESTAMPTZ,
+        expires_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX idx_duels_challenger ON duels (challenger_id);
+      CREATE INDEX idx_duels_opponent ON duels (opponent_id);
+
+      ALTER TABLE duels ENABLE ROW LEVEL SECURITY;
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+          REVOKE ALL ON duels FROM anon;
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          REVOKE ALL ON duels FROM authenticated;
+        END IF;
+      END $$;
+    `,
+  },
 ];

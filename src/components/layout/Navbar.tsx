@@ -88,13 +88,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isSoundMenuOpen, setIsSoundMenuOpen] = useState(false);
   const soundMenuRef = useRef<HTMLDivElement>(null);
   const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
-  const [isTourModalOpen, setIsTourModalOpen] = useState(() => {
-    try {
-      return localStorage.getItem('axon_tour_seen') !== 'true';
-    } catch {
-      return false;
-    }
-  });
+  // First visits get the quick start (in App) instead; the tour opens from "How Studify works".
+  const [isTourModalOpen, setIsTourModalOpen] = useState(false);
   const [isPaperTheme, setIsPaperTheme] = useState(() => {
     try {
       return localStorage.getItem(THEME_STORAGE_KEY) === 'paper';

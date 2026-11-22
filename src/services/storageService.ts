@@ -455,6 +455,17 @@ export class StorageService {
     }
   }
 
+  /** This week's XP with the week it belongs to (its Monday, UTC), as friends see it. */
+  public static getWeeklyXPForSync(now: Date = new Date()): { weekXp: number; weekXpWeek: string } {
+    const week = weekStartOf(now);
+    try {
+      const saved = JSON.parse(this.readRaw(this.getKey(STORAGE_KEYS.WEEKLY_XP)) || 'null') as { week: string; current: number } | null;
+      return { weekXp: saved?.week === week ? saved.current : 0, weekXpWeek: week };
+    } catch {
+      return { weekXp: 0, weekXpWeek: week };
+    }
+  }
+
   public static addWeeklyXP(amount: number): number {
     const safeAmount = Math.max(0, Math.round(amount));
     const { current, best } = this.getWeeklyXP();

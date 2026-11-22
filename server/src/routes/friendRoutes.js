@@ -1,7 +1,7 @@
 /**
  * Friends: each student has an invite code; adding someone's code makes you friends both ways
  * (sharing your code is the consent). A friend sees only your name, avatar, streak, when you last
- * studied and today's minutes, never your decks or email.
+ * studied, today's minutes and this week's XP, never your decks or email.
  */
 
 import crypto from 'node:crypto';
@@ -14,6 +14,13 @@ export const MAX_FRIENDS = 50;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 8;
 const DAY_MS = 86_400_000;
+
+/** The Monday (UTC) a week starts on, as YYYY-MM-DD: the app's key for "this week". */
+export const weekStartOf = (date) => {
+  const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+  return day.toISOString().slice(0, 10);
+};
 
 function send(res, status, payload) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -70,6 +77,8 @@ export function friendView(row, now = new Date()) {
     streak: sinceLast <= 2 * DAY_MS ? Math.max(0, Number(stats.currentStreak) || 0) : 0,
     lastStudiedAt: last === null ? null : new Date(last).toISOString(),
     todayMinutes: sinceLast <= DAY_MS ? Math.max(0, Math.round(Number(stats.todayMinutes) || 0)) : 0,
+    // XP earned this week (weeks start on Monday, UTC, as in the app); last week's total counts as 0.
+    weekXp: stats.weekXpWeek === weekStartOf(now) ? Math.max(0, Math.round(Number(stats.weekXp) || 0)) : 0,
     friendsSince: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
   };
 }

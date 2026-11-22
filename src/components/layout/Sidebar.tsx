@@ -37,6 +37,8 @@ type View = 'home' | 'dashboard' | 'exam' | 'interleave' | 'sanctuary' | 'studio
 
 interface SidebarProps {
   activeView: View;
+  /** Mock exams and mixing decks need studied cards; they show once there are some. */
+  showPractice?: boolean;
   onNavigate: (view: View) => void;
   stats: UserStats;
   currentUser?: UserAccount | null;
@@ -118,6 +120,7 @@ const GroupLabel: React.FC<{ collapsed: boolean; children: React.ReactNode }> = 
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeView,
+  showPractice = true,
   onNavigate,
   currentUser,
   onOpenAuth,
@@ -348,8 +351,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <GroupLabel collapsed={collapsed}>Practice</GroupLabel>
         <div className="space-y-0.5">
-          <NavItem icon={Award} label="Mock exam" collapsed={collapsed} active={activeView === 'exam'} onClick={go(() => onNavigate('exam'))} />
-          <NavItem icon={Shuffle} label="Mix decks" collapsed={collapsed} active={activeView === 'interleave'} onClick={go(() => onNavigate('interleave'))} />
+          {showPractice && (
+            <>
+              <NavItem icon={Award} label="Mock exam" collapsed={collapsed} active={activeView === 'exam'} onClick={go(() => onNavigate('exam'))} />
+              <NavItem icon={Shuffle} label="Mix decks" collapsed={collapsed} active={activeView === 'interleave'} onClick={go(() => onNavigate('interleave'))} />
+            </>
+          )}
           <NavItem icon={Compass} label="Explore decks" collapsed={collapsed} onClick={go(onOpenStarterCatalog)} />
         </div>
 

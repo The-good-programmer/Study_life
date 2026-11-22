@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import type { StarterDeckMetadata, StudySession } from '../../types';
 import { CURATED_STARTER_DECKS, isBoardExamDeck, rankStarterDecksForGrade } from '../../data/curatedStarterCatalog';
+import { createClonedSession, findSavedCopy } from './starterDeckCopy';
 import { StorageService } from '../../services/storageService';
 import { AuthService } from '../../services/authService';
 import { soundEngine } from '../../services/soundEngine';
@@ -69,23 +70,6 @@ const LEVEL_OPTIONS: { value: Level | 'all'; label: string }[] = [
 ];
 
 const SAMPLE_CARD_COUNT = 3;
-
-function createClonedSession(deck: StarterDeckMetadata): StudySession {
-  return {
-    ...deck.session,
-    id: `${deck.id}-${Date.now()}`,
-    createdAt: new Date().toISOString(),
-    elapsedSeconds: 0,
-    currentConceptIndex: 0,
-    currentPhase: 'priming',
-  };
-}
-
-/** The saved copy of a starter deck, if the learner already added it. */
-const findSavedCopy = (deck: StarterDeckMetadata): StudySession | undefined =>
-  StorageService.getSessions().find(
-    s => s.id === deck.id || s.id.startsWith(`${deck.id}-`) || s.title === deck.session.title,
-  );
 
 const matchesQuery = (deck: StarterDeckMetadata, query: string): boolean => {
   if (!query) return true;

@@ -15,6 +15,8 @@ import { CalendarFeedService } from './services/calendarFeedService';
 import { useFocusTimerAlerts } from './hooks/useFocusTimer';
 import { FocusToast } from './components/focus/FocusToast';
 import { InstallAppDialog } from './components/common/InstallAppDialog';
+import { QuickStartDialog } from './components/onboarding/QuickStartDialog';
+import { markQuickStartSeen, pendingQuickStartTopic, shouldShowQuickStart } from './components/onboarding/quickStart';
 import { FriendsDialog } from './components/friends/FriendsDialog';
 import { FriendsService, inviteCodeFrom } from './services/friendsService';
 import { ApiConfig } from './services/apiConfig';
@@ -114,6 +116,13 @@ export function App() {
     return code ?? FriendsService.pendingInvite();
   });
   const invitedWhileSignedOut = Boolean(friendInvite) && !AuthService.getCurrentUser();
+  // A first visit (no decks yet) starts with "What do you want to study?" instead of a tour. A topic typed
+  // before signing up brings it back after signing in.
+  const [quickStart, setQuickStart] = useState<{ topic: string | null } | null>(() =>
+    !resetToken && !friendInvite && (shouldShowQuickStart() || (pendingQuickStartTopic() && AuthService.getCurrentUser()))
+      ? { topic: pendingQuickStartTopic() }
+      : null,
+  );
   const [isAuthOpen, setIsAuthOpen] = useState(() => Boolean(resetToken) || invitedWhileSignedOut);
   const [authInitialTab, setAuthInitialTab] = useState<'login' | 'register' | 'profile'>(() => (invitedWhileSignedOut && !resetToken ? 'register' : 'login'));
   const [stats, setStats] = useState<UserStats>(StorageService.getStats());
@@ -163,6 +172,8 @@ export function App() {
       // Signing out stops this browser's reminders for that account.
       if (!user && NotificationService.getSettings().push) void NotificationService.disablePushReminders();
       setCurrentUser(user);
+      const topic = user ? pendingQuickStartTopic() : null;
+      if (topic) setQuickStart({ topic });
       setStats(StorageService.getStats());
     });
     return unsubscribe;
@@ -302,7 +313,9 @@ export function App() {
   const savedSessions = StorageService.getSessions();
   // Today's review across decks: what "Start review" studies and the count shown beside it.
   const dailyQueue = StorageService.getDailyQueue();
+  // Mock exams and mixing decks show once something has been studied (before, they would open empty).
   const allCards = StorageService.getAllCards();
+  const hasStudied = allCards.some(card => card.reps > 0);
   const starredCardsCount = allCards.filter(c => c.isStarred).length;
 
   const handleQuickStudy = () => {
@@ -333,6 +346,7 @@ export function App() {
       {/* Desktop Sidebar & Mobile Drawer */}
       <Sidebar
         activeView={view}
+        showPractice={hasStudied}
         onNavigate={handleNavigate}
         stats={stats}
         currentUser={currentUser}
@@ -506,7 +520,7 @@ export function App() {
       </div>
 
       {view !== 'sanctuary' && (
-        <MobileTabBar activeView={view} onNavigate={handleNavigate} dueCardsCount={dailyQueue.cards.length} />
+        <MobileTabBar activeView={view} onNavigate={handleNavigate} dueCardsCount={dailyQueue.cards.length} showExam={hasStudied} />
       )}
 
       {/* Floating NotebookLM-style Audio Briefing Bar */}
@@ -683,6 +697,31 @@ export function App() {
       {focusToast}
 
       <InstallAppDialog isOpen={isInstallHelpOpen} onClose={() => setIsInstallHelpOpen(false)} />
+
+      {quickStart && (
+        <QuickStartDialog
+          initialTopic={quickStart.topic}
+          onClose={() => {
+            markQuickStartSeen();
+            setQuickStart(null);
+          }}
+          onStartSession={session => {
+            markQuickStartSeen();
+            setQuickStart(null);
+            handleStartSession(session);
+          }}
+          onOpenNotes={() => {
+            markQuickStartSeen();
+            setQuickStart(null);
+            setLibraryNotes({ text: '', key: Date.now() });
+            handleNavigate('studio');
+          }}
+          onOpenAuth={() => {
+            setQuickStart(null);
+            handleOpenAuth('register');
+          }}
+        />
+      )}
 
       {currentUser && friendInvite && (
         <FriendsDialog
