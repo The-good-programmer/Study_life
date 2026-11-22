@@ -24,6 +24,8 @@ import {
   Sparkles,
   Eye,
   Repeat,
+  CloudUpload,
+  X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { StudySession, UserStats, SubjectFolder, UserAccount } from '../../types';
@@ -70,6 +72,17 @@ const HOW_IT_WORKS: { icon: LucideIcon; title: string; body: string }[] = [
   { icon: Repeat, title: 'A few minutes a day', body: 'Each card comes back just before you would forget it.' },
 ];
 
+/** When a guest last closed the "keep your decks" prompt; it comes back after a few days. */
+const KEEP_PROMPT_KEY = 'studify_keep_decks_prompt_closed';
+const KEEP_PROMPT_PAUSE_MS = 3 * 24 * 60 * 60 * 1000;
+const keepPromptPaused = (): boolean => {
+  try {
+    return Date.now() - Number(localStorage.getItem(KEEP_PROMPT_KEY) || 0) < KEEP_PROMPT_PAUSE_MS;
+  } catch {
+    return false;
+  }
+};
+
 const SECONDS_PER_CARD = 20;
 /** Decks shown on Today before linking to the full library. */
 const DECKS_ON_HOME = 5;
@@ -92,6 +105,8 @@ interface DailyMissionHomeProps {
   onOpenLibrary?: () => void;
   /** Opens sign-in (for adding friends). */
   onOpenAuth?: () => void;
+  /** Opens the sign-up form (for a guest keeping their decks). */
+  onOpenSignUp?: () => void;
 }
 
 const greetingFor = (date: Date): string => {
@@ -122,6 +137,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   onOpenPlanner,
   onOpenLibrary,
   onOpenAuth,
+  onOpenSignUp,
 }) => {
   const [stats, setStats] = useState<UserStats>(() => StorageService.getStats());
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => AuthService.getCurrentUser());
@@ -185,6 +201,17 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
   const hasDecks = savedSessions.length > 0;
   // Streak, XP and level tiles wait for the first review: four zeros tell a new student nothing.
   const [hasPlannerItems] = useState(() => PlannerService.getItems().length > 0);
+  const [keepPromptClosed, setKeepPromptClosed] = useState(keepPromptPaused);
+  // A guest's decks live only in this browser: offer an account to keep them (and make more with AI).
+  const showKeepPrompt = !currentUser && hasDecks && !keepPromptClosed && Boolean(onOpenSignUp);
+  const closeKeepPrompt = () => {
+    setKeepPromptClosed(true);
+    try {
+      localStorage.setItem(KEEP_PROMPT_KEY, String(Date.now()));
+    } catch {
+      // Private mode: it shows again next visit.
+    }
+  };
   const hasStudied = totalReviews > 0 || stats.currentStreak > 0 || weekly.current > 0 || stats.xp > 0;
 
   const dueIds = useMemo(() => new Set(queue.cards.map(card => card.id)), [queue]);
@@ -453,6 +480,35 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
             </div>
           </section>
 
+          {/* Keep your decks (guests) */}
+          {showKeepPrompt && (
+            <section
+              aria-labelledby="keep-decks-title"
+              className="flex flex-col gap-4 rounded-2xl border border-brand/30 bg-brand-soft/60 p-4 sm:flex-row sm:items-center sm:p-5 animate-rise"
+            >
+              <div className="flex min-w-0 flex-1 items-start gap-3.5">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-ink" aria-hidden="true">
+                  <CloudUpload className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <h2 id="keep-decks-title" className="text-[15px] font-semibold text-ink">
+                    {savedSessions.length === 1 ? 'Keep your deck' : 'Keep your decks'}
+                  </h2>
+                  <p className="mt-0.5 text-[13px] leading-relaxed text-ink-muted">
+                    Right now {savedSessions.length === 1 ? 'it is' : 'they are'} saved in this browser only. Sign up free to keep your
+                    progress on every device and make more decks with AI.
+                  </p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button variant="primary" onClick={onOpenSignUp} className="flex-1 sm:flex-none">
+                  Sign up free
+                </Button>
+                <IconButton icon={X} label="Not now" onClick={closeKeepPrompt} />
+              </div>
+            </section>
+          )}
+
           {/* How it works, until the first deck */}
           {!hasDecks && (
             <section aria-labelledby="how-it-works-title" className="space-y-3">
@@ -533,7 +589,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
           {(hasDecks || hasPlannerItems) && onOpenPlanner && <UpcomingPlanCard onStartSession={onStartSession} onOpenPlanner={onOpenPlanner} />}
 
           {/* Friends */}
-          {(hasDecks || currentUser) && <FriendsCard user={currentUser ? { id: currentUser.id, name: currentUser.name } : null} onOpenAuth={onOpenAuth} />}
+          {(currentUser || (hasDecks && !showKeepPrompt)) && <FriendsCard user={currentUser ? { id: currentUser.id, name: currentUser.name } : null} onOpenAuth={onOpenAuth} />}
 
           {/* Decks */}
           {hasDecks && (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { StudentEducationProfile, StudySession, UserAccount } from '../../types';
 import { AuthService } from '../../services/authService';
 import { StorageService } from '../../services/storageService';
+import { GuestDeck } from '../../services/guestDeck';
 import { buildSession, describeGenerationError, hasContent } from './deckGenerator';
 import type { GenerationRequest, GenerationStage } from './deckGenerator';
 
@@ -46,7 +47,9 @@ export const useDeckGeneration = ({ onSessionReady, onSessionSaved }: UseDeckGen
       setError(null);
       setIsLoading(true);
       try {
-        const session = await buildSession(request, profile, setStage);
+        // A guest's first deck is made with the shared AI (one free deck); later ones need an account.
+        const build = () => buildSession(request, profile, setStage);
+        const session = GuestDeck.isAvailable() ? await GuestDeck.run(build) : await build();
         StorageService.saveSession(session);
         onSessionSaved?.();
         onSessionReady(session);

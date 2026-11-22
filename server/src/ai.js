@@ -115,6 +115,38 @@ export async function consumeDailyQuota(userId, ip = 'unknown') {
   }
 }
 
+/**
+ * Daily quotas for a guest's free deck: the network's and the whole service's (as for accounts), plus a
+ * ceiling on all guests together, so free decks can never use up what signed-in students rely on.
+ * Returns null when there is room, or which one is spent: 'ip', 'guests' or 'all'.
+ */
+export async function consumeGuestQuota(ip = 'unknown') {
+  const limits = {
+    ip: Number(process.env.AI_IP_DAILY_QUOTA) || 400,
+    guests: Number(process.env.AI_GUEST_DAILY_QUOTA) || 600,
+    all: Number(process.env.AI_GLOBAL_DAILY_QUOTA) || 5000,
+  };
+  const day = new Date().toISOString().slice(0, 10);
+  try {
+    await db.tx(async (t) => {
+      for (const [scope, pool] of [['ip', `ip:${ip}`], ['guests', 'guests'], ['all', 'all']]) {
+        const changed = await t.run(
+          `INSERT INTO ai_usage_pools (pool, day, count) VALUES ($1, $2, 1)
+           ON CONFLICT (pool, day) DO UPDATE SET count = ai_usage_pools.count + 1
+           WHERE ai_usage_pools.count < $3`,
+          [pool, day, limits[scope]],
+        );
+        if (!changed) throw new QuotaExceeded(scope);
+      }
+    });
+    return null;
+  } catch (err) {
+    if (!(err instanceof QuotaExceeded)) throw err;
+    if (err.scope === 'guests') console.warn(`[AI Gateway] Guests' daily limit (${limits.guests}) is spent. Raise AI_GUEST_DAILY_QUOTA to allow more free decks.`);
+    return err.scope;
+  }
+}
+
 export async function generateContent({ contents, responseMimeType, enableThinking, responseSchema }) {
   if (!aiClient) {
     throw new Error('Server AI Gateway is not configured with GEMINI_API_KEY.');

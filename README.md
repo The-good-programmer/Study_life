@@ -8,7 +8,7 @@ Open Studify, pick a starter deck or turn your own notes or a lecture PDF into f
 
 ## 🔁 The core study loop
 
-1. **Add material** — pick a ready-made starter deck (ranked for your level), paste notes, take photos of them, record a lecture or upload its audio (written out in 3-minute parts, up to two hours), paste a YouTube link (notes from the video's first hour), import Anki/Quizlet/CSV, or drop a PDF. The AI's text lands in the notes box for you to check first. A first visit opens *What do you want to study?* instead of a tour.
+1. **Add material** — pick a ready-made starter deck (ranked for your level), paste notes, take photos of them, record a lecture or upload its audio (written out in 3-minute parts, up to two hours), paste a YouTube link (notes from the video's first hour), import Anki/Quizlet/CSV, or drop a PDF. The AI's text lands in the notes box for you to check first. A first visit opens *What do you want to study?* instead of a tour. A guest's first AI deck (from a topic, notes or a PDF) is free with no account; after that, the home page offers a free account to keep it and make more.
 2. **Review** — active recall flashcards, rated *Again / Hard / Good / Easy*.
 3. **Let the scheduler work** — reviews are spaced with the open-source FSRS algorithm (`ts-fsrs`), so cards come back just before you would forget them. **Start review** opens today's review across all decks: every card due now (most overdue first), then new cards up to a daily limit (10 by default, Settings → Study). Missed cards come back a few cards later, and the last rating can be undone (Z). A wrong or unclear card can be fixed on the spot or hidden from reviews (E); the latest edit wins on every device. **Ask about this card** opens a short chat with the AI about the card on screen.
 4. **See progress** — the retention dashboard shows what's due, what's sticking, and which cards keep failing. Friends (added by code or invite link) see each other's streak and whether they studied today, rank by this week's XP, and challenge each other to duels: the same multiple-choice questions from a deck, graded on the server. An optional weekly email sums up the week.
@@ -72,6 +72,7 @@ npm run server
 | `GEMINI_API_KEY` | For shared AI | Enables the AI proxy. Only signed-in users can use it. |
 | `AI_DAILY_QUOTA` | No (default 200) | Shared AI requests per user per day. |
 | `AI_IP_DAILY_QUOTA`, `AI_GLOBAL_DAILY_QUOTA` | No (400, 5000) | Shared AI requests per network and for the whole service per day, a ceiling on the Gemini bill. |
+| `AI_GUEST_DAILY_QUOTA` | No (600) | Shared AI requests per day for all guests' free decks together (one free deck per guest: two requests, up to four with a retry; three free decks per network a day). |
 | `GEMINI_MODELS` | No | Comma-separated Gemini models to try in order. Defaults to `gemini-2.5-flash,gemini-2.5-flash-lite,gemini-3.6-flash`. |
 | `DATABASE_URL` | **Production** | PostgreSQL connection string. Without it, development uses an embedded database in `server/data/pgdata`. |
 | `ALLOWED_ORIGINS` | No | Comma-separated browser origins allowed to call the API. Defaults to the local dev and preview ports. |

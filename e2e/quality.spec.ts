@@ -72,3 +72,50 @@ test('an error in the app is reported to the server', async ({ page }) => {
   expect(res.status()).toBe(204);
   expect(res.request().postDataJSON()).toMatchObject({ kind: 'error', message: 'Error: e2e: something broke', path: '/' });
 });
+
+test('a guest makes one free AI deck, is offered to keep it, and is asked to sign up for the next', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() =>
+    localStorage.setItem('studify_guest_education_profile_v1', JSON.stringify({ age: 16, country: 'US', grade: '11th grade' })),
+  );
+  await page.route('**/api/health', route => route.fulfill({ json: { status: 'ok', db: 'connected', aiProxyAvailable: true } }));
+  // This test server has no Gemini key, so the pass and the AI are stood in for (the server's side is unit-tested).
+  let passes = 0;
+  await page.route('**/api/ai/guest-pass', route => {
+    passes += 1;
+    return route.fulfill({ json: { pass: 'test-pass', expiresIn: 1800, requests: 4 } });
+  });
+  const aiCalls: { pass: string | undefined; signedIn: boolean; review: boolean }[] = [];
+  await page.route('**/api/ai/generate', async route => {
+    const body = route.request().postDataJSON();
+    const headers = route.request().headers();
+    const review = JSON.stringify(body.responseSchema ?? {}).includes('verdict');
+    aiCalls.push({ pass: headers['x-guest-pass'], signedIn: Boolean(headers.authorization), review });
+    const text = review ? JSON.stringify({ cards: [] }) : JSON.stringify(generatedDeck);
+    await route.fulfill({ json: { success: true, text } });
+  });
+
+  await page.goto('/');
+  const quickStart = page.getByRole('dialog', { name: 'What do you want to study?' });
+  await expect(quickStart.getByText('your first deck is free')).toBeVisible();
+  await quickStart.getByLabel(/Type a topic/).fill('Cells');
+  await quickStart.getByRole('button', { name: 'Make my deck' }).click();
+  await expect(page.getByRole('heading', { name: 'Mitochondria' })).toBeVisible({ timeout: 20_000 }); // the deck's session opens
+
+  // Written and checked on the guest's pass, without an account.
+  expect(passes).toBe(1);
+  expect(aiCalls.map(c => [c.pass, c.signedIn, c.review])).toEqual([['test-pass', false, false], ['test-pass', false, true]]);
+
+  // Back home: an offer to keep the deck.
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Keep your deck' })).toBeVisible();
+
+  // A second deck needs an account.
+  await page.getByRole('button', { name: 'Library', exact: true }).first().click();
+  await page.getByLabel('Topic to study').fill('Atoms');
+  await page.getByLabel('Topic to study').press('Enter');
+  await expect(page.getByRole('dialog').first()).toBeVisible(); // sign-in, instead of making the deck
+  expect(passes).toBe(1);
+  expectNoErrors(errors);
+});
