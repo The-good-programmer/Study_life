@@ -249,6 +249,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
             particleCount: 25,
             spread: 55,
             origin: { y: 0.8 },
+            disableForReducedMotion: true,
             colors: ['#06b6d4', '#8b5cf6', '#ec4899', '#f59e0b']
           });
         }
@@ -376,6 +377,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
             particleCount: 25,
             spread: 55,
             origin: { y: 0.8 },
+            disableForReducedMotion: true,
             colors: ['#06b6d4', '#8b5cf6', '#ec4899', '#f59e0b']
           });
         }
@@ -728,6 +730,8 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
   // page leaves room under the card for them.
   const showRatingBar = activeTab === 'cards' && !!currentCard && !!intervals && isAnswerRevealed && selectedOption === null;
   const showChoiceResult = isAnswerRevealed && selectedOption !== null && !!currentCard;
+  // Phones: Show answer sits in a bar at the bottom, where the rating buttons then appear.
+  const showRevealBar = activeTab === 'cards' && !!currentCard && !isAnswerRevealed && !isChoiceCard;
 
   // On a phone the session settings sit in one menu, so the card is the first thing on screen.
   const settingsMenuItems: ActionMenuItem[] = [
@@ -744,7 +748,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
   return (
     <div
       className={`mx-auto w-full max-w-2xl space-y-4 py-2 animate-fadeIn ${
-        showRatingBar ? 'pb-36 sm:pb-40' : showChoiceResult ? 'pb-56 sm:pb-40' : ''
+        showRatingBar ? 'pb-36 sm:pb-40' : showChoiceResult ? 'pb-56 sm:pb-40' : showRevealBar ? 'pb-32 sm:pb-0' : ''
       }`}
     >
       {/* Toolbar */}
@@ -848,7 +852,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                     ? 'none'
                     : `transform ${flyOut ? 200 : 300}ms var(--motion-ease-out), opacity 200ms var(--motion-ease-out), border-color 0.2s ease`,
               }}
-              className={`relative flex min-h-[360px] select-none flex-col rounded-3xl border bg-surface-solid p-6 shadow-[0_1px_0_rgb(255_255_255/0.04)_inset,0_24px_48px_-28px_rgb(0_0_0/0.6)] sm:p-8 ${
+              className={`relative flex min-h-60 select-none flex-col break-words sm:min-h-[360px] rounded-3xl border bg-surface-solid p-6 shadow-[0_1px_0_rgb(255_255_255/0.04)_inset,0_24px_48px_-28px_rgb(0_0_0/0.6)] sm:p-8 ${
                 isAnswerRevealed ? 'border-line-strong' : 'border-line'
               } ${effectiveType !== 'multiple-choice' && !isAnswerRevealed ? 'cursor-grab hover:border-line-strong active:cursor-grabbing' : ''}`}
             >
@@ -945,7 +949,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                   }
                   return (
                     <div className="space-y-4">
-                      <h3 className="text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
+                      <h3 className="text-[22px] font-semibold leading-snug text-pretty tracking-tight text-ink sm:text-[26px]">
                         <MathRenderer text={currentCard.question} />
                       </h3>
                       <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
@@ -971,7 +975,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 
                 {isChoiceCard && (
                   <div className="space-y-5">
-                    <h3 className="text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
+                    <h3 className="text-[22px] font-semibold leading-snug text-pretty tracking-tight text-ink sm:text-[26px]">
                       <MathRenderer text={currentCard.question} />
                     </h3>
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -1019,7 +1023,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 
                 {effectiveType === 'image-occlusion' && currentCard.imageUrl && (
                   <div className="space-y-4">
-                    <h3 className="text-[18px] font-semibold leading-snug text-ink">
+                    <h3 className="text-[18px] font-semibold leading-snug text-pretty text-ink">
                       <MathRenderer text={currentCard.question} />
                     </h3>
                     <div className="flex w-full select-none items-center justify-center overflow-hidden rounded-2xl border border-line bg-canvas p-2">
@@ -1062,7 +1066,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                 )}
 
                 {effectiveType === 'standard' && !hasInteractiveOptions && (
-                  <h3 className="text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
+                  <h3 className="text-[22px] font-semibold leading-snug text-pretty tracking-tight text-ink sm:text-[26px]">
                     <MathRenderer text={currentCard.question} />
                   </h3>
                 )}
@@ -1136,7 +1140,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                   </div>
                 )
               ) : !isChoiceCard ? (
-                <div className="mt-auto flex flex-col items-center gap-2 pt-8">
+                <div className="mt-auto hidden flex-col items-center gap-2 pt-8 sm:flex">
                   <Button
                     variant="primary"
                     size="lg"
@@ -1150,7 +1154,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                     Show answer
                     <kbd className="ml-1 hidden h-5 items-center rounded border border-white/25 bg-black/15 px-1.5 font-mono text-[10.5px] sm:inline-flex">Space</kbd>
                   </Button>
-                  <span className="text-xs text-ink-subtle">Or tap the card. On a phone, swipe it.</span>
+                  <span className="text-xs text-ink-subtle">Or click the card.</span>
                 </div>
               ) : null}
 
@@ -1346,6 +1350,17 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
       )}
 
       {/* Rating, pinned to the bottom of the screen so it is in reach without scrolling */}
+      {showRevealBar && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas-raised/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_32px_-16px_rgb(0_0_0/0.5)] backdrop-blur-xl sm:hidden">
+          <div className="mx-auto max-w-2xl space-y-2 px-3 py-3">
+            <Button variant="primary" size="lg" icon={Eye} onClick={handleToggleReveal} className="h-14 w-full text-[16px]">
+              Show answer
+            </Button>
+            <p className="text-center text-xs text-ink-subtle">Or tap or swipe the card.</p>
+          </div>
+        </div>
+      )}
+
       {showRatingBar && intervals && (
         <div
           role="group"

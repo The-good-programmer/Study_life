@@ -342,9 +342,9 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
           </div>
 
           {session.casualFlashcardMode ? (
-            <Badge tone="brand" className="hidden md:inline-flex">
-              Quick review
-            </Badge>
+            <span className="hidden md:inline-flex">
+              <Badge tone="brand">Quick review</Badge>
+            </span>
           ) : (
             <nav aria-label="Session steps" className="hidden items-center gap-0.5 rounded-xl border border-line bg-canvas p-1 lg:flex">
               {phases.map((p, idx) => {
@@ -466,7 +466,7 @@ export const StudyPilot: React.FC<StudyPilotProps> = ({ initialSession, onExit, 
       )}
 
       <main
-        className={`mx-auto flex w-full flex-1 flex-col justify-center p-4 transition-[max-width] sm:p-6 ${
+        className={`mx-auto flex w-full flex-1 flex-col justify-start p-4 transition-[max-width] sm:p-6 sm:pt-10 ${
           isSourceReaderOpen ? 'max-w-[1720px]' : 'max-w-5xl'
         }`}
       >
