@@ -88,7 +88,7 @@ Each screen gets three passes, then one pull request: **Impeccable critique** (h
 typography, layout, clarity), **web-design-guidelines** (accessibility and UX rules) and
 **break-ui** (worst-case data). Suggested order, starting with what students use most:
 
-1. Review session, in depth: every card type, hints, the tutor, the summary. Known: the confetti `<canvas>` on the summary sits outside any landmark; it should be `aria-hidden`.
+1. ✅ Review session, in depth: every card type, hints, the tutor, the summary (PR after #47). Still open: the confetti `<canvas>` sits outside any landmark and should be `aria-hidden` (needs `confetti.create` with our own canvas); whether confetti belongs mid-session is an open question for the owner.
 2. Planner and timetable.
 3. Focus fullscreen and the timer.
 4. Exam simulator.

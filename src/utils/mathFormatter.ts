@@ -16,7 +16,8 @@ export const escapeHtml = (str: string): string => {
 // Split by inline math ($...$) or block math ($$...$$)
 export const renderFormattedText = (raw: string): string => {
   // 1. First escape raw HTML to prevent XSS injection
-  const escaped = escapeHtml(raw);
+  // (U+E000, a private-use character, marks the kept URLs and code below, so it is removed from card text.)
+  const escaped = escapeHtml(raw.replace(/\uE000/g, ''));
 
   // 2. Replace standard math symbols, Greek letters, and arrows (supporting escaped arrows)
   const formatted = escaped
@@ -43,15 +44,23 @@ export const renderFormattedText = (raw: string): string => {
     .replace(/&lt;=&gt;/g, '⇌')
     .replace(/\\infty/g, '∞');
 
-  // Parse superscripts like x^2 or x^{10}
-  const withSup = formatted.replace(/\^\{([^}]+)\}|\^([0-9a-zA-Z+-])/g, (_, group1, group2) => {
+  // Keep URLs and `code` out of the formatting below: their underscores and carets are literal.
+  const kept: string[] = [];
+  const keep = (text: string) => `\uE000${kept.push(text) - 1}\uE000`;
+  const guarded = formatted.replace(/`[^`]+`|https?:\/\/[^\s<>"]+/g, keep);
+
+  // Parse superscripts like x^2, x^{10} or e^x. A single letter counts only at the end of a word,
+  // so names like snake_case or user_id stay as written.
+  const withSup = guarded.replace(/\^\{([^}]+)\}|\^([0-9+-]|[a-zA-Z](?![a-zA-Z]))/g, (_, group1, group2) => {
     return `<sup>${group1 || group2}</sup>`;
   });
 
-  // Parse subscripts like H_2O or x_{i}
-  const withSub = withSup.replace(/_\{([^}]+)\}|_([0-9a-zA-Z+-])/g, (_, group1, group2) => {
-    return `<sub>${group1 || group2}</sub>`;
-  });
+  // Parse subscripts like H_2O, x_{i} or x_i (same single-letter rule)
+  const withSub = withSup
+    .replace(/_\{([^}]+)\}|_([0-9+-]|[a-zA-Z](?![a-zA-Z]))/g, (_, group1, group2) => {
+      return `<sub>${group1 || group2}</sub>`;
+    })
+    .replace(/\uE000(\d+)\uE000/g, (_, i) => kept[Number(i)]);
 
   // Parse fractions \frac{a}{b}
   const withFractions = withSub.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, (_, num, den) => {

@@ -72,6 +72,11 @@ Shared building blocks. Use these before writing new markup:
 | `ConfirmDialog` | `src/components/common/ConfirmDialog.tsx` | For every destructive or data-changing confirmation. Never `window.confirm`. |
 | `ActionMenu` | `src/components/ui/ActionMenu.tsx` | Overflow menus on cards. |
 
+`cn()` only joins class names; it does not resolve Tailwind conflicts. To hide a primitive at some
+sizes, wrap it (`<span className="hidden md:inline-flex"><Badge…/></span>`). Passing
+`className="hidden md:inline-flex"` to `Badge`, `Button` or `IconButton` doesn't work, because
+their own `inline-flex` can win.
+
 ## Motion
 
 Full reasoning in `plans/` (001–007).
@@ -96,6 +101,14 @@ Full reasoning in `plans/` (001–007).
 
 - Keyboard: Space reveals, 1–4 rate in reviews; ⌘K / Ctrl+K opens search. Keyboard-triggered UI
   appears instantly, without animation.
+- Review session on phones: the main action lives in a bar fixed to the bottom, within thumb
+  reach. "Show answer" first, then the four rating buttons in the same place. The content area
+  reserves space for the bar (`pb-32` / `pb-36`).
+- Session screens are top-aligned (`justify-start`), never vertically centered: centered content
+  jumps whenever its height changes, as on every answer reveal.
+- User text (questions, answers, titles) must wrap: card containers use `break-words`. The text
+  formatter (`src/utils/mathFormatter.ts`) leaves URLs, `` `code` `` and snake_case alone; single
+  letters become sub/superscripts only at the end of a word (`x_i`, `e^x`).
 - Swipe on review cards: horizontal past 60px, or a quick flick (24px or more, faster than
   0.11px/ms); vertical past 60px only, because vertical movement is usually scrolling.
 - Visible focus: a global `:focus-visible` outline in `--brand`. An input that removes it must show

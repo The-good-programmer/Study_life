@@ -242,7 +242,9 @@ export const CharacterCustomizerModal: React.FC<CharacterCustomizerModalProps> =
                 </button>
               ))}
             </div>
-            <IconButton icon={X} label="Close" onClick={onClose} className="hidden shrink-0 md:inline-flex" />
+            <span className="hidden shrink-0 md:inline-flex">
+              <IconButton icon={X} label="Close" onClick={onClose} />
+            </span>
           </div>
 
           <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">

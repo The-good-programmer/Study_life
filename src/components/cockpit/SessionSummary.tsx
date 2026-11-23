@@ -151,7 +151,8 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
       confetti({
         particleCount: 100,
         spread: 80,
-        origin: { y: 0.6 }
+        origin: { y: 0.6 },
+        disableForReducedMotion: true,
       });
     } catch {
       // confetti fallback
@@ -348,7 +349,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
 
       <Card className="space-y-3">
         <h2 className="text-[15px] font-semibold text-ink">Take it with you</h2>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2">
           <Button variant="secondary" size="sm" icon={Printer} onClick={handlePrint}>
             Study sheet
           </Button>
@@ -366,15 +367,13 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
         )}
       </Card>
 
-      <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+      {/* "Done" is in the summary card at the top; these are the other ways on. */}
+      <div className="grid grid-cols-2 gap-2 pt-1 sm:flex sm:justify-end">
         <Button variant="ghost" icon={RotateCcw} onClick={onRestart}>
           Study again
         </Button>
         <Button variant="secondary" icon={Layers} onClick={onOpenDashboard}>
           See what is due
-        </Button>
-        <Button variant="secondary" trailingIcon={ArrowRight} onClick={onHome}>
-          Done
         </Button>
       </div>
 

@@ -50,6 +50,22 @@ describe('MathRenderer - renderFormattedText', () => {
     expect(rendered).toContain('a<sub>ij</sub>');
   });
 
+  it('formats single-letter subscripts and superscripts only at the end of a word', () => {
+    const rendered = renderFormattedText('x_i + e^x, CO_2 and user_id or v_max');
+    expect(rendered).toContain('x<sub>i</sub>');
+    expect(rendered).toContain('e<sup>x</sup>');
+    expect(rendered).toContain('CO<sub>2</sub>');
+    expect(rendered).toContain('user_id');
+    expect(rendered).toContain('v_max');
+  });
+
+  it('leaves URLs and inline code as written', () => {
+    const rendered = renderFormattedText('See https://example.com/wiki/Big_Data_x^2 and `my_var^2`, then H_2O');
+    expect(rendered).toContain('https://example.com/wiki/Big_Data_x^2');
+    expect(rendered).toMatch(/<code class="[^"]*">my_var\^2<\/code>/);
+    expect(rendered).toContain('H<sub>2</sub>O');
+  });
+
   it('formats LaTeX fractions correctly', () => {
     const input = '\\frac{1}{2} + \\frac{x+y}{z}';
     const rendered = renderFormattedText(input);
