@@ -150,8 +150,10 @@
     --ink: oklch(0.965 0.004 270);
     --ink-muted: oklch(0.76 0.012 270);
     --ink-subtle: oklch(0.6 0.015 270);
-    --brand: oklch(0.625 0.195 276);
-    --brand-hover: oklch(0.67 0.185 276);
+    /* 0.57 keeps white button text at 4.7:1 (WCAG AA) and the focus ring at 4:1 on the canvas.
+       Hover goes darker, not lighter: a lighter fill would drop the label below 4.5:1. */
+    --brand: oklch(0.57 0.2 276);
+    --brand-hover: oklch(0.52 0.2 276);
     --brand-soft: oklch(0.625 0.195 276 / 0.15);
     --brand-ink: #ffffff;
     --brand-text: oklch(0.78 0.11 276);
@@ -457,7 +459,7 @@
   --brand-soft: oklch(0.53 0.2 276 / 0.1);
   --brand-ink: #ffffff;
   --brand-text: oklch(0.5 0.2 276);
-  --gold: oklch(0.6 0.13 70);
+  --gold: oklch(0.52 0.13 70); /* 4.9:1 on gold-soft badges (WCAG AA for small text) */
   --gold-soft: oklch(0.8 0.14 78 / 0.22);
   --success: oklch(0.55 0.13 162);
   --success-soft: oklch(0.7 0.13 162 / 0.16);
