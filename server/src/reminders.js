@@ -153,6 +153,95 @@ export async function runReminders({ now = new Date(), send }) {
   return { checked: subscriptions.length, sent };
 }
 
+/** Lessons only get a notification this soon after they end (a server that slept doesn't send stale ones). */
+export const AFTER_CLASS_WINDOW_MINUTES = 20;
+
+const minutesOfTime = (time) => {
+  const [h, m] = String(time).split(':').map(Number);
+  return h * 60 + m;
+};
+
+/** Day of the week (ISO, 1 = Monday) of a YYYY-MM-DD day. */
+const isoWeekdayOf = (day) => {
+  const [y, m, d] = day.split('-').map(Number);
+  return ((new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7) + 1;
+};
+
+const readDocument = async (userId, kind) => {
+  const row = await db.one('SELECT data_json FROM user_documents WHERE user_id = $1 AND kind = $2', [userId, kind]);
+  try {
+    const items = row ? JSON.parse(row.data_json)?.items : null;
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Lessons that ended since the last notification (and within the window), not yet logged, from a
+ * student's synced timetable. `notifiedThrough` is "YYYY-MM-DD HH:MM" in their time zone, or null.
+ */
+export function lessonsJustEnded({ lessons, logs, day, minutes, notifiedThrough }) {
+  const [sentDay, sentTime] = String(notifiedThrough ?? '').split(' ');
+  const after = sentDay === day && isTimeOfDay(sentTime) ? minutesOfTime(sentTime) : -1;
+  const weekday = isoWeekdayOf(day);
+  return lessons.filter((lesson) => {
+    if (!lesson || lesson.weekday !== weekday || !isTimeOfDay(lesson.end) || typeof lesson.subject !== 'string') return false;
+    const end = minutesOfTime(lesson.end);
+    if (end <= after || end > minutes || minutes - end > AFTER_CLASS_WINDOW_MINUTES) return false;
+    return !logs.some((log) => log?.lessonId === lesson.id && log?.date === day);
+  });
+}
+
+/** What an after-class notification says. */
+export function afterClassMessage(lesson) {
+  return {
+    title: `${lesson.subject} just finished`,
+    body: 'What did you cover? Note it in a few seconds and get flashcards for tonight.',
+    url: `/?log=${encodeURIComponent(lesson.id)}`,
+    tag: `studify-lesson-${lesson.id}`,
+    action: 'Note it',
+  };
+}
+
+/**
+ * Sends a notification when a lesson in a student's timetable ends (browsers that left after-class
+ * notifications on). Each lesson is notified once, and never once it's logged.
+ */
+export async function runAfterClass({ now = new Date(), send }) {
+  const subscriptions = await db.all(
+    'SELECT endpoint, user_id, keys_json, time_zone, lessons_notified_through FROM push_subscriptions WHERE after_class = TRUE',
+  );
+  const docs = new Map();
+  let sent = 0;
+  for (const sub of subscriptions) {
+    if (!isValidTimeZone(sub.time_zone)) continue;
+    if (!docs.has(sub.user_id)) {
+      docs.set(sub.user_id, { lessons: await readDocument(sub.user_id, 'timetable'), logs: await readDocument(sub.user_id, 'lesson_logs') });
+    }
+    const { lessons, logs } = docs.get(sub.user_id);
+    if (lessons.length === 0) continue;
+    const { day, minutes } = localTime(now, sub.time_zone);
+    const ended = lessonsJustEnded({ lessons, logs, day, minutes, notifiedThrough: sub.lessons_notified_through });
+    if (ended.length === 0) continue;
+    try {
+      for (const lesson of ended) {
+        await send({ endpoint: sub.endpoint, keys: JSON.parse(sub.keys_json) }, afterClassMessage(lesson));
+        sent++;
+      }
+      const through = `${day} ${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+      await db.run('UPDATE push_subscriptions SET lessons_notified_through = $1 WHERE endpoint = $2', [through, sub.endpoint]);
+    } catch (err) {
+      if (err?.statusCode === 404 || err?.statusCode === 410) {
+        await db.run('DELETE FROM push_subscriptions WHERE endpoint = $1', [sub.endpoint]);
+      } else {
+        console.warn('[Reminders] Could not send an after-class notification:', err?.message ?? err);
+      }
+    }
+  }
+  return { checked: subscriptions.length, sent };
+}
+
 /** Sends one reminder with web-push and the server's keys. */
 export function createPushSender(subject) {
   return async (subscription, message) => {
@@ -174,6 +263,8 @@ export function startReminderSchedule({ subject, everyMs = 5 * 60_000 } = {}) {
     try {
       const { sent } = await runReminders({ send });
       if (sent > 0) console.log(`[Reminders] Sent ${sent}.`);
+      const afterClass = await runAfterClass({ send });
+      if (afterClass.sent > 0) console.log(`[Reminders] Sent ${afterClass.sent} after-class.`);
     } catch (err) {
       console.error('[Reminders] Run failed:', err.message);
     } finally {

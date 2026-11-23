@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarPlus, ChevronLeft, ChevronRight, Plus, ScanText } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, ChevronRight, Plus, ScanText, Sparkles } from 'lucide-react';
 import type { PlannerItem, StudySession, SubjectFolder } from '../../types';
 import { PlannerService, dayKey, daysBetween, relativeDay, type DayPlan } from '../../services/plannerService';
 import { StorageService } from '../../services/storageService';
@@ -15,6 +15,8 @@ import { WeeklyTimetable } from '../timetable/WeeklyTimetable';
 export interface PlannerPageProps {
   onStartSession: (session: StudySession) => void;
   onOpenAuth?: () => void;
+  /** The AI set-up assistant: timetable, exams and subjects from a couple of photos. */
+  onOpenSetup?: () => void;
 }
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -70,7 +72,7 @@ const ItemRow: React.FC<{ item: PlannerItem; folders: SubjectFolder[]; onEdit: (
 };
 
 /** Exams, homework and other dates on a month calendar, with each exam's plan worked back from its date. */
-export const PlannerPage: React.FC<PlannerPageProps> = ({ onStartSession, onOpenAuth }) => {
+export const PlannerPage: React.FC<PlannerPageProps> = ({ onStartSession, onOpenAuth, onOpenSetup }) => {
   const { items, plan, folders } = usePlanner();
   // The day the page opened on; a page left open past midnight keeps it until it is opened again.
   const [today] = useState(() => dayKey(new Date()));
@@ -120,7 +122,12 @@ export const PlannerPage: React.FC<PlannerPageProps> = ({ onStartSession, onOpen
           <Button icon={CalendarPlus} onClick={() => setIsSyncOpen(true)}>
             Add to calendar
           </Button>
-          <Button variant="primary" icon={Plus} onClick={() => setAdding(selected >= today ? selected : today)}>
+          {onOpenSetup && (
+            <Button variant="primary" icon={Sparkles} onClick={onOpenSetup}>
+              Set up with AI
+            </Button>
+          )}
+          <Button variant={onOpenSetup ? 'secondary' : 'primary'} icon={Plus} onClick={() => setAdding(selected >= today ? selected : today)}>
             Add
           </Button>
         </div>

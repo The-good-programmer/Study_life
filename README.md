@@ -32,6 +32,15 @@ Open Studify, pick a starter deck or turn your own notes or a lecture PDF into f
 - **Leech Hunter** — finds cards you keep failing and helps split them into simpler ones.
 - **Gamepad review** — flip and grade cards with a Bluetooth controller (HTML5 Gamepad API).
 
+### Set-up assistant
+
+*Set up with AI* (in the Planner, on Today for a signed-in student with no timetable, and right after signing up) sets up
+a school year from a couple of photos: the timetable, then a syllabus or exam dates (photo, PDF or pasted text), then the
+subjects found in both, each with an optional starter deck aimed at what its syllabus covers (up to three at once). The
+AI reads; you tick what's right at each step, any step can be skipped, and nothing is saved until *Finish*. Subjects
+become folders (with an icon from the name) so lessons, exam plans, class notes and decks are linked from the start.
+Manual *Add* buttons stay alongside.
+
 ### Timetable and after-class notes
 
 Add your weekly lessons in the Planner (school or university: any day, any times, a room if you like; *Save and add
@@ -39,6 +48,13 @@ another* fills a day quickly). On days with lessons, **After class** on Today li
 what you covered (a few seconds). Homework goes into the planner, due at that subject's next lesson by default, and the
 topic (with any notes) can become flashcards, checked like any AI deck, added as one topic to that subject's
 **class notes** deck, so they come up in tonight's review. The timetable and logs sync with your account.
+
+- **From a photo:** *From a photo* reads a picture (or pasted text) of the timetable with the AI; you tick the lessons to
+  add, and ones already there are left out.
+- **After-class notifications:** with reminders on (Settings → Reminders), the server sends a notification when each
+  lesson ends ("Biology just finished"), from the synced timetable in your time zone: once per lesson, within 20
+  minutes of its end, and never for a lesson you've already noted. Tapping it opens the note (`/?log=<lessonId>`). It can
+  be turned off under *After each lesson*.
 
 ### Focus workspace
 

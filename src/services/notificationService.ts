@@ -13,6 +13,8 @@ export interface NotificationSettings {
   sound: boolean;
   /** Reminders come from the server as push notifications, so they arrive with Studify closed. */
   push?: boolean;
+  /** With push on: a notification when each lesson in the timetable ends (on unless turned off). */
+  afterClass?: boolean;
 }
 
 /** A Web Push key (base64url) as the bytes the browser's push manager wants. */
@@ -145,6 +147,7 @@ export class NotificationService {
         subscription: subscription.toJSON(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         remindAt: remindAtOf(settings),
+        afterClass: settings.afterClass !== false,
       }),
     });
     if (!res.ok) throw new Error(res.error || 'The server did not accept the reminder.');
@@ -182,6 +185,12 @@ export class NotificationService {
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
     if (subscription) await this.sendSubscription(subscription, settings);
+  }
+
+  /** Turns after-class notifications on or off for this browser (with push reminders on). */
+  public static async setAfterClass(on: boolean): Promise<void> {
+    this.saveSettings({ afterClass: on });
+    await this.updatePushReminderTime();
   }
 
   /** Stops server reminders for this browser (on turning reminders off, and on signing out). */

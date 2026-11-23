@@ -322,4 +322,13 @@ export const MIGRATIONS = [
         WHERE author_name <> 'a Studify student';
     `,
   },
+  {
+    // After-class notifications: whether this browser wants one when each lesson in the timetable ends
+    // (on unless turned off), and up to when (local day and time) lessons have been notified.
+    id: '010_after_class_notifications',
+    sql: `
+      ALTER TABLE push_subscriptions ADD COLUMN after_class BOOLEAN NOT NULL DEFAULT TRUE;
+      ALTER TABLE push_subscriptions ADD COLUMN lessons_notified_through TEXT;
+    `,
+  },
 ];

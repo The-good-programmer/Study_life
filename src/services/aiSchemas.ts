@@ -301,6 +301,29 @@ export const PLANNER_EXTRACTION_SCHEMA = {
   required: ['items'],
 };
 
+/** A timetable read from a photo or text: the weekly lessons. */
+export const TIMETABLE_EXTRACTION_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    lessons: {
+      type: Type.ARRAY,
+      description: 'Every weekly lesson, lecture, lab or class in the timetable.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          subject: { type: Type.STRING, description: 'The subject or course, e.g. "Biology" or "CS101".' },
+          weekday: { type: Type.INTEGER, description: 'Day of the week: 1 Monday, 2 Tuesday ... 7 Sunday.' },
+          start: { type: Type.STRING, description: 'Start time, HH:MM in 24-hour time.' },
+          end: { type: Type.STRING, description: 'End time, HH:MM in 24-hour time.' },
+          room: { type: Type.STRING, description: 'The room or place, if the timetable gives one.' },
+        },
+        required: ['subject', 'weekday', 'start', 'end'],
+      },
+    },
+  },
+  required: ['lessons'],
+};
+
 /** The second check of a new deck: a verdict for each card, with corrections. */
 export const DECK_REVIEW_SCHEMA = {
   type: Type.OBJECT,

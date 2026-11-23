@@ -247,3 +247,114 @@ test('a lesson in the timetable is logged after class: homework goes in the plan
   expect(deck?.concepts[0].retrievalCards).toHaveLength(2);
   expectNoErrors(errors);
 });
+
+test('a pasted timetable is read into lessons, and an after-class notification opens that lesson', async ({ page, request }) => {
+  const errors = watchErrors(page);
+  const me = await newAccount(request, 'Reader');
+  await page.addInitScript(() => localStorage.setItem('axon_tour_seen', 'true'));
+  await standInForAi(page, () =>
+    JSON.stringify({
+      lessons: [
+        { subject: 'Biology', weekday: 1, start: '08:30', end: '09:15', room: 'Lab 2' },
+        { subject: 'Maths', weekday: 2, start: '09:20', end: '10:05' },
+      ],
+    }),
+  );
+  await page.goto('/');
+  await signIn(page, me.email);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Planner' }).click();
+  await page.getByRole('button', { name: 'From a photo' }).click();
+  const read = page.getByRole('dialog', { name: 'Add your timetable from a photo' });
+  await read.getByLabel('Or paste it').fill('Monday 08:30-09:15 Biology (Lab 2); Tuesday 09:20-10:05 Maths');
+  await read.getByRole('button', { name: 'Read it' }).click();
+  const check = page.getByRole('dialog', { name: 'Check your lessons' });
+  await expect(check.getByText('Biology')).toBeVisible();
+  await check.getByRole('button', { name: 'Add 2 lessons' }).click();
+  await expect(page.getByRole('button', { name: /^Edit Biology, Monday 08:30/ })).toBeVisible();
+
+  // The notification's link: /?log=<lessonId> opens the note for that lesson.
+  const lessonId = await page.evaluate(id => (JSON.parse(localStorage.getItem(`studify_timetable_v1_${id}`) || '[]') as { id: string; subject: string }[]).find(l => l.subject === 'Maths')!.id, me.id);
+  await page.goto(`/?log=${lessonId}`);
+  await expect(page.getByRole('dialog', { name: 'What did you cover?' })).toContainText('Maths');
+  expect(new URL(page.url()).search).toBe('');
+  expectNoErrors(errors);
+});
+
+test('the set-up assistant reads a timetable and exam dates, then makes the subjects and a starter deck', async ({ page, request }) => {
+  const errors = watchErrors(page);
+  const me = await newAccount(request, 'Starter');
+  await page.addInitScript(() => localStorage.setItem('axon_tour_seen', 'true'));
+  const nextYear = new Date().getFullYear() + 1;
+  const deckJson = JSON.stringify({
+    title: 'Biology basics',
+    category: 'Biology',
+    description: 'Starter deck',
+    concepts: [
+      {
+        title: 'Cells',
+        mentalModel: 'Tiny rooms.',
+        coreTakeaways: ['Cells have membranes'],
+        keyTerms: [],
+        feynmanPrompt: 'Explain cells.',
+        sampleMasteryExplanation: '',
+        retrievalCards: [{ question: 'What surrounds a cell?', answer: 'A membrane', cardType: 'standard' }],
+      },
+    ],
+  });
+  const calls = await standInForAi(page, body => {
+    const asked = JSON.stringify(body);
+    if (asked.includes('verdict')) return JSON.stringify({ cards: [] });
+    if (asked.includes('weekly lesson')) return JSON.stringify({ lessons: [{ subject: 'Biology', weekday: 1, start: '08:30', end: '09:15' }, { subject: 'Maths', weekday: 2, start: '09:20', end: '10:05' }] });
+    if (asked.includes('dated deadline')) return JSON.stringify({ items: [{ kind: 'exam', title: 'Cells test', date: `${nextYear}-01-15`, subject: 'Biology', topics: ['Cells', 'DNA'] }] });
+    return deckJson;
+  });
+  await page.goto('/');
+  await signIn(page, me.email);
+
+  // Offered on the home page to a student with no timetable.
+  await page.getByRole('region', { name: 'Set up your school year with AI' }).getByRole('button', { name: 'Set up' }).click();
+  const assistant = page.getByRole('dialog', { name: 'Set up your school year' });
+  await assistant.getByRole('button', { name: 'Start' }).click();
+
+  await page.getByRole('dialog', { name: 'Your timetable' }).getByLabel('Or paste it').fill('Mon 08:30 Biology, Tue 09:20 Maths');
+  await page.getByRole('button', { name: 'Read it' }).click();
+  const lessons = page.getByRole('dialog', { name: 'Check your lessons' });
+  await expect(lessons.getByText('Maths')).toBeVisible();
+  await lessons.getByRole('button', { name: 'Next' }).click();
+
+  await page.getByRole('dialog', { name: 'Exams and deadlines' }).getByLabel('Or paste it').fill('Biology cells test 15 January');
+  await page.getByRole('button', { name: 'Read it' }).click();
+  const exams = page.getByRole('dialog', { name: 'Check your exams and deadlines' });
+  await expect(exams.getByText('Cells test')).toBeVisible();
+  await exams.getByRole('button', { name: 'Next' }).click();
+
+  // Biology (an exam) and Maths, each offered a starter deck; only Biology's is kept.
+  const subjects = page.getByRole('dialog', { name: 'Your subjects' });
+  await expect(subjects.getByText('1 lesson a week · 1 exam')).toBeVisible();
+  await subjects.getByRole('checkbox', { name: 'Starter deck' }).nth(1).uncheck();
+  await subjects.getByRole('button', { name: 'Finish and make 1 deck' }).click();
+
+  const done = page.getByRole('dialog', { name: "You're set up" });
+  await expect(done.getByText('2 lessons in your timetable')).toBeVisible({ timeout: 20_000 });
+  await expect(done.getByText('1 exam or deadline in the Planner')).toBeVisible();
+  await expect(done.getByText('Biology basics')).toBeVisible();
+  // The starter deck was aimed at what the syllabus covers.
+  expect(calls.some(call => JSON.stringify(call).includes('Biology: Cells; DNA'))).toBe(true);
+
+  const saved = await page.evaluate(id => {
+    const read = (key: string) => JSON.parse(localStorage.getItem(`${key}_${id}`) || '[]');
+    return { folders: read('studify_folders_v1'), lessons: read('studify_timetable_v1'), decks: read('studify_sessions_v1') };
+  }, me.id);
+  const biology = (saved.folders as { id: string; name: string }[]).find(f => f.name === 'Biology');
+  expect(biology).toBeTruthy();
+  expect((saved.lessons as { subject: string; folderId: string }[]).find(l => l.subject === 'Biology')?.folderId).toBe(biology!.id);
+  expect((saved.decks as { title: string; folderId: string }[]).find(d => d.title === 'Biology basics')?.folderId).toBe(biology!.id);
+
+  await done.getByRole('button', { name: 'See the Planner' }).click();
+  await expect(page.getByRole('button', { name: /^Edit Maths, Tuesday 09:20/ })).toBeVisible();
+  // Finished: not offered again.
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /Today/ }).click();
+  await expect(page.getByRole('region', { name: 'After class' }).or(page.getByRole('heading', { level: 1 })).first()).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Set up your school year with AI' })).toHaveCount(0);
+  expectNoErrors(errors);
+});

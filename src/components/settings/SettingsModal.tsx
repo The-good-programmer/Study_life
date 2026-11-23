@@ -28,7 +28,7 @@ import { haptics } from '../../services/hapticsService';
 import { cn } from '../../utils/cn';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Dialog, DialogHeader, DialogPanel } from '../common/Dialog';
-import { Badge, Button, IconButton } from '../ui/primitives';
+import { Badge, Button, IconButton, Toggle } from '../ui/primitives';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -499,6 +499,24 @@ const RemindersSection: React.FC<{ onShowInstallHelp?: () => void }> = ({ onShow
           </div>
         )}
       </SettingGroup>
+
+      {isOn && settings.push && (
+        <SettingGroup
+          title="After each lesson"
+          description="When a lesson in your timetable (Planner) ends, a notification asks what you covered, so it becomes tonight's flashcards. Never for a lesson you've already noted."
+        >
+          <Toggle
+            checked={settings.afterClass !== false}
+            onChange={on => {
+              setSettings(NotificationService.saveSettings({ afterClass: on }));
+              NotificationService.setAfterClass(on).catch(() => {
+                showNotice({ tone: 'error', text: 'Couldn’t save that on the server. Try again when you’re online.' });
+              });
+            }}
+            label="After-class notifications"
+          />
+        </SettingGroup>
+      )}
 
       <WeeklyEmailGroup />
 
