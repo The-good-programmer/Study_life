@@ -1,5 +1,7 @@
 # Animation plans
 
+> **Next:** the overall plan for improving design quality is in [design-roadmap.md](design-roadmap.md).
+
 Written by the `improve-animations` skill from an audit of the app's motion at commit `d249d9e`.
 Each plan stands alone: it quotes the current code, gives exact target values, and says how to
 check the result by eye. Any agent can execute one without other context.
