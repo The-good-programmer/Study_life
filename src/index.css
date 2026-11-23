@@ -559,6 +559,19 @@
   border-color: #d6d6d1 !important;
 }
 
+/* Focus must stay visible: inputs that drop the outline show focus with a brand border, which the
+   fixed border colour above would otherwise hide. */
+[data-theme="paper"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+[data-theme="paper"] textarea:focus,
+[data-theme="paper"] select:focus {
+  border-color: var(--brand) !important;
+}
+
+/* A field with a unit suffix ("25 min") reads as one surface: its shell matches the input. */
+[data-theme="paper"] .input-shell {
+  background-color: #ffffff;
+}
+
 [data-theme="paper"] input::placeholder,
 [data-theme="paper"] textarea::placeholder {
   color: #8a8d98 !important;

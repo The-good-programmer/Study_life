@@ -114,14 +114,14 @@ export const FocusTimerCard: React.FC<FocusTimerCardProps> = ({ timer, settings,
         />
       </div>
 
-      <div className="relative flex items-center justify-between gap-3 border-t border-line pt-4">
+      <div className="relative flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-line pt-4">
         <div className="flex min-w-0 items-center gap-2.5 text-xs text-ink-subtle">
           <div className="flex shrink-0 items-center gap-1" aria-hidden="true">
             {Array.from({ length: settings.longBreakEvery }, (_, i) => (
               <span key={i} className={cn('h-2 w-2 rounded-full', i < timer.completedInCycle ? 'bg-brand' : 'bg-line-strong')} />
             ))}
           </div>
-          <span className="truncate">
+          <span className="min-w-0 leading-snug">
             {timer.phase === 'long-break'
               ? 'Long break'
               : untilLong === 0

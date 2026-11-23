@@ -122,7 +122,11 @@ Full reasoning in `plans/` (001–007).
 - Swipe on review cards: horizontal past 60px, or a quick flick (24px or more, faster than
   0.11px/ms); vertical past 60px only, because vertical movement is usually scrolling.
 - Visible focus: a global `:focus-visible` outline in `--brand`. An input that removes it must show
-  focus another way (border color).
+  focus another way (`focus:border-brand`). The light theme forces input borders with
+  `!important` (`src/index.css`), so it has a matching `:focus` rule; `e2e/design.spec.ts` checks
+  that a focused field changes in the light theme.
+- A field with a unit suffix ("25 min") is one surface: give the wrapper `input-shell` and put the
+  border and `focus-within:border-brand` on the wrapper.
 - Every icon-only button has an `aria-label`; decorative icons are `aria-hidden`.
 
 ## Automatic checks

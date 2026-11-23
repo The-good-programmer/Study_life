@@ -122,3 +122,16 @@ for (const theme of THEMES) {
     });
   }
 }
+
+test('a focused text field shows its focus in the light theme', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('axon_theme', 'paper');
+    localStorage.setItem('axon_tour_seen', 'true');
+  });
+  await page.goto('/?view=focus');
+  const field = page.getByPlaceholder(/^Add a task/);
+  const border = () => field.evaluate(e => getComputedStyle(e).borderColor);
+  const atRest = await border();
+  await field.focus();
+  await expect.poll(border).not.toBe(atRest);
+});

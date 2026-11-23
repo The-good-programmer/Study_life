@@ -26,7 +26,7 @@ const NumberField: React.FC<{ field: (typeof NUMBER_FIELDS)[number]; value: numb
   return (
     <label className="flex flex-col gap-1.5">
       <span className="text-xs font-medium text-ink-subtle">{field.label}</span>
-      <span className="flex h-10 items-center rounded-xl border border-line-strong bg-canvas pr-3 transition-colors focus-within:border-brand">
+      <span className="input-shell flex h-10 items-center rounded-xl border border-line-strong bg-canvas pr-3 transition-colors focus-within:border-brand">
         <input
           type="number"
           inputMode="numeric"
