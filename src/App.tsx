@@ -1,4 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
+import { ConfirmDialog } from './components/common/ConfirmDialog';
 import type { AppView } from './components/layout/views';
 import { Loader2, WifiOff } from 'lucide-react';
 import type { StudySession, UserStats, UserAccount } from './types';
@@ -336,10 +337,20 @@ export function App() {
     setStats(StorageService.getStats());
   };
 
-  const handleNavigate = (targetView: AppView) => {
+  // A mock exam keeps its answers in memory: leaving the page mid-exam asks first, as its own ✕ does.
+  const [examInProgress, setExamInProgress] = useState(false);
+  const [pendingView, setPendingView] = useState<AppView | null>(null);
+  const goTo = (targetView: AppView) => {
     setLibraryNotes(null);
     setView(targetView);
     setStats(StorageService.getStats());
+  };
+  const handleNavigate = (targetView: AppView) => {
+    if (examInProgress && view === 'exam' && targetView !== 'exam') {
+      setPendingView(targetView);
+      return;
+    }
+    goTo(targetView);
   };
   const openCampus = WORLD_3D_ENABLED ? () => handleNavigate('sanctuary') : undefined;
   // Notices shown over every screen: Focus alerts, and the server starting up.
@@ -590,6 +601,7 @@ export function App() {
                 onStartRemediationSession={(session) => {
                   handleStartSession(session);
                 }}
+                onActiveChange={setExamInProgress}
               />
             )}
             {view === 'interleave' && (
@@ -636,9 +648,26 @@ export function App() {
 
       </div>
 
-      {view !== 'sanctuary' && (
+      {/* Hidden during a mock exam: one stray tap would leave it. */}
+      {view !== 'sanctuary' && !(examInProgress && view === 'exam') && (
         <MobileTabBar activeView={view} onNavigate={handleNavigate} dueCardsCount={dailyQueue.cards.length} showExam={hasStudied} />
       )}
+      <ConfirmDialog
+        isOpen={pendingView !== null}
+        title="Leave this exam?"
+        confirmLabel="Leave exam"
+        cancelLabel="Keep going"
+        tone="danger"
+        onConfirm={() => {
+          const target = pendingView;
+          setPendingView(null);
+          setExamInProgress(false);
+          if (target) goTo(target);
+        }}
+        onCancel={() => setPendingView(null)}
+      >
+        Your answers so far will not be scored or saved, and nothing is paid.
+      </ConfirmDialog>
 
       {/* Floating NotebookLM-style Audio Briefing Bar */}
       {audioSession && (

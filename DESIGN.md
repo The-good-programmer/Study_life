@@ -114,6 +114,11 @@ Full reasoning in `plans/` (001–007).
 - Empty states say what the area is for and offer the next step, with an `IconMedallion`
   (Planner's "No exams yet" → Add an exam). A calm one-liner with an icon is enough where nothing
   is needed ("Nothing due in the next seven days.").
+- Activities that hold unsaved progress (a mock exam) hide the phone tab bar while running, and any
+  other navigation asks first with `ConfirmDialog`, the same question their own ✕ asks
+  (`App.tsx`, `onActiveChange`).
+- Keyboard-shortcut hints (`Kbd`) show only from `sm` up (`hidden sm:inline-flex` on a wrapper);
+  on a touch screen they take space and mean nothing.
 - Session screens are top-aligned (`justify-start`), never vertically centered: centered content
   jumps whenever its height changes, as on every answer reveal.
 - User text (questions, answers, titles) must wrap: card containers use `break-words`. The text
