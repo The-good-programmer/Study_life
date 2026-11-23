@@ -91,7 +91,7 @@ typography, layout, clarity), **web-design-guidelines** (accessibility and UX ru
 1. ✅ Review session, in depth: every card type, hints, the tutor, the summary (PR after #47). Follow-up done: confetti only at the end (owner's decision), on its own `aria-hidden` canvas.
 2. ✅ Planner and timetable.
 3. ✅ Focus fullscreen and the timer.
-4. Exam simulator.
+4. ✅ Exam simulator.
 5. Deck studio and image occlusion.
 6. Onboarding: the first visit, the set-up assistant, Quick start.
 7. Settings and account.

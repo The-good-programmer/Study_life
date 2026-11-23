@@ -39,6 +39,7 @@ import {
   scoreAnswer,
 } from './examScoring';
 import { getEffectiveCardType, isOptionCorrect } from '../cockpit/retrievalLogic';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Badge, Button, Card, CoinIcon, IconButton, Kbd, ProgressBar } from '../ui/primitives';
 import { shuffle } from '../../utils/shuffle';
 import { orderOptionsForCard } from '../../utils/quizOptions';
@@ -48,6 +49,8 @@ interface ExamSimulatorProps {
   onBack: () => void;
   onStartRemediationSession: (session: StudySession) => void;
   initialDeckId?: string;
+  /** Called with true while an exam is under way, so the app can keep navigation from discarding it. */
+  onActiveChange?: (active: boolean) => void;
 }
 
 interface ExamQuestionItem {
@@ -61,8 +64,13 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   onBack,
   onStartRemediationSession,
   initialDeckId,
+  onActiveChange,
 }) => {
   const [stage, setStage] = useState<'setup' | 'active' | 'report'>('setup');
+  useEffect(() => {
+    onActiveChange?.(stage === 'active');
+  }, [stage, onActiveChange]);
+  useEffect(() => () => onActiveChange?.(false), [onActiveChange]);
   const [setupError, setSetupError] = useState<string | null>(null);
 
   // Available decks (user saved, curated starter decks, demo sessions)
@@ -539,7 +547,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             </span>
           </div>
 
-          <h3 className="text-[22px] font-semibold leading-snug tracking-tight text-ink sm:text-[26px]">
+          <h3 className="text-[22px] font-semibold leading-snug tracking-tight text-pretty break-words text-ink sm:text-[26px]">
             <MathRenderer text={isAnswerSubmitted ? fillCloze(currentItem.card.question) : maskCloze(currentItem.card.question)} />
           </h3>
 
@@ -674,7 +682,9 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                     >
                       <span className="flex w-full items-center justify-between gap-2">
                         <span className="text-[14px] font-semibold text-ink">{option.label}</span>
-                        <Kbd>{option.key}</Kbd>
+                        <span className="hidden sm:inline-flex">
+                          <Kbd>{option.key}</Kbd>
+                        </span>
                       </span>
                       <span className="text-xs tabular-nums text-ink-subtle">
                         {option.right} / {option.wrong}
@@ -699,36 +709,21 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           </div>
         </div>
 
-        {isExitConfirmOpen && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fadeIn"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="leave-exam-title"
-            onClick={() => setIsExitConfirmOpen(false)}
-          >
-            <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-3xl border border-line-strong bg-surface-solid p-6 text-center shadow-2xl">
-              <h3 id="leave-exam-title" className="text-[17px] font-semibold text-ink">Leave this exam?</h3>
-              <p className="mt-2 text-[14px] leading-relaxed text-ink-muted">Your answers so far will not be scored or saved, and nothing is paid.</p>
-              <div className="mt-6 flex gap-2">
-                <Button variant="secondary" className="flex-1" onClick={() => setIsExitConfirmOpen(false)}>
-                  Keep going
-                </Button>
-                <Button
-                  variant="danger"
-                  className="flex-1"
-                  onClick={() => {
-                    setIsExitConfirmOpen(false);
-                    setIsTimerActive(false);
-                    setStage('setup');
-                  }}
-                >
-                  Leave exam
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        <ConfirmDialog
+          isOpen={isExitConfirmOpen}
+          title="Leave this exam?"
+          confirmLabel="Leave exam"
+          cancelLabel="Keep going"
+          tone="danger"
+          onConfirm={() => {
+            setIsExitConfirmOpen(false);
+            setIsTimerActive(false);
+            setStage('setup');
+          }}
+          onCancel={() => setIsExitConfirmOpen(false)}
+        >
+          Your answers so far will not be scored or saved, and nothing is paid.
+        </ConfirmDialog>
       </div>
     );
   }
@@ -757,6 +752,20 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           <ResultStat label="Calibration" value={`${finalReport.calibrationPercent}%`} hint="How well your confidence predicted whether you were right" />
           <ResultStat label="Grade" value={grade} />
         </div>
+
+        <Card className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-[15px] font-semibold text-ink">Review what you missed</h2>
+            <p className="mt-1 text-[14px] text-ink-muted">
+              {reviewCount > 0
+                ? `A guided session on the ${reviewCount} ${reviewCount === 1 ? 'question' : 'questions'} you missed, guessed or were wrongly sure about.`
+                : 'Nothing to review: every answer was right and you were sure of it.'}
+            </p>
+          </div>
+          <Button variant="primary" icon={Sparkles} onClick={handleLaunchRemediation} disabled={reviewCount === 0} className="shrink-0">
+            Start review
+          </Button>
+        </Card>
 
         <Card className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
@@ -830,19 +839,6 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           </div>
         </section>
 
-        <Card className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-[15px] font-semibold text-ink">Review what you missed</h2>
-            <p className="mt-1 text-[14px] text-ink-muted">
-              {reviewCount > 0
-                ? `A guided session on the ${reviewCount} ${reviewCount === 1 ? 'question' : 'questions'} you missed, guessed or were wrongly sure about.`
-                : 'Nothing to review: every answer was right and you were sure of it.'}
-            </p>
-          </div>
-          <Button variant="primary" icon={Sparkles} onClick={handleLaunchRemediation} disabled={reviewCount === 0} className="shrink-0">
-            Start review
-          </Button>
-        </Card>
 
         <section aria-labelledby="answers-title" className="space-y-3">
           <div className="flex items-center justify-between gap-3">

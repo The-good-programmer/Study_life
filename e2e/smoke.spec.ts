@@ -358,3 +358,26 @@ test('the set-up assistant reads a timetable and exam dates, then makes the subj
   await expect(page.getByRole('region', { name: 'Set up your school year with AI' })).toHaveCount(0);
   expectNoErrors(errors);
 });
+
+test('a mock exam is not lost by a stray tap on the navigation', async ({ page }) => {
+  const errors = watchErrors(page);
+  await seedDeck(page, { due: 3, later: 3 });
+  await page.goto('/');
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Practice' }).click();
+  await page.getByRole('button', { name: /Mock exam/ }).first().click();
+  await page.getByRole('button', { name: 'Start exam' }).click();
+  await expect(page.getByText(/^Question 1 of/)).toBeVisible();
+
+  // Leaving through the sidebar asks first; "Keep going" stays in the exam.
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /^Library/ }).click();
+  const leave = page.getByRole('dialog', { name: 'Leave this exam?' });
+  await expect(leave).toBeVisible();
+  await leave.getByRole('button', { name: 'Keep going' }).click();
+  await expect(page.getByText(/^Question 1 of/)).toBeVisible();
+
+  // Confirming leaves.
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /^Library/ }).click();
+  await page.getByRole('dialog', { name: 'Leave this exam?' }).getByRole('button', { name: 'Leave exam' }).click();
+  await expect(page.getByText(/^Question 1 of/)).toHaveCount(0);
+  expectNoErrors(errors);
+});
