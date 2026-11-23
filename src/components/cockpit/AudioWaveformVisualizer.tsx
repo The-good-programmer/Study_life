@@ -46,8 +46,8 @@ export const AudioWaveformVisualizer: React.FC<AudioWaveformVisualizerProps> = (
         {(isActive ? heights : Array<number>(barCount).fill(12)).map((h, idx) => (
           <span
             key={idx}
-            className={cn('w-0.5 rounded-full transition-[height] duration-100 ease-out', barColor)}
-            style={{ height: `${isActive ? h : 12}%`, opacity: isActive ? 0.35 + (h / 100) * 0.65 : 0.3 }}
+            className={cn('h-full w-0.5 rounded-full transition-transform duration-100 ease-out', barColor)}
+            style={{ transform: `scaleY(${(isActive ? h : 12) / 100})`, opacity: isActive ? 0.35 + (h / 100) * 0.65 : 0.3 }}
           />
         ))}
       </span>

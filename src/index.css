@@ -53,9 +53,9 @@
 
   /* fadeIn is opacity-only on purpose: a transform animation that keeps filling makes its
      element the containing block for position: fixed children, which mispositions modals. */
-  --animate-fadeIn: fadeIn 0.24s ease-out;
+  --animate-fadeIn: fadeIn 180ms var(--motion-ease-out);
   --animate-shake: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
-  --animate-rise: rise 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  --animate-rise: rise 300ms var(--motion-ease-out) backwards;
   /* Review cards: each one is dealt in from the stack and the answer folds open, kept short because
      students rate dozens of cards a session, mostly from the keyboard. "backwards" fill only, for
      the same reason as fadeIn below. */
@@ -248,21 +248,6 @@
   box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.06), 0 24px 48px -24px rgb(0 0 0 / 0.75);
 }
 
-.glass-panel-interactive {
-  background: rgb(20 20 27 / 0.72);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--line);
-  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.04);
-  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.glass-panel-interactive:hover {
-  background: rgb(26 26 35 / 0.86);
-  border-color: oklch(0.625 0.195 276 / 0.35);
-  transform: translateY(-1px);
-}
-
 /* Hide scrollbar for clean horizontal tabs */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -290,31 +275,40 @@
   transform: rotateY(180deg);
 }
 
-/* Equalizer animations for Audio Engine */
+/* Equalizer animations for Audio Engine. Each bar is full height and scales, so the loop never
+   triggers layout: scale = old pixel height / 16px row. */
 @keyframes eq-jump-1 {
-  0%, 100% { height: 3px; }
-  50% { height: 14px; }
+  0%, 100% { transform: scaleY(0.1875); }
+  50% { transform: scaleY(0.875); }
 }
 
 @keyframes eq-jump-2 {
-  0%, 100% { height: 14px; }
-  50% { height: 4px; }
+  0%, 100% { transform: scaleY(0.875); }
+  50% { transform: scaleY(0.25); }
 }
 
 @keyframes eq-jump-3 {
-  0%, 100% { height: 6px; }
-  50% { height: 16px; }
+  0%, 100% { transform: scaleY(0.375); }
+  50% { transform: scaleY(1); }
 }
 
 @keyframes eq-jump-4 {
-  0%, 100% { height: 12px; }
-  50% { height: 3px; }
+  0%, 100% { transform: scaleY(0.75); }
+  50% { transform: scaleY(0.1875); }
 }
 
-.animate-eq-1 { animation: eq-jump-1 0.75s ease-in-out infinite; }
-.animate-eq-2 { animation: eq-jump-2 0.55s ease-in-out 0.15s infinite; }
-.animate-eq-3 { animation: eq-jump-3 0.85s ease-in-out 0.3s infinite; }
-.animate-eq-4 { animation: eq-jump-4 0.65s ease-in-out 0.05s infinite; }
+.animate-eq-1,
+.animate-eq-2,
+.animate-eq-3,
+.animate-eq-4 {
+  height: 100%;
+  transform-origin: bottom;
+}
+
+.animate-eq-1 { animation: eq-jump-1 0.75s ease-in-out infinite backwards; }
+.animate-eq-2 { animation: eq-jump-2 0.55s ease-in-out 0.15s infinite backwards; }
+.animate-eq-3 { animation: eq-jump-3 0.85s ease-in-out 0.3s infinite backwards; }
+.animate-eq-4 { animation: eq-jump-4 0.65s ease-in-out 0.05s infinite backwards; }
 
 /* Custom gentle pulse */
 @keyframes pulse-subtle {
@@ -498,8 +492,7 @@
 }
 
 [data-theme="paper"] .glass-panel,
-[data-theme="paper"] .glass-panel-elevated,
-[data-theme="paper"] .glass-panel-interactive {
+[data-theme="paper"] .glass-panel-elevated {
   background: #ffffff !important;
   border-color: var(--line) !important;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.08) !important;
