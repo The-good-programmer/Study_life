@@ -43,7 +43,7 @@ test('a new deck is cleaned up and checked by the AI before it is studied', asyn
 
   await page.goto('/');
   await signIn(page, me.email);
-  await page.getByRole('button', { name: 'Library', exact: true }).first().click();
+  await page.getByRole('button', { name: /^Library\b/ }).first().click();
   await page.getByLabel('Topic to study').fill('Cells');
   await page.getByLabel('Topic to study').press('Enter');
   await expect(page.getByText('Checking', { exact: false }).first()).toBeVisible();
@@ -112,7 +112,7 @@ test('a guest makes one free AI deck, is offered to keep it, and is asked to sig
   await expect(page.getByRole('heading', { name: 'Keep your deck' })).toBeVisible();
 
   // A second deck needs an account.
-  await page.getByRole('button', { name: 'Library', exact: true }).first().click();
+  await page.getByRole('button', { name: /^Library\b/ }).first().click();
   await page.getByLabel('Topic to study').fill('Atoms');
   await page.getByLabel('Topic to study').press('Enter');
   await expect(page.getByRole('dialog').first()).toBeVisible(); // sign-in, instead of making the deck

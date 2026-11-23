@@ -35,7 +35,8 @@ classes** (`text-emerald-400` and similar are theme-blind and failed contrast be
 | Status | `success`, `danger`, `gold` (streaks, rewards), `due` (cards due), each with `-soft`; `success-ink` and `danger-ink` for text on solid fills |
 
 Contrast: text tokens are tuned to **at least 4.5:1** (WCAG AA) on their intended backgrounds in
-both themes. After changing a token, re-check contrast in both themes.
+both themes. `src/designTokens.test.ts` checks every pairing the components use, in both themes, on
+every test run. When a component puts text on a new token pairing, add that pairing there.
 
 ## Typography
 
@@ -101,6 +102,22 @@ Full reasoning in `plans/` (001–007).
   focus another way (border color).
 - Every icon-only button has an `aria-label`; decorative icons are `aria-hidden`.
 
+## Automatic checks
+
+| Check | File | Runs |
+|---|---|---|
+| Token contrast: every text/background pairing reaches 4.5:1, and the focus ring 3:1, in both themes | `src/designTokens.test.ts` | `npm test`, and CI on every PR |
+| Accessibility: axe-core WCAG 2.2 A/AA on Today, Library, Focus, Insights, Planner, Settings, a review (question and answer), empty Today and Library, and sign-up, in both themes at 390px and 1280px | `e2e/design.spec.ts` | `npm run e2e`, and CI on every PR |
+| Visual snapshots of key screens | `e2e/visual.spec.ts` | On request: `npm run e2e:visual` (not in CI; screenshots vary slightly between machines) |
+
+- To see every accessibility finding at once instead of the first failure:
+  `AXE_COLLECT=axe.jsonl npx playwright test e2e/design.spec.ts`.
+- After an intended visual change: `npm run e2e:visual -- --update-snapshots`, look at the new
+  images, and commit them.
+- Buttons with visible text take their name from that text. Use `aria-label` only when there is no
+  visible text (icon-only, or the collapsed sidebar), so voice control users can say what they see
+  (WCAG 2.5.3).
+
 ---
 
 # Rules
@@ -112,8 +129,9 @@ Owner decisions, newest last. Format: the rule, why, and a dated comment with th
 - **Studify feels calm, focused and premium; Duolingo- and Gizmo-style warmth and delight go only
   where they're earned: progress, rewards, streaks, empty states and first-time moments.**
   Why: the owner wants calm, focused and premium, and named Gizmo and Duolingo as references.
-  Concentrating the energy keeps both true. *(Reconciliation inferred by Claude; owner to confirm.)*
-  <!-- 2026-11-23: "calm, focused, premium" · references "Gizmo, duolingo, and similar" -->
+  Concentrating the energy keeps both true. *(Reconciliation proposed by Claude, confirmed by the
+  owner.)*
+  <!-- 2026-11-23: "calm, focused, premium" · references "Gizmo, duolingo, and similar" · confirmed: "Yes" -->
 
 - **Never leave a screen or state feeling bare: empty states, plain lists and screens with no sense
   of progress get content, visible progress, an `IconMedallion` or illustration, and a clear next
@@ -134,5 +152,5 @@ Owner decisions, newest last. Format: the rule, why, and a dated comment with th
 - **No mascot or character art. Where Axo the axolotl used to be (empty states, the session
   summary, the set-up assistant), use `IconMedallion`. Don't add a new mascot.**
   Why: the owner had the axolotl removed. A cartoon character also pulls against *calm* and
-  *premium*. *(Second half inferred; owner to confirm.)*
-  <!-- 2026-11-23: options remove / keep as accent / replace → "remove it" -->
+  *premium*. *(Second half proposed by Claude, confirmed by the owner.)*
+  <!-- 2026-11-23: options remove / keep as accent / replace → "remove it" · no new mascot, confirmed: "Yes" -->

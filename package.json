@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "avatar:compress": "node tools/avatar-pipeline/compress.mjs",
     "check:build": "node scripts/check-build.mjs",
-    "e2e": "playwright test"
+    "e2e": "playwright test --grep-invert @visual",
+    "e2e:visual": "playwright test --grep @visual"
   },
   "dependencies": {
     "@google/genai": "^2.25.0",
@@ -28,6 +29,7 @@
     "ts-fsrs": "^5.4.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@gltf-transform/core": "4.5.1",
     "@gltf-transform/extensions": "4.5.1",
     "@gltf-transform/functions": "4.5.1",

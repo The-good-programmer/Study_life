@@ -41,16 +41,16 @@ The phases below fix these in order of value. Phase 1 makes every later phase be
 5. Does the axolotl mascot set the tone (playful), or is it an accent in a mostly serious app?
 6. Which matters more on phones: dense information, or big and simple screens?
 
-## Phase 2: Automatic design checks on every pull request
+## Phase 2: Automatic design checks on every pull request ✅ Done
 
 CI already runs Playwright browser tests (`npm run e2e` in `.github/workflows/ci.yml`), so these slot
 straight in.
 
 | # | Deliverable | What it does |
 |---|---|---|
-| 2.1 | `e2e/design.spec.ts`: accessibility | Runs axe-core (`@axe-core/playwright`) on Today, Library, Focus, Insights, Planner, a review session (card revealed), sign-up and Settings. Covers both themes, at 390px and 1280px. **A pull request fails if it adds a contrast, label or structure problem.** |
-| 2.2 | Token contrast test (Vitest) | Reads the color tokens in `src/index.css` and checks every text and background pairing reaches 4.5:1 in both themes. A token edit that breaks readability fails before any screen is drawn. |
-| 2.3 | Visual snapshots | Playwright screenshots of key screens in both themes. An unintended visual change shows up as an image diff in the pull request, and Claude can look at the diff to judge it. |
+| 2.1 ✅ | `e2e/design.spec.ts`: accessibility | Runs axe-core (`@axe-core/playwright`) on Today, Library, Focus, Insights, Planner, a review session (card revealed), sign-up and Settings. Covers both themes, at 390px and 1280px. **A pull request fails if it adds a contrast, label or structure problem.** |
+| 2.2 ✅ | Token contrast test (Vitest), `src/designTokens.test.ts` | Reads the color tokens in `src/index.css` and checks every text and background pairing reaches 4.5:1 in both themes. A token edit that breaks readability fails before any screen is drawn. |
+| 2.3 ✅ | Visual snapshots (on request, `npm run e2e:visual`; kept out of CI because screenshots vary between machines and CI gates deploys) | Playwright screenshots of key screens in both themes. An unintended visual change shows up as an image diff in the pull request, and Claude can look at the diff to judge it. |
 
 ## Phase 3: Add the right skills (and only those) ✅ Done
 
@@ -110,7 +110,7 @@ screens start from a higher bar.
 | 1 ✅ | Phase 3: install skills | Merge the PR | small |
 | 2 ✅ | Phase 1.2 + 1.3: `DESIGN.md` and `CLAUDE.md` | Merge the PR | medium |
 | 3 ✅ | Phase 1.1: `PRODUCT.md` | Answer the 6 questions | small |
-| 4 | Phase 2: automatic checks | Merge the PR | medium |
+| 4 ✅ | Phase 2: automatic checks | Merge the PR | medium |
 | 5 | Phase 5: screen reviews | Merge one PR per screen; phone check | 1 session per screen |
 | — | Phase 4 | Say what you like and dislike, whenever | ongoing |
 

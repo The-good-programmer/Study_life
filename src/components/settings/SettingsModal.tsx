@@ -203,7 +203,7 @@ function OptionGrid<T extends string | number>({
             )}
           >
             <span className={cn('block text-sm font-medium', selected ? 'text-brand-text' : 'text-ink')}>{option.label}</span>
-            {option.hint && <span className="mt-0.5 block text-xs text-ink-subtle">{option.hint}</span>}
+            {option.hint && <span className={cn('mt-0.5 block text-xs', selected ? 'text-ink-muted' : 'text-ink-subtle')}>{option.hint}</span>}
           </button>
         );
       })}

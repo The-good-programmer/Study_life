@@ -72,7 +72,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon: Icon, label, collapsed, active,
   <button
     type="button"
     onClick={onClick}
-    aria-label={label}
+    aria-label={collapsed ? label : undefined}
     aria-current={active ? 'page' : undefined}
     className={cn(
       'group relative flex h-9 w-full items-center rounded-lg text-[13px] transition-colors duration-150 cursor-pointer',
@@ -242,7 +242,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={go(onQuickStudy)}
-            aria-label={dueCardsCount > 0 ? `Start review, ${dueCardsCount} cards today` : 'Start review'}
+            aria-label={collapsed ? (dueCardsCount > 0 ? `Start review, ${dueCardsCount} cards today` : 'Start review') : undefined}
             title={collapsed ? (dueCardsCount > 0 ? `Start review (${dueCardsCount} today)` : 'Start review') : undefined}
             className={cn(
               'group relative flex h-9 items-center rounded-lg bg-brand text-[13px] font-medium text-brand-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.2),0_8px_20px_-12px_var(--brand)] transition-colors hover:bg-brand-hover cursor-pointer',
@@ -254,7 +254,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {!collapsed && <span>Start review</span>}
             </span>
             {!collapsed && dueCardsCount > 0 && (
-              <span className="rounded-md bg-white/20 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">{dueCardsCount}</span>
+              <span className="rounded-md bg-white/20 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">
+                {dueCardsCount}
+                <span className="sr-only"> cards today</span>
+              </span>
             )}
             {collapsed && dueCardsCount > 0 && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-due ring-2 ring-canvas-raised" />}
           </button>
@@ -420,14 +423,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={go(() => onOpenAuth?.(currentUser ? 'profile' : 'login'))}
-            aria-label={currentUser ? `Account: ${currentUser.name}` : 'Sign in or register'}
+            aria-label={collapsed ? (currentUser ? `Account: ${currentUser.name}` : 'Sign in or register') : undefined}
             title={collapsed ? (currentUser ? currentUser.name : 'Sign in') : undefined}
             className={cn(
               'flex min-w-0 items-center rounded-lg transition-colors hover:bg-surface-hover cursor-pointer',
               collapsed ? 'h-9 w-9 justify-center' : 'h-11 flex-1 gap-2.5 px-2',
             )}
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-soft text-[13px] font-semibold text-brand-text">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-soft text-[13px] font-semibold text-brand-text" aria-hidden="true">
               {currentUser ? currentUser.avatar || currentUser.name.charAt(0).toUpperCase() : 'G'}
             </span>
             {!collapsed && (
