@@ -108,6 +108,9 @@ for (const theme of THEMES) {
         await openScreen(page, 'Library');
         await expect(page.locator('main#main h1').first()).toBeVisible();
         await expectAccessible(page, 'Library, no decks');
+        await openScreen(page, 'Planner');
+        await expect(page.getByText('No exams yet')).toBeVisible();
+        await expectAccessible(page, 'Planner, empty');
 
         await openScreen(page, 'Guest');
         await page.getByRole('tab', { name: /Create account/ }).or(page.getByRole('button', { name: /^Create account$/ })).first().click();

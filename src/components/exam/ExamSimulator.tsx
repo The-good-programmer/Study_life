@@ -228,7 +228,8 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
         confetti({
           particleCount: 120,
           spread: 80,
-          origin: { y: 0.6 }
+          origin: { y: 0.6 },
+          disableForReducedMotion: true,
         });
       } catch {
         // ignore

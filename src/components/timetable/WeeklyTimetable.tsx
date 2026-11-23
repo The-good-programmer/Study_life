@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Camera, Check, NotebookPen, Plus } from 'lucide-react';
+import { Camera, Check, ChevronDown, NotebookPen, Plus } from 'lucide-react';
 import type { StudySession, TimetableLesson } from '../../types';
 import { dayKey } from '../../services/plannerService';
 import { StorageService } from '../../services/storageService';
@@ -29,6 +29,8 @@ export const WeeklyTimetable: React.FC<{
   const [adding, setAdding] = useState<number | null>(null);
   const [logging, setLogging] = useState<TimetableLesson | null>(null);
   const [importing, setImporting] = useState(false);
+  // Phones show the next day with lessons; the rest of the week is a tap away.
+  const [showWeek, setShowWeek] = useState(false);
   const [notified] = useState(() => {
     const settings = NotificationService.getSettings();
     return Boolean(settings.push && settings.afterClass !== false);
@@ -114,7 +116,7 @@ export const WeeklyTimetable: React.FC<{
         <>
           {/* Phone: day by day, starting today */}
           <div className="space-y-3 md:hidden">
-            {phoneDays.map(weekday => (
+            {(showWeek ? phoneDays : phoneDays.slice(0, 1)).map(weekday => (
               <section key={weekday} aria-label={WEEKDAY_NAMES[weekday - 1]}>
                 <h3 className={cn('mb-1.5 text-xs font-semibold uppercase tracking-wide', weekday === todayWeekday ? 'text-brand-text' : 'text-ink-subtle')}>
                   {weekday === todayWeekday ? 'Today' : WEEKDAY_NAMES[weekday - 1]}
@@ -122,6 +124,18 @@ export const WeeklyTimetable: React.FC<{
                 <ul className="space-y-1.5">{byDay(weekday).map(tile)}</ul>
               </section>
             ))}
+            {phoneDays.length > 1 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                trailingIcon={ChevronDown}
+                onClick={() => setShowWeek(shown => !shown)}
+                aria-expanded={showWeek}
+                className={cn('w-full', showWeek && '[&_svg]:rotate-180')}
+              >
+                {showWeek ? 'Show less' : `Show the whole week (${phoneDays.length - 1} more ${phoneDays.length - 1 === 1 ? 'day' : 'days'})`}
+              </Button>
+            )}
           </div>
 
           {/* Wider screens: the whole week */}
