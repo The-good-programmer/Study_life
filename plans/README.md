@@ -11,6 +11,8 @@ check the result by eye. Any agent can execute one without other context.
 | 003 | [Keep spinners and fades working when "reduce motion" is on](003-reduced-motion-keeps-feedback.md) | MEDIUM | DONE |
 | 004 | [A swipe throws the card off in its direction, and quick flicks count](004-swipe-throws-the-card.md) | MEDIUM | DONE |
 | 005 | [Slide the phone menu in from the left edge](005-mobile-drawer-slides-in.md) | MEDIUM | DONE |
+| 006 | [Animate the audio bars with scale, not height](006-audio-bars-scale-not-height.md) | LOW | DONE |
+| 007 | [One shared entrance curve, a quicker page fade, and no dead hover CSS](007-one-shared-entrance-curve.md) | LOW | DONE |
 
 ## Execution order
 
@@ -26,16 +28,12 @@ check the result by eye. Any agent can execute one without other context.
 - 004 → 001 (uses `--motion-ease-out`; also edits the same card element)
 - 005 → 001 (uses `--motion-ease-drawer`)
 
-## Audit findings not planned
+## Remaining audit findings
 
-Lower-value findings from the same audit, kept here so they are not lost:
+All three lower-value findings are handled:
 
-- LOW: the audio equalizer bars (`src/index.css`, `@keyframes eq-jump-1` to `eq-jump-4`) animate
-  `height` nonstop while audio plays. `transform: scaleY()` with `transform-origin: bottom` would
-  avoid layout work on every frame.
-- LOW: four near-identical hand-typed curves (`cubic-bezier(0.2, 0.8, 0.2, 1)`,
-  `(0.16, 1, 0.3, 1)`, `(0.3, 0.7, 0.3, 1)` and the built-in `ease-out` on `fadeIn`) could all use
-  `--motion-ease-out`. The page-switch `fadeIn` could also drop from 240ms to about 180ms.
-- LOW: 11 hover scale or shift effects (for example `DailyMissionHome.tsx:878`,
-  `UserAvatarBadge.tsx:57`) are not limited to mouse devices, so they can stick after a tap on
-  phones. Wrap them with Tailwind's `[@media(hover:hover)_and_(pointer:fine)]:` variant.
+- Audio equalizer animating `height`: plan 006, which also covers the speech visualizer bars.
+- Near-identical hand-typed curves and the slow page fade: plan 007.
+- Hover motion on touch screens: no change needed. Tailwind v4 already wraps every `hover:` and
+  `group-hover:` utility in `@media (hover: hover)`, as checked in the built CSS. The only ungated
+  hover motion was the unused `.glass-panel-interactive` class, which plan 007 removes.
