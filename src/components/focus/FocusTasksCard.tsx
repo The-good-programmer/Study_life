@@ -194,7 +194,7 @@ export const FocusTasksCard: React.FC<FocusTasksCardProps> = ({ tasks, currentTa
           value={title}
           onChange={e => setTitle(e.target.value)}
           maxLength={MAX_TASK_TITLE}
-          placeholder="Add a task, e.g. Chemistry worksheet"
+          placeholder="Add a task, e.g. Essay plan…"
           className="h-10 min-w-0 flex-1 rounded-xl border border-line-strong bg-canvas px-3 text-sm text-ink placeholder:text-ink-subtle transition-colors focus:border-brand focus:outline-none"
         />
         <Button type="submit" icon={Plus} disabled={!title.trim()} aria-label="Add task">
