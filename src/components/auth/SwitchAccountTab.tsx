@@ -38,7 +38,7 @@ export const SwitchAccountTab: React.FC<SwitchAccountTabProps> = ({
         return (
           <div
             key={acc.id}
-            className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-all ${
+            className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 transition-colors ${
               isCurrent
                 ? 'bg-brand-soft border-brand/50 ring-1 ring-brand-soft'
                 : 'bg-surface border-line hover:bg-surface-hover'
@@ -74,7 +74,7 @@ export const SwitchAccountTab: React.FC<SwitchAccountTabProps> = ({
               {!isCurrent && (
                 <button
                   onClick={() => onSwitch(acc)}
-                  className="px-3 py-1.5 rounded-xl bg-brand hover:bg-brand-hover text-brand-ink font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  className="px-3 py-1.5 rounded-xl bg-brand hover:bg-brand-hover text-brand-ink font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <span>Switch</span>
                   <ArrowRight className="w-3 h-3" />

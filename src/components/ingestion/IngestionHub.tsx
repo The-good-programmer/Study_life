@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNeedsSignInForAi } from '../../hooks/useAiAccess';
 import { AiUnavailableNotice } from '../common/AiUnavailableNotice';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { GuestDeck } from '../../services/guestDeck';
 import { Mascot } from '../mascot/Mascot';
 import { CommunityDecksPanel } from '../community/CommunityDecksPanel';
@@ -198,6 +199,8 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<SubjectFolder | null>(null);
+  const [pendingDeckDelete, setPendingDeckDelete] = useState<StudySession | null>(null);
+  const [pendingFolderDelete, setPendingFolderDelete] = useState<SubjectFolder | null>(null);
   const [moveToFolderSession, setMoveToFolderSession] = useState<StudySession | null>(null);
 
   // Sync folders and sessions with storage mutations
@@ -310,12 +313,27 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
     generate({ kind: 'notes', text: notesInput });
   };
 
-  const handleDeleteDeck = (id: string, e: React.MouseEvent) => {
+  const handleDeleteDeck = (deck: StudySession, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('Delete this study deck from your local library?')) {
-      StorageService.deleteSession(id);
-      setSavedSessions(StorageService.getSessions());
-    }
+    setPendingDeckDelete(deck);
+  };
+
+  const confirmDeleteDeck = () => {
+    if (!pendingDeckDelete) return;
+    StorageService.deleteSession(pendingDeckDelete.id);
+    setSavedSessions(StorageService.getSessions());
+    setPendingDeckDelete(null);
+  };
+
+  const confirmDeleteFolder = () => {
+    const folder = pendingFolderDelete;
+    if (!folder) return;
+    StorageService.deleteFolder(folder.id);
+    if (selectedFolderId === folder.id) setSelectedFolderId('all');
+    setFolders(StorageService.getFolders());
+    setSavedSessions(StorageService.getSessions());
+    soundEngine.playCompanionBubble();
+    setPendingFolderDelete(null);
   };
 
   const handleExportSingleDeck = (session: StudySession, e: React.MouseEvent) => {
@@ -763,15 +781,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (confirm(`Delete the subject "${folder.name}"? Its decks stay in your library, unassigned.`)) {
-                              StorageService.deleteFolder(folder.id);
-                              if (selectedFolderId === folder.id) setSelectedFolderId('all');
-                              setFolders(StorageService.getFolders());
-                              setSavedSessions(StorageService.getSessions());
-                              soundEngine.playCompanionBubble();
-                            }
-                          }}
+                          onClick={() => setPendingFolderDelete(folder)}
                           aria-label={`Delete ${folder.name}`}
                           className="rounded-md p-1 text-ink-subtle hover:bg-danger-soft hover:text-danger cursor-pointer"
                         >
@@ -884,7 +894,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
                           { label: 'Print study sheet', icon: Printer, onSelect: () => ExportService.printStudySheet(deck) },
                           { label: 'Export as Markdown', icon: FileText, onSelect: () => ExportService.downloadMarkdown(deck) },
                           { label: 'Export as JSON', icon: Download, onSelect: (e) => handleExportSingleDeck(deck, e) },
-                          { label: 'Delete deck', icon: Trash2, tone: 'danger', onSelect: (e) => handleDeleteDeck(deck.id, e) },
+                          { label: 'Delete deck', icon: Trash2, tone: 'danger', onSelect: (e) => handleDeleteDeck(deck, e) },
                         ]}
                       />
                     </div>
@@ -1147,6 +1157,26 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
         onStartQuickSession={() => setIsStarterCatalogModalOpen(true)}
       />
 
+      <ConfirmDialog
+        isOpen={!!pendingDeckDelete}
+        title={`Delete "${pendingDeckDelete?.title ?? ''}"?`}
+        confirmLabel="Delete deck"
+        tone="danger"
+        onConfirm={confirmDeleteDeck}
+        onCancel={() => setPendingDeckDelete(null)}
+      >
+        The deck and its cards leave your library and review queue. This can't be undone.
+      </ConfirmDialog>
+      <ConfirmDialog
+        isOpen={!!pendingFolderDelete}
+        title={`Delete "${pendingFolderDelete?.name ?? ''}"?`}
+        confirmLabel="Delete subject"
+        tone="danger"
+        onConfirm={confirmDeleteFolder}
+        onCancel={() => setPendingFolderDelete(null)}
+      >
+        The subject is removed, but its decks stay in your library, unfiled.
+      </ConfirmDialog>
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useId, useState } from 'react';
 import { Check, Copy, Flame, Share2, Swords, UserMinus, UserPlus } from 'lucide-react';
 import { FriendsService, formatCode, friendStatus, sortFriends, type Friend, type FriendsData } from '../../services/friendsService';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Dialog, DialogHeader, DialogPanel } from '../common/Dialog';
 import { Button } from '../ui/primitives';
 import { FriendAvatar } from './FriendAvatar';
@@ -25,6 +26,8 @@ export const FriendsDialog: React.FC<{
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<{ id: string; name: string } | null>(null);
+  const [removing, setRemoving] = useState(false);
   const [now] = useState(() => new Date());
 
   const show = useCallback((res: Awaited<ReturnType<typeof FriendsService.load>>) => {
@@ -71,9 +74,14 @@ export const FriendsDialog: React.FC<{
     void load();
   };
 
-  const remove = async (friendId: string, name: string) => {
-    if (!window.confirm(`Remove ${name} from your friends? You'll stop seeing each other's progress.`)) return;
-    const res = await FriendsService.remove(friendId);
+  const remove = (friendId: string, name: string) => setPendingRemove({ id: friendId, name });
+
+  const confirmRemove = async () => {
+    if (!pendingRemove) return;
+    setRemoving(true);
+    const res = await FriendsService.remove(pendingRemove.id);
+    setRemoving(false);
+    setPendingRemove(null);
     if (res.ok) void load();
     else setMessage({ tone: 'error', text: res.error });
   };
@@ -219,6 +227,17 @@ export const FriendsDialog: React.FC<{
           </section>
         </div>
       </DialogPanel>
+      <ConfirmDialog
+        isOpen={!!pendingRemove}
+        title={`Remove ${pendingRemove?.name ?? ''}?`}
+        confirmLabel="Remove friend"
+        tone="danger"
+        busy={removing}
+        onConfirm={() => void confirmRemove()}
+        onCancel={() => setPendingRemove(null)}
+      >
+        You'll stop seeing each other's progress. You can add each other again with your invite code.
+      </ConfirmDialog>
     </Dialog>
   );
 };

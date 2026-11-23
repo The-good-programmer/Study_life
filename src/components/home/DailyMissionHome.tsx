@@ -554,7 +554,7 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
               <button
                 type="button"
                 onClick={() => setShowScienceModal(true)}
-                className="inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-text hover:underline cursor-pointer"
+                className="-my-3 inline-flex min-h-11 items-center gap-1.5 text-[13px] font-medium text-brand-text hover:underline cursor-pointer"
               >
                 The research behind it
                 <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />

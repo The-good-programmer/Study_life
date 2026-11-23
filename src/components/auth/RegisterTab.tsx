@@ -144,16 +144,18 @@ export const RegisterTab: React.FC<RegisterTabProps> = ({
             <button
               type="button"
               onClick={() => setShowPassword(shown => !shown)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
               className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-ink-subtle transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer"
             >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
             </button>
           </div>
           {password && (
             <div className="w-full h-1 bg-surface-hover rounded-full overflow-hidden mt-1">
               <div
-                className={`h-full transition-all duration-300 ${strength.color.split(' ')[1]}`}
-                style={{ width: `${strength.percent}%` }}
+                className={`h-full w-full origin-left transition-[transform,background-color] duration-300 ${strength.color.split(' ')[1]}`}
+                style={{ transform: `scaleX(${strength.percent / 100})` }}
               />
             </div>
           )}
