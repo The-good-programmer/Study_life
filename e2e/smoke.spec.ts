@@ -66,7 +66,7 @@ test('photos of notes are written out into the notes box', async ({ page, reques
   const calls = await standInForAi(page, () => 'Cell membrane\n- Made of a lipid bilayer');
   await page.goto('/');
   await signIn(page, me.email);
-  await page.getByRole('button', { name: 'Library', exact: true }).first().click();
+  await page.getByRole('button', { name: /^Library\b/ }).first().click();
   await page.getByRole('tab', { name: 'Notes' }).click();
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAEklEQVR4nGP4z8CAB+GTG8HSALfKY52fTcuYAAAAAElFTkSuQmCC', 'base64');
   await page.locator('input[type=file][accept="image/*"]').setInputFiles({ name: 'notes.png', mimeType: 'image/png', buffer: png });

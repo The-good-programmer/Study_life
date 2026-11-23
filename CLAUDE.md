@@ -32,9 +32,13 @@ Node server (`server/`), shipped as a web app, a PWA and through Capacitor. The 
 
 ## Before opening a PR with UI changes
 
-- `npm run lint`, `npx tsc -b`, `npm test -- --exclude "server/**"`, `npm run build`.
-- Run the app (`npm run dev`) and look at the changed screens at 390px and desktop width, in both
-  themes. Check contrast and labels in the browser (axe-core), not only by reading code.
+- `npm run lint`, `npx tsc -b`, `npm test -- --exclude "server/**"` (includes the token contrast
+  test), `npm run build`.
+- `npm run e2e` (needs `npm ci` in `server/` once): includes the accessibility checks in
+  `e2e/design.spec.ts`. Add new screens or states there.
+- `npm run e2e:visual` and look at any image diffs; if the change is intended, update the snapshots
+  (`-- --update-snapshots`) and commit them.
+- Look at the changed screens yourself at 390px and desktop width, in both themes.
 - Say in the PR what was checked in the browser and what still needs a real phone.
 
 ## Roadmap

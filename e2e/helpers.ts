@@ -26,7 +26,7 @@ export async function newAccount(request: APIRequestContext, name: string) {
 
 /** Signs in through the sign-in dialog. */
 export async function signIn(page: Page, email: string) {
-  await page.getByRole('button', { name: 'Sign in or register' }).first().click();
+  await page.getByRole('button', { name: /^(Sign in or register|Guest Sign in to sync)$/ }).first().click();
   await page.locator('input[type=email]').first().fill(email);
   await page.locator('input[type=password]').first().fill(PASSWORD);
   await page.locator('form button[type=submit]').first().click();

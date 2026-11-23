@@ -1148,7 +1148,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
                     className="w-full sm:w-auto sm:px-8"
                   >
                     Show answer
-                    <kbd className="ml-1 hidden h-5 items-center rounded border border-white/25 bg-white/15 px-1.5 font-mono text-[10.5px] sm:inline-flex">Space</kbd>
+                    <kbd className="ml-1 hidden h-5 items-center rounded border border-white/25 bg-black/15 px-1.5 font-mono text-[10.5px] sm:inline-flex">Space</kbd>
                   </Button>
                   <span className="text-xs text-ink-subtle">Or tap the card. On a phone, swipe it.</span>
                 </div>

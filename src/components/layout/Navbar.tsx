@@ -366,14 +366,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             type="button"
             onClick={() => onOpenAuth?.(currentUser ? 'profile' : 'login')}
-            aria-label={currentUser ? `Account: ${currentUser.name}` : 'Log in'}
             title={currentUser ? `${currentUser.name} (${currentUser.email})` : 'Log in or create an account'}
             className="ml-0.5 flex h-9 items-center gap-2 rounded-full pl-0.5 pr-0.5 transition-colors hover:bg-surface-hover sm:pr-3 cursor-pointer"
           >
-            <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-brand-soft text-sm font-semibold text-brand-text">
+            <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-brand-soft text-sm font-semibold text-brand-text" aria-hidden="true">
               {currentUser ? currentUser.avatar || currentUser.name.charAt(0).toUpperCase() : 'G'}
             </span>
-            <span className="hidden max-w-[120px] truncate text-[13px] font-medium text-ink sm:inline">
+            {/* The visible text is the button's name (voice control says what it sees); on phones it
+                stays readable to screen readers while only the avatar shows. */}
+            <span className="sr-only max-w-[120px] truncate text-[13px] font-medium text-ink sm:not-sr-only sm:inline">
+              {currentUser && <span className="sr-only">Account: </span>}
               {currentUser ? currentUser.name.split(' ')[0] : 'Log in'}
             </span>
           </button>
