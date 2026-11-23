@@ -24,7 +24,6 @@ import { soundEngine } from '../../services/soundEngine';
 import { AIService } from '../../services/aiService';
 import { MathRenderer } from '../common/MathRenderer';
 import { gamepadService, type GamepadAction } from '../../services/gamepadService';
-import confetti from 'canvas-confetti';
 import { StudyHUD } from './StudyHUD';
 import { CardEditDialog } from './CardEditDialog';
 import { CardTutor } from './CardTutor';
@@ -244,15 +243,6 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
       haptics.success();
       setCombo(prev => {
         const nextCombo = prev + 1;
-        if (nextCombo === 3 || nextCombo === 5 || nextCombo === 10) {
-          confetti({
-            particleCount: 25,
-            spread: 55,
-            origin: { y: 0.8 },
-            disableForReducedMotion: true,
-            colors: ['#06b6d4', '#8b5cf6', '#ec4899', '#f59e0b']
-          });
-        }
         soundEngine.playComboChime(rating === 'easy' ? nextCombo + 1 : nextCombo);
         return nextCombo;
       });
@@ -372,15 +362,6 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
         const nextCombo = prev + 1;
         haptics.combo(nextCombo);
         soundEngine.playComboChime(nextCombo);
-        if (nextCombo === 3 || nextCombo === 5 || nextCombo === 10) {
-          confetti({
-            particleCount: 25,
-            spread: 55,
-            origin: { y: 0.8 },
-            disableForReducedMotion: true,
-            colors: ['#06b6d4', '#8b5cf6', '#ec4899', '#f59e0b']
-          });
-        }
         return nextCombo;
       });
     } else {

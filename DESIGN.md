@@ -104,6 +104,16 @@ Full reasoning in `plans/` (001–007).
 - Review session on phones: the main action lives in a bar fixed to the bottom, within thumb
   reach. "Show answer" first, then the four rating buttons in the same place. The content area
   reserves space for the bar (`pb-32` / `pb-36`).
+- Page headers show one primary action (plus at most one secondary). Other actions go in an
+  `ActionMenu` ("⋯"). Example: the Planner shows Add, Set up with AI, then ⋯ (Read a syllabus,
+  Add to calendar).
+- Order a page by urgency: what needs doing now comes first (Planner: overdue and due this week,
+  then exams, then the timetable, then the month).
+- On phones, long lists show the most relevant slice with a "Show the whole …" toggle (the
+  timetable shows the next day with lessons, then the whole week on request).
+- Empty states say what the area is for and offer the next step, with an `IconMedallion`
+  (Planner's "No exams yet" → Add an exam). A calm one-liner with an icon is enough where nothing
+  is needed ("Nothing due in the next seven days.").
 - Session screens are top-aligned (`justify-start`), never vertically centered: centered content
   jumps whenever its height changes, as on every answer reveal.
 - User text (questions, answers, titles) must wrap: card containers use `break-words`. The text
@@ -151,6 +161,13 @@ Owner decisions, newest last. Format: the rule, why, and a dated comment with th
   step. Not extra decoration or chrome.**
   Why: the owner finds some parts "empty and boring".
   <!-- 2026-11-23: "I feel like some parts are empty and boring" -->
+
+- **Confetti and other celebration effects play only when an activity ends (the session summary,
+  an exam result, a finished game), never during one. During a session, progress shows calmly:
+  the 🔥 streak counter, a sound, a vibration.**
+  Why: the owner chose to save confetti for the end. Mid-session bursts interrupt focus, and
+  studying stays calm (see Feel).
+  <!-- 2026-11-23: Q keep mid-session confetti at 3/5/10 in a row, or save it for the end? → "save confetti for the end" -->
 
 ## Spacing & layout
 

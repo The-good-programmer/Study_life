@@ -147,18 +147,26 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
       haptics.coin();
     }, 650);
 
+    // Confetti marks the end of a session (never during one). It gets its own canvas so the
+    // decoration is hidden from assistive technology, and the canvas goes when the burst ends.
+    const canvas = document.createElement('canvas');
+    canvas.setAttribute('aria-hidden', 'true');
+    canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:100';
+    document.body.appendChild(canvas);
+    const burst = confetti.create(canvas, { resize: true, disableForReducedMotion: true });
     try {
-      confetti({
-        particleCount: 100,
-        spread: 80,
-        origin: { y: 0.6 },
-        disableForReducedMotion: true,
-      });
+      const done = burst({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
+      if (done) void done.then(() => canvas.remove());
+      else canvas.remove();
     } catch {
-      // confetti fallback
+      canvas.remove();
     }
 
-    return () => clearTimeout(coinTimer);
+    return () => {
+      clearTimeout(coinTimer);
+      burst.reset();
+      canvas.remove();
+    };
   }, []);
 
   // Record the session and pay the study wage exactly once per finished pass. The claim
