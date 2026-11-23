@@ -114,7 +114,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
   const currentCardIdRef = useRef<string | undefined>(undefined);
   const [showScienceModal, setShowScienceModal] = useState(false);
 
-  // Dynamic Mascot & Combo Feedback State
+  // Combo feedback state
   const [combo, setCombo] = useState<number>(0);
   const [lastRating, setLastRating] = useState<FSRSRating | null>(null);
 

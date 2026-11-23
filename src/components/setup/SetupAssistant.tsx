@@ -1,5 +1,5 @@
 import React, { useId, useMemo, useRef, useState } from 'react';
-import { ArrowRight, CalendarDays, Camera, Check, Layers, Loader2, Plus, ScanText, Sparkles, X } from 'lucide-react';
+import { ArrowRight, CalendarDays, Camera, Check, CircleCheck, Layers, Loader2, Plus, ScanText, Sparkles, X } from 'lucide-react';
 import type { StudySession } from '../../types';
 import { AIService } from '../../services/aiService';
 import { KIND_LABELS } from '../../services/plannerService';
@@ -12,8 +12,7 @@ import { describeGenerationError } from '../ingestion/deckGenerator';
 import { cn } from '../../utils/cn';
 import { photoForAi } from '../../utils/photoForAi';
 import { Dialog, DialogFooter, DialogHeader, DialogPanel } from '../common/Dialog';
-import { Mascot } from '../mascot/Mascot';
-import { Button } from '../ui/primitives';
+import { Button, IconMedallion } from '../ui/primitives';
 import { INPUT_CLASS, formatDay } from '../planner/plannerUi';
 
 type Step = 'intro' | 'timetable' | 'exams' | 'subjects' | 'working' | 'done';
@@ -210,7 +209,7 @@ export const SetupAssistant: React.FC<{
           {step === 'intro' &&
             (aiReady ? (
               <div className="space-y-4">
-                <Mascot mood="wave" className="mx-auto h-24 w-28 text-ink" />
+                <IconMedallion icon={Sparkles} className="mx-auto" />
                 <ol className="space-y-2.5">
                   {[
                     [CalendarDays, 'Snap your timetable', 'Your lessons, every week, with a nudge after each one.'],
@@ -342,7 +341,7 @@ export const SetupAssistant: React.FC<{
 
           {(step === 'working' || step === 'done') && (
             <div className="space-y-4">
-              {step === 'done' && <Mascot mood="cheer" className="mx-auto h-24 w-28 text-ink" />}
+              {step === 'done' && <IconMedallion icon={CircleCheck} tone="success" className="mx-auto" />}
               {summary && (
                 <ul className="space-y-1.5 text-[14px] text-ink-muted">
                   {summary.lessons > 0 && <li className="flex items-center gap-2"><Check className="h-4 w-4 text-success" aria-hidden="true" />{summary.lessons} {summary.lessons === 1 ? 'lesson' : 'lessons'} in your timetable</li>}

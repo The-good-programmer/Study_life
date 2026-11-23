@@ -3,7 +3,6 @@ import { useNeedsSignInForAi } from '../../hooks/useAiAccess';
 import { AiUnavailableNotice } from '../common/AiUnavailableNotice';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { GuestDeck } from '../../services/guestDeck';
-import { Mascot } from '../mascot/Mascot';
 import { CommunityDecksPanel } from '../community/CommunityDecksPanel';
 import { 
   X,
@@ -51,7 +50,7 @@ import { CognitiveTourModal } from '../onboarding/CognitiveTourModal';
 import { DepthEstimationService, SUPPORTED_LANGUAGES } from '../../services/depthEstimationService';
 import { EducationProfileModal } from './EducationProfileModal';
 import { useDeckGeneration } from './useDeckGeneration';
-import { Badge, Button, IconButton, ProgressBar } from '../ui/primitives';
+import { Badge, Button, IconButton, IconMedallion, ProgressBar } from '../ui/primitives';
 import { ActionMenu } from '../ui/ActionMenu';
 import { EducationCatalog } from '../../services/educationCatalog';
 import { SubjectFolderModal } from '../studio/SubjectFolderModal';
@@ -837,7 +836,7 @@ export const IngestionHub: React.FC<IngestionHubProps> = ({
               {deckSearch || selectedFolderId !== 'all' ? (
                 <BookMarked className="mx-auto h-8 w-8 text-ink-subtle" aria-hidden="true" />
               ) : (
-                <Mascot mood="sleepy" className="mx-auto h-20 w-24 text-ink" />
+                <IconMedallion icon={Layers} className="mx-auto" />
               )}
               <p className="mt-3 text-[15px] font-medium text-ink">
                 {deckSearch
