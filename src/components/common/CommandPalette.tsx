@@ -222,8 +222,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   let lastGroup: Group | null = null;
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} ariaLabel="Search" className="max-w-xl" containerClassName="items-start! pt-[12dvh]!">
-      <DialogPanel className="max-h-[min(560px,76dvh)]">
+    <Dialog isOpen={isOpen} onClose={onClose} ariaLabel="Search" className="max-w-xl" containerClassName="items-start! pt-[12dvh]!" animated={false}>
+      <DialogPanel className="max-h-[min(560px,76dvh)]" animated={false}>
         <div className="flex shrink-0 items-center gap-3 border-b border-line px-4">
           <Search className="h-4 w-4 shrink-0 text-ink-subtle" aria-hidden="true" />
           <input

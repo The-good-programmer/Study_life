@@ -1,6 +1,6 @@
 # 004 — A swipe throws the card off in its direction, and quick flicks count
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: d249d9e
 - **Severity**: MEDIUM
 - **Category**: Physicality & interruptibility

@@ -1,6 +1,6 @@
 # 003 — Keep spinners and fades working when "reduce motion" is on
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: d249d9e
 - **Severity**: MEDIUM
 - **Category**: Accessibility

@@ -1,6 +1,6 @@
 # 002 — Open the search palette (⌘K) instantly
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: d249d9e
 - **Severity**: HIGH
 - **Category**: Purpose & frequency

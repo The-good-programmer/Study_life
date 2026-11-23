@@ -18,6 +18,8 @@ interface DialogProps {
   children: React.ReactNode;
   className?: string;
   containerClassName?: string;
+  /** Plays the fade-in entrance. Off for UI opened by a keyboard shortcut, which should appear instantly. */
+  animated?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export const Dialog: React.FC<DialogProps> = ({
   children,
   className = '',
   containerClassName = '',
+  animated = true,
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
@@ -112,7 +115,8 @@ export const Dialog: React.FC<DialogProps> = ({
   return (
     <div
       className={cn(
-        'fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm animate-fadeIn sm:p-6',
+        'fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-6',
+        animated && 'animate-fadeIn',
         containerClassName,
       )}
       onClick={(e) => {
@@ -136,11 +140,17 @@ export const Dialog: React.FC<DialogProps> = ({
   );
 };
 
+interface DialogPanelProps extends React.HTMLAttributes<HTMLDivElement> {
+  /** Plays the rise-in entrance. Off for UI opened by a keyboard shortcut, which should appear instantly. */
+  animated?: boolean;
+}
+
 /** The visible card of a dialog. Pair it with a scrolling body: `min-h-0 flex-1 overflow-y-auto`. */
-export const DialogPanel: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className, children, ...rest }) => (
+export const DialogPanel: React.FC<DialogPanelProps> = ({ className, children, animated = true, ...rest }) => (
   <div
     className={cn(
-      'flex min-h-0 w-full flex-col overflow-hidden rounded-[22px] border border-line-strong bg-surface-solid text-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.05),0_32px_80px_-28px_rgb(0_0_0/0.8)] animate-rise',
+      'flex min-h-0 w-full flex-col overflow-hidden rounded-[22px] border border-line-strong bg-surface-solid text-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.05),0_32px_80px_-28px_rgb(0_0_0/0.8)]',
+      animated && 'animate-rise',
       className,
     )}
     {...rest}

@@ -1,6 +1,6 @@
 # 005 — Slide the phone menu in from the left edge
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: d249d9e
 - **Severity**: MEDIUM
 - **Category**: Physicality & origin
