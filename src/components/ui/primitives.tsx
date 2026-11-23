@@ -135,6 +135,29 @@ export const IconButton: React.FC<IconButtonProps> = ({ icon: Icon, label, activ
   </button>
 );
 
+/**
+ * A calm icon in a soft tinted tile, used where an illustration would go: empty states and finished
+ * moments. Decorative (aria-hidden): the text beside it must say what it means.
+ */
+export const IconMedallion: React.FC<{
+  icon: LucideIcon;
+  tone?: 'brand' | 'success';
+  size?: 'md' | 'lg';
+  className?: string;
+}> = ({ icon: Icon, tone = 'brand', size = 'md', className }) => (
+  <span
+    className={cn(
+      'flex shrink-0 items-center justify-center',
+      size === 'lg' ? 'h-20 w-20 rounded-3xl' : 'h-14 w-14 rounded-2xl',
+      tone === 'success' ? 'bg-success-soft text-success' : 'bg-brand-soft text-brand-text',
+      className,
+    )}
+    aria-hidden="true"
+  >
+    <Icon className={size === 'lg' ? 'h-9 w-9' : 'h-6 w-6'} strokeWidth={1.75} />
+  </span>
+);
+
 /** A bordered content card on the canvas. */
 export const Card: React.FC<React.HTMLAttributes<HTMLDivElement> & { padded?: boolean }> = ({
   className,

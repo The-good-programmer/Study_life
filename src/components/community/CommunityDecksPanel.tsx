@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Flag, Heart, Link2, Plus, Trash2, UserRound } from 'lucide-react';
+import { Check, Copy, Flag, Heart, Link2, Plus, Trash2, UserRound, Users } from 'lucide-react';
 import type { StudySession } from '../../types';
 import { AuthService } from '../../services/authService';
 import { CommunityService, absoluteShareUrl, type MySharedDeck, type PublicDeckSummary } from '../../services/communityService';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Dialog, DialogFooter, DialogHeader, DialogPanel } from '../common/Dialog';
-import { Mascot } from '../mascot/Mascot';
 import { ActionMenu } from '../ui/ActionMenu';
-import { Badge, Button } from '../ui/primitives';
+import { Badge, Button, IconMedallion } from '../ui/primitives';
 
 const shareLinkOf = (slug: string) => absoluteShareUrl(`/?shared=${encodeURIComponent(slug)}`);
 
@@ -160,7 +159,7 @@ export const CommunityDecksPanel: React.FC<{
         <div className="rounded-2xl border border-dashed border-line-strong px-6 py-10 text-center text-[13px] text-ink-muted">{error}</div>
       ) : decks.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line-strong px-6 py-10 text-center">
-          <Mascot mood="sleepy" className="mx-auto h-20 w-24 text-ink" />
+          <IconMedallion icon={Users} className="mx-auto" />
           <p className="mt-3 text-[15px] font-medium text-ink">{query ? 'No shared decks match your search' : 'No shared decks yet'}</p>
           <p className="mx-auto mt-1 max-w-sm text-[13px] text-ink-subtle">
             Be the first: open one of your decks and press Share.

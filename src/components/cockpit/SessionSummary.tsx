@@ -13,18 +13,18 @@ import {
   Share2,
   Flame,
   CalendarClock,
+  Trophy,
 } from 'lucide-react';
 import type { StudySession, ConceptCheckpoint } from '../../types';
 import { StorageService } from '../../services/storageService';
 import { soundEngine } from '../../services/soundEngine';
 import { ExportService } from '../../services/exportService';
-import { Mascot } from '../mascot/Mascot';
 import { SynapticFlexModal } from '../mascot/SynapticFlexModal';
 import { lifeSimService } from '../../services/lifeSimService';
 import { grantReward } from '../../services/economy/rewardService';
 import { payableMinutes } from '../../services/economy/rewardRules';
 import { haptics } from '../../services/hapticsService';
-import { Button, Card, CoinIcon } from '../ui/primitives';
+import { Button, Card, CoinIcon, IconMedallion } from '../ui/primitives';
 import { groupNextReviews } from './sessionSchedule';
 import { completionKey, estimatedMinutesOf, ratedInPass } from './sessionPass';
 import type { ReviewGroup } from './sessionSchedule';
@@ -223,7 +223,7 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
       {/* The moment worth a screenshot: what was done, the streak, and when the cards come back. */}
       <header className="relative overflow-hidden rounded-3xl border border-brand/25 bg-gradient-to-b from-brand-soft to-surface-solid px-5 pb-6 pt-7 text-center sm:px-8 animate-rise">
         <div className="pointer-events-none absolute -top-24 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-brand/25 blur-3xl" aria-hidden="true" />
-        <Mascot mood="cheer" className="relative mx-auto h-28 w-32 text-ink" />
+        <IconMedallion icon={Trophy} size="lg" className="relative mx-auto" />
         <h1 className="relative mt-3 text-[28px] font-semibold tracking-tight text-ink sm:text-[32px]">{headline}</h1>
         <p className="relative mx-auto mt-1 max-w-md text-[15px] text-ink-muted">
           {rated > 0 ? `${rated} ${rated === 1 ? 'card' : 'cards'} in ${minutes} min · ` : ''}

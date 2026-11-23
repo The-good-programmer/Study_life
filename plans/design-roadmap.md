@@ -24,13 +24,13 @@ The phases below fix these in order of value. Phase 1 makes every later phase be
 
 ---
 
-## Phase 1: Give Claude a memory of the design
+## Phase 1: Give Claude a memory of the design ✅ Done
 
 | # | Deliverable | What it contains | Who |
 |---|---|---|---|
-| 1.1 | `PRODUCT.md` | Who Studify is for (age, school level, countries), what they're trying to do, the feeling the app should give (calm? playful? serious?), words to use and avoid. | **Done**: written from your answers. |
-| 1.2 | `DESIGN.md` | The design system as it exists: color tokens and their contrast rules, type scale (Geist), spacing, radii, shadows, motion tokens (`--motion-ease-out`, durations), component primitives (`Button`, `Dialog`, `Badge`...), light and dark theme rules, and a **decisions log** (for example: "no animation on keyboard-driven actions", "hover effects only on mouse devices"). | Claude, from the code. |
-| 1.3 | `CLAUDE.md` | Rules every session loads automatically: read `PRODUCT.md` and `DESIGN.md` before UI work; use tokens, never raw colors; check both themes, at 390px and desktop width; run the design checks before a PR; which skill to use for which job. | Claude. |
+| 1.1 ✅ | `PRODUCT.md` | Who Studify is for (age, school level, countries), what they're trying to do, the feeling the app should give (calm? playful? serious?), words to use and avoid. | **Done**: written from your answers. |
+| 1.2 ✅ | `DESIGN.md` | The design system as it exists: color tokens and their contrast rules, type scale (Geist), spacing, radii, shadows, motion tokens (`--motion-ease-out`, durations), component primitives (`Button`, `Dialog`, `Badge`...), light and dark theme rules, and a **decisions log** (for example: "no animation on keyboard-driven actions", "hover effects only on mouse devices"). | Claude, from the code. |
+| 1.3 ✅ | `CLAUDE.md` | Rules every session loads automatically: read `PRODUCT.md` and `DESIGN.md` before UI work; use tokens, never raw colors; check both themes, at 390px and desktop width; run the design checks before a PR; which skill to use for which job. | Claude. |
 
 **The 6 questions for 1.1** (short answers are fine):
 
@@ -52,7 +52,7 @@ straight in.
 | 2.2 | Token contrast test (Vitest) | Reads the color tokens in `src/index.css` and checks every text and background pairing reaches 4.5:1 in both themes. A token edit that breaks readability fails before any screen is drawn. |
 | 2.3 | Visual snapshots | Playwright screenshots of key screens in both themes. An unintended visual change shows up as an image diff in the pull request, and Claude can look at the diff to judge it. |
 
-## Phase 3: Add the right skills (and only those)
+## Phase 3: Add the right skills (and only those) ✅ Done
 
 From [emilkowalski/skills](https://github.com/emilkowalski/skills), the same source as `improve-animations`:
 
@@ -88,7 +88,7 @@ Each screen gets three passes, then one pull request: **Impeccable critique** (h
 typography, layout, clarity), **web-design-guidelines** (accessibility and UX rules) and
 **break-ui** (worst-case data). Suggested order, starting with what students use most:
 
-1. Review session, in depth: every card type, hints, the tutor, the summary.
+1. Review session, in depth: every card type, hints, the tutor, the summary. Known: the confetti `<canvas>` on the summary sits outside any landmark; it should be `aria-hidden`.
 2. Planner and timetable.
 3. Focus fullscreen and the timer.
 4. Exam simulator.
@@ -107,9 +107,9 @@ screens start from a higher bar.
 
 | Order | Work | Your part | Rough size |
 |---|---|---|---|
-| 1 | Phase 3: install skills | Merge the PR | small |
-| 2 | Phase 1.2 + 1.3: `DESIGN.md` and `CLAUDE.md` | Merge the PR | medium |
-| 3 | Phase 1.1: `PRODUCT.md` | Answer the 6 questions | small |
+| 1 ✅ | Phase 3: install skills | Merge the PR | small |
+| 2 ✅ | Phase 1.2 + 1.3: `DESIGN.md` and `CLAUDE.md` | Merge the PR | medium |
+| 3 ✅ | Phase 1.1: `PRODUCT.md` | Answer the 6 questions | small |
 | 4 | Phase 2: automatic checks | Merge the PR | medium |
 | 5 | Phase 5: screen reviews | Merge one PR per screen; phone check | 1 session per screen |
 | — | Phase 4 | Say what you like and dislike, whenever | ongoing |

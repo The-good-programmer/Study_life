@@ -32,7 +32,6 @@ import type { StudySession, UserStats, SubjectFolder, UserAccount } from '../../
 import type { DailyLedger } from '../../types/lifeSim';
 import { StorageService } from '../../services/storageService';
 import { PlannerService } from '../../services/plannerService';
-import { Mascot } from '../mascot/Mascot';
 import { AfterClassCard } from '../timetable/AfterClassCard';
 import { SetupOfferCard } from '../setup/SetupOfferCard';
 import { AuthService } from '../../services/authService';
@@ -459,10 +458,6 @@ export const DailyMissionHome: React.FC<DailyMissionHomeProps> = ({
                   </div>
                 )}
               </div>
-
-              {!hasDecks && (
-                <Mascot mood="wave" className="hidden h-36 w-40 shrink-0 self-start text-ink lg:block" />
-              )}
 
               {hasDecks && (
                 <div className="space-y-1.5 sm:hidden">

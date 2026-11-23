@@ -60,8 +60,6 @@
      students rate dozens of cards a session, mostly from the keyboard. "backwards" fill only, for
      the same reason as fadeIn below. */
   --animate-card-deal: card-deal 180ms var(--motion-ease-out) backwards;
-  --animate-mascot-bob: mascot-bob 3.2s ease-in-out infinite;
-  --animate-mascot-wave: mascot-wave 1.4s ease-in-out infinite;
   --animate-answer-unfold: answer-unfold 200ms var(--motion-ease-out) backwards;
   /* The phone navigation drawer slides in from the edge it is attached to. */
   --animate-drawer-in: drawer-in 300ms var(--motion-ease-drawer) backwards;
@@ -76,15 +74,6 @@
     to { opacity: 1; transform: none; }
   }
 
-  @keyframes mascot-bob {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-4px); }
-  }
-
-  @keyframes mascot-wave {
-    0%, 100% { transform: rotate(0); }
-    50% { transform: rotate(-18deg); }
-  }
 
   @keyframes card-deal {
     from { opacity: 0; transform: translateY(6px) scale(0.99); } /* no sideways shift: a phone would scroll */

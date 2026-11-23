@@ -6,11 +6,8 @@
  * Run at build time by the `publicPages` plugin in vite.config.ts. Pure functions of the deck data,
  * so they are unit-tested (buildPublicPages.test.ts).
  */
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import type { RetrievalCard, StarterDeckMetadata } from '../types';
 import { CURATED_STARTER_DECKS } from '../data/curatedStarterCatalog';
-import { Mascot } from '../components/mascot/Mascot';
 
 /** A deck a student shared that qualifies for a page (server: GET /api/decks/public-pages). */
 export interface CommunityDeck {
@@ -76,8 +73,7 @@ ol.cards li{background:var(--card);border:1px solid var(--line);border-radius:16
 .q{font-weight:600;margin:0}.a{margin:6px 0 0;color:var(--muted)}.a b{color:var(--success);font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin-right:6px}
 .panel{margin:44px 0;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px;display:flex;flex-wrap:wrap;gap:16px 24px;align-items:center;justify-content:space-between}
 .panel p{margin:4px 0 0;color:var(--muted)}
-.hero{display:grid;gap:8px 32px;align-items:center;padding:40px 0 8px}@media(min-width:720px){.hero{grid-template-columns:1fr 200px}}
-.hero svg{width:200px;height:170px;justify-self:center}
+.hero{display:grid;gap:8px 32px;align-items:center;padding:40px 0 8px}
 .steps{display:grid;gap:10px;margin:0;padding:0;list-style:none}@media(min-width:640px){.steps{grid-template-columns:repeat(3,1fr)}}
 .steps li{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}.steps b{display:block}.steps span{color:var(--muted);font-size:14px}
 .decks{display:grid;gap:10px;margin:0;padding:0;list-style:none}@media(min-width:640px){.decks{grid-template-columns:repeat(2,1fr)}}
@@ -238,7 +234,6 @@ export function hubPage(allDecks: StarterDeckMetadata[], siteUrl: string, commun
   // Gentlest first, as in the app: a board-exam deck shouldn't be the first thing a school student sees.
   const decks = [...allDecks].sort((a, b) => GENTLENESS[a.difficulty] - GENTLENESS[b.difficulty]);
   const url = new URL('/decks/', siteUrl).href;
-  const mascot = renderToStaticMarkup(createElement(Mascot, { mood: 'wave', bob: false }));
   const categories = [...new Set(decks.map(deck => deck.category))];
   const body = `
 <section class="hero">
@@ -247,7 +242,6 @@ export function hubPage(allDecks: StarterDeckMetadata[], siteUrl: string, commun
 <p class="lead">Free flashcards that quiz you and bring each card back just before you would forget it. Pick a deck below, or type any topic and get your own deck in a minute.</p>
 <div class="cta"><a class="btn" href="/">Start studying free</a><small>No account needed for your first deck.</small></div>
 </div>
-${mascot}
 </section>
 <h2>How it works</h2>
 <ol class="steps">

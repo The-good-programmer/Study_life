@@ -55,10 +55,9 @@ On phones, prefer **big and simple** over dense:
 - Fewer items per row; larger type for what matters most.
 - Push secondary information down or behind a tap rather than shrinking everything.
 
-## Open decisions
+## Decisions
 
-- **Axo, the 2D axolotl mascot**, still appears in 5 places: Today (`DailyMissionHome.tsx`), the
-  empty Library (`IngestionHub.tsx`), the session summary (`SessionSummary.tsx`), community decks
-  (`CommunityDecksPanel.tsx`) and the set-up assistant (`SetupAssistant.tsx`). The 3D axolotl world
-  is already off (`VITE_ENABLE_3D_WORLD`). The owner thought the axolotl had been removed: decide
-  whether Axo stays, is replaced, or goes.
+- **No mascot.** Axo the 2D axolotl was removed on 2026-11-23 at the owner's request. Its spots
+  (empty states, the session summary, the set-up assistant) now use `IconMedallion`, and the public
+  deck pages no longer show it. The 3D axolotl world stays switched off (`VITE_ENABLE_3D_WORLD`).
+  See the rule in `DESIGN.md`.
