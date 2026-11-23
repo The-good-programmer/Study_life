@@ -28,7 +28,7 @@ The phases below fix these in order of value. Phase 1 makes every later phase be
 
 | # | Deliverable | What it contains | Who |
 |---|---|---|---|
-| 1.1 | `PRODUCT.md` | Who Studify is for (age, school level, countries), what they're trying to do, the feeling the app should give (calm? playful? serious?), words to use and avoid. | **You answer 6 short questions** (below); Claude writes it. |
+| 1.1 | `PRODUCT.md` | Who Studify is for (age, school level, countries), what they're trying to do, the feeling the app should give (calm? playful? serious?), words to use and avoid. | **Done**: written from your answers. |
 | 1.2 | `DESIGN.md` | The design system as it exists: color tokens and their contrast rules, type scale (Geist), spacing, radii, shadows, motion tokens (`--motion-ease-out`, durations), component primitives (`Button`, `Dialog`, `Badge`...), light and dark theme rules, and a **decisions log** (for example: "no animation on keyboard-driven actions", "hover effects only on mouse devices"). | Claude, from the code. |
 | 1.3 | `CLAUDE.md` | Rules every session loads automatically: read `PRODUCT.md` and `DESIGN.md` before UI work; use tokens, never raw colors; check both themes, at 390px and desktop width; run the design checks before a PR; which skill to use for which job. | Claude. |
 
