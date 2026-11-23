@@ -3,6 +3,7 @@ import { Check, Copy, Flag, Heart, Link2, Plus, Trash2, UserRound } from 'lucide
 import type { StudySession } from '../../types';
 import { AuthService } from '../../services/authService';
 import { CommunityService, absoluteShareUrl, type MySharedDeck, type PublicDeckSummary } from '../../services/communityService';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { Dialog, DialogFooter, DialogHeader, DialogPanel } from '../common/Dialog';
 import { Mascot } from '../mascot/Mascot';
 import { ActionMenu } from '../ui/ActionMenu';
@@ -33,6 +34,8 @@ export const CommunityDecksPanel: React.FC<{
   const [added, setAdded] = useState<Record<string, StudySession>>({});
   const [busySlug, setBusySlug] = useState<string | null>(null);
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
+  const [pendingUnshare, setPendingUnshare] = useState<MySharedDeck | null>(null);
+  const [unsharing, setUnsharing] = useState(false);
   const [reporting, setReporting] = useState<PublicDeckSummary | null>(() =>
     reportSlug && signedIn ? { slug: reportSlug, title: 'A shared deck', id: reportSlug, author_name: '', subject: '', description: '', card_count: 0, likes: 0, created_at: '' } : null,
   );
@@ -97,9 +100,15 @@ export const CommunityDecksPanel: React.FC<{
     }
   };
 
-  const unshare = async (deck: MySharedDeck) => {
-    if (!window.confirm(`Unshare "${deck.title}"? The link stops working, and copies others already added stay theirs.`)) return;
+  const unshare = (deck: MySharedDeck) => setPendingUnshare(deck);
+
+  const confirmUnshare = async () => {
+    if (!pendingUnshare) return;
+    const deck = pendingUnshare;
+    setUnsharing(true);
     const result = await CommunityService.unshareDeck(deck.slug);
+    setUnsharing(false);
+    setPendingUnshare(null);
     if (result.success) {
       setMine(prev => prev.filter(d => d.slug !== deck.slug));
       setDecks(prev => prev?.filter(d => d.slug !== deck.slug) ?? prev);
@@ -221,6 +230,17 @@ export const CommunityDecksPanel: React.FC<{
           }}
         />
       )}
+      <ConfirmDialog
+        isOpen={!!pendingUnshare}
+        title={`Unshare "${pendingUnshare?.title ?? ''}"?`}
+        confirmLabel="Unshare deck"
+        tone="danger"
+        busy={unsharing}
+        onConfirm={() => void confirmUnshare()}
+        onCancel={() => setPendingUnshare(null)}
+      >
+        The link stops working. Copies others already added stay theirs.
+      </ConfirmDialog>
     </div>
   );
 };

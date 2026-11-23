@@ -90,7 +90,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ user, canSwitchAccount, 
 
         <button
           onClick={onEdit}
-          className="p-2 rounded-xl bg-surface hover:bg-surface-hover border border-line text-ink-muted hover:text-ink transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+          className="p-2 rounded-xl bg-surface hover:bg-surface-hover border border-line text-ink-muted hover:text-ink transition-colors text-xs flex items-center gap-1.5 cursor-pointer"
           title="Edit Profile"
         >
           <Edit3 className="w-3.5 h-3.5" />
@@ -142,7 +142,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ user, canSwitchAccount, 
       <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
         <button
           onClick={onLogout}
-          className="flex-1 py-2.5 px-4 rounded-xl bg-canvas hover:bg-surface-hover border border-line-strong text-ink-muted hover:text-ink font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+          className="flex-1 py-2.5 px-4 rounded-xl bg-canvas hover:bg-surface-hover border border-line-strong text-ink-muted hover:text-ink font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
         >
           <LogOut className="w-3.5 h-3.5 text-ink-subtle" />
           <span>Log out</span>
@@ -151,7 +151,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ user, canSwitchAccount, 
         {canSwitchAccount && (
           <button
             onClick={onSwitch}
-            className="flex-1 py-2.5 px-4 rounded-xl bg-brand-soft hover:bg-brand-soft border border-brand/40 text-brand-text font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+            className="flex-1 py-2.5 px-4 rounded-xl bg-brand-soft hover:bg-brand-soft border border-brand/40 text-brand-text font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Switch account</span>

@@ -131,9 +131,11 @@ export const LoginTab: React.FC<LoginTabProps> = ({
             <button
               type="button"
               onClick={() => setShowPassword(shown => !shown)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
               className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-ink-subtle transition-colors hover:bg-surface-hover hover:text-ink cursor-pointer"
             >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
             </button>
           </div>
         </div>
@@ -149,7 +151,7 @@ export const LoginTab: React.FC<LoginTabProps> = ({
                   key={acc.id}
                   type="button"
                   onClick={() => pickAccount(acc)}
-                  className="text-left p-2.5 rounded-xl bg-surface hover:bg-surface-hover border border-line flex items-center gap-2.5 transition-all cursor-pointer"
+                  className="text-left p-2.5 rounded-xl bg-surface hover:bg-surface-hover border border-line flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <AccountAvatar
                     pictureUrl={acc.pictureUrl}

@@ -180,6 +180,14 @@
   html {
     background-color: var(--canvas);
     -webkit-text-size-adjust: 100%;
+    /* A faint brand tint instead of the browser's grey flash: most buttons have no pressed
+       style of their own, so taps still need some feedback. */
+    -webkit-tap-highlight-color: var(--brand-soft);
+  }
+
+  /* No double-tap-to-zoom wait on controls. Pinch zoom still works. */
+  a, button, input, label, select, summary, textarea, [role="button"] {
+    touch-action: manipulation;
   }
 
   body {
@@ -199,6 +207,8 @@
   h1, h2, h3, h4 {
     font-family: var(--font-display);
     letter-spacing: -0.02em;
+    /* Even line lengths, so a heading never ends on one stranded word. */
+    text-wrap: balance;
   }
 
   ::selection {

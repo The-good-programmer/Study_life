@@ -111,7 +111,7 @@ export const EditProfileTab: React.FC<EditProfileTabProps> = ({ user, onCancel, 
 
           <button
             type="submit"
-            className="py-2.5 px-5 rounded-xl bg-brand hover:bg-brand-hover text-brand-ink font-semibold text-xs shadow-md transition-all cursor-pointer"
+            className="py-2.5 px-5 rounded-xl bg-brand hover:bg-brand-hover text-brand-ink font-semibold text-xs shadow-md transition-colors cursor-pointer"
           >
             Save changes
           </button>
