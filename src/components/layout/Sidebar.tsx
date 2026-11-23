@@ -485,7 +485,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {isOpenMobile && (
         <div className="fixed inset-0 z-50 flex md:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onCloseMobile} />
-          <aside className="relative z-10 flex h-full w-72 max-w-[85vw] flex-col border-r border-line bg-canvas-raised px-3 py-3 shadow-2xl animate-fadeIn">
+          <aside className="relative z-10 flex h-full w-72 max-w-[85vw] flex-col border-r border-line bg-canvas-raised px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-2xl animate-fadeIn">
             {renderNavContent(false, true)}
           </aside>
         </div>

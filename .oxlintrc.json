@@ -15,6 +15,7 @@
     ]
   },
   "ignorePatterns": [
-    "public/basis/**"
+    "public/basis/**",
+    ".claude/skills/**"
   ]
 }

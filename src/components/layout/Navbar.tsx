@@ -172,7 +172,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <>
-      <header className="sticky top-0 z-30 w-full border-b border-line bg-canvas/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-30 w-full pt-[env(safe-area-inset-top)] border-b border-line bg-canvas/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-1.5 px-3 sm:gap-2 sm:px-6">
           {onToggleMobileSidebar && (
             <div className="flex md:hidden">
