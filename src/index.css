@@ -56,13 +56,15 @@
   --animate-fadeIn: fadeIn 0.24s ease-out;
   --animate-shake: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
   --animate-rise: rise 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
-  /* Review cards: each one is dealt in from the stack, turns when its answer shows, and the answer
-     folds open. "backwards" fill only, for the same reason as fadeIn below. */
-  --animate-card-deal: card-deal 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
-  --animate-card-turn: card-turn 0.42s cubic-bezier(0.3, 0.7, 0.3, 1);
+  /* Review cards: each one is dealt in from the stack and the answer folds open, kept short because
+     students rate dozens of cards a session, mostly from the keyboard. "backwards" fill only, for
+     the same reason as fadeIn below. */
+  --animate-card-deal: card-deal 180ms var(--motion-ease-out) backwards;
   --animate-mascot-bob: mascot-bob 3.2s ease-in-out infinite;
   --animate-mascot-wave: mascot-wave 1.4s ease-in-out infinite;
-  --animate-answer-unfold: answer-unfold 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  --animate-answer-unfold: answer-unfold 200ms var(--motion-ease-out) backwards;
+  /* The phone navigation drawer slides in from the edge it is attached to. */
+  --animate-drawer-in: drawer-in 300ms var(--motion-ease-drawer) backwards;
 
   @keyframes fadeIn {
     from { opacity: 0; }
@@ -85,18 +87,12 @@
   }
 
   @keyframes card-deal {
-    from { opacity: 0; transform: translateY(14px) rotate(1deg) scale(0.97); } /* no sideways shift: a phone would scroll */
+    from { opacity: 0; transform: translateY(6px) scale(0.99); } /* no sideways shift: a phone would scroll */
     to { opacity: 1; transform: none; }
   }
 
-  @keyframes card-turn {
-    0% { transform: perspective(1200px) rotateY(0); }
-    45% { transform: perspective(1200px) rotateY(-7deg) scale(1.01); }
-    100% { transform: perspective(1200px) rotateY(0); }
-  }
-
   @keyframes answer-unfold {
-    from { opacity: 0; transform: perspective(900px) rotateX(-14deg) translateY(-6px); transform-origin: top; }
+    from { opacity: 0; transform: translateY(-4px); }
     to { opacity: 1; transform: none; }
   }
 
@@ -105,6 +101,11 @@
     20%, 80% { transform: translateX(2px); }
     30%, 50%, 70% { transform: translateX(-3px); }
     40%, 60% { transform: translateX(3px); }
+  }
+
+  @keyframes drawer-in {
+    from { transform: translateX(-100%); }
+    to { transform: none; }
   }
 }
 
@@ -142,6 +143,9 @@
     color-scheme: dark;
     --canvas: #0a0a0f;
     --canvas-raised: #0e0e14;
+    /* Motion: a strong ease-out for things entering, and an iOS-like curve for drawers. */
+    --motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --motion-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
     --surface: rgb(255 255 255 / 0.03);
     --surface-hover: rgb(255 255 255 / 0.055);
     --surface-solid: #141419;
@@ -418,18 +422,12 @@
 }
 
 @keyframes slideUp {
-  0% {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-  100% {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
 
 .animate-slideUp {
-  animation: slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: slideUp 180ms var(--motion-ease-out) backwards;
 }
 
 .animate-shimmer {
@@ -616,7 +614,7 @@
   }
 }
 
-/* Accessibility: Prefers reduced motion */
+/* Accessibility: Prefers reduced motion. Movement goes; fades and loading feedback stay. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -626,4 +624,19 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* Opacity-only fades involve no movement and show that something changed. */
+  .animate-fadeIn {
+    animation-duration: 0.2s !important;
+  }
+
+  /* A spinner that stops looks like a hang, so loading indicators pulse instead of rotating. */
+  .animate-spin {
+    animation: reduced-motion-pulse 1.6s ease-in-out infinite !important;
+  }
+}
+
+@keyframes reduced-motion-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }

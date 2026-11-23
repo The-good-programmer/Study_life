@@ -1,6 +1,6 @@
 # 001 — Make the review-card motion quick enough for keyboard reviewing
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: d249d9e
 - **Severity**: HIGH
 - **Category**: Purpose & frequency (with Easing & duration)

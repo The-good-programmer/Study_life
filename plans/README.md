@@ -6,11 +6,11 @@ check the result by eye. Any agent can execute one without other context.
 
 | # | Plan | Severity | Status |
 |---|---|---|---|
-| 001 | [Make the review-card motion quick enough for keyboard reviewing](001-quicker-review-card-motion.md) | HIGH | TODO |
-| 002 | [Open the search palette (⌘K) instantly](002-instant-command-palette.md) | HIGH | TODO |
-| 003 | [Keep spinners and fades working when "reduce motion" is on](003-reduced-motion-keeps-feedback.md) | MEDIUM | TODO |
-| 004 | [A swipe throws the card off in its direction, and quick flicks count](004-swipe-throws-the-card.md) | MEDIUM | TODO |
-| 005 | [Slide the phone menu in from the left edge](005-mobile-drawer-slides-in.md) | MEDIUM | TODO |
+| 001 | [Make the review-card motion quick enough for keyboard reviewing](001-quicker-review-card-motion.md) | HIGH | DONE |
+| 002 | [Open the search palette (⌘K) instantly](002-instant-command-palette.md) | HIGH | DONE |
+| 003 | [Keep spinners and fades working when "reduce motion" is on](003-reduced-motion-keeps-feedback.md) | MEDIUM | DONE |
+| 004 | [A swipe throws the card off in its direction, and quick flicks count](004-swipe-throws-the-card.md) | MEDIUM | DONE |
+| 005 | [Slide the phone menu in from the left edge](005-mobile-drawer-slides-in.md) | MEDIUM | DONE |
 
 ## Execution order
 

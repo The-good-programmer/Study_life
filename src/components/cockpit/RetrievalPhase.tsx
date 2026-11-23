@@ -108,6 +108,10 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
   const mouseStartX = useRef<number | null>(null);
   const mouseStartY = useRef<number | null>(null);
   const isMouseDown = useRef<boolean>(false);
+  const swipeStartTime = useRef(0);
+  const [flyOut, setFlyOut] = useState<{ x: number; y: number } | null>(null);
+  // The card on screen, read by the delayed rating of a swipe throw.
+  const currentCardIdRef = useRef<string | undefined>(undefined);
   const [showScienceModal, setShowScienceModal] = useState(false);
 
   // Dynamic Mascot & Combo Feedback State
@@ -155,6 +159,9 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     setCurrentIndex(0);
   }
   const currentCard = queue[currentIndex];
+  useEffect(() => {
+    currentCardIdRef.current = currentCard?.id;
+  });
   const [misconception, setMisconception] = useState<DiagnosticDistractor | null>(null);
   const [hintLevel, setHintLevel] = useState<number>(0);
 
@@ -510,10 +517,50 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
   }, [activeTab, currentCard, isAnswerRevealed, handleRate, handleRevealAnswer]);
 
   // Live Tactile Gestures (Swipe Left: Again, Right: Good, Up: Easy, Down: Hard)
+  // A horizontal swipe counts past 60px or as a quick flick (24px+ faster than 0.11px/ms).
+  // Vertical swipes need 60px, since fast vertical movement is usually the page scrolling.
+  // A rating throws the card off in the swipe's direction, then rates it.
+  const finishSwipe = (deltaX: number, deltaY: number, showFeedback: boolean) => {
+    if (flyOut) return;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+    const horizontal = absX > absY;
+    const elapsed = Math.max(1, performance.now() - swipeStartTime.current);
+    const isSwipe = horizontal ? absX > 60 || (absX >= 24 && absX / elapsed > 0.11) : absY > 60;
+    if (!isSwipe) return;
+
+    const rating: FSRSRating = horizontal ? (deltaX > 0 ? 'good' : 'again') : deltaY < 0 ? 'easy' : 'hard';
+    if (showFeedback) {
+      const label = { good: 'Swipe Right: Good', again: 'Swipe Left: Again', easy: 'Swipe Up: Easy', hard: 'Swipe Down: Hard' }[rating];
+      setTouchFeedback(label);
+      setTimeout(() => setTouchFeedback(null), 1000);
+    }
+
+    if (!isAnswerRevealed) {
+      handleRevealAnswer();
+      return;
+    }
+    if (!currentCard || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      handleRate(rating);
+      return;
+    }
+    const ratedCardId = currentCard.id;
+    setFlyOut(
+      horizontal
+        ? { x: Math.sign(deltaX) * window.innerWidth, y: deltaY }
+        : { x: deltaX, y: Math.sign(deltaY) * window.innerHeight },
+    );
+    setTimeout(() => {
+      if (currentCardIdRef.current === ratedCardId) handleRate(rating);
+      setFlyOut(null);
+    }, 200);
+  };
+
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches && e.touches.length > 0) {
       touchStartX.current = e.touches[0].clientX;
       touchStartY.current = e.touches[0].clientY;
+      swipeStartTime.current = performance.now();
       setIsSwipingActive(true);
     }
   };
@@ -544,36 +591,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     const deltaX = clientX - touchStartX.current;
     const deltaY = clientY - touchStartY.current;
 
-    const absX = Math.abs(deltaX);
-    const absY = Math.abs(deltaY);
-
-    if (absX > 60 && absX > absY) {
-      // Horizontal swipe
-      if (deltaX > 0) {
-        setTouchFeedback('Swipe Right: Good');
-        setTimeout(() => setTouchFeedback(null), 1000);
-        if (isAnswerRevealed) handleRate('good');
-        else handleRevealAnswer();
-      } else {
-        setTouchFeedback('Swipe Left: Again');
-        setTimeout(() => setTouchFeedback(null), 1000);
-        if (isAnswerRevealed) handleRate('again');
-        else handleRevealAnswer();
-      }
-    } else if (absY > 60 && absY > absX) {
-      // Vertical swipe
-      if (deltaY < 0) {
-        setTouchFeedback('Swipe Up: Easy');
-        setTimeout(() => setTouchFeedback(null), 1000);
-        if (isAnswerRevealed) handleRate('easy');
-        else handleRevealAnswer();
-      } else {
-        setTouchFeedback('Swipe Down: Hard');
-        setTimeout(() => setTouchFeedback(null), 1000);
-        if (isAnswerRevealed) handleRate('hard');
-        else handleRevealAnswer();
-      }
-    }
+    finishSwipe(deltaX, deltaY, true);
 
     touchStartX.current = null;
     touchStartY.current = null;
@@ -589,6 +607,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
     }
     mouseStartX.current = e.clientX;
     mouseStartY.current = e.clientY;
+    swipeStartTime.current = performance.now();
     isMouseDown.current = true;
   };
 
@@ -604,27 +623,7 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
 
   const handleMouseUp = () => {
     if (!isMouseDown.current) return;
-    if (touchOffset) {
-      const absX = Math.abs(touchOffset.x);
-      const absY = Math.abs(touchOffset.y);
-      if (absX > 60 && absX > absY) {
-        if (touchOffset.x > 0) {
-          if (isAnswerRevealed) handleRate('good');
-          else handleRevealAnswer();
-        } else {
-          if (isAnswerRevealed) handleRate('again');
-          else handleRevealAnswer();
-        }
-      } else if (absY > 60 && absY > absX) {
-        if (touchOffset.y < 0) {
-          if (isAnswerRevealed) handleRate('easy');
-          else handleRevealAnswer();
-        } else {
-          if (isAnswerRevealed) handleRate('hard');
-          else handleRevealAnswer();
-        }
-      }
-    }
+    if (touchOffset) finishSwipe(touchOffset.x, touchOffset.y, false);
     isMouseDown.current = false;
     mouseStartX.current = null;
     mouseStartY.current = null;
@@ -838,13 +837,19 @@ export const RetrievalPhase: React.FC<RetrievalPhaseProps> = ({
               onMouseLeave={handleMouseUp}
               style={{
                 touchAction: 'pan-y',
-                transform: touchOffset
-                  ? `translate3d(${touchOffset.x}px, ${touchOffset.y * 0.4}px, 0) rotate(${touchOffset.x * 0.05}deg)`
-                  : undefined,
-                transition: touchOffset ? 'none' : 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.2s ease',
+                transform: flyOut
+                  ? `translate3d(${flyOut.x}px, ${flyOut.y}px, 0) rotate(${Math.max(-12, Math.min(12, flyOut.x * 0.03))}deg)`
+                  : touchOffset
+                    ? `translate3d(${touchOffset.x}px, ${touchOffset.y * 0.4}px, 0) rotate(${touchOffset.x * 0.05}deg)`
+                    : undefined,
+                opacity: flyOut ? 0 : undefined,
+                transition:
+                  touchOffset && !flyOut
+                    ? 'none'
+                    : `transform ${flyOut ? 200 : 300}ms var(--motion-ease-out), opacity 200ms var(--motion-ease-out), border-color 0.2s ease`,
               }}
               className={`relative flex min-h-[360px] select-none flex-col rounded-3xl border bg-surface-solid p-6 shadow-[0_1px_0_rgb(255_255_255/0.04)_inset,0_24px_48px_-28px_rgb(0_0_0/0.6)] sm:p-8 ${
-                isAnswerRevealed ? 'border-line-strong animate-card-turn' : 'border-line'
+                isAnswerRevealed ? 'border-line-strong' : 'border-line'
               } ${effectiveType !== 'multiple-choice' && !isAnswerRevealed ? 'cursor-grab hover:border-line-strong active:cursor-grabbing' : ''}`}
             >
               {swipeStamp && (
